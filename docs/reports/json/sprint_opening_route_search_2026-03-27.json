@@ -1,0 +1,72 @@
+{
+  "sprint": "opening-route-search",
+  "date": "2026-03-27",
+  "lane0": {
+    "bridge_pressure": {
+      "opponent": "bridge_pressure",
+      "games": 24,
+      "wins": 0,
+      "win_rate": 0.0,
+      "avg_half_rounds": 10.5,
+      "r7_count": 19,
+      "r7_eligible": 24,
+      "r7_rate": 0.7916666666666666,
+      "deaths_by_agent": 43
+    },
+    "hal_death_trade": {
+      "opponent": "hal_death_trade",
+      "games": 24,
+      "wins": 11,
+      "win_rate": 0.4583333333333333,
+      "avg_half_rounds": 7.208333333333333,
+      "r7_count": 8,
+      "r7_eligible": 24,
+      "r7_rate": 0.3333333333333333,
+      "deaths_by_agent": 43
+    },
+    "hal_pressure": {
+      "opponent": "hal_pressure",
+      "games": 24,
+      "wins": 11,
+      "win_rate": 0.4583333333333333,
+      "avg_half_rounds": 7.208333333333333,
+      "r7_count": 8,
+      "r7_eligible": 24,
+      "r7_rate": 0.3333333333333333,
+      "deaths_by_agent": 43
+    },
+    "seeded_r9": {
+      "wins": 1,
+      "games": 1,
+      "rate": 1.0
+    },
+    "learned_hal": {
+      "opponent": "learned_hal",
+      "games": 24,
+      "wins": 4,
+      "win_rate": 0.16666666666666666,
+      "avg_half_rounds": 4.666666666666667,
+      "r7_count": 0,
+      "r7_eligible": 24,
+      "r7_rate": 0.0,
+      "deaths_by_agent": 54
+    }
+  },
+  "audit": {
+    "baseline": {
+      "r7_count": 36,
+      "r7_eligible": 100,
+      "r7_rate": 0.36,
+      "wins": 36,
+      "total": 100,
+      "win_rate": 0.36
+    }
+  },
+  "candidates": [],
+  "promotion": {
+    "best_candidate": null,
+    "promotion_bar": null,
+    "primary_met": false,
+    "secondary_met": false
+  }
+}

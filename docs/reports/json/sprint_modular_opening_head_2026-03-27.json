@@ -1,0 +1,894 @@
+{
+  "sprint": "modular-opening-head",
+  "date": "2026-03-27",
+  "lane0": {
+    "static": {
+      "bridge_pressure": {
+        "opponent": "bridge_pressure",
+        "games": 24,
+        "wins": 0,
+        "win_rate": 0.0,
+        "avg_half_rounds": 10.5,
+        "r7_count": 19,
+        "r7_eligible": 24,
+        "r7_rate": 0.7916666666666666,
+        "r9_count": 0,
+        "r9_eligible": 24,
+        "r9_rate": 0.0,
+        "deaths_by_agent": 43
+      },
+      "hal_death_trade": {
+        "opponent": "hal_death_trade",
+        "games": 24,
+        "wins": 11,
+        "win_rate": 0.4583333333333333,
+        "avg_half_rounds": 7.208333333333333,
+        "r7_count": 8,
+        "r7_eligible": 24,
+        "r7_rate": 0.3333333333333333,
+        "r9_count": 2,
+        "r9_eligible": 24,
+        "r9_rate": 0.08333333333333333,
+        "deaths_by_agent": 43
+      },
+      "hal_pressure": {
+        "opponent": "hal_pressure",
+        "games": 24,
+        "wins": 11,
+        "win_rate": 0.4583333333333333,
+        "avg_half_rounds": 7.208333333333333,
+        "r7_count": 8,
+        "r7_eligible": 24,
+        "r7_rate": 0.3333333333333333,
+        "r9_count": 2,
+        "r9_eligible": 24,
+        "r9_rate": 0.08333333333333333,
+        "deaths_by_agent": 43
+      },
+      "seeded_r9": {
+        "wins": 1,
+        "games": 1,
+        "rate": 1.0
+      }
+    },
+    "perturbed": {
+      "2048": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.5,
+          "r7_count": 19,
+          "r7_eligible": 24,
+          "r7_rate": 0.7916666666666666,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 10,
+          "win_rate": 0.4166666666666667,
+          "avg_half_rounds": 6.833333333333333,
+          "r7_count": 5,
+          "r7_eligible": 24,
+          "r7_rate": 0.20833333333333334,
+          "r9_count": 1,
+          "r9_eligible": 24,
+          "r9_rate": 0.041666666666666664,
+          "deaths_by_agent": 44
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 10,
+          "win_rate": 0.4166666666666667,
+          "avg_half_rounds": 6.833333333333333,
+          "r7_count": 5,
+          "r7_eligible": 24,
+          "r7_rate": 0.20833333333333334,
+          "r9_count": 1,
+          "r9_eligible": 24,
+          "r9_rate": 0.041666666666666664,
+          "deaths_by_agent": 44
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "4096": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.5,
+          "r7_count": 19,
+          "r7_eligible": 24,
+          "r7_rate": 0.7916666666666666,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 5.041666666666667,
+          "r7_count": 1,
+          "r7_eligible": 24,
+          "r7_rate": 0.041666666666666664,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 5.041666666666667,
+          "r7_count": 1,
+          "r7_eligible": 24,
+          "r7_rate": 0.041666666666666664,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "8192": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.0,
+          "r7_count": 0,
+          "r7_eligible": 24,
+          "r7_rate": 0.0,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 24
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 4,
+          "win_rate": 0.16666666666666666,
+          "avg_half_rounds": 19.583333333333332,
+          "r7_count": 0,
+          "r7_eligible": 24,
+          "r7_rate": 0.0,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 39
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 4,
+          "win_rate": 0.16666666666666666,
+          "avg_half_rounds": 19.583333333333332,
+          "r7_count": 0,
+          "r7_eligible": 24,
+          "r7_rate": 0.0,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 39
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      }
+    }
+  },
+  "candidates": [
+    {
+      "tag": "A1_h8",
+      "family": "A",
+      "opening_horizon": 8,
+      "bc_accuracy": 1.0,
+      "opening_trainable": false,
+      "static_pass": true,
+      "static_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.5,
+          "r7_count": 19,
+          "r7_eligible": 24,
+          "r7_rate": 0.7916666666666666,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "static_results_50": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.6,
+          "r7_count": 40,
+          "r7_eligible": 50,
+          "r7_rate": 0.8,
+          "r9_count": 0,
+          "r9_eligible": 50,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 90
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 50,
+          "wins": 23,
+          "win_rate": 0.46,
+          "avg_half_rounds": 7.54,
+          "r7_count": 18,
+          "r7_eligible": 50,
+          "r7_rate": 0.36,
+          "r9_count": 4,
+          "r9_eligible": 50,
+          "r9_rate": 0.08,
+          "deaths_by_agent": 90
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 50,
+          "wins": 23,
+          "win_rate": 0.46,
+          "avg_half_rounds": 7.54,
+          "r7_count": 18,
+          "r7_eligible": 50,
+          "r7_rate": 0.36,
+          "r9_count": 4,
+          "r9_eligible": 50,
+          "r9_rate": 0.08,
+          "deaths_by_agent": 90
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "stress_results": {
+        "2048": {
+          "ppo_steps": 2048,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        },
+        "4096": {
+          "ppo_steps": 4096,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 9,
+              "win_rate": 0.375,
+              "avg_half_rounds": 8.458333333333334,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 45
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 9,
+              "win_rate": 0.375,
+              "avg_half_rounds": 8.458333333333334,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 45
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        },
+        "8192": {
+          "ppo_steps": 8192,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        }
+      },
+      "learned_hal_result": {
+        "opponent": "learned_hal",
+        "games": 50,
+        "wins": 8,
+        "win_rate": 0.16,
+        "avg_half_rounds": 4.64,
+        "r7_count": 0,
+        "r7_eligible": 50,
+        "r7_rate": 0.0,
+        "r9_count": 0,
+        "r9_eligible": 50,
+        "r9_rate": 0.0,
+        "deaths_by_agent": 113
+      }
+    },
+    {
+      "tag": "A2_h12",
+      "family": "A",
+      "opening_horizon": 12,
+      "bc_accuracy": 1.0,
+      "opening_trainable": false,
+      "static_pass": true,
+      "static_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.5,
+          "r7_count": 19,
+          "r7_eligible": 24,
+          "r7_rate": 0.7916666666666666,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 43
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "static_results_50": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 10.6,
+          "r7_count": 40,
+          "r7_eligible": 50,
+          "r7_rate": 0.8,
+          "r9_count": 0,
+          "r9_eligible": 50,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 90
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 50,
+          "wins": 23,
+          "win_rate": 0.46,
+          "avg_half_rounds": 7.54,
+          "r7_count": 18,
+          "r7_eligible": 50,
+          "r7_rate": 0.36,
+          "r9_count": 4,
+          "r9_eligible": 50,
+          "r9_rate": 0.08,
+          "deaths_by_agent": 90
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 50,
+          "wins": 23,
+          "win_rate": 0.46,
+          "avg_half_rounds": 7.54,
+          "r7_count": 18,
+          "r7_eligible": 50,
+          "r7_rate": 0.36,
+          "r9_count": 4,
+          "r9_eligible": 50,
+          "r9_rate": 0.08,
+          "deaths_by_agent": 90
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "stress_results": {
+        "2048": {
+          "ppo_steps": 2048,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 11,
+              "win_rate": 0.4583333333333333,
+              "avg_half_rounds": 8.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        },
+        "4096": {
+          "ppo_steps": 4096,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 7,
+              "win_rate": 0.2916666666666667,
+              "avg_half_rounds": 7.708333333333333,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 4,
+              "r9_eligible": 24,
+              "r9_rate": 0.16666666666666666,
+              "deaths_by_agent": 52
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 7,
+              "win_rate": 0.2916666666666667,
+              "avg_half_rounds": 7.708333333333333,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 4,
+              "r9_eligible": 24,
+              "r9_rate": 0.16666666666666666,
+              "deaths_by_agent": 52
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        },
+        "8192": {
+          "ppo_steps": 8192,
+          "results": {
+            "bridge_pressure": {
+              "opponent": "bridge_pressure",
+              "games": 24,
+              "wins": 0,
+              "win_rate": 0.0,
+              "avg_half_rounds": 10.5,
+              "r7_count": 19,
+              "r7_eligible": 24,
+              "r7_rate": 0.7916666666666666,
+              "r9_count": 0,
+              "r9_eligible": 24,
+              "r9_rate": 0.0,
+              "deaths_by_agent": 43
+            },
+            "hal_death_trade": {
+              "opponent": "hal_death_trade",
+              "games": 24,
+              "wins": 7,
+              "win_rate": 0.2916666666666667,
+              "avg_half_rounds": 7.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 1,
+              "r9_eligible": 24,
+              "r9_rate": 0.041666666666666664,
+              "deaths_by_agent": 52
+            },
+            "hal_pressure": {
+              "opponent": "hal_pressure",
+              "games": 24,
+              "wins": 7,
+              "win_rate": 0.2916666666666667,
+              "avg_half_rounds": 7.375,
+              "r7_count": 8,
+              "r7_eligible": 24,
+              "r7_rate": 0.3333333333333333,
+              "r9_count": 1,
+              "r9_eligible": 24,
+              "r9_rate": 0.041666666666666664,
+              "deaths_by_agent": 52
+            },
+            "seeded_r9": {
+              "wins": 1,
+              "games": 1,
+              "rate": 1.0
+            }
+          },
+          "gate_pass": true
+        }
+      },
+      "learned_hal_result": {
+        "opponent": "learned_hal",
+        "games": 50,
+        "wins": 8,
+        "win_rate": 0.16,
+        "avg_half_rounds": 4.64,
+        "r7_count": 0,
+        "r7_eligible": 50,
+        "r7_rate": 0.0,
+        "r9_count": 0,
+        "r9_eligible": 50,
+        "r9_rate": 0.0,
+        "deaths_by_agent": 113
+      }
+    },
+    {
+      "tag": "B1_h8_ppo2k",
+      "family": "B",
+      "opening_horizon": 8,
+      "bc_accuracy": 1.0,
+      "opening_trainable": true,
+      "static_pass": false,
+      "static_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 3,
+          "win_rate": 0.125,
+          "avg_half_rounds": 6.958333333333333,
+          "r7_count": 9,
+          "r7_eligible": 24,
+          "r7_rate": 0.375,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 49
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "static_results_50": null,
+      "stress_results": {},
+      "learned_hal_result": null
+    },
+    {
+      "tag": "B2_h8_ppo4k",
+      "family": "B",
+      "opening_horizon": 8,
+      "bc_accuracy": 1.0,
+      "opening_trainable": true,
+      "static_pass": false,
+      "static_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 24,
+          "wins": 3,
+          "win_rate": 0.125,
+          "avg_half_rounds": 6.958333333333333,
+          "r7_count": 9,
+          "r7_eligible": 24,
+          "r7_rate": 0.375,
+          "r9_count": 0,
+          "r9_eligible": 24,
+          "r9_rate": 0.0,
+          "deaths_by_agent": 49
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 24,
+          "wins": 11,
+          "win_rate": 0.4583333333333333,
+          "avg_half_rounds": 7.208333333333333,
+          "r7_count": 8,
+          "r7_eligible": 24,
+          "r7_rate": 0.3333333333333333,
+          "r9_count": 2,
+          "r9_eligible": 24,
+          "r9_rate": 0.08333333333333333,
+          "deaths_by_agent": 43
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        }
+      },
+      "static_results_50": null,
+      "stress_results": {},
+      "learned_hal_result": null
+    }
+  ],
+  "promotion": {
+    "best_candidate": "A1_h8",
+    "promotion_bar": "secondary",
+    "primary_met": false,
+    "secondary_met": true
+  }
+}

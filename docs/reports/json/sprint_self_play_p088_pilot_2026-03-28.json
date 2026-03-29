@@ -1,0 +1,329 @@
+{
+  "sprint": "self-play-p088-pilot",
+  "date": "2026-03-28",
+  "physicality_baku": 0.88,
+  "pilot_budget_per_family": 12288,
+  "eval_games": 50,
+  "baseline_route": [
+    1,
+    1,
+    1,
+    10,
+    60,
+    1,
+    60,
+    1
+  ],
+  "reused_artifacts": {
+    "learned_hal": "fresh_hal_fresh_32k (pre-trained at p=0.88, 32768 steps)",
+    "opening_bc": "route [1, 1, 1, 10, 60, 1, 60, 1], 80 epochs, accuracy 100.0%",
+    "base_model": "baku_vs_bridge_pressure_opening_to_round7_bc_only_bc_combined_0.3",
+    "bp_specialist": "baku_vs_bridge_pressure_opening_to_round7_bc_only_bc_spec_e50_lr5.5"
+  },
+  "skipped": [
+    "Fresh Hal generation",
+    "Degeneracy check",
+    "Stress testing / PPO perturbation",
+    "Separate safety gate lane"
+  ],
+  "baseline": {
+    "bridge_pressure": {
+      "opponent": "bridge_pressure",
+      "games": 50,
+      "wins": 0,
+      "win_rate": 0.0,
+      "avg_half_rounds": 11.56,
+      "r7_count": 44,
+      "r7_eligible": 50,
+      "r7_rate": 0.88,
+      "deaths_by_agent": 94
+    },
+    "hal_death_trade": {
+      "opponent": "hal_death_trade",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "hal_pressure": {
+      "opponent": "hal_pressure",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "seeded_r9": {
+      "wins": 1,
+      "games": 1,
+      "rate": 1.0
+    },
+    "learned_hal": {
+      "opponent": "learned_hal",
+      "games": 50,
+      "wins": 0,
+      "win_rate": 0.0,
+      "avg_half_rounds": 11.56,
+      "r7_count": 44,
+      "r7_eligible": 50,
+      "r7_rate": 0.88,
+      "deaths_by_agent": 94
+    }
+  },
+  "baseline_bc_stats": {
+    "accuracy": 1.0,
+    "misaligned": 0,
+    "correct": 1930,
+    "total": 1930
+  },
+  "candidates": [
+    {
+      "tag": "A1_vanilla",
+      "family": "A1",
+      "mechanism": "vanilla_late_ppo",
+      "ppo_steps": 12288,
+      "description": "MLP OpeningAutoPlay, bridge shaping, balanced league (ht+hp+lhal@0.5)",
+      "eval_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 50,
+          "wins": 30,
+          "win_rate": 0.6,
+          "avg_half_rounds": 11.56,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 99
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 50,
+          "wins": 30,
+          "win_rate": 0.6,
+          "avg_half_rounds": 11.56,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 99
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        },
+        "learned_hal": {
+          "opponent": "learned_hal",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "bc_stats": {
+          "accuracy": 1.0,
+          "misaligned": 0,
+          "correct": 1930,
+          "total": 1930
+        }
+      },
+      "analysis": {
+        "safe": true,
+        "improved_lh": false,
+        "improved_ht": false,
+        "improved_hp": false,
+        "any_improvement": false,
+        "composite_score": 0.0,
+        "deltas": {
+          "bp_r7": 0.0,
+          "ht_r7": 0.0,
+          "hp_r7": 0.0,
+          "lhal_wr": 0.0
+        }
+      }
+    },
+    {
+      "tag": "A2_curriculum",
+      "family": "A2",
+      "mechanism": "scenario_curriculum",
+      "ppo_steps": 12288,
+      "description": "MLP LateCurriculum p_opening=0.4, r7+r8 scenarios, bridge shaping, balanced league",
+      "eval_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 50,
+          "wins": 35,
+          "win_rate": 0.7,
+          "avg_half_rounds": 11.46,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 94
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 50,
+          "wins": 35,
+          "win_rate": 0.7,
+          "avg_half_rounds": 11.46,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 94
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        },
+        "learned_hal": {
+          "opponent": "learned_hal",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "bc_stats": {
+          "accuracy": 1.0,
+          "misaligned": 0,
+          "correct": 1930,
+          "total": 1930
+        }
+      },
+      "analysis": {
+        "safe": true,
+        "improved_lh": false,
+        "improved_ht": false,
+        "improved_hp": false,
+        "any_improvement": false,
+        "composite_score": 0.0,
+        "deltas": {
+          "bp_r7": 0.0,
+          "ht_r7": 0.0,
+          "hp_r7": 0.0,
+          "lhal_wr": 0.0
+        }
+      }
+    },
+    {
+      "tag": "A3_lhal_target",
+      "family": "A3",
+      "mechanism": "lhal_targeted",
+      "ppo_steps": 12288,
+      "description": "MLP OpeningAutoPlay, light shaping, lhal-heavy(2x) league",
+      "eval_results": {
+        "bridge_pressure": {
+          "opponent": "bridge_pressure",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "hal_death_trade": {
+          "opponent": "hal_death_trade",
+          "games": 50,
+          "wins": 34,
+          "win_rate": 0.68,
+          "avg_half_rounds": 9.92,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 95
+        },
+        "hal_pressure": {
+          "opponent": "hal_pressure",
+          "games": 50,
+          "wins": 34,
+          "win_rate": 0.68,
+          "avg_half_rounds": 9.92,
+          "r7_count": 25,
+          "r7_eligible": 50,
+          "r7_rate": 0.5,
+          "deaths_by_agent": 95
+        },
+        "seeded_r9": {
+          "wins": 1,
+          "games": 1,
+          "rate": 1.0
+        },
+        "learned_hal": {
+          "opponent": "learned_hal",
+          "games": 50,
+          "wins": 0,
+          "win_rate": 0.0,
+          "avg_half_rounds": 11.56,
+          "r7_count": 44,
+          "r7_eligible": 50,
+          "r7_rate": 0.88,
+          "deaths_by_agent": 94
+        },
+        "bc_stats": {
+          "accuracy": 1.0,
+          "misaligned": 0,
+          "correct": 1930,
+          "total": 1930
+        }
+      },
+      "analysis": {
+        "safe": true,
+        "improved_lh": false,
+        "improved_ht": false,
+        "improved_hp": false,
+        "any_improvement": false,
+        "composite_score": 0.0,
+        "deltas": {
+          "bp_r7": 0.0,
+          "ht_r7": 0.0,
+          "hp_r7": 0.0,
+          "lhal_wr": 0.0
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "best_candidate": "A1_vanilla",
+    "best_composite_score": 0.0,
+    "any_improvement": false,
+    "calibration_verdict": "NO_SIGNAL_AT_12K"
+  },
+  "elapsed_seconds": 3085
+}

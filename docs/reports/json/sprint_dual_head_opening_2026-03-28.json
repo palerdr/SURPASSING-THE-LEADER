@@ -1,0 +1,463 @@
+{
+  "sprint": "dual-head-opening",
+  "date": "2026-03-28",
+  "physicality_baku": 0.88,
+  "baseline_route": [
+    1,
+    1,
+    1,
+    10,
+    60,
+    1,
+    60,
+    1
+  ],
+  "reference_1_old_clf": {
+    "bridge_pressure": {
+      "opponent": "bridge_pressure",
+      "games": 50,
+      "wins": 0,
+      "win_rate": 0.0,
+      "avg_half_rounds": 11.56,
+      "r7_count": 44,
+      "r7_eligible": 50,
+      "r7_rate": 0.88,
+      "deaths_by_agent": 94
+    },
+    "hal_death_trade": {
+      "opponent": "hal_death_trade",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "hal_pressure": {
+      "opponent": "hal_pressure",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "seeded_r9": {
+      "wins": 1,
+      "games": 1,
+      "rate": 1.0
+    },
+    "prior_4096": {
+      "opponent": "prior_4096",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.06,
+      "r7_count": 0,
+      "r7_eligible": 50,
+      "r7_rate": 0.0,
+      "deaths_by_agent": 94
+    },
+    "native_hal": {
+      "opponent": "native_hal",
+      "games": 50,
+      "wins": 0,
+      "win_rate": 0.0,
+      "avg_half_rounds": 13.32,
+      "r7_count": 0,
+      "r7_eligible": 50,
+      "r7_rate": 0.0,
+      "deaths_by_agent": 94
+    },
+    "extra_stats": {
+      "classifier": "old_t2",
+      "bp_accuracy": 1.0,
+      "native_accuracy": 0.0
+    }
+  },
+  "reference_2_native_clf": {
+    "bridge_pressure": {
+      "opponent": "bridge_pressure",
+      "games": 50,
+      "wins": 10,
+      "win_rate": 0.2,
+      "avg_half_rounds": 8.96,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 119
+    },
+    "hal_death_trade": {
+      "opponent": "hal_death_trade",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "hal_pressure": {
+      "opponent": "hal_pressure",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.66,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 94
+    },
+    "seeded_r9": {
+      "wins": 1,
+      "games": 1,
+      "rate": 1.0
+    },
+    "prior_4096": {
+      "opponent": "prior_4096",
+      "games": 50,
+      "wins": 35,
+      "win_rate": 0.7,
+      "avg_half_rounds": 9.06,
+      "r7_count": 0,
+      "r7_eligible": 50,
+      "r7_rate": 0.0,
+      "deaths_by_agent": 94
+    },
+    "native_hal": {
+      "opponent": "native_hal",
+      "games": 50,
+      "wins": 10,
+      "win_rate": 0.2,
+      "avg_half_rounds": 8.96,
+      "r7_count": 25,
+      "r7_eligible": 50,
+      "r7_rate": 0.5,
+      "deaths_by_agent": 119
+    },
+    "extra_stats": {
+      "classifier": "native_aware_t2",
+      "bp_accuracy": 0.0,
+      "native_accuracy": 1.0
+    }
+  },
+  "classifier_diagnostic": {
+    "old_t2": {
+      "bp_accuracy": 1.0,
+      "native_accuracy": 0.0
+    },
+    "native_aware_t2": {
+      "bp_accuracy": 0.0,
+      "native_accuracy": 1.0
+    }
+  },
+  "confidence_profiles": {
+    "old_t2": {
+      "bridge_pressure": {"mean_p_bp": 0.643, "mean_p_hal": 0.357, "std_p_bp": 0.0},
+      "hal_death_trade": {"mean_p_bp": 0.357, "mean_p_hal": 0.643, "std_p_bp": 0.0},
+      "native_hal": {"mean_p_bp": 0.643, "mean_p_hal": 0.357, "std_p_bp": 0.0}
+    },
+    "native_aware_t2": {
+      "bridge_pressure": {"mean_p_bp": 0.393, "mean_p_hal": 0.607, "std_p_bp": 0.0},
+      "hal_death_trade": {"mean_p_bp": 0.232, "mean_p_hal": 0.768, "std_p_bp": 0.0},
+      "native_hal": {"mean_p_bp": 0.393, "mean_p_hal": 0.607, "std_p_bp": 0.0}
+    },
+    "key_finding": "bp and native_hal have IDENTICAL classifier probabilities (std=0.0) because their T2 observations are numerically identical"
+  },
+  "opening_route_comparison": {
+    "bp_specialist_opening": [1, 1, 60, 1, 60, 1, 60, 1],
+    "hal_frc_opening": [1, 1, 1, 10, 60, 1, 60, 1],
+    "differ_at_turns": [2, 3],
+    "note": "Routes only differ at R1 (T2-T3). bp checks at 60, hal checks at 1."
+  },
+  "families": {
+    "A_dual_head": [
+      {
+        "tag": "A1_dual_old_clf",
+        "stats": {
+          "type": "dual_head_old_clf",
+          "bp_opening_entries": 8,
+          "hal_opening_entries": 8,
+          "misaligned": 0
+        },
+        "gate_pass": true,
+        "analysis": {
+          "level": null,
+          "score": 3.46,
+          "abs": {
+            "bp_r7": 0.88,
+            "ht_r7": 0.5,
+            "hp_r7": 0.5,
+            "r9": 1.0,
+            "prior_wr": 0.7,
+            "native_wr": 0.0,
+            "native_r7": 0.0,
+            "misaligned": 0
+          },
+          "vs_ref1": {
+            "bp_delta": 0.0,
+            "native_wr_delta": 0.0,
+            "native_r7_delta": 0.0
+          },
+          "vs_ref2": {
+            "bp_delta": 0.38,
+            "native_wr_delta": -0.2,
+            "native_r7_delta": -0.5
+          }
+        },
+        "gap": {
+          "full_native_wr": 0.0,
+          "full_native_r7": 0.0
+        }
+      },
+      {
+        "tag": "A2_dual_native_clf",
+        "stats": {
+          "type": "dual_head_native_clf",
+          "bp_opening_entries": 8,
+          "hal_opening_entries": 8,
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "A3_universal_hal_old_clf",
+        "stats": {
+          "type": "dual_head_universal_hal_old_clf",
+          "opening_entries": 8,
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      }
+    ],
+    "B_stacked": [
+      {
+        "tag": "B1_univ_hal_old_late",
+        "stats": {
+          "type": "stacked_univ_hal_old_late",
+          "opening_mode": "universal_hal",
+          "late_clf": "old_t2",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "B2_univ_bp_old_late",
+        "stats": {
+          "type": "stacked_univ_bp_old_late",
+          "opening_mode": "universal_bp",
+          "late_clf": "old_t2",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "B3_old_open_native_late",
+        "stats": {
+          "type": "stacked_old_open_native_late",
+          "opening_clf": "old_t2",
+          "late_clf": "native_aware_t2",
+          "misaligned": 0
+        },
+        "gate_pass": true,
+        "analysis": {
+          "level": null,
+          "score": 3.46,
+          "abs": {
+            "bp_r7": 0.88,
+            "ht_r7": 0.5,
+            "hp_r7": 0.5,
+            "r9": 1.0,
+            "prior_wr": 0.7,
+            "native_wr": 0.0,
+            "native_r7": 0.0,
+            "misaligned": 0
+          },
+          "vs_ref1": {
+            "bp_delta": 0.0,
+            "native_wr_delta": 0.0,
+            "native_r7_delta": 0.0
+          },
+          "vs_ref2": {
+            "bp_delta": 0.38,
+            "native_wr_delta": -0.2,
+            "native_r7_delta": -0.5
+          }
+        },
+        "gap": {
+          "full_native_wr": 0.0,
+          "full_native_r7": 0.0
+        }
+      },
+      {
+        "tag": "B4_native_open_old_late",
+        "stats": {
+          "type": "stacked_native_open_old_late",
+          "opening_clf": "native_aware_t2",
+          "late_clf": "old_t2",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      }
+    ],
+    "C_confidence": [
+      {
+        "tag": "C1_old_conf07_hal_fb",
+        "stats": {
+          "type": "confidence_old_clf_07_hal_fallback",
+          "bp_threshold": 0.7,
+          "hal_threshold": 0.7,
+          "fallback": "hal_opening",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "C2_old_conf09_hal_fb",
+        "stats": {
+          "type": "confidence_old_clf_09_hal_fallback",
+          "bp_threshold": 0.9,
+          "hal_threshold": 0.9,
+          "fallback": "hal_opening",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "C3_old_asym_08_05",
+        "stats": {
+          "type": "confidence_old_clf_08_05",
+          "bp_threshold": 0.8,
+          "hal_threshold": 0.5,
+          "fallback": "hal_opening",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "C4_native_conf07_hal_fb",
+        "stats": {
+          "type": "confidence_native_clf_07_hal_fallback",
+          "bp_threshold": 0.7,
+          "hal_threshold": 0.7,
+          "fallback": "hal_opening",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      },
+      {
+        "tag": "C5_old_conf07_bp_fb",
+        "stats": {
+          "type": "confidence_old_clf_07_bp_fallback",
+          "bp_threshold": 0.7,
+          "hal_threshold": 0.7,
+          "fallback": "bp_opening",
+          "misaligned": 0
+        },
+        "gate_pass": false,
+        "analysis": null,
+        "gap": null
+      }
+    ]
+  },
+  "validated": [
+    {
+      "tag": "A1_dual_old_clf",
+      "analysis": {
+        "level": null,
+        "score": 3.46,
+        "abs": {
+          "bp_r7": 0.88,
+          "ht_r7": 0.5,
+          "hp_r7": 0.5,
+          "r9": 1.0,
+          "prior_wr": 0.7,
+          "native_wr": 0.0,
+          "native_r7": 0.0,
+          "misaligned": 0
+        },
+        "vs_ref1": {
+          "bp_delta": 0.0,
+          "native_wr_delta": 0.0,
+          "native_r7_delta": 0.0
+        },
+        "vs_ref2": {
+          "bp_delta": 0.38,
+          "native_wr_delta": -0.2,
+          "native_r7_delta": -0.5
+        }
+      },
+      "gap": {
+        "full_native_wr": 0.0,
+        "full_native_r7": 0.0
+      }
+    },
+    {
+      "tag": "B3_old_open_native_late",
+      "analysis": {
+        "level": null,
+        "score": 3.46,
+        "abs": {
+          "bp_r7": 0.88,
+          "ht_r7": 0.5,
+          "hp_r7": 0.5,
+          "r9": 1.0,
+          "prior_wr": 0.7,
+          "native_wr": 0.0,
+          "native_r7": 0.0,
+          "misaligned": 0
+        },
+        "vs_ref1": {
+          "bp_delta": 0.0,
+          "native_wr_delta": 0.0,
+          "native_r7_delta": 0.0
+        },
+        "vs_ref2": {
+          "bp_delta": 0.38,
+          "native_wr_delta": -0.2,
+          "native_r7_delta": -0.5
+        }
+      },
+      "gap": {
+        "full_native_wr": 0.0,
+        "full_native_r7": 0.0
+      }
+    }
+  ],
+  "verdict": {
+    "verdict": "NO_IMPROVEMENT",
+    "tradeoff_broken": false,
+    "best_candidate": "A1_dual_old_clf",
+    "best_level": null,
+    "best_score": 3.46,
+    "candidates_evaluated": 2,
+    "root_cause": "observation_space_limitation",
+    "root_cause_detail": "bp and native_hal produce numerically identical 20-dim observation vectors at T2. Classifier receives the same input for both opponents (P(bp)=0.643 for both, std=0.0). No routing architecture can distinguish them.",
+    "best_next_move": "observation_enrichment",
+    "best_next_move_detail": "Add opponent action history to observation vector. At T2, opponent has taken 2 actions that differ between bp and native_hal but are not in the current obs."
+  },
+  "elapsed_seconds": 70.2
+}
