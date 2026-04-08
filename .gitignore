@@ -1,0 +1,29 @@
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtualenvs / local tooling
+.venv/
+.python-version
+
+# Test / tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated reports and experiment outputs
+docs/reports/
+
+# Training artifacts
+models/checkpoints/
+models/self_play/
+
+# Generated media
+*.png
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

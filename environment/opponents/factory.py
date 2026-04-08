@@ -31,6 +31,8 @@ from .model_opponent import ModelOpponent
 from .random_bot import RandomBot
 from .safe_bot import BridgePressureBot, LeapAwareSafeBot, SafeBot
 
+from hal.hal_opponent import CanonicalHal
+
 
 SCRIPTED_OPPONENTS = {
     "none": None,
@@ -52,6 +54,7 @@ SCRIPTED_OPPONENTS = {
     "hal_echo": HalEcholocationTeacher,
     "hal_memory": HalMemoryLossTeacher,
     "hal_resilience": HalResilienceTeacher,
+    "hal_canonical": CanonicalHal,
 }
 
 
@@ -87,8 +90,8 @@ def opponent_role_for_agent(agent_role: str) -> str:
     return "baku" if agent_role == "hal" else "hal"
 
 
-def create_model_opponent(model_path: str, *, agent_role: str):
-    return ModelOpponent(model_path, role=opponent_role_for_agent(agent_role))
+def create_model_opponent(model_path: str, *, agent_role: str, obs_version: int = 1):
+    return ModelOpponent(model_path, role=opponent_role_for_agent(agent_role), obs_version=obs_version)
 
 
 def parse_weighted_model_spec(spec: str) -> tuple[str, float]:
