@@ -18,7 +18,7 @@ from ..awareness import (
     initial_awareness_for_role,
     update_awareness,
 )
-from ..observation import build_observation
+from ..observation import build_observation, build_observation_v2
 
 
 class SelectorOpponent(Opponent):
@@ -28,12 +28,13 @@ class SelectorOpponent(Opponent):
     during Hal training or evaluation.
     """
 
-    def __init__(self, selector, role: str, awareness_config: AwarenessConfig | None = None):
+    def __init__(self, selector, role: str, awareness_config: AwarenessConfig | None = None, obs_version: int = 1):
         self.selector = selector
         self.role = role.lower()
         self.awareness_config = awareness_config or AwarenessConfig()
         self.awareness = initial_awareness_for_role(role)
         self._processed_history_len = 0
+        self.obs_version = obs_version
 
     def _sync_awareness(self, game: Game) -> LeapAwareness:
         while self._processed_history_len < len(game.history):
@@ -54,11 +55,16 @@ class SelectorOpponent(Opponent):
         me = game.player1 if am_hal else game.player2
         opp = game.player2 if am_hal else game.player1
 
-        obs = build_observation(game, me, opp, exposes_leap_features(awareness))
+        leap_known = exposes_leap_features(awareness)
+        if self.obs_version == 2:
+            obs = build_observation_v2(game, me, opp, leap_known)
+        else:
+            obs = build_observation(game, me, opp, leap_known)
         mask = build_action_mask(
             role=role,
             is_leap_turn=game.is_leap_second_turn(),
             awareness=awareness,
+            actor=self.role,
         )
         action, _ = self.selector.predict(obs, action_masks=mask, deterministic=True)
         return int(action) + 1
@@ -83,6 +89,7 @@ class ModelOpponent(Opponent):
         model_path: str,
         role: str,
         awareness_config: AwarenessConfig | None = None,
+        obs_version: int = 1,
     ):
         self.model_path = model_path
         self.model = MaskablePPO.load(model_path)
@@ -90,6 +97,7 @@ class ModelOpponent(Opponent):
         self.awareness_config = awareness_config or AwarenessConfig()
         self.awareness = initial_awareness_for_role(role)
         self._processed_history_len = 0
+        self.obs_version = obs_version
 
     def _sync_awareness(self, game: Game) -> LeapAwareness:
         while self._processed_history_len < len(game.history):
@@ -124,14 +132,19 @@ class ModelOpponent(Opponent):
             me = game.player2
             opp = game.player1
 
-        obs = build_observation(game, me, opp, exposes_leap_features(awareness))
+        leap_known = exposes_leap_features(awareness)
+        if self.obs_version == 2:
+            obs = build_observation_v2(game, me, opp, leap_known)
+        else:
+            obs = build_observation(game, me, opp, leap_known)
 
         mask = build_action_mask(
             role=role,
             is_leap_turn=game.is_leap_second_turn(),
             awareness=awareness,
+            actor=self.role,
         )
-        
+
         action, _ = self.model.predict(obs, action_masks=mask, deterministic=True)
 
         return int(action) + 1

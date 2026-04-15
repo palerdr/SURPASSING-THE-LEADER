@@ -213,48 +213,40 @@ class Game:
 
 
     def play_half_round(self, drop_time: int, check_time: int) -> HalfRoundRecord:
-        """
-        Execute one half-round with the given actions.
+        """Execute one half-round, rolling RNG for any required survival check.
 
-        This is the main entry point. The caller provides drop_time and check_time.
-        The Game resolves the outcome, updates all state, and returns a record.
+        This is the main entry point for normal gameplay. For deterministic
+        forward simulation (e.g., search), use resolve_half_round directly with
+        an explicit survived_outcome.
+        """
+        return self.resolve_half_round(drop_time, check_time, survived_outcome=None)
+
+    def resolve_half_round(
+        self,
+        drop_time: int,
+        check_time: int,
+        survived_outcome: Optional[bool] = None,
+    ) -> HalfRoundRecord:
+        """Apply a half-round, optionally with an externally-supplied survival outcome.
+
+        This is the single source of truth for half-round resolution. Both
+        play_half_round (which passes survived_outcome=None to roll the RNG) and
+        Hal's search forward simulator (which branches on survived_outcome=True
+        and survived_outcome=False) call this method.
 
         Args:
-            drop_time: Second at which D drops the handkerchief. Must be in [1, turn_duration].
-            check_time: Second at which C checks. Must be in [1, 60].
-                        (C's max is always 60 — they don't know about leap second.)
+            drop_time: Second at which D drops. Must be in [1, turn_duration].
+            check_time: Second at which C checks. Must be in [1, turn_duration].
+            survived_outcome: If a death occurs, this is the survival outcome to
+                use. None means "roll the RNG" (live play). True/False means
+                "force this outcome" (search forward simulation).
 
         Returns:
             HalfRoundRecord describing everything that happened.
-
-        Raises:
-            ValueError: If actions are out of valid range.
-            GameOverError: If the game is already over.
-
-        Flow:
-            1. Validate inputs.
-            2. Determine turn_duration (check leap second).
-            3. Resolve check: success or failure.
-            4. If success:
-                a. Compute ST = check_time - drop_time.
-                b. Add ST to checker's cylinder.
-                c. If cylinder >= CYLINDER_MAX: overflow → death sequence.
-            5. If failure:
-                a. Add FAILED_CHECK_PENALTY to checker's cylinder.
-                b. Inject entire cylinder → death sequence.
-            6. If death sequence:
-                a. Compute death_duration = cylinder contents at injection.
-                b. Compute survival probability.
-                c. Roll for survival.
-                d. If survived: call on_death then on_revival on the player.
-                e. If died: call on_death then on_permanent_death. Set game_over.
-            7. Advance game clock appropriately.
-            8. Record and return the HalfRoundRecord.
         """
         if self.game_over:
             raise GameOverError("Game is Already Over")
 
-        # Snapshot clock BEFORE any advancement for the record
         clock_at_start = self.game_clock
 
         dropper, checker = self.get_roles_for_half(self.current_half)
@@ -263,14 +255,11 @@ class Game:
         self.validate_drop_time(drop_time, turn_duration)
         self.validate_check_time(check_time, turn_duration)
 
-        # Successful check: handkerchief is on the ground when C looks.
-        # check_time >= drop_time means C sees it (even mid-drop).
-        # Yakou rules ST cannot be 0 — minimum is 1 second.
         success = check_time >= drop_time
         death_occurred = False
         death_duration = 0.0
-        survived = None
-        survival_probability = None
+        survived: Optional[bool] = None
+        survival_probability: Optional[float] = None
         ST = 0.0
 
         if success:
@@ -278,19 +267,23 @@ class Game:
             overflow = checker.add_to_cylinder(ST)
             if overflow:
                 death_occurred = True
-                death_duration = checker.cylinder
+                death_duration = min(checker.cylinder, CYLINDER_MAX)
         else:
             checker.add_to_cylinder(FAILED_CHECK_PENALTY)
             death_occurred = True
-            death_duration = checker.cylinder
+            death_duration = min(checker.cylinder, CYLINDER_MAX)
 
         if death_occurred:
             survival_probability = self.referee.compute_survival_probability(
                 checker, death_duration=death_duration
             )
-            survived = self.referee.attempt_revival(
-                checker, death_duration=death_duration, rng=self.rng
-            )
+            if survived_outcome is None:
+                survived = self.referee.attempt_revival(
+                    checker, death_duration=death_duration, rng=self.rng
+                )
+            else:
+                survived = survived_outcome
+                self.referee.cprs_performed += 1
 
             checker.on_death(death_duration=death_duration)
             if survived:
@@ -301,13 +294,10 @@ class Game:
                 self.winner = dropper
                 self.loser = checker
 
-        # Turn itself
         self.advance_clock(turn_duration)
-        # Death procedure: player is dead for death_duration, then injection/CPR/recovery overhead
         if death_occurred:
             self.advance_clock(death_duration + DEATH_PROCEDURE_OVERHEAD)
 
-        # Determine result enum
         if not death_occurred:
             result = HalfRoundResult.CHECK_SUCCESS
         elif success and survived:
@@ -319,7 +309,6 @@ class Game:
         else:
             result = HalfRoundResult.CHECK_FAIL_DIED
 
-        # Build record
         record = HalfRoundRecord(
             round_num=self.round_num,
             half=self.current_half,
@@ -337,17 +326,11 @@ class Game:
         )
         self.history.append(record)
 
-        # ── Advance half/round counters + inter-half/inter-round clock ──
         if not self.game_over:
             if self.current_half == 1:
-                # Mid-round: add within-round overhead (settling, role swap)
-                # No snapping — the round is still in progress.
                 self.advance_clock(WITHIN_ROUND_OVERHEAD)
                 self.current_half = 2
             else:
-                # Round complete: snap clock to the next whole-minute boundary.
-                # This models the between-round gap observed in the manga where
-                # every round starts on an exact minute mark.
                 self.snap_clock_to_next_minute()
                 self.current_half = 1
                 self.round_num += 1

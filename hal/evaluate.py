@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import torch
 
@@ -15,30 +13,83 @@ from src.Constants import (
     CARDIAC_DECAY,
 )
 from src.Game import Game
-from cfr.half_round import survival_probability
+from environment.cfr.half_round import survival_probability
 from environment.route_math import get_named_players, lsr_variation_from_clock, safe_strategy_budget
 
 _nn_model = None
+_nn_device = None
 
 
 def set_nn_evaluator(net) -> None:
-    global _nn_model
+    global _nn_model, _nn_device
+    if net is not None:
+        from .value_net import DEVICE
+        net = net.to(DEVICE)
+        net.eval()
+        _nn_device = DEVICE
     _nn_model = net
+
+
+def get_nn_model():
+    return _nn_model
+
+
+def get_nn_device():
+    return _nn_device
+
+
+def _hal_terminal_value(game: Game) -> float:
+    if game.winner is None:
+        return 0.0
+    return 1.0 if game.winner.name.lower() == "hal" else -1.0
 
 
 def evaluate(game: Game) -> float:
     if game.game_over:
-        return 1.0 if game.winner.name.lower() == "hal" else -1.0
+        return _hal_terminal_value(game)
 
     if _nn_model is not None:
         from .value_net import extract_features
         features = extract_features(game)
         with torch.no_grad():
-            tensor = torch.tensor(features).unsqueeze(0)
+            tensor = torch.tensor(features, device=_nn_device).unsqueeze(0)
             value = _nn_model(tensor).item()
         return value
 
     return _handcrafted_evaluate(game)
+
+
+def evaluate_batch(games: list[Game]) -> np.ndarray:
+    terminal_mask = []
+    terminal_vals = []
+    non_terminal_indices = []
+    non_terminal_features = []
+
+    from .value_net import extract_features
+
+    for i, game in enumerate(games):
+        if game.game_over:
+            terminal_mask.append(True)
+            terminal_vals.append(_hal_terminal_value(game))
+        else:
+            terminal_mask.append(False)
+            terminal_vals.append(0.0)
+            non_terminal_indices.append(i)
+            non_terminal_features.append(extract_features(game))
+
+    values = np.array(terminal_vals, dtype=np.float64)
+
+    if non_terminal_features and _nn_model is not None:
+        batch = torch.tensor(np.stack(non_terminal_features), device=_nn_device)
+        with torch.no_grad():
+            preds = _nn_model(batch).squeeze(-1).cpu().numpy()
+        for idx, pred in zip(non_terminal_indices, preds):
+            values[idx] = float(pred)
+    elif non_terminal_features:
+        for idx in non_terminal_indices:
+            values[idx] = _handcrafted_evaluate(games[idx])
+
+    return values
 
 
 def _handcrafted_evaluate(game: Game) -> float:

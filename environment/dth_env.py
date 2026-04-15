@@ -41,7 +41,7 @@ from .awareness import (
     initial_awareness_for_role,
     update_awareness,
 )
-from .observation import OBS_SIZE, build_observation
+from .observation import OBS_SIZE, OBS_V2_SIZE, build_observation, build_observation_v2
 from .reward import compute_route_shaping_bonus, shaped_reward, sparse_reward
 from .route_stages import current_route_stage_flags
 from .opponents.base import Opponent
@@ -68,10 +68,13 @@ class DTHEnv(gym.Env):
         awareness_config: AwarenessConfig | None = None,
         scenario_sampler: Callable[[np.random.Generator], dict | None] | None = None,
         max_steps: int | None = None,
+        obs_version: int = 1,
+        baku_physicality: float | None = None,
     ):
         super().__init__()
 
         self.opponent = opponent
+        self.baku_physicality = baku_physicality
         self.agent_role = agent_role
         self._seed = seed
         self.use_shaping = use_shaping
@@ -79,10 +82,12 @@ class DTHEnv(gym.Env):
         self.awareness_config = awareness_config or AwarenessConfig()
         self.scenario_sampler = scenario_sampler
         self.max_steps = max_steps
+        self.obs_version = obs_version
 
+        obs_dim = OBS_V2_SIZE if obs_version == 2 else OBS_SIZE
         self.action_space = spaces.Discrete(61)
         self.observation_space = spaces.Box(
-            low = 0.0, high = 1.0, shape = (OBS_SIZE,), dtype = np.float32
+            low = 0.0, high = 1.0, shape = (obs_dim,), dtype = np.float32
         )
 
         self.game = None
@@ -105,7 +110,8 @@ class DTHEnv(gym.Env):
         scenario = scenario_from_options(options)
 
         HAL = Player("Hal", physicality = PHYSICALITY_HAL)
-        BAKU = Player("Baku", physicality = PHYSICALITY_BAKU) 
+        baku_phys = self.baku_physicality if self.baku_physicality is not None else PHYSICALITY_BAKU
+        BAKU = Player("Baku", physicality = baku_phys)
         YAKOU = Referee()
         
         first_dropper = HAL
@@ -143,12 +149,7 @@ class DTHEnv(gym.Env):
 
         self.opponent.reset()
 
-        init_obs = build_observation(
-            self.game,
-            self.agent,
-            self.opp_player,
-            exposes_leap_features(self.awareness),
-        )
+        init_obs = self._build_obs()
         info_dict = {
             "game_clock": self.game.game_clock,
             "awareness": self.awareness.value,
@@ -162,6 +163,17 @@ class DTHEnv(gym.Env):
 
 
 
+
+    def _build_obs(self) -> np.ndarray:
+        """Build observation using the configured obs_version."""
+        leap_known = exposes_leap_features(self.awareness)
+        if self.obs_version == 2:
+            return build_observation_v2(
+                self.game, self.agent, self.opp_player, leap_known,
+            )
+        return build_observation(
+            self.game, self.agent, self.opp_player, leap_known,
+        )
 
     def action_masks(self) -> np.ndarray:
         """
@@ -177,6 +189,7 @@ class DTHEnv(gym.Env):
             role=role,
             is_leap_turn=self.game.is_leap_second_turn(),
             awareness=self.awareness,
+            actor=self.agent_role,
         )
         
 
@@ -221,12 +234,7 @@ class DTHEnv(gym.Env):
             record=record,
         )
         
-        obs = build_observation(
-            self.game,
-            self.agent,
-            self.opp_player,
-            exposes_leap_features(self.awareness),
-        )
+        obs = self._build_obs()
         terminated = self.game.game_over
         agent_won = self.game.winner is self.agent
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from multiprocessing import Pool, cpu_count
 
 import numpy as np
 
@@ -14,11 +15,10 @@ from src.Referee import Referee
 from .hal_opponent import CanonicalHal
 from .value_net import extract_features
 
-#outcomes from Hal's perspective
 @dataclass(slots=True)
 class Experience:
-    features: np.ndarray  # shape (23,)
-    outcome: float  # +1.0 or -1.0
+    features: np.ndarray
+    outcome: float
 
 
 def play_one_game(
@@ -26,11 +26,6 @@ def play_one_game(
     opponent: Opponent,
     seed: int,
 ) -> list[Experience]:
-    """Play a full game, return experiences from Hal's perspective.
-
-    At each half-round (before Hal acts), extract features.
-    After game ends, label all positions with the outcome.
-    """
     hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
     baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
     game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
@@ -59,20 +54,36 @@ def play_one_game(
     return [Experience(state_features, outcome) for state_features in features]
 
 
+def _play_one_game_worker(args: tuple) -> list[Experience]:
+    seed, opp_name, search_depth = args
+    opponent = create_scripted_opponent(opp_name, seed=seed)
+    hal_ai = CanonicalHal(seed=seed, depth=search_depth)
+    return play_one_game(hal_ai=hal_ai, opponent=opponent, seed=seed)
+
+
 def generate_dataset(
     n_games: int,
     opponent_names: list[str],
     search_depth: int = 1,
     base_seed: int = 0,
+    workers: int | None = None,
 ) -> list[Experience]:
-    """Play n_games across the opponent pool, return all experiences."""
-    
+    tasks = [
+        (base_seed + i, opponent_names[i % len(opponent_names)], search_depth)
+        for i in range(n_games)
+    ]
+
+    n_workers = workers or max(1, cpu_count() - 1)
+
+    if n_workers <= 1:
+        dataset = []
+        for t in tasks:
+            dataset.extend(_play_one_game_worker(t))
+        return dataset
+
     dataset = []
-    for i in range(n_games):
-        seed = base_seed + i
-        opp_name = opponent_names[i % len(opponent_names)]
-        opponent = create_scripted_opponent(opp_name, seed=seed)
-        hal_ai = CanonicalHal(seed=seed, depth=search_depth)
-        dataset.extend(play_one_game(hal_ai=hal_ai, opponent=opponent, seed=seed))
+    with Pool(n_workers) as pool:
+        for result in pool.imap_unordered(_play_one_game_worker, tasks):
+            dataset.extend(result)
     return dataset
         

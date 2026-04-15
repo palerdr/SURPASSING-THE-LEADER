@@ -75,7 +75,8 @@ class TestBelief:
 
     def test_initial_not_exploiting(self):
         b = BeliefState()
-        assert not b.exploitation_mode
+        assert not b.check_exploit
+        assert not b.drop_exploit
 
     def test_tracks_baku_checks(self):
         b = BeliefState()
@@ -101,8 +102,8 @@ class TestBelief:
         for _ in range(6):
             r = self._make_record(checker="Baku", check_time=59)
             b = update_belief(b, r)
-        assert b.exploitation_mode
-        assert b.baku_predicted_bucket_probs is not None
+        assert b.check_exploit
+        assert b.baku_check_probs is not None
 
     def test_no_exploitation_with_varied_play(self):
         b = BeliefState()
@@ -110,7 +111,7 @@ class TestBelief:
         for s in seconds:
             r = self._make_record(checker="Baku", check_time=s)
             b = update_belief(b, r)
-        assert not b.exploitation_mode
+        assert not b.check_exploit
 
     def test_history_capped_at_10(self):
         b = BeliefState()
@@ -161,3 +162,80 @@ class TestCanonicalHal:
                 game.play_half_round(baku_action, hal_action)
             turn += 1
         assert turn > 0
+
+
+class TestCanonicalHalLeapLegality:
+    """Item 20: regression for Hal's actor-aware leap-second legality."""
+
+    def _leap_game(self, *, current_half: int = 1) -> "Game":
+        from src.Game import Game
+        from src.Player import Player
+        from src.Referee import Referee
+        from src.Constants import PHYSICALITY_HAL, PHYSICALITY_BAKU
+
+        hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
+        baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
+        ref = Referee()
+        game = Game(player1=hal, player2=baku, referee=ref, first_dropper=hal)
+        game.seed(42)
+        game.game_clock = 3540.0
+        game.current_half = current_half
+        return game
+
+    def test_hal_dropper_never_chooses_61_on_leap_turn(self):
+        game = self._leap_game(current_half=1)
+        hal_ai = CanonicalHal(seed=0, depth=1, use_adaptive=False)
+        hal_ai._state = HalState(memory=MemoryMode.NORMAL, leap_deduced=True)
+
+        for _ in range(10):
+            action = hal_ai.choose_action(game, "dropper", 61)
+            assert 1 <= action <= 60, f"Hal dropped {action} on leap turn"
+
+    def test_hal_checker_can_pick_61_when_deduced(self):
+        game = self._leap_game(current_half=2)
+        hal_ai = CanonicalHal(seed=42, depth=1, use_adaptive=False)
+        hal_ai._state = HalState(memory=MemoryMode.NORMAL, leap_deduced=True)
+
+        for _ in range(20):
+            action = hal_ai.choose_action(game, "checker", 61)
+            assert 1 <= action <= 61
+
+    def test_hal_checker_capped_at_60_when_amnesia(self):
+        game = self._leap_game(current_half=2)
+        hal_ai = CanonicalHal(seed=0, depth=1, use_adaptive=False)
+        hal_ai._state = HalState(memory=MemoryMode.AMNESIA, leap_deduced=True)
+
+        for _ in range(20):
+            action = hal_ai.choose_action(game, "checker", 61)
+            assert 1 <= action <= 60, f"Hal checked {action} despite amnesia"
+
+    def test_hal_checker_capped_at_60_when_undeduced(self):
+        game = self._leap_game(current_half=2)
+        hal_ai = CanonicalHal(seed=0, depth=1, use_adaptive=False)
+        hal_ai._state = HalState(memory=MemoryMode.NORMAL, leap_deduced=False)
+
+        for _ in range(20):
+            action = hal_ai.choose_action(game, "checker", 61)
+            assert 1 <= action <= 60, f"Hal checked {action} without deducing leap"
+
+
+class TestSearchMemoryRecursion:
+    """Item 20: search must propagate memory updates recursively as the clock advances."""
+
+    def test_memory_can_advance_when_simulating_into_leap_window(self):
+        from src.Game import Game
+        from src.Player import Player
+        from src.Referee import Referee
+        from src.Constants import PHYSICALITY_HAL, PHYSICALITY_BAKU
+        from hal.search import search
+
+        hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
+        baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
+        game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
+        game.seed(0)
+        game.game_clock = 3000.0  # before PRE_AMNESIA threshold
+
+        belief = BeliefState()
+        strategy, value = search(game, depth=1, belief=belief, memory=MemoryMode.NORMAL, leap_deduced=True)
+        assert strategy is not None
+        assert -1.0 <= value <= 1.0

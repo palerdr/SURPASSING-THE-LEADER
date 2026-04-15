@@ -38,8 +38,16 @@ from src.Player import Player
 from src.Constants import (
     CYLINDER_MAX, LS_WINDOW_START, TURN_DURATION_NORMAL,
 )
+from .routing_features import (
+    build_public_opponent_history_features,
+    build_full_public_action_history,
+    ROUTING_FEATURE_SIZE,
+    FULL_HISTORY_SIZE,
+)
 
 OBS_SIZE = 20
+OBS_V2_SIZE = 24  # v1 (20) + public opponent history features (4)
+OBS_V3_SIZE = OBS_V2_SIZE + FULL_HISTORY_SIZE  # v2 (24) + full padded history (60) = 84
 
 
 def compute_lsr_variation(game: Game) -> int:
@@ -163,3 +171,44 @@ def build_observation(
     obs[19] = 1.0 if leap_known else 0.0
 
     return obs
+
+
+def build_observation_v2(
+    game: Game,
+    perspective: Player,
+    opponent: Player,
+    leap_known: bool,
+) -> np.ndarray:
+    """Build v2 observation: v1 (20 dims) + public opponent history (4 dims).
+
+    Indices 0-19: identical to v1 (see build_observation).
+    Indices 20-23: public opponent action history features from routing_features.
+
+    Returns:
+        np.ndarray of shape (24,), dtype float32.
+    """
+    base = build_observation(game, perspective, opponent, leap_known)
+    history = build_public_opponent_history_features(game, perspective, opponent)
+    return np.concatenate((base, history))
+
+
+def build_observation_v3(
+    game: Game,
+    perspective: Player,
+    opponent: Player,
+    leap_known: bool,
+) -> np.ndarray:
+    """Build v3 observation: v2 (24 dims) + full padded public action history (60 dims).
+
+    Indices 0-23:  identical to v2 (see build_observation_v2).
+    Indices 24-83: full public action history, zero-padded to 30 half-rounds.
+
+    This is infrastructure for a future observation-v3 retrain. Not used as
+    the promoted policy observation this sprint.
+
+    Returns:
+        np.ndarray of shape (84,), dtype float32.
+    """
+    v2 = build_observation_v2(game, perspective, opponent, leap_known)
+    full_history = build_full_public_action_history(game, perspective, opponent)
+    return np.concatenate((v2, full_history))

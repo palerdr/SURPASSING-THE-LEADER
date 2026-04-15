@@ -15,15 +15,23 @@ class Opponent(ABC):
 
     @abstractmethod
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
-        """Pick a second [1, turn_duration] for dropping or [1, 60] for checking.
+        """Pick a second within the actor's legal range for this role/state.
+
+        The legal max depends on actor identity, role, and leap awareness:
+          - Hal dropper: never 61.
+          - Hal checker: may use 61 only when leap_deduced and not in AMNESIA.
+          - Baku dropper: may use 61 when turn_duration == 61.
+          - Baku checker: never 61.
+
+        See environment.legal_actions for the canonical legality rules.
 
         Args:
             game: Current game state (full access — opponents are privileged).
             role: Either "dropper" or "checker".
-            turn_duration: 60 normally, 61 during leap second turn.
+            turn_duration: 60 normally, 61 during leap second turn (engine-level).
 
         Returns:
-            The chosen second (integer).
+            The chosen second (integer) within the actor's legal range.
         """
         ...
 

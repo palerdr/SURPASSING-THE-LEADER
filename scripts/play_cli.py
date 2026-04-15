@@ -13,8 +13,9 @@ import sys
 import os
 import getpass
 import time
+import argparse
+import threading
 
-# Add project root to path so `src` resolves as a package
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.Player import Player
@@ -24,6 +25,9 @@ from src.Constants import (
     PHYSICALITY_HAL, PHYSICALITY_BAKU, CYLINDER_MAX,
     TURN_DURATION_NORMAL, DEATH_PROCEDURE_OVERHEAD,
 )
+from hal.hal_opponent import CanonicalHal
+from hal.evaluate import set_nn_evaluator
+from hal.train import load_checkpoint
 
 # -- Display helpers -------------------------------------------------
 
@@ -82,18 +86,55 @@ def get_drop_time(name: str, max_t: int) -> int:
             print("\n  Game aborted.")
             sys.exit(0)
 
-def get_check_time(name: str) -> int:
-    """Visible input for checker."""
+def get_check_time(name: str, max_t: int = TURN_DURATION_NORMAL) -> int:
     while True:
         try:
-            raw = input(f"  {name} (Checker) -- choose second [1-{TURN_DURATION_NORMAL}]: ")
+            raw = input(f"  {name} (Checker) -- choose second [1-{max_t}]: ")
             val = int(raw)
-            if 1 <= val <= TURN_DURATION_NORMAL:
+            if 1 <= val <= max_t:
                 return val
-            print(f"    Must be 1-{TURN_DURATION_NORMAL}.")
+            print(f"    Must be 1-{max_t}.")
         except ValueError:
             print("    Enter a number.")
         except (EOFError, KeyboardInterrupt):
+            print("\n  Game aborted.")
+            sys.exit(0)
+
+
+def _countdown_tick(turn_dur, stop):
+    start = time.time()
+    while not stop.is_set():
+        elapsed = int(time.time() - start)
+        remaining = max(0, turn_dur - elapsed)
+        sys.stdout.write(f"\033[s\033[A\r  [{remaining:>2}s]\033[K\033[u")
+        sys.stdout.flush()
+        if remaining <= 0:
+            break
+        stop.wait(1.0)
+
+
+def get_timed_input(name: str, role: str, max_t: int, turn_dur: int, hidden: bool = False) -> int:
+    print(f"  [{turn_dur:>2}s]")
+    stop = threading.Event()
+    timer = threading.Thread(target=_countdown_tick, args=(turn_dur, stop), daemon=True)
+    timer.start()
+
+    prompt = f"  {name} ({role}) -- choose second [1-{max_t}]: "
+    while True:
+        try:
+            raw = getpass.getpass(prompt) if hidden else input(prompt)
+            val = int(raw)
+            if 1 <= val <= max_t:
+                stop.set()
+                timer.join(timeout=2)
+                sys.stdout.write("\033[A\r\033[K")
+                sys.stdout.flush()
+                return val
+            print(f"    Must be 1-{max_t}.")
+        except ValueError:
+            print("    Enter a number.")
+        except (EOFError, KeyboardInterrupt):
+            stop.set()
             print("\n  Game aborted.")
             sys.exit(0)
 
@@ -172,18 +213,49 @@ def print_history(game: Game):
 
 # -- Main game loop --------------------------------------------------
 
+def load_hal_ai(depth: int, checkpoint: str | None) -> CanonicalHal:
+    if checkpoint:
+        net = load_checkpoint(checkpoint)
+        set_nn_evaluator(net)
+        print(f"  Loaded value net: {checkpoint}")
+    else:
+        default = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "models", "checkpoints", "hal_deep_best.pt",
+        )
+        if os.path.exists(default):
+            net = load_checkpoint(default)
+            set_nn_evaluator(net)
+            print(f"  Loaded value net: hal_deep_best.pt")
+        else:
+            print("  No value net found, using handcrafted eval.")
+    return CanonicalHal(depth=depth)
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Drop The Handkerchief -- CLI")
+    parser.add_argument("--pvp", action="store_true", help="Two human players (no AI)")
+    parser.add_argument("--depth", type=int, default=2, help="Hal search depth (default: 2)")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to value net checkpoint")
+    args = parser.parse_args()
+
     print_banner()
 
-    p1_name = input("  Player 1 name [Hal]: ").strip() or "Hal"
-    p2_name = input("  Player 2 name [Baku]: ").strip() or "Baku"
+    if args.pvp:
+        hal_ai = None
+        p1_name = input("  Player 1 name [Hal]: ").strip() or "Hal"
+        p2_name = input("  Player 2 name [Baku]: ").strip() or "Baku"
+    else:
+        print("  Loading Hal AI...")
+        hal_ai = load_hal_ai(args.depth, args.checkpoint)
+        print()
+        p1_name = "Hal"
+        p2_name = input("  Your name [Baku]: ").strip() or "Baku"
 
-    p1 = Player(name=p1_name, physicality=PHYSICALITY_HAL)
-    p2 = Player(name=p2_name, physicality=PHYSICALITY_BAKU)
+    hal = Player(name=p1_name, physicality=PHYSICALITY_HAL)
+    baku = Player(name=p2_name, physicality=PHYSICALITY_BAKU)
     ref = Referee()
-    game = Game(player1=p1, player2=p2, referee=ref)
-
-    # Pre-game ceremony: 12 minutes before R1 (matches manga R1 at 8:12)
+    game = Game(player1=hal, player2=baku, referee=ref)
     game.game_clock = 720.0
 
     print()
@@ -191,7 +263,6 @@ def main():
     pause("Press Enter to begin the game...")
 
     while not game.game_over:
-        # -- Round header --
         clear()
         round_display = game.round_num + 1
         print()
@@ -210,8 +281,17 @@ def main():
             print(f"  Dropper: {dropper.name}    Checker: {checker.name}")
             print()
 
-            drop_t = get_drop_time(dropper.name, turn_dur)
-            check_t = get_check_time(checker.name)
+            if hal_ai is not None:
+                hal_player = hal
+                if dropper is hal_player:
+                    drop_t = hal_ai.choose_action(game, "dropper", turn_dur)
+                    check_t = get_timed_input(checker.name, "Checker", turn_dur, turn_dur)
+                else:
+                    drop_t = get_timed_input(dropper.name, "Dropper", turn_dur, turn_dur, hidden=True)
+                    check_t = hal_ai.choose_action(game, "checker", turn_dur)
+            else:
+                drop_t = get_drop_time(dropper.name, turn_dur)
+                check_t = get_check_time(checker.name, turn_dur)
 
             record = game.play_half_round(drop_t, check_t)
             print_half_result(record)
@@ -223,7 +303,6 @@ def main():
         if not game.game_over:
             pause("Press Enter for next round...")
 
-    # -- Game over --
     print()
     print(f"  ========================================")
     print(f"  GAME OVER")

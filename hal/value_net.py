@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-"""
-Function approximator f: game -> [-1, 1] to represent how likely Hal is to win from a given state
-Arch: Input(n_features) → Linear(64) → ReLU → Linear(64) → ReLU → Linear(1) → Tanh
-"""
-
 import numpy as np
-from torch import Tensor, nn
+import torch
+from torch import nn
 
-from cfr.half_round import survival_probability
+from environment.cfr.half_round import survival_probability
 from environment.route_math import (
     get_named_players,
     lsr_variation_from_clock,
@@ -18,16 +14,15 @@ from environment.route_math import (
 from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY, LS_WINDOW_START, OPENING_START_CLOCK
 from src.Game import Game
 
-
 HIDDEN_DIM = 64
-# HAL.md calls this a 24-input network, but the enumerated feature list expands to 23 slots.
 FEATURE_DIM = 23
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#clamps to [0.0, 1.0]
+
 def _clip01(value: float) -> float:
     return float(np.clip(value, 0.0, 1.0))
 
-#if Hal fails how likely is he to survive this death
+
 def _projected_fail_survival(game: Game, player) -> float:
     death_duration = min(player.cylinder + FAILED_CHECK_PENALTY, CYLINDER_MAX)
     return survival_probability(
@@ -39,7 +34,6 @@ def _projected_fail_survival(game: Game, player) -> float:
 
 
 def extract_features(game: Game) -> np.ndarray:
-    """Convert the current game state into the documented normalized value-net input."""
     hal, baku = get_named_players(game)
     dropper, _ = game.get_roles_for_half(game.current_half)
     hal_is_dropper = dropper.name.lower() == "hal"
@@ -66,7 +60,7 @@ def extract_features(game: Game) -> np.ndarray:
         _clip01(game.game_clock / 3600.0),
         _clip01(game.round_num / 10.0),
         float(game.current_half == 2),
-        *lsr_one_hot, #unpack the one-hot vector
+        *lsr_one_hot,
         float(game.is_leap_second_turn()),
         _clip01(rounds_until_leap_window(game) / 10.0),
         _clip01(game.referee.cprs_performed / 6.0),
@@ -79,7 +73,6 @@ def extract_features(game: Game) -> np.ndarray:
 
 
 class ValueNet(nn.Module):
-    #Input(n_features) → Linear(64) → ReLU → Linear(64) → ReLU → Linear(1) → Tanh
     def __init__(self, input_dim: int = FEATURE_DIM, hidden_dim: int = HIDDEN_DIM):
         super().__init__()
         self.layers = nn.Sequential(
@@ -90,8 +83,6 @@ class ValueNet(nn.Module):
             nn.Linear(hidden_dim, 1),
             nn.Tanh(),
         )
-        
+
     def forward(self, x):
         return self.layers(x)
-    
-    

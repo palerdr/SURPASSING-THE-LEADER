@@ -1,8 +1,10 @@
 import torch
 import numpy as np
-from .value_net import ValueNet, FEATURE_DIM
 from torch.optim import Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.nn import MSELoss
+
+from .value_net import ValueNet, FEATURE_DIM
 from .self_play import Experience
 
 
@@ -13,17 +15,14 @@ def train_value_net(
         batch_size: int = 256,
         lr: float = 1e-3,
 ) -> list[float]:
-    """Train the value network on collected experiences.                        
-      
-      Returns list of average loss per epoch (for plotting/monitoring).           
-      """
-    
     N = len(dataset)
 
     features = torch.tensor(np.stack([exp.features for exp in dataset]))
     outcomes = torch.tensor([[exp.outcome] for exp in dataset], dtype=torch.float32)
 
     optimizer = Adam(net.parameters(), lr=lr)
+    total_steps = epochs * ((N + batch_size - 1) // batch_size)
+    scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=lr * 0.01)
     loss_fn = MSELoss()
     history = []
 
@@ -36,14 +35,13 @@ def train_value_net(
             batch_features = features[batch_idx]
             batch_outcomes = outcomes[batch_idx]
 
-            #forward pass
             predictions = net(batch_features)
             loss = loss_fn(predictions, batch_outcomes)
 
-            #backwards pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             epoch_loss += loss.item()
             n_batches += 1

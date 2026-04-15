@@ -74,4 +74,4 @@ REFEREE_FLOOR = 0.4                 # minimum effectiveness (even exhausted)
 
 # Player physicality presets
 PHYSICALITY_HAL = 1.0
-PHYSICALITY_BAKU = 0.88
+PHYSICALITY_BAKU = 0.94

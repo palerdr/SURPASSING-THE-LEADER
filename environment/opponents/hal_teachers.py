@@ -19,8 +19,14 @@ class HalTeacher(Opponent):
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
         snapshot = build_strategy_snapshot(game)
         if role == "checker":
-            return clamp_second(choose_hal_checker_second(snapshot, turn_duration), role=role, turn_duration=turn_duration)
-        return clamp_second(choose_hal_dropper_second(snapshot, turn_duration), role=role, turn_duration=turn_duration)
+            return clamp_second(
+                choose_hal_checker_second(snapshot, turn_duration),
+                role=role, turn_duration=turn_duration, actor="hal",
+            )
+        return clamp_second(
+            choose_hal_dropper_second(snapshot, turn_duration),
+            role=role, turn_duration=turn_duration, actor="hal",
+        )
 
 
 class HalLeapInferenceTeacher(HalTeacher):
@@ -45,9 +51,9 @@ class HalPressureTeacher(HalTeacher):
         snapshot = build_strategy_snapshot(game)
         if role == "dropper" and snapshot.active_lsr:
             if snapshot.route_flags["round7_pressure"]:
-                return instant_drop(turn_duration)
+                return instant_drop(turn_duration, actor="hal")
             if snapshot.route_flags["round8_bridge"]:
-                return target_st_drop(55, turn_duration)
+                return target_st_drop(55, turn_duration, actor="hal")
         return super().choose_action(game, role, turn_duration)
 
 
@@ -89,7 +95,7 @@ class HalResilienceTeacher(HalTeacher):
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
         snapshot = build_strategy_snapshot(game)
         if role == "dropper" and snapshot.active_lsr and snapshot.route_flags["round7_pressure"]:
-            return instant_drop(turn_duration)
+            return instant_drop(turn_duration, actor="hal")
         if role == "checker" and snapshot.hal_budget.fail_post_ttd < 299.0:
             return safe_check(turn_duration)
         return super().choose_action(game, role, turn_duration)

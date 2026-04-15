@@ -41,6 +41,16 @@ def _empirical_bucket_probs(history: tuple[int, ...]) -> tuple[float, ...]:
     return tuple(c / total for c in counts)
 
 
+def _role_exploit(history: tuple[int, ...]) -> tuple[bool, float, tuple[float, ...] | None]:
+    counts = [0] * len(STANDARD_BUCKETS)
+    for s in history:
+        counts[_bucket_index(s)] += 1
+    ent = _entropy(counts)
+    exploit = ent < EXPLOITATION_THRESHOLD and len(history) >= 4
+    probs = _empirical_bucket_probs(history) if exploit else None
+    return exploit, ent, probs
+
+
 def update_belief(belief: BeliefState, record: HalfRoundRecord) -> BeliefState:
     new_checks = belief.baku_check_history
     new_drops = belief.baku_drop_history
@@ -50,21 +60,17 @@ def update_belief(belief: BeliefState, record: HalfRoundRecord) -> BeliefState:
     if record.dropper.lower() == "baku":
         new_drops = (new_drops + (record.drop_time,))[-10:]
 
-    all_actions = new_checks + new_drops
-    counts = [0] * len(STANDARD_BUCKETS)
-    for s in all_actions:
-        counts[_bucket_index(s)] += 1
-
-    ent = _entropy(counts)
-    exploit = ent < EXPLOITATION_THRESHOLD and len(all_actions) >= 4
-
-    predicted = _empirical_bucket_probs(all_actions) if exploit else None
+    chk_exploit, chk_ent, chk_probs = _role_exploit(new_checks)
+    drp_exploit, drp_ent, drp_probs = _role_exploit(new_drops)
 
     return replace(
         belief,
         baku_check_history=new_checks,
         baku_drop_history=new_drops,
-        exploitation_mode=exploit,
-        baku_predicted_bucket_probs=predicted,
-        baku_entropy=ent,
+        check_exploit=chk_exploit,
+        drop_exploit=drp_exploit,
+        baku_check_probs=chk_probs,
+        baku_drop_probs=drp_probs,
+        check_entropy=chk_ent,
+        drop_entropy=drp_ent,
     )

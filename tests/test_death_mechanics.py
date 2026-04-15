@@ -112,10 +112,11 @@ class TestCylinderOverflow:
         baku.cylinder = 250
 
         # Now a check with 55 ST: 250 + 55 = 305 >= 300 -> overflow
+        # Canon: injection caps at 300 regardless of actual cylinder contents
         rec = game.play_half_round(drop_time=5, check_time=60)
         assert rec.result in (HalfRoundResult.CYLINDER_OVERFLOW_SURVIVED,
                                HalfRoundResult.CYLINDER_OVERFLOW_DIED)
-        assert rec.death_duration == 305
+        assert rec.death_duration == 300
 
     def test_cylinder_at_exactly_300_triggers(self):
         """Cylinder reaching exactly 300 triggers injection."""

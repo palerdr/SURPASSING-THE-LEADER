@@ -15,7 +15,7 @@ def make_env(role: str = "hal", **kwargs) -> DTHEnv:
     return DTHEnv(opponent=RandomBot(), agent_role=role, seed=123, **kwargs)
 
 
-def test_unaware_checker_cannot_use_61_on_leap():
+def test_hal_unaware_checker_cannot_use_61_on_leap():
     env = make_env("hal")
     env.reset(options={
         "scenario": {
@@ -29,7 +29,7 @@ def test_unaware_checker_cannot_use_61_on_leap():
     assert env.action_masks()[60] == False
 
 
-def test_deduced_checker_can_use_61_on_leap():
+def test_hal_deduced_checker_can_use_61_on_leap():
     env = make_env("hal")
     env.reset(options={
         "scenario": {
@@ -43,13 +43,41 @@ def test_deduced_checker_can_use_61_on_leap():
     assert env.action_masks()[60] == True
 
 
-def test_dropper_can_use_61_on_leap_even_if_unaware():
+def test_baku_checker_cannot_use_61_on_leap_even_if_deduced():
+    env = make_env("baku")
+    env.reset(options={
+        "scenario": {
+            "game_clock": 3540.0,
+            "current_half": 1,
+            "first_dropper": "hal",
+            "awareness": "deduced",
+        }
+    })
+
+    assert env.action_masks()[60] == False
+
+
+def test_hal_dropper_cannot_use_61_on_leap():
     env = make_env("hal")
     env.reset(options={
         "scenario": {
             "game_clock": 3540.0,
             "current_half": 1,
             "first_dropper": "hal",
+            "awareness": "deduced",
+        }
+    })
+
+    assert env.action_masks()[60] == False
+
+
+def test_baku_dropper_can_use_61_on_leap_even_if_unaware():
+    env = make_env("baku")
+    env.reset(options={
+        "scenario": {
+            "game_clock": 3540.0,
+            "current_half": 1,
+            "first_dropper": "baku",
             "awareness": "unaware",
         }
     })

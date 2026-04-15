@@ -18,6 +18,14 @@ from src.Player import Player
 ROUTING_HISTORY_WINDOW = 2
 ROUTING_FEATURE_SIZE = ROUTING_HISTORY_WINDOW * 2
 
+# ── Full-history scaffold (v3 infrastructure) ──────────────────────────
+# Fixed-padded full public action history for future observation-v3.
+# Records every opponent action from the entire game, zero-padded to a
+# fixed max length. NOT used as the promoted policy observation this sprint.
+FULL_HISTORY_MAX_HALF_ROUNDS = 30
+FULL_HISTORY_FEATURES_PER_RECORD = 2  # (action_norm, role_flag)
+FULL_HISTORY_SIZE = FULL_HISTORY_MAX_HALF_ROUNDS * FULL_HISTORY_FEATURES_PER_RECORD
+
 
 def _public_action_for_player(record, player: Player) -> tuple[float, float]:
     """Return normalized public action + role flag for ``player`` in one record.
@@ -66,6 +74,50 @@ def build_public_opponent_history_features(
         base = idx * 2
         features[base] = action_norm
         features[base + 1] = role_flag
+
+    return features
+
+
+def build_full_public_action_history(
+    game: Game,
+    perspective: Player,
+    opponent: Player,
+    *,
+    max_half_rounds: int = FULL_HISTORY_MAX_HALF_ROUNDS,
+) -> np.ndarray:
+    """Build fixed-padded full public action history for all game turns.
+
+    Unlike the windowed v2 features (last 2 actions), this encodes every
+    opponent action from the start of the game, zero-padded to a fixed
+    maximum length. Intended as infrastructure for a future observation-v3.
+
+    Output layout (max_half_rounds * 2 features):
+        [0]  turn_0_opponent_action_norm
+        [1]  turn_0_opponent_role_flag
+        [2]  turn_1_opponent_action_norm
+        [3]  turn_1_opponent_role_flag
+        ...
+        [2*max_half_rounds-2]  turn_{max-1}_opponent_action_norm
+        [2*max_half_rounds-1]  turn_{max-1}_opponent_role_flag
+
+    Missing (future) turns are zero-padded.
+    """
+    features = np.zeros(max_half_rounds * FULL_HISTORY_FEATURES_PER_RECORD, dtype=np.float32)
+    if not game.history:
+        return features
+
+    slot = 0
+    for record in game.history:
+        if slot >= max_half_rounds:
+            break
+        try:
+            action_norm, role_flag = _public_action_for_player(record, opponent)
+        except ValueError:
+            continue
+        base = slot * FULL_HISTORY_FEATURES_PER_RECORD
+        features[base] = action_norm
+        features[base + 1] = role_flag
+        slot += 1
 
     return features
 

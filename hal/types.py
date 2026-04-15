@@ -16,14 +16,16 @@ class MemoryMode(Enum):
     AMNESIA = auto()
     RECOVERED = auto()
 
-#hal's belief state
 @dataclass(frozen=True)
 class BeliefState:
     baku_check_history: tuple[int, ...] = ()
     baku_drop_history: tuple[int, ...] = ()
-    exploitation_mode: bool = False
-    baku_predicted_bucket_probs: tuple[float, ...] | None = None
-    baku_entropy: float = 2.0
+    check_exploit: bool = False
+    drop_exploit: bool = False
+    baku_check_probs: tuple[float, ...] | None = None
+    baku_drop_probs: tuple[float, ...] | None = None
+    check_entropy: float = 2.0
+    drop_entropy: float = 2.0
 
 
 #hal's agg state

@@ -11,9 +11,10 @@ from random import Random
 from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY
 from hal.types import Bucket, BeliefState
 from hal.buckets import (
-    STANDARD_BUCKETS, LEAP_BUCKET, bucket_pair_payoff, resolve_bucket,
+    STANDARD_BUCKETS, LEAP_BUCKET, bucket_pair_payoff, resolve_bucket, get_legal_buckets,
 )
 from hal.solver import solve_minimax, best_response
+from environment.legal_actions import legal_max_second, can_use_leap_second
 
 
 # ── Ticket 1.1: Bucket definitions ──
@@ -183,25 +184,24 @@ class TestSolveMinimax:
 
 class TestBestResponse:
     def test_pure_exploitation(self):
-        # Baku always plays bucket 0 → Hal should pick the row with best A[i][0]
         A = np.array([[1.0, -5.0],
                       [3.0, -5.0]])
         belief = BeliefState(
-            exploitation_mode=True,
-            baku_predicted_bucket_probs=(1.0, 0.0),
+            check_exploit=True,
+            baku_check_probs=(1.0, 0.0),
         )
-        strat, val = best_response(belief, A)
-        assert strat[1] == pytest.approx(1.0)  # row 1 has payoff 3 vs col 0
+        strat, val = best_response(belief, A, hal_is_dropper=True)
+        assert strat[1] == pytest.approx(1.0)
         assert val == pytest.approx(3.0)
 
     def test_mixed_baku(self):
         A = np.array([[4.0, 0.0],
                       [0.0, 4.0]])
         belief = BeliefState(
-            exploitation_mode=True,
-            baku_predicted_bucket_probs=(0.8, 0.2),
+            drop_exploit=True,
+            baku_drop_probs=(0.8, 0.2),
         )
-        strat, val = best_response(belief, A)
+        strat, val = best_response(belief, A, hal_is_dropper=False)
         # EV row 0 = 4*0.8 + 0*0.2 = 3.2
         # EV row 1 = 0*0.8 + 4*0.2 = 0.8
         assert strat[0] == pytest.approx(1.0)
@@ -212,9 +212,123 @@ class TestBestResponse:
         A = rng.randn(7, 7)
         probs = tuple(np.ones(7) / 7)
         belief = BeliefState(
-            exploitation_mode=True,
-            baku_predicted_bucket_probs=probs,
+            check_exploit=True,
+            baku_check_probs=probs,
         )
-        strat, _ = best_response(belief, A)
+        strat, _ = best_response(belief, A, hal_is_dropper=True)
         assert sum(strat) == pytest.approx(1.0)
-        assert sum(s == 1.0 for s in strat) == 1  # pure strategy
+        assert sum(s == 1.0 for s in strat) == 1
+
+
+class TestLegalActionAsymmetry:
+    def test_hal_dropper_max_is_60_on_normal_turn(self):
+        assert legal_max_second("hal", "dropper", 60) == 60
+
+    def test_hal_dropper_max_is_60_on_leap_turn(self):
+        assert legal_max_second("hal", "dropper", 61, hal_leap_deduced=True) == 60
+
+    def test_hal_checker_max_is_60_when_unaware(self):
+        assert legal_max_second("hal", "checker", 61, hal_leap_deduced=False) == 60
+
+    def test_hal_checker_max_is_61_when_deduced(self):
+        assert legal_max_second("hal", "checker", 61, hal_leap_deduced=True) == 61
+
+    def test_hal_checker_max_is_60_when_amnesia(self):
+        assert legal_max_second(
+            "hal", "checker", 61, hal_leap_deduced=True, hal_memory_impaired=True,
+        ) == 60
+
+    def test_baku_dropper_max_is_61_on_leap_turn(self):
+        assert legal_max_second("baku", "dropper", 61) == 61
+
+    def test_baku_checker_max_is_60_even_when_aware(self):
+        assert legal_max_second("baku", "checker", 61, hal_leap_deduced=True) == 60
+
+    def test_can_use_leap_second_hal_dropper_never(self):
+        assert not can_use_leap_second("hal", "dropper", hal_leap_deduced=True)
+
+    def test_can_use_leap_second_hal_checker_requires_deduced(self):
+        assert can_use_leap_second("hal", "checker", hal_leap_deduced=True)
+        assert not can_use_leap_second("hal", "checker", hal_leap_deduced=False)
+        assert not can_use_leap_second(
+            "hal", "checker", hal_leap_deduced=True, hal_memory_impaired=True,
+        )
+
+    def test_can_use_leap_second_baku_dropper_always(self):
+        assert can_use_leap_second("baku", "dropper")
+
+    def test_can_use_leap_second_baku_checker_never(self):
+        assert not can_use_leap_second("baku", "checker", hal_leap_deduced=True)
+
+
+class TestLegalBucketSelection:
+    def test_hal_dropper_buckets_omit_leap_on_leap_turn(self):
+        buckets = get_legal_buckets("hal", "dropper", 61, hal_leap_deduced=True)
+        assert LEAP_BUCKET not in buckets
+        assert buckets == STANDARD_BUCKETS
+
+    def test_hal_checker_buckets_include_leap_when_deduced(self):
+        buckets = get_legal_buckets("hal", "checker", 61, hal_leap_deduced=True)
+        assert LEAP_BUCKET in buckets
+
+    def test_hal_checker_buckets_omit_leap_when_unaware(self):
+        buckets = get_legal_buckets("hal", "checker", 61, hal_leap_deduced=False)
+        assert LEAP_BUCKET not in buckets
+
+    def test_hal_checker_buckets_omit_leap_when_amnesia(self):
+        buckets = get_legal_buckets(
+            "hal", "checker", 61, hal_leap_deduced=True, hal_memory_impaired=True,
+        )
+        assert LEAP_BUCKET not in buckets
+
+    def test_baku_dropper_buckets_include_leap_on_leap_turn(self):
+        buckets = get_legal_buckets("baku", "dropper", 61)
+        assert LEAP_BUCKET in buckets
+
+    def test_baku_checker_buckets_omit_leap_on_leap_turn(self):
+        buckets = get_legal_buckets("baku", "checker", 61)
+        assert LEAP_BUCKET not in buckets
+
+    def test_normal_turn_no_leap_for_anyone(self):
+        for actor in ("hal", "baku"):
+            for role in ("dropper", "checker"):
+                buckets = get_legal_buckets(actor, role, 60)
+                assert LEAP_BUCKET not in buckets
+
+
+class TestSearchSignAndPruning:
+    """Regression for the immediate-payoff sign and dominated-pruning polarity bugs."""
+
+    def test_signed_immediate_hal_dropper_negates_checker_perspective(self):
+        from hal.search import _signed_immediate
+
+        m = np.array([[-30.0]])
+        val = _signed_immediate(m, 0, 0, hal_is_dropper=True)
+        assert val > 0  # checker hurt → good for hal-as-dropper
+
+    def test_signed_immediate_hal_checker_passes_through(self):
+        from hal.search import _signed_immediate
+
+        m = np.array([[-30.0]])
+        val = _signed_immediate(m, 0, 0, hal_is_dropper=False)
+        assert val < 0  # checker hurt → bad for hal-as-checker
+
+    def test_pruning_keeps_at_least_one_hal_action(self):
+        from hal.search import _prune_dominated
+
+        hal_keep, baku_keep = _prune_dominated(
+            STANDARD_BUCKETS, STANDARD_BUCKETS, checker_cylinder=100.0, hal_is_dropper=True,
+        )
+        assert len(hal_keep) >= 1
+        assert len(baku_keep) >= 1
+
+    def test_pruning_does_not_remove_dominant_action(self):
+        from hal.search import _prune_dominated
+
+        # The instant bucket is strong for hal-as-dropper at high checker cylinder
+        # because it forces the checker to either fail or accept maximum ST.
+        hal_keep, _ = _prune_dominated(
+            STANDARD_BUCKETS, STANDARD_BUCKETS, checker_cylinder=250.0, hal_is_dropper=True,
+        )
+        # The instant bucket should not be pruned in this clear-cut state.
+        assert 0 in hal_keep

@@ -36,30 +36,30 @@ def choose_hal_checker_second(snapshot, turn_duration: int) -> int:
 
 def choose_hal_dropper_second(snapshot, turn_duration: int) -> int:
     if snapshot.is_leap_turn:
-        return instant_drop(turn_duration)
+        return instant_drop(turn_duration, actor="hal")
 
     if snapshot.round_num == 1 and snapshot.current_half == 1:
-        return target_st_drop(25, turn_duration)
+        return target_st_drop(25, turn_duration, actor="hal")
 
     if snapshot.round_num == 2 and snapshot.current_half == 1:
-        return target_st_drop(4, turn_duration)
+        return target_st_drop(4, turn_duration, actor="hal")
 
     if snapshot.round_num == 3 and snapshot.current_half == 1:
-        return target_st_drop(3, turn_duration)
+        return target_st_drop(3, turn_duration, actor="hal")
 
     if snapshot.round_num == 5 and snapshot.current_half == 1:
-        return late_drop(turn_duration, second=60)
+        return late_drop(turn_duration, second=60, actor="hal")
 
     if snapshot.round_num == 6 and snapshot.current_half == 1:
-        return instant_drop(turn_duration)
+        return instant_drop(turn_duration, actor="hal")
 
     if snapshot.round_num == 7 and snapshot.current_half == 1:
-        return target_st_drop(55, turn_duration)
+        return target_st_drop(55, turn_duration, actor="hal")
 
     if snapshot.round_num == 8 and snapshot.current_half == 1:
-        return instant_drop(turn_duration)
+        return instant_drop(turn_duration, actor="hal")
 
     if snapshot.active_lsr and snapshot.current_half == 1:
-        return instant_drop(turn_duration)
+        return instant_drop(turn_duration, actor="hal")
 
-    return target_st_drop(24, turn_duration)
+    return target_st_drop(24, turn_duration, actor="hal")

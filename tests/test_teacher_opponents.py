@@ -78,3 +78,51 @@ def test_hal_memory_teacher_falls_for_leap_at_sixty():
     teacher = HalMemoryLossTeacher()
 
     assert teacher.choose_action(env.game, "checker", env.game.get_turn_duration()) == 60
+
+
+def test_hal_teachers_never_drop_61_on_leap_turn():
+    """Item 23: Hal teachers must never drop 61, even on leap turn.
+
+    Baku may drop 61 (as the canonical leap-second exploit) but Hal cannot —
+    Hal's persona/awareness rules forbid the dropper from using the extra
+    second. This is enforced via the actor-aware clamp_second contract.
+    """
+    from environment.opponents.hal_teachers import (
+        HalTeacher,
+        HalLeapInferenceTeacher,
+        HalDeathTradeTeacher,
+        HalPressureTeacher,
+        HalDeviationTeacher,
+        HalEcholocationTeacher,
+        HalMemoryLossTeacher,
+        HalResilienceTeacher,
+    )
+
+    env = make_env("hal")
+    env.reset(options={"scenario": get_scenario("round9_leap_deduced")})
+    td = env.game.get_turn_duration()
+    assert td == 61
+
+    teachers = [
+        HalTeacher(),
+        HalLeapInferenceTeacher(),
+        HalDeathTradeTeacher(),
+        HalPressureTeacher(),
+        HalDeviationTeacher(),
+        HalEcholocationTeacher(),
+        HalMemoryLossTeacher(),
+        HalResilienceTeacher(),
+    ]
+
+    for teacher in teachers:
+        action = teacher.choose_action(env.game, "dropper", td)
+        assert 1 <= action <= 60, f"{type(teacher).__name__} dropped {action} on leap turn"
+
+
+def test_baku_leap_executor_still_drops_61():
+    env = make_env("baku")
+    env.reset(options={"scenario": get_scenario("round9_leap_deduced")})
+
+    teacher = BakuLeapExecutorTeacher()
+    action = teacher.choose_action(env.game, "dropper", env.game.get_turn_duration())
+    assert action == 61

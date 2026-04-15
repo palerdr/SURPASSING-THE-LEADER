@@ -12,7 +12,7 @@ from enum import Enum
 import numpy as np
 
 from src.Game import Game, HalfRoundRecord
-from src.Constants import TURN_DURATION_NORMAL
+from src.Constants import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
 
 
 class LeapAwareness(str, Enum):
@@ -36,7 +36,9 @@ def exposes_leap_features(awareness: LeapAwareness) -> bool:
     return awareness == LeapAwareness.DEDUCED
 
 
-def checker_can_use_extra_second(awareness: LeapAwareness) -> bool:
+def checker_can_use_extra_second(awareness: LeapAwareness, *, actor: str = "baku") -> bool:
+    if actor.lower() != "hal":
+        return False
     return awareness == LeapAwareness.DEDUCED
 
 
@@ -45,15 +47,25 @@ def build_action_mask(
     role: str,
     is_leap_turn: bool,
     awareness: LeapAwareness,
+    actor: str = "baku",
 ) -> np.ndarray:
+    from environment.legal_actions import legal_max_second
+
     mask = np.zeros(61, dtype=bool)
     mask[:TURN_DURATION_NORMAL] = True
 
     if not is_leap_turn:
         return mask
 
-    if role == "dropper" or checker_can_use_extra_second(awareness):
-        mask[TURN_DURATION_NORMAL] = True  # action 60 -> second 61
+    hal_leap_deduced = awareness == LeapAwareness.DEDUCED
+    hal_memory_impaired = awareness == LeapAwareness.MEMORY_IMPAIRED
+    max_sec = legal_max_second(
+        actor, role, TURN_DURATION_LEAP,
+        hal_leap_deduced=hal_leap_deduced,
+        hal_memory_impaired=hal_memory_impaired,
+    )
+    if max_sec >= TURN_DURATION_LEAP:
+        mask[TURN_DURATION_NORMAL] = True  # action index 60 -> second 61
 
     return mask
 
