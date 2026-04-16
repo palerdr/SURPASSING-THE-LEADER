@@ -10,6 +10,8 @@ from src.Referee import Referee
 from src.Game import Game
 from src.Constants import PHYSICALITY_HAL, PHYSICALITY_BAKU
 from hal.hal_opponent import CanonicalHal
+from hal.train import load_checkpoint
+from hal.evaluate import set_nn_evaluator
 from environment.opponents.factory import create_scripted_opponent
 
 BAKU_OPPONENTS = [
@@ -73,8 +75,17 @@ def main():
     parser.add_argument("--opponent", default=None, help="Single opponent to test")
     parser.add_argument("--games", type=int, default=NUM_GAMES)
     parser.add_argument("--depth", type=int, default=SEARCH_DEPTH)
+    parser.add_argument("--checkpoint", default=None, help="Path to value net checkpoint (.pt)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+
+    if args.checkpoint:
+        net = load_checkpoint(args.checkpoint)
+        set_nn_evaluator(net)
+        print(f"loaded checkpoint: {args.checkpoint}")
+    else:
+        set_nn_evaluator(None)
+        print("using handcrafted eval")
 
     opponents = [args.opponent] if args.opponent else BAKU_OPPONENTS
     hal_ai = CanonicalHal(seed=0, depth=args.depth)

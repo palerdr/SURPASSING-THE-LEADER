@@ -16,6 +16,7 @@ htmlcov/
 
 # Generated reports and experiment outputs
 docs/reports/
+logs/
 
 # Training artifacts
 models/checkpoints/

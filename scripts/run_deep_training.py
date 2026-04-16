@@ -89,7 +89,7 @@ def main():
         print(f"ITERATION {i}")
         print(f"{'='*60}")
 
-        if net is not None and i > 0:
+        if net is not None:
             set_nn_evaluator(net)
         else:
             set_nn_evaluator(None)

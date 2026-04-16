@@ -1,0 +1,14 @@
+# STL Python runtime dependencies
+#
+# Engine + Hal AI run on numpy/scipy/torch.
+# Gym wrapper uses gymnasium + stable-baselines3 (MaskablePPO lives in sb3-contrib).
+# Tests use pytest.
+
+numpy>=2.0,<3
+scipy>=1.14,<2
+torch>=2.5
+gymnasium>=1.0,<2
+stable-baselines3>=2.5
+sb3-contrib>=2.5
+matplotlib>=3.8
+pytest>=8.0

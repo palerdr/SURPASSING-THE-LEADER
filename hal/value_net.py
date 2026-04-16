@@ -16,7 +16,7 @@ from src.Game import Game
 
 HIDDEN_DIM = 64
 FEATURE_DIM = 23
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cpu")
 
 
 def _clip01(value: float) -> float:
