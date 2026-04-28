@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surpassing the Leader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mx: -1000px;
+    --my: -1000px;
+    --bg-aspect: 1.3386;
+    --img-w: min(100vw, calc(100vh * var(--bg-aspect)));
+    --img-h: min(100vh, calc(100vw / var(--bg-aspect)));
+    --img-vpad: calc((100vh - var(--img-h)) / 2);
+    --img-hpad: calc((100vw - var(--img-w)) / 2);
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+  }
+
+  .scene {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+
+  .background { background-image: url("Background.png"); }
+
+  .stars {
+    background-image: url("StarMap.png");
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+
+  .stars-base {
+    opacity: 0.42;
+    filter: brightness(1.25) contrast(1.05);
+  }
+
+  .stars-glow {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='620' height='620'><defs><filter id='d' x='-10%25' y='-10%25' width='120%25' height='120%25'><feTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='3' seed='7' result='t'/><feDisplacementMap in='SourceGraphic' in2='t' scale='95' xChannelSelector='R' yChannelSelector='G'/></filter><radialGradient id='g' cx='310' cy='310' r='300' gradientUnits='userSpaceOnUse'><stop offset='0' stop-color='white' stop-opacity='1'/><stop offset='0.45' stop-color='white' stop-opacity='0.6'/><stop offset='0.82' stop-color='white' stop-opacity='0.09'/><stop offset='1' stop-color='white' stop-opacity='0'/></radialGradient></defs><rect width='620' height='620' fill='url(%23g)' filter='url(%23d)'/></svg>");
+    -webkit-mask-size: 620px 620px;
+    -webkit-mask-position: calc(var(--mx) - 310px) calc(var(--my) - 310px);
+    -webkit-mask-repeat: no-repeat;
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='620' height='620'><defs><filter id='d' x='-10%25' y='-10%25' width='120%25' height='120%25'><feTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='3' seed='7' result='t'/><feDisplacementMap in='SourceGraphic' in2='t' scale='95' xChannelSelector='R' yChannelSelector='G'/></filter><radialGradient id='g' cx='310' cy='310' r='300' gradientUnits='userSpaceOnUse'><stop offset='0' stop-color='white' stop-opacity='1'/><stop offset='0.45' stop-color='white' stop-opacity='0.6'/><stop offset='0.82' stop-color='white' stop-opacity='0.09'/><stop offset='1' stop-color='white' stop-opacity='0'/></radialGradient></defs><rect width='620' height='620' fill='url(%23g)' filter='url(%23d)'/></svg>");
+    mask-size: 620px 620px;
+    mask-position: calc(var(--mx) - 310px) calc(var(--my) - 310px);
+    mask-repeat: no-repeat;
+    animation: glowShimmer 2.4s ease-in-out infinite;
+    will-change: filter;
+  }
+
+  @keyframes glowShimmer {
+    0%, 100% { filter: brightness(1.95) contrast(1.05); }
+    50%      { filter: brightness(3.05) contrast(1.22); }
+  }
+
+  .shooting-star {
+    position: absolute;
+    width: 170px;
+    height: 1.2px;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    background: linear-gradient(to right,
+      transparent 0%,
+      rgba(255,255,255,0)    8%,
+      rgba(255,255,255,0.30) 70%,
+      rgba(255,255,255,0.95) 100%);
+    filter: blur(0.4px);
+    left: var(--x0);
+    top: var(--y0);
+    opacity: 0;
+    animation: shoot var(--dur) cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  }
+
+  @keyframes shoot {
+    0%   { transform: translate(0, 0) rotate(var(--rot)); opacity: 0; }
+    8%   { opacity: 0.55; }
+    85%  { opacity: 0.35; }
+    100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stars-glow   { animation: none; filter: brightness(2.4); }
+    .shooting-star { display: none; }
+  }
+
+  .title {
+    position: absolute;
+    bottom: calc(var(--img-vpad) + 2.2vh);
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+    font-weight: 900;
+    font-size: max(18px, calc(var(--img-w) * 0.058));
+    line-height: 1;
+    letter-spacing: 0.10em;
+    color: #fff;
+    -webkit-text-stroke: 0.11em #000;
+    paint-order: stroke fill;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    z-index: 5;
+  }
+
+  .bulbs {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  .bulb {
+    position: absolute;
+    cursor: ns-resize;
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+  }
+  .bulb.dragging { cursor: grabbing; }
+
+  .bulb-img {
+    position: absolute;
+    inset: 0;
+    background-image: url("LightBulb.png");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: brightness(0.55) contrast(0.85);
+  }
+
+  .bulb-glow {
+    position: absolute;
+    top: -180%;
+    bottom: -10%;
+    left: -120%;
+    right: -120%;
+    background: radial-gradient(circle at 50% 70%,
+      rgba(255, 240, 200, 0.95) 0%,
+      rgba(255, 225, 150, 0.55) 12%,
+      rgba(255, 200, 100, 0.22) 28%,
+      rgba(255, 180, 70, 0.05) 45%,
+      transparent 65%);
+    mix-blend-mode: screen;
+    opacity: 0;
+    pointer-events: none;
+    filter: blur(3px);
+  }
+
+  .bulb.lighting .bulb-glow {
+    animation: bulbWarmup var(--bulb-duration, 12s) linear forwards;
+  }
+  .bulb.lighting .bulb-img {
+    animation: bulbBrighten var(--bulb-duration, 12s) linear forwards;
+  }
+  .bulb.lit .bulb-glow { opacity: 1; }
+  .bulb.lit .bulb-img  { filter: brightness(1.5) contrast(1.05); }
+
+  @keyframes bulbWarmup {
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  @keyframes bulbBrighten {
+    0%   { filter: brightness(0.55) contrast(0.85); }
+    100% { filter: brightness(1.5) contrast(1.05); }
+  }
+
+  .editor {
+    position: fixed;
+    bottom: 12px;
+    left: 12px;
+    z-index: 10;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #fff;
+    background: rgba(0,0,0,0.62);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    max-width: 360px;
+  }
+  .editor .hint  { color: rgba(255,255,255,0.55); font-size: 11px; }
+  .editor pre    { margin: 0; white-space: pre; line-height: 1.35; color: #c8e3ff; }
+  .editor .row   { display: flex; gap: 6px; flex-wrap: wrap; }
+  .editor button {
+    font: inherit;
+    color: #fff;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  .editor button:hover  { background: rgba(255,255,255,0.20); }
+  .editor button:active { background: rgba(255,255,255,0.30); }
+  .editor .toast { color: #9bd6a3; font-size: 11px; min-height: 14px; }
+</style>
+</head>
+<body>
+  <div class="scene" id="scene">
+    <div class="layer background"></div>
+    <div class="layer stars stars-base"></div>
+    <div class="layer stars stars-glow"></div>
+    <div class="bulbs" id="bulbs"></div>
+    <div class="title">SURPASSING THE LEADER</div>
+  </div>
+
+  <div class="editor" id="editor">
+    <div class="hint">Drag bulbs up/down · 12s each, 60s total</div>
+    <pre id="readout"></pre>
+    <div class="row">
+      <button id="copyBtn"  type="button">Copy JSON</button>
+      <button id="resetBtn" type="button">Reset</button>
+      <button id="restartBtn" type="button">Restart timer</button>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    (function () {
+      const root      = document.documentElement;
+      const scene     = document.getElementById('scene');
+      const bulbsEl   = document.getElementById('bulbs');
+      const readout   = document.getElementById('readout');
+      const toast     = document.getElementById('toast');
+
+      window.addEventListener('pointermove', (e) => {
+        root.style.setProperty('--mx', e.clientX + 'px');
+        root.style.setProperty('--my', e.clientY + 'px');
+      }, { passive: true });
+
+      const BG_W = 1451;
+      const BG_H = 1084;
+      const BULB_NATIVE_W = 1024;
+      const BULB_NATIVE_H = 1536;
+      const BULB_ASPECT_WH = BULB_NATIVE_W / BULB_NATIVE_H;
+
+      const BULB_COUNT = 5;
+      const BULB_SIZE = 0.16;
+      const BULB_DURATION_MS = 12_000;
+
+      const DEFAULTS = Array.from({ length: BULB_COUNT }, (_, i) => ({
+        cx: (i + 1) / (BULB_COUNT + 1),
+        cy: 0.86
+      }));
+      const positions = DEFAULTS.map(p => ({ ...p }));
+      const bulbEls = [];
+
+      for (let i = 0; i < BULB_COUNT; i++) {
+        const el = document.createElement('div');
+        el.className = 'bulb';
+        el.dataset.index = String(i);
+        el.style.setProperty('--bulb-duration', (BULB_DURATION_MS / 1000) + 's');
+        el.innerHTML = '<div class="bulb-glow"></div><div class="bulb-img"></div>';
+        bulbsEl.appendChild(el);
+        bulbEls.push(el);
+      }
+
+      function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+      function getContainInfo() {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const scale = Math.min(vw / BG_W, vh / BG_H);
+        const renderedW = BG_W * scale;
+        const renderedH = BG_H * scale;
+        const offsetX = (vw - renderedW) / 2;
+        const offsetY = (vh - renderedH) / 2;
+        return { renderedW, renderedH, offsetX, offsetY };
+      }
+
+      function placeBulbs() {
+        const { renderedW, renderedH, offsetX, offsetY } = getContainInfo();
+        const heightPx = BULB_SIZE * renderedH;
+        const widthPx  = heightPx * BULB_ASPECT_WH;
+        for (let i = 0; i < BULB_COUNT; i++) {
+          const p = positions[i];
+          const cx = offsetX + p.cx * renderedW;
+          const cy = offsetY + p.cy * renderedH;
+          const el = bulbEls[i];
+          el.style.width  = widthPx + 'px';
+          el.style.height = heightPx + 'px';
+          el.style.left   = (cx - widthPx / 2) + 'px';
+          el.style.top    = (cy - heightPx / 2) + 'px';
+        }
+        updateReadout();
+      }
+
+      function updateReadout() {
+        const lines = positions.map(p =>
+          '    { cx: ' + p.cx.toFixed(4) + ', cy: ' + p.cy.toFixed(4) + ' }');
+        readout.textContent =
+          '{\n' +
+          '  imageWidth:  ' + BG_W + ',\n' +
+          '  imageHeight: ' + BG_H + ',\n' +
+          '  bulbSize:    ' + BULB_SIZE + ',\n' +
+          '  durationMsPerBulb: ' + BULB_DURATION_MS + ',\n' +
+          '  bulbs: [\n' + lines.join(',\n') + '\n  ]\n' +
+          '}';
+      }
+
+      placeBulbs();
+      window.addEventListener('resize', placeBulbs);
+
+      bulbEls.forEach((el, i) => {
+        let dragId = null, dragStart = null;
+        el.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          dragId = e.pointerId;
+          dragStart = { py: e.clientY, cy: positions[i].cy };
+          el.classList.add('dragging');
+          el.setPointerCapture(e.pointerId);
+        });
+        el.addEventListener('pointermove', (e) => {
+          if (e.pointerId !== dragId) return;
+          const { renderedH } = getContainInfo();
+          const dy = (e.clientY - dragStart.py) / renderedH;
+          positions[i].cy = clamp(dragStart.cy + dy, -0.1, 1.2);
+          placeBulbs();
+        });
+        function endDrag(e) {
+          if (e.pointerId !== dragId) return;
+          dragId = null;
+          el.classList.remove('dragging');
+          try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+        el.addEventListener('pointerup',     endDrag);
+        el.addEventListener('pointercancel', endDrag);
+      });
+
+      let lightTimer = null;
+      let lightingIndex = 0;
+
+      function clearLightingState() {
+        if (lightTimer) { clearTimeout(lightTimer); lightTimer = null; }
+        for (const el of bulbEls) {
+          el.classList.remove('lighting', 'lit');
+        }
+        lightingIndex = 0;
+      }
+
+      function lightNext() {
+        if (lightingIndex >= BULB_COUNT) {
+          lightTimer = null;
+          return;
+        }
+        const el = bulbEls[lightingIndex];
+        el.classList.add('lighting');
+        lightTimer = setTimeout(() => {
+          el.classList.remove('lighting');
+          el.classList.add('lit');
+          lightingIndex++;
+          lightNext();
+        }, BULB_DURATION_MS);
+      }
+
+      function startTimer() {
+        clearLightingState();
+        lightNext();
+      }
+
+      document.getElementById('copyBtn').addEventListener('click', async () => {
+        const text = readout.textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          flashToast('Copied');
+        } catch (_) {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          let ok = false;
+          try { ok = document.execCommand('copy'); } catch (_) {}
+          ta.remove();
+          flashToast(ok ? 'Copied' : 'Copy failed — select manually');
+        }
+      });
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        for (let i = 0; i < BULB_COUNT; i++) Object.assign(positions[i], DEFAULTS[i]);
+        placeBulbs();
+        flashToast('Reset positions');
+      });
+      document.getElementById('restartBtn').addEventListener('click', () => {
+        startTimer();
+        flashToast('Timer restarted');
+      });
+
+      let toastTimer = null;
+      function flashToast(msg) {
+        toast.textContent = msg;
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.textContent = ''; }, 1400);
+      }
+
+      startTimer();
+
+      let shotTimer = null;
+
+      function spawnShootingStar() {
+        const star = document.createElement('div');
+        star.className = 'shooting-star';
+
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        const angleDeg = 25 + Math.random() * 25;
+        const sign = Math.random() < 0.5 ? -1 : 1;
+        const angleRad = angleDeg * Math.PI / 180;
+        const len = 1100 + Math.random() * 700;
+        const dx = sign * Math.cos(angleRad) * len;
+        const dy = Math.sin(angleRad) * len;
+        const rotDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        const x0 = (sign > 0 ? -120 + Math.random() * vw * 0.5
+                             : vw * 0.5 + Math.random() * (vw * 0.5 + 120));
+        const y0 = -40 + Math.random() * (vh * 0.45);
+        const dur = 1.0 + Math.random() * 0.7;
+
+        star.style.setProperty('--x0',  x0.toFixed(1)  + 'px');
+        star.style.setProperty('--y0',  y0.toFixed(1)  + 'px');
+        star.style.setProperty('--dx',  dx.toFixed(1)  + 'px');
+        star.style.setProperty('--dy',  dy.toFixed(1)  + 'px');
+        star.style.setProperty('--rot', rotDeg.toFixed(1) + 'deg');
+        star.style.setProperty('--dur', dur.toFixed(2) + 's');
+
+        scene.appendChild(star);
+        star.addEventListener('animationend', () => star.remove(), { once: true });
+      }
+
+      function shotTick() {
+        if (document.visibilityState === 'visible') spawnShootingStar();
+        scheduleNextShot();
+      }
+      function scheduleNextShot(min = 9000, range = 12000) {
+        clearTimeout(shotTimer);
+        shotTimer = setTimeout(shotTick, min + Math.random() * range);
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          scheduleNextShot(3000, 5000);
+        }
+      });
+      scheduleNextShot();
+    })();
+  </script>
+</body>
+</html>
