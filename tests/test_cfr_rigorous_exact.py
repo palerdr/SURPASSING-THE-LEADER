@@ -207,6 +207,8 @@ def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():
         root / "environment/cfr/exact_state.py",
         root / "environment/cfr/exact_transition.py",
         root / "environment/cfr/exact_solver.py",
+        root / "environment/cfr/candidates.py",
+        root / "environment/cfr/selective_search.py",
     ]
     forbidden = (
         "environment.reward",
