@@ -201,6 +201,8 @@ def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():
         root / "environment/cfr/minimax.py",
         root / "environment/cfr/diagnostics.py",
         root / "environment/cfr/tactical_scenarios.py",
+        root / "environment/cfr/tablebase.py",
+        root / "environment/cfr/timing_features.py",
         root / "environment/cfr/utility.py",
         root / "environment/cfr/exact_state.py",
         root / "environment/cfr/exact_transition.py",
