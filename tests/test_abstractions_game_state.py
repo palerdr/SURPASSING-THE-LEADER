@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.game_state import (
+from environment.abstractions.game_state import (
     AbstractState,
     CYL_BUCKET_SIZE,
     CYL_NUM_BUCKETS,

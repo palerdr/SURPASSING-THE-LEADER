@@ -21,7 +21,7 @@ from src.Constants import (
     PHYSICALITY_HAL,
     PHYSICALITY_BAKU,
 )
-from .half_round import (
+from environment.cfr.half_round import (
     solve_half_round,
     build_augmented_payoff_matrix,
     survival_probability,

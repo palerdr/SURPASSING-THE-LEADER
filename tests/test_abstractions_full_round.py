@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.full_round import resolve_half_round, simulate_round
+from environment.abstractions.full_round import resolve_half_round, simulate_round
 from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY
 
 

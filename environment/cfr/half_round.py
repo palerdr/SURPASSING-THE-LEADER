@@ -1,7 +1,12 @@
-"""Single half-round CFR solver for Drop The Handkerchief.
+"""Single half-round regret-matching CFR baseline.
 
-CFR finds Nash equilibrium strategies by iterating regret matching.
-The payoff matrix can be immediate-only or augmented with continuation values.
+This module is the original (pre-Phase-1) regret-matching solver over the
+exact 1..60 second matrix. It is *not bucketed* — the action space is
+exact — but the canonical rigorous solver in this namespace is
+``exact_solver.solve_exact_finite_horizon`` (LP minimax + chance-branch
+recursion). Keep this file as a comparison baseline for matrix-equivalence
+tests and as the source of pure helpers like ``survival_probability``;
+new rigorous code should not call ``solve_half_round`` from here.
 """
 
 from __future__ import annotations

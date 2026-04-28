@@ -7,14 +7,14 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.tree import (
+from environment.abstractions.tree import (
     get_turn_duration,
     snap_to_next_minute,
     compute_successors,
     solve_game,
     REPRESENTATIVE_STS,
 )
-from environment.cfr.game_state import (
+from environment.abstractions.game_state import (
     AbstractState,
     make_abstract_state,
     CYL_BUCKET_SIZE,

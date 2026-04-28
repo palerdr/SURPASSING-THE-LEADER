@@ -26,7 +26,7 @@ from src.Constants import (
 from src.Referee import Referee
 from src.Player import Player
 
-from .half_round import solve_half_round, compute_payoff_matrix
+from environment.cfr.half_round import solve_half_round, compute_payoff_matrix
 from .game_state import AbstractState, make_abstract_state
 
 
