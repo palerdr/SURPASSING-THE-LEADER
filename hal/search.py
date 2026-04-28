@@ -10,11 +10,10 @@ from src.Constants import (
     LS_WINDOW_START,
 )
 
-from .types import Bucket, BeliefState, MemoryMode
-from .buckets import build_payoff_matrix, get_legal_buckets
-from .solver import solve_minimax, best_response
+from .state import Bucket, BeliefState, MemoryMode, update_memory
+from .action_model import best_response, build_payoff_matrix, get_legal_buckets
+from environment.cfr.minimax import solve_minimax
 from .evaluate import evaluate, get_nn_model
-from .memory import update_memory
 
 
 def _exploit_or_nash(

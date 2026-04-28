@@ -6,11 +6,9 @@ from src.Game import Game
 from environment.opponents.base import Opponent
 from environment.legal_actions import clamp_action
 
-from .types import HalState, MemoryMode
-from .buckets import get_legal_buckets, resolve_bucket
+from .state import HalState, MemoryMode, update_belief, update_memory
+from .action_model import get_legal_buckets, resolve_bucket
 from .search import search, adaptive_depth
-from .belief import update_belief
-from .memory import update_memory
 
 DEFAULT_SEARCH_DEPTH = 3
 
