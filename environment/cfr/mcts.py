@@ -3,6 +3,7 @@ from .exact_transition import ExactGameSnapshot, ExactJointAction, ExactSearchCo
 from .candidates import CandidateActions, generate_candidates
 from .utility import terminal_value
 from .minimax import solve_minimax
+from .evaluator import LeafEvaluator
 from src.Game import Game
 import numpy as np
 
@@ -38,7 +39,6 @@ class MCTSResult:
 
 
 #helpers
-    
 def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
     """Build an MCTSNode at the current game state.
     Snapshots the engine state, generates candidates, allocates zero
@@ -159,9 +159,6 @@ def _step_into_child(
     return node.children[key], survived_outcome
 
 
-def _expand_node(node, game, evaluator) -> None:
-    ...
-
 def _backup(path, value) -> None:
     """Apply leaf_value to every (node, d_idx, c_idx) in path.
 
@@ -177,6 +174,63 @@ def _backup(path, value) -> None:
         node.N_cell[d_idx, c_idx] += 1
         node.Q[d_idx, c_idx] += (value - node.Q[d_idx, c_idx]) / node.N_cell[d_idx, c_idx]
 
+def mcts_search(
+        game :Game,
+        config: MCTSConfig,
+        evaluator: LeafEvaluator,
+        rng: np.random.Generator,
+        exact_config: ExactSearchConfig | None = None,
+) -> MCTSResult:
+    """Run MCTS for config.iterations iterations from the current game state.
+
+      Returns the root's equilibrium strategies, the Hal-perspective value,
+      and visit-count diagnostics.
+      """
+      
+    exact_config = exact_config or ExactSearchConfig()
+    root = make_node(game, exact_config)
+    c = config.exploration_c
+
+    for _ in range(config.iterations):
+        node, path = root, []
+        root.game_snapshot.restore(game=game)
+        while True:
+            #game ended at this position so backprop off leaf value
+            if node.terminal_value is not None:
+                leaf_value = node.terminal_value
+                break
+
+            #Frontier node, haven't evaluated it so we must evaluate and backup
+            if not node.is_expanded:
+                leaf_value = evaluator(game)
+                node.is_expanded = True
+                break
+
+            d_idx, c_idx = _select_joint_action(node, c, rng)
+            path.append((node, d_idx, c_idx))
+            node, _ = _step_into_child(node, game, d_idx, c_idx, rng, exact_config)
+        _backup(path, leaf_value)
+
+    Q = root.Q
+    if root.hal_is_dropper:
+      dropper_strat, _ = solve_minimax(Q)
+      checker_strat, _ = solve_minimax((-Q).T)
+    else:
+      dropper_strat, _ = solve_minimax(-Q)
+      checker_strat, _ = solve_minimax(Q.T)
+    
+    value_for_hal = float(dropper_strat @ Q @ checker_strat)
+    
+    return MCTSResult(
+        root_strategy_dropper= dropper_strat,
+        root_strategy_checker= checker_strat,
+        root_value_for_hal=value_for_hal,
+        principal_line= [],
+        root_visits= root.N_node,
+        cells_used= root.N_cell.sum(),
+    )
+
 
 def _principal_line(root) -> list[ExactJointAction]:
     ...
+
