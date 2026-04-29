@@ -163,6 +163,20 @@ def _expand_node(node, game, evaluator) -> None:
     ...
 
 def _backup(path, value) -> None:
-    ...
+    """Apply leaf_value to every (node, d_idx, c_idx) in path.
+
+      Increments N_node, N_cell[d_idx, c_idx], and updates Q[d_idx, c_idx]
+      with a running-mean step. Mutates the nodes in place.
+      Apply leaf_value to every (node, d_idx, c_idx) in path.
+
+      Increments N_node, N_cell[d_idx, c_idx], and updates Q[d_idx, c_idx]
+      with a running-mean step. Mutates the nodes in place.
+      """
+    for (node, d_idx, c_idx) in path:
+        node.N_node += 1
+        node.N_cell[d_idx, c_idx] += 1
+        node.Q[d_idx, c_idx] += (value - node.Q[d_idx, c_idx]) / node.N_cell[d_idx, c_idx]
+
+
 def _principal_line(root) -> list[ExactJointAction]:
     ...
