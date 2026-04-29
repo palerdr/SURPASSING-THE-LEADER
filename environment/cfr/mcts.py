@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from .exact_transition import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
 from .candidates import CandidateActions, generate_candidates
 from .utility import terminal_value
+from .minimax import solve_minimax
 from src.Game import Game
 import numpy as np
 
@@ -17,6 +18,7 @@ class MCTSNode:
     prior : np.ndarray
     terminal_value : float | None
     children : dict[tuple[int, int, bool | None], "MCTSNode"]
+    hal_is_dropper : bool
 
 @dataclass
 class MCTSConfig:
@@ -36,16 +38,6 @@ class MCTSResult:
 
 
 #helpers
-def _exploration_augmented_matrix(node, c) -> np.ndarray:
-    ...
-def _select_joint_action(node, exploration_c) -> tuple[int, int]:
-    ...
-def _expand_node(node, game, evaluator) -> None:
-    ...
-def _backup(path, value) -> None:
-    ...
-def _principal_line(root) -> list[ExactJointAction]:
-    ...
     
 def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
     """Build an MCTSNode at the current game state.
@@ -66,9 +58,11 @@ def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
             is_expanded= False,
             prior= np.full((0,0), 0, dtype = np.float64),
             terminal_value= tval,
-            children = {}
+            children = {},
+            hal_is_dropper = False
         )
-
+    dropper,_ = game.get_roles_for_half(game.current_half)
+    hdrop = (dropper.name.lower() == config.perspective_name.lower())
     cands = generate_candidates(game, config)
     D = len(cands.drop_seconds)
     C = len(cands.check_seconds)
@@ -91,6 +85,50 @@ def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
         is_expanded = False,
         prior= prior,
         terminal_value= tval,
-        children={}
+        children={},
+        hal_is_dropper=hdrop,
     )
     
+
+def _exploration_augmented_matrix(node: MCTSNode, exploration_c: float) -> np.ndarray:
+    """Return Q + c * P * sqrt(N_node) / (1 + N_cell). 
+    Has shape (D,C)
+    """
+    Q = node.Q
+    U = exploration_c * node.prior * np.sqrt(node.N_node) / (1 + node.N_cell)
+    return Q + U
+
+
+
+def _select_joint_action(
+        node:MCTSNode,
+        exploration_c:float,
+        rng:np.random.Generator,
+) -> tuple[int, int]:
+    """Return cell indexes (d_idx, c_idx) sampled from the matrix-game
+    equilibrium of the exploration-augmented Q at this node
+    """
+    
+    hal_is_dopper = node.hal_is_dropper
+    D,C = len(node.drop_seconds), len(node.check_seconds)
+
+    Q_explore = _exploration_augmented_matrix(node, exploration_c=exploration_c)
+
+    if hal_is_dopper:
+        dropper_strategy, _ = solve_minimax(Q_explore)
+        checker_strategy, _ = solve_minimax((-Q_explore).T)
+    else:
+        dropper_strategy, _ = solve_minimax(-Q_explore)
+        checker_strategy, _ = solve_minimax((Q_explore).T)
+    
+    d_idx = rng.choice(D, p=dropper_strategy)
+    c_idx = rng.choice(C, p=checker_strategy)
+    
+    return int(d_idx), int(c_idx)
+
+def _expand_node(node, game, evaluator) -> None:
+    ...
+def _backup(path, value) -> None:
+    ...
+def _principal_line(root) -> list[ExactJointAction]:
+    ...
