@@ -18,6 +18,7 @@ from .evaluator import LeafEvaluator
 from .exact_transition import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
 from .minimax import solve_minimax
 from .utility import terminal_value
+from .exact_state import ExactPublicState, exact_public_state
 
 
 @dataclass
@@ -139,6 +140,7 @@ def _step_into_child(
     c_idx: int,
     rng: np.random.Generator,
     config: ExactSearchConfig,
+    transposition: dict[ExactPublicState, MCTSNode] | None = None,
 ) -> tuple["MCTSNode", bool | None]:
     """Apply the joint action at (d_idx, c_idx) to the engine, sample the
     chance outcome if a death is possible, and return the child node along
@@ -160,8 +162,17 @@ def _step_into_child(
 
     key = (d_time, c_time, survived_outcome)
     game.resolve_half_round(d_time, c_time, survived_outcome)
+
     if key not in node.children:
-        node.children[key] = make_node(game, config)
+        state_key = exact_public_state(game)
+        if transposition is not None and state_key in transposition:
+            node.children[key] = transposition[state_key]
+        else:    
+            child = make_node(game, config)
+            node.children[key] = child
+            if transposition is not None:
+                transposition[state_key] = child
+
     return node.children[key], survived_outcome
 
 
@@ -193,6 +204,9 @@ def mcts_search(
     root = make_node(game, exact_config)
     c = config.exploration_c
 
+    transposition : dict[ExactPublicState, MCTSNode] = {}
+    transposition[exact_public_state(game)] = root
+
     for _ in range(config.iterations):
         root.game_snapshot.restore(game=game)
         node = root
@@ -207,7 +221,7 @@ def mcts_search(
                 break
             d_idx, c_idx = _select_joint_action(node, c, rng)
             path.append((node, d_idx, c_idx))
-            node, _ = _step_into_child(node, game, d_idx, c_idx, rng, exact_config)
+            node, _ = _step_into_child(node, game, d_idx, c_idx, rng, exact_config, transposition=transposition)
         _backup(path, leaf_value)
 
     Q = root.Q
