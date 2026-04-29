@@ -9,6 +9,7 @@ from environment.cfr.evaluator import (
     LeafEvaluator,
     TablebaseEvaluator,
     TerminalOnlyEvaluator,
+    ValueNetEvaluator,
 )
 from environment.cfr.tablebase import get_scenario
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
@@ -171,6 +172,46 @@ def test_tablebase_evaluator_satisfies_leaf_evaluator_protocol_structurally():
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
     scenario = get_scenario("forced_baku_overflow_death")
     assert call_with_protocol(evaluator, scenario.game) == 1.0
+
+
+# ── ValueNetEvaluator (Slice 4b Step 2) ───────────────────────────────────
+
+
+def test_value_net_evaluator_returns_model_fn_value():
+    evaluator = ValueNetEvaluator(model_fn=lambda game: 0.42)
+    assert evaluator(_make_fresh_game()) == 0.42
+
+
+def test_value_net_evaluator_passes_game_to_model_fn():
+    # The model_fn must receive the live game object, not be called with no
+    # arguments or an abstracted state. Verify by reading game state inside.
+    def model_fn(game: Game) -> float:
+        return float(game.player2.cylinder)
+
+    g = _make_fresh_game()
+    g.player2.cylinder = 173.0
+    evaluator = ValueNetEvaluator(model_fn=model_fn)
+    assert evaluator(g) == 173.0
+
+
+def test_value_net_evaluator_satisfies_leaf_evaluator_protocol_structurally():
+    def call_with_protocol(evaluator: LeafEvaluator, game: Game) -> float:
+        return evaluator(game)
+
+    evaluator = ValueNetEvaluator(model_fn=lambda game: -0.3)
+    assert call_with_protocol(evaluator, _make_fresh_game()) == -0.3
+
+
+def test_value_net_evaluator_composes_as_tablebase_fallback():
+    # The intended Slice 4b composition: tablebase short-circuits on hits;
+    # value net handles every other position. Pinned state -> tablebase value;
+    # fresh game -> value net's output.
+    fallback = ValueNetEvaluator(model_fn=lambda game: 0.25)
+    evaluator = TablebaseEvaluator(fallback=fallback)
+
+    pinned = get_scenario("forced_baku_overflow_death")
+    assert evaluator(pinned.game) == 1.0           # tablebase hit
+    assert evaluator(_make_fresh_game()) == 0.25   # delegates to value net
 
 
 def test_tablebase_evaluator_relational_scenarios_are_not_in_table():

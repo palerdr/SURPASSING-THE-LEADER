@@ -3,13 +3,13 @@
 When MCTS reaches a leaf, it needs a Hal-perspective value in [-1, 1].
 This module defines the LeafEvaluator protocol plus concrete evaluators:
 
-  - TerminalOnlyEvaluator: returns terminal_value or 0.0 for unresolved.
-  - TablebaseEvaluator: short-circuits on positions matching pinned tablebase
-    entries; falls back to a wrapped evaluator otherwise.
-  - ValueNetEvaluator: wraps a trained value net behind the protocol.
+    - TerminalOnlyEvaluator: returns terminal_value or 0.0 for unresolved.
+    - TablebaseEvaluator: short-circuits on positions matching pinned tablebase
+        entries; falls back to a wrapped evaluator otherwise.
+    - ValueNetEvaluator: wraps a trained value net behind the protocol.
 """
 
-from typing import Protocol
+from typing import Protocol, Callable
 
 from .exact_state import ExactPublicState, exact_public_state
 from .tablebase import REGISTRY
@@ -57,5 +57,8 @@ class TablebaseEvaluator:
 class ValueNetEvaluator:
     """Wraps the trained value net behind a clean interface."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, model_fn: Callable[[Game], float]) -> None:
+        self.model = model_fn
+
+    def __call__(self, game: Game) -> float:
+        return self.model(game)
