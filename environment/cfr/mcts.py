@@ -239,11 +239,30 @@ def mcts_search(
         root_strategy_checker=checker_strat,
         root_value_for_hal=value_for_hal,
         root_visits=root.N_node,
-        principal_line=[],
+        principal_line= _principal_line(root),
         cells_used=int(root.N_cell.sum()),
     )
 
 
 def _principal_line(root: MCTSNode) -> list[ExactJointAction]:
-    """Stub: most-visited path through the tree. Implemented in Slice 4c."""
-    ...
+    """most-visited path in tree"""
+    line = []
+    node = root
+    while True:
+        
+        if node.terminal_value is not None or node.N_node == 0 or node.N_cell.max() == 0:
+            break
+        C = len(node.check_seconds)
+        flat_idx = int(np.argmax(node.N_cell))
+        d_idx, c_idx = divmod(flat_idx, C)
+        d_time, c_time = node.drop_seconds[d_idx], node.check_seconds[c_idx]
+        line.append(ExactJointAction(d_time, c_time))
+        
+        candidate_keys = [k for k in node.children if k[0] == d_time and k[1] == c_time]
+        if not candidate_keys:
+            break
+        next_key = max(candidate_keys, key = lambda k: node.children[k].N_node)
+
+        node = node.children[next_key]
+
+    return line        
