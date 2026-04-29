@@ -12,9 +12,9 @@ from src.Game import Game
 from src.Constants import (
     PHYSICALITY_HAL, PHYSICALITY_BAKU, TURN_DURATION_NORMAL, TURN_DURATION_LEAP,
 )
-from hal.types import BeliefState, HalState, MemoryMode
-from hal.memory import update_memory
-from hal.belief import update_belief
+from hal.state import BeliefState, HalState, MemoryMode
+from hal.state import update_memory
+from hal.state import update_belief
 from hal.hal_opponent import CanonicalHal
 
 

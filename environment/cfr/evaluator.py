@@ -11,9 +11,9 @@ This module defines the LeafEvaluator protocol plus concrete evaluators:
 
 from typing import Protocol, Callable
 
-from .exact_state import ExactPublicState, exact_public_state
+from .exact import ExactPublicState, exact_public_state
 from .tablebase import REGISTRY
-from .utility import terminal_value
+from .exact import terminal_value
 from src.Game import Game
 
 

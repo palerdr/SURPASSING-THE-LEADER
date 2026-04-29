@@ -7,8 +7,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.exact_solver import evaluate_joint_action
-from environment.cfr.exact_transition import ExactJointAction
+from environment.cfr.exact import evaluate_joint_action
+from environment.cfr.exact import ExactJointAction
 from environment.cfr.tablebase import (
     REGISTRY,
     get_scenario,

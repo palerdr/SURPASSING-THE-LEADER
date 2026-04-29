@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from .exact_solver import ExactSolveResult, solve_exact_finite_horizon
+from .exact import ExactSolveResult, solve_exact_finite_horizon
 from .tactical_scenarios import (
     TacticalScenario,
     cpr_degradation_fatigued_referee,

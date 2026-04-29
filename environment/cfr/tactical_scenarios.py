@@ -19,7 +19,7 @@ from src.Game import Game
 from src.Player import Player
 from src.Referee import Referee
 
-from .exact_transition import ExactSearchConfig
+from .exact import ExactSearchConfig
 
 
 @dataclass(frozen=True)

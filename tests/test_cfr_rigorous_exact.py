@@ -9,13 +9,13 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.exact_solver import (
+from environment.cfr.exact import (
     evaluate_joint_action,
     exact_immediate_checker_payoff_matrix,
     solve_exact_finite_horizon,
 )
-from environment.cfr.exact_state import exact_public_state
-from environment.cfr.exact_transition import (
+from environment.cfr.exact import exact_public_state
+from environment.cfr.exact import (
     ExactJointAction,
     ExactSearchConfig,
     enumerate_joint_actions,
@@ -23,9 +23,9 @@ from environment.cfr.exact_transition import (
 )
 from environment.cfr.half_round import compute_payoff_matrix
 from environment.cfr.diagnostics import diagnose_exact_strategy
-from environment.cfr.minimax import solve_minimax
+from environment.cfr.exact import solve_minimax
 from environment.cfr.tactical_scenarios import forced_baku_overflow_death, leap_second_check_61_probe
-from environment.cfr.utility import terminal_value
+from environment.cfr.exact import terminal_value
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL, TURN_DURATION_NORMAL
 from src.Game import Game
 from src.Player import Player
@@ -198,17 +198,12 @@ def test_leap_second_probe_values_check_61_above_check_60_against_drop_61():
 def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():
     root = pathlib.Path(__file__).resolve().parents[1]
     rigorous_files = [
-        root / "environment/cfr/minimax.py",
+        root / "environment/cfr/exact.py",
         root / "environment/cfr/diagnostics.py",
         root / "environment/cfr/tactical_scenarios.py",
         root / "environment/cfr/tablebase.py",
         root / "environment/cfr/timing_features.py",
-        root / "environment/cfr/utility.py",
-        root / "environment/cfr/exact_state.py",
-        root / "environment/cfr/exact_transition.py",
-        root / "environment/cfr/exact_solver.py",
-        root / "environment/cfr/candidates.py",
-        root / "environment/cfr/selective_search.py",
+        root / "environment/cfr/selective.py",
     ]
     forbidden = (
         "environment.reward",

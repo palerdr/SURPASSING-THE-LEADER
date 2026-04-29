@@ -1,12 +1,15 @@
-"""Selective exact-second minimax search over candidate action sets.
+"""Selective exact-second search: candidate generation + minimax recursion.
 
-Mirrors solve_exact_finite_horizon but expands only the candidate seconds
-returned by ``generate_candidates``. ``audit_against_full_width`` runs the
-same state under both selective and full enumeration and reports the value
-gap, so any insufficiency in the candidate set is observable.
+Single module covering:
 
-No heuristic frontier, no value-net evaluator, no shaping. Frontier states
-(horizon exhausted, no terminal) are reported as unresolved mass.
+    - Candidate exact-second generation (CRITICAL_SECONDS, CandidateActions,
+        overflow_st_threshold, safe_st_budget, generate_candidates).
+    - Selective minimax search over candidate cells (selective_solve)
+        plus a full-width audit (audit_against_full_width).
+
+Mirrors solve_exact_finite_horizon but expands only the strategically
+meaningful cells per state. The audit reports the value gap so any
+candidate-set insufficiency is observable, not silent.
 """
 
 from __future__ import annotations
@@ -15,17 +18,89 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.Constants import CYLINDER_MAX
 from src.Game import Game
 
-from .candidates import CandidateActions, generate_candidates
-from .exact_solver import solve_exact_finite_horizon
-from .exact_transition import (
+from .exact import (
     ExactGameSnapshot,
     ExactJointAction,
     ExactSearchConfig,
+    UtilityBreakdown,
+    legal_seconds_for_current_role,
+    solve_exact_finite_horizon,
+    solve_minimax,
+    terminal_value,
 )
-from .minimax import solve_minimax
-from .utility import UtilityBreakdown, terminal_value
+
+
+# ── Candidate generation ──────────────────────────────────────────────────
+
+
+CRITICAL_SECONDS: tuple[int, ...] = (1, 2, 58, 59, 60, 61)
+
+
+@dataclass(frozen=True)
+class CandidateActions:
+    drop_seconds: tuple[int, ...]
+    check_seconds: tuple[int, ...]
+
+    @property
+    def joint_count(self) -> int:
+        return len(self.drop_seconds) * len(self.check_seconds)
+
+
+def overflow_st_threshold(checker_cylinder: float) -> int:
+    """Smallest ST that drives the cylinder to CYLINDER_MAX or above."""
+    return max(1, int(CYLINDER_MAX) - int(checker_cylinder))
+
+
+def safe_st_budget(checker_cylinder: float) -> int:
+    """Largest ST that leaves the cylinder strictly below CYLINDER_MAX."""
+    return max(0, int(CYLINDER_MAX) - 1 - int(checker_cylinder))
+
+
+def _legal_filter(seconds: set[int], legal: range) -> set[int]:
+    return {s for s in seconds if s in legal}
+
+
+def generate_candidates(game: Game, config: ExactSearchConfig | None = None) -> CandidateActions:
+    """Return candidate exact seconds for the dropper and checker."""
+    config = config or ExactSearchConfig()
+    dropper, checker = game.get_roles_for_half(game.current_half)
+    drop_legal = legal_seconds_for_current_role(game, dropper.name, "dropper", config)
+    check_legal = legal_seconds_for_current_role(game, checker.name, "checker", config)
+
+    drop_seconds: set[int] = _legal_filter(set(CRITICAL_SECONDS), drop_legal)
+    check_seconds: set[int] = _legal_filter(set(CRITICAL_SECONDS), check_legal)
+
+    overflow_st = overflow_st_threshold(checker.cylinder)
+    safe_st = safe_st_budget(checker.cylinder)
+
+    for d in tuple(drop_seconds):
+        for c in (
+            d - 1, d, d + 1,
+            d + safe_st, d + safe_st + 1,
+            d + overflow_st - 1, d + overflow_st,
+        ):
+            if c in check_legal:
+                check_seconds.add(c)
+
+    for c in tuple(check_seconds):
+        for d in (
+            c - 1, c, c + 1,
+            c - safe_st - 1, c - safe_st,
+            c - overflow_st, c - overflow_st + 1,
+        ):
+            if d in drop_legal:
+                drop_seconds.add(d)
+
+    return CandidateActions(
+        drop_seconds=tuple(sorted(drop_seconds)),
+        check_seconds=tuple(sorted(check_seconds)),
+    )
+
+
+# ── Selective minimax search ──────────────────────────────────────────────
 
 
 @dataclass(frozen=True)

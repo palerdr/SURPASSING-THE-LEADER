@@ -226,7 +226,7 @@ def test_tablebase_evaluator_relational_scenarios_are_not_in_table():
         "cpr_degradation_fresh_referee",
         "cpr_degradation_fatigued_referee",
     )
-    from environment.cfr.exact_state import exact_public_state
+    from environment.cfr.exact import exact_public_state
 
     for name in relational_names:
         scenario = get_scenario(name)

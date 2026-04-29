@@ -12,7 +12,7 @@ from src.Constants import (
 
 from .state import Bucket, BeliefState, MemoryMode, update_memory
 from .action_model import best_response, build_payoff_matrix, get_legal_buckets
-from environment.cfr.minimax import solve_minimax
+from environment.cfr.exact import solve_minimax
 from .evaluate import evaluate, get_nn_model
 
 

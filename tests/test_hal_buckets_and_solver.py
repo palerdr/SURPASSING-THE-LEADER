@@ -9,11 +9,12 @@ import pytest
 from random import Random
 
 from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY
-from hal.types import Bucket, BeliefState
-from hal.buckets import (
+from hal.state import Bucket, BeliefState
+from hal.action_model import (
     STANDARD_BUCKETS, LEAP_BUCKET, bucket_pair_payoff, resolve_bucket, get_legal_buckets,
 )
-from hal.solver import solve_minimax, best_response
+from environment.cfr.exact import solve_minimax
+from hal.action_model import best_response
 from environment.legal_actions import legal_max_second, can_use_leap_second
 
 

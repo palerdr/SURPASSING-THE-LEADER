@@ -8,7 +8,7 @@ import numpy as np
 
 from src.Game import Game
 
-from .exact_solver import ExactSolveResult
+from .exact import ExactSolveResult
 
 
 @dataclass(frozen=True)

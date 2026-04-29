@@ -7,9 +7,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.candidates import generate_candidates
-from environment.cfr.exact_solver import solve_exact_finite_horizon
-from environment.cfr.selective_search import (
+from environment.cfr.selective import generate_candidates
+from environment.cfr.exact import solve_exact_finite_horizon
+from environment.cfr.selective import (
     audit_against_full_width,
     selective_solve,
 )

@@ -13,12 +13,12 @@ import numpy as np
 
 from src.Game import Game
 
-from .candidates import generate_candidates
+from .selective import generate_candidates
 from .evaluator import LeafEvaluator
-from .exact_transition import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
-from .minimax import solve_minimax
-from .utility import terminal_value
-from .exact_state import ExactPublicState, exact_public_state
+from .exact import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
+from .exact import solve_minimax
+from .exact import terminal_value
+from .exact import ExactPublicState, exact_public_state
 
 
 @dataclass

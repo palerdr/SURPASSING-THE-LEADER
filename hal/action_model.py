@@ -11,7 +11,7 @@ from random import Random
 
 import numpy as np
 
-from environment.cfr.minimax import solve_minimax
+from environment.cfr.exact import solve_minimax
 from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY
 
 from .state import BeliefState, Bucket

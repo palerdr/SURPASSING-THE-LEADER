@@ -5,13 +5,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.candidates import (
+from environment.cfr.selective import (
     CRITICAL_SECONDS,
     generate_candidates,
     overflow_st_threshold,
     safe_st_budget,
 )
-from environment.cfr.exact_transition import ExactSearchConfig
+from environment.cfr.exact import ExactSearchConfig
 from environment.cfr.tactical_scenarios import (
     leap_second_check_61_probe,
     safe_budget_pressure_at_cylinder_240,
