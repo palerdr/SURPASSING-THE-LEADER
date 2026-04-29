@@ -126,8 +126,42 @@ def _select_joint_action(
     
     return int(d_idx), int(c_idx)
 
+def _step_into_child(
+        node: MCTSNode,
+        game: Game,
+        d_idx: int,
+        c_idx: int,
+        rng: np.random.Generator,
+        config: ExactSearchConfig,
+) -> tuple["MCTSNode", bool | None]:
+    """Apply the joint action at (d_idx, c_idx) to the engine, sample the
+      chance outcome if a death is possible, and return the child node along
+      with the survival flag (True/False/None). Caches the child in
+      node.children so subsequent iterations reuse it.
+      """
+    d_time, c_time = node.drop_seconds[d_idx], node.check_seconds[c_idx]
+    snap = ExactGameSnapshot(game)
+    probe = game.resolve_half_round(d_time, c_time, survived_outcome=None)
+    death_possible = probe.survived is not None
+    survival_probability = probe.survival_probability
+    snap.restore(game)
+    
+    survived_outcome = None
+    if death_possible:
+        survived_outcome = bool(rng.random() < survival_probability)
+    
+    key = (d_time, c_time, survived_outcome)
+
+    game.resolve_half_round(d_time, c_time, survived_outcome)
+    if key not in node.children:
+        node.children[key] = make_node(game, config)
+    
+    return node.children[key], survived_outcome
+
+
 def _expand_node(node, game, evaluator) -> None:
     ...
+
 def _backup(path, value) -> None:
     ...
 def _principal_line(root) -> list[ExactJointAction]:
