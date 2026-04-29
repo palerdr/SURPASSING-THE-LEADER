@@ -1,11 +1,16 @@
-"""Tests for MCTS Step 2: leaf evaluator interface and terminal-only evaluator."""
+"""Tests for MCTS Steps 2 and 4b: leaf evaluator interfaces and concrete evaluators."""
 
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.evaluator import LeafEvaluator, TerminalOnlyEvaluator
+from environment.cfr.evaluator import (
+    LeafEvaluator,
+    TablebaseEvaluator,
+    TerminalOnlyEvaluator,
+)
+from environment.cfr.tablebase import get_scenario
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
 from src.Player import Player
@@ -88,3 +93,101 @@ def test_terminal_only_evaluator_returns_float_type():
     assert isinstance(evaluator(_make_fresh_game()), float)
     assert isinstance(evaluator(_make_terminal_game(hal_wins=True)), float)
     assert isinstance(evaluator(_make_terminal_game(hal_wins=False)), float)
+
+
+# ── TablebaseEvaluator (Slice 4b) ─────────────────────────────────────────
+
+
+class _RecordingEvaluator:
+    """Test double: a LeafEvaluator that records how many times it was called."""
+
+    def __init__(self, fixed_value: float = 0.42) -> None:
+        self.calls = 0
+        self.fixed_value = fixed_value
+
+    def __call__(self, game: Game) -> float:
+        self.calls += 1
+        return self.fixed_value
+
+
+def test_tablebase_evaluator_construction_loads_pinned_registry_entries():
+    # Two pinned scenarios in the registry today: forced_baku_overflow_death
+    # (+1.0) and forced_hal_overflow_death (-1.0). The table must contain both.
+    evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
+    assert len(evaluator._table) == 2
+    assert 1.0 in evaluator._table.values()
+    assert -1.0 in evaluator._table.values()
+
+
+def test_tablebase_evaluator_hit_returns_pinned_value_without_calling_fallback():
+    recorder = _RecordingEvaluator()
+    evaluator = TablebaseEvaluator(fallback=recorder)
+
+    scenario = get_scenario("forced_baku_overflow_death")
+    value = evaluator(scenario.game)
+
+    assert value == 1.0
+    assert recorder.calls == 0  # short-circuit; fallback never invoked
+
+
+def test_tablebase_evaluator_hit_works_for_negative_pinned_value():
+    recorder = _RecordingEvaluator()
+    evaluator = TablebaseEvaluator(fallback=recorder)
+
+    scenario = get_scenario("forced_hal_overflow_death")
+    value = evaluator(scenario.game)
+
+    assert value == -1.0
+    assert recorder.calls == 0
+
+
+def test_tablebase_evaluator_miss_delegates_to_fallback():
+    # A fresh game (cyl=0/0) is not in the pinned table; fallback should run.
+    recorder = _RecordingEvaluator(fixed_value=0.42)
+    evaluator = TablebaseEvaluator(fallback=recorder)
+
+    value = evaluator(_make_fresh_game())
+
+    assert value == 0.42
+    assert recorder.calls == 1
+
+
+def test_tablebase_evaluator_composes_with_terminal_only_evaluator():
+    # End-to-end: tablebase hit returns pinned, miss falls through to
+    # TerminalOnlyEvaluator which returns 0.0 for non-terminal positions.
+    evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
+
+    pinned = get_scenario("forced_baku_overflow_death")
+    fresh = _make_fresh_game()
+
+    assert evaluator(pinned.game) == 1.0
+    assert evaluator(fresh) == 0.0
+
+
+def test_tablebase_evaluator_satisfies_leaf_evaluator_protocol_structurally():
+    def call_with_protocol(evaluator: LeafEvaluator, game: Game) -> float:
+        return evaluator(game)
+
+    evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
+    scenario = get_scenario("forced_baku_overflow_death")
+    assert call_with_protocol(evaluator, scenario.game) == 1.0
+
+
+def test_tablebase_evaluator_relational_scenarios_are_not_in_table():
+    # Scenarios with expected_value=None (CPR pair, leap probe, safe-budget
+    # pair) must not appear in the pinned table — they're paired tests, not
+    # values we'd want to short-circuit on.
+    evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
+    relational_names = (
+        "leap_second_check_61_probe",
+        "safe_budget_pressure_at_cylinder_241",
+        "safe_budget_pressure_at_cylinder_240",
+        "cpr_degradation_fresh_referee",
+        "cpr_degradation_fatigued_referee",
+    )
+    from environment.cfr.exact_state import exact_public_state
+
+    for name in relational_names:
+        scenario = get_scenario(name)
+        key = exact_public_state(scenario.game)
+        assert key not in evaluator._table, name
