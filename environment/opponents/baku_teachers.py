@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from src.Game import Game
 
+from environment.cfr.timing_features import (
+    current_checker_fail_would_activate_lsr,
+    is_active_lsr,
+    rounds_until_leap_window,
+)
 from environment.strategy_features import build_strategy_snapshot
 
 from .base import Opponent
@@ -87,3 +92,50 @@ class BakuResilienceFallbackTeacher(BakuTeacher):
         if role == "dropper" and snapshot.hal_budget.fail_post_ttd < 298.0 and snapshot.active_lsr:
             return instant_drop(turn_duration, actor="baku")
         return super().choose_action(game, role, turn_duration)
+
+
+class BakuLSREngineeringTeacher(BakuTeacher):
+    """Canonical Baku for Stockfish-style manga validation (Phase 7).
+
+    Engineers Active LSR at the leap window by deliberately failing checks
+    in the 4–7 round runway when a fail flips parity, then maximizes Hal's
+    accumulation by instant-dropping during pre-leap Active LSR turns. This
+    is the closest computable analogue to the deviation_doc's pre-committed
+    multi-round plan, intended as the validation opponent for the trained
+    agent.
+    """
+
+    _ENGINEERING_RUNWAY_MIN = 4
+    _ENGINEERING_RUNWAY_MAX = 7
+
+    def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
+        if role == "checker":
+            return clamp_second(
+                self._choose_checker_second(game, turn_duration),
+                role=role,
+                turn_duration=turn_duration,
+                actor="baku",
+            )
+        return clamp_second(
+            self._choose_dropper_second(game, turn_duration),
+            role=role,
+            turn_duration=turn_duration,
+            actor="baku",
+        )
+
+    def _choose_checker_second(self, game: Game, turn_duration: int) -> int:
+        runway = rounds_until_leap_window(game)
+        if (
+            current_checker_fail_would_activate_lsr(game)
+            and self._ENGINEERING_RUNWAY_MIN <= runway <= self._ENGINEERING_RUNWAY_MAX
+        ):
+            # Deliberately fail the check: pick second 1 so check < drop almost
+            # always (only collides when drop_time also = 1, which is the lone
+            # tie cell we accept losing). This is the LSR-engineering move.
+            return 1
+        return safe_check(turn_duration)
+
+    def _choose_dropper_second(self, game: Game, turn_duration: int) -> int:
+        if rounds_until_leap_window(game) <= 1 and is_active_lsr(game):
+            return instant_drop(turn_duration, actor="baku")
+        return 30

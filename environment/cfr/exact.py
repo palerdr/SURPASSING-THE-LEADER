@@ -175,10 +175,13 @@ def solve_minimax(payoff: np.ndarray) -> tuple[np.ndarray, float]:
 
 @dataclass(frozen=True)
 class ExactSearchConfig:
-    """Knowledge/legality switches for exact action expansion."""
+    """Perspective configuration for exact action expansion.
 
-    hal_leap_deduced: bool = False
-    hal_memory_impaired: bool = False
+    The historical hal_leap_deduced / hal_memory_impaired flags are gone —
+    Hal can never play check=61 in this codebase, period. The strategic
+    constraint is hard-coded in legal_actions.py, not configured here.
+    """
+
     perspective_name: str = "Hal"
 
 
@@ -249,14 +252,9 @@ class ExactGameSnapshot:
 
 
 def legal_seconds_for_current_role(game: Game, actor_name: str, role: str, config: ExactSearchConfig) -> range:
+    del config  # ExactSearchConfig no longer carries legality switches.
     turn_duration = game.get_turn_duration()
-    max_second = legal_max_second(
-        actor_name,
-        role,
-        turn_duration,
-        hal_leap_deduced=config.hal_leap_deduced,
-        hal_memory_impaired=config.hal_memory_impaired,
-    )
+    max_second = legal_max_second(actor_name, role, turn_duration)
     if role == "checker":
         max_second = min(max_second, max(turn_duration, TURN_DURATION_NORMAL))
     return range(1, max_second + 1)

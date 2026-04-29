@@ -19,6 +19,7 @@ from .exact import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
 from .exact import solve_minimax
 from .exact import terminal_value
 from .exact import ExactPublicState, exact_public_state
+from .subgame_resolve import is_critical, resolve_subgame
 
 
 @dataclass
@@ -194,11 +195,20 @@ def mcts_search(
     evaluator: LeafEvaluator,
     rng: np.random.Generator,
     exact_config: ExactSearchConfig | None = None,
+    subgame_resolve_at_critical: bool = False,
 ) -> MCTSResult:
     """Run MCTS for config.iterations iterations from the current game state.
 
     Returns the root's equilibrium strategies, the Hal-perspective value,
     and visit-count diagnostics.
+
+    When ``subgame_resolve_at_critical`` is True and ``is_critical`` flags
+    the root state, the MCTS run is supplemented by a fresh selective
+    subgame re-solve at deeper horizon and the resolve's strategies (and
+    Hal-perspective value) replace the MCTS-derived ones at the root. This
+    matches the Stockfish-style "do extra search at high-stakes positions"
+    pattern (Brown & Sandholm 2018). Default ``False`` preserves existing
+    behavior.
     """
     exact_config = exact_config or ExactSearchConfig()
     root = make_node(game, exact_config)
@@ -233,6 +243,15 @@ def mcts_search(
         checker_strat, _ = solve_minimax(Q.T)
 
     value_for_hal = float(dropper_strat @ Q @ checker_strat)
+
+    if subgame_resolve_at_critical:
+        root.game_snapshot.restore(game=game)
+        if is_critical(game):
+            resolve_result = resolve_subgame(game, config=exact_config)
+            dropper_strat = resolve_result.dropper_strategy
+            checker_strat = resolve_result.checker_strategy
+            value_for_hal = float(resolve_result.value_for_hal)
+        root.game_snapshot.restore(game=game)
 
     return MCTSResult(
         root_strategy_dropper=dropper_strat,

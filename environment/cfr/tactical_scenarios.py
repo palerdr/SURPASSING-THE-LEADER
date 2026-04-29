@@ -83,20 +83,6 @@ def forced_hal_overflow_death() -> TacticalScenario:
     )
 
 
-def leap_second_check_61_probe() -> TacticalScenario:
-    """Baku drops on leap turn while Hal is checker and has deduced the leap."""
-    game = _base_game(clock=3540.0, current_half=2)
-    return TacticalScenario(
-        name="leap_second_check_61_probe",
-        game=game,
-        config=ExactSearchConfig(hal_leap_deduced=True),
-        half_round_horizon=1,
-        expected_note="Against drop=61, check=61 avoids the failed-check death branch that check=60 triggers.",
-        expected_value=None,
-        tags=("leap_window", "knowledge_deduced", "action_dominance"),
-    )
-
-
 def safe_budget_pressure_at_cylinder_241() -> TacticalScenario:
     """Baku checker at cyl=241: drop=1 + check=60 forces terminal overflow.
 

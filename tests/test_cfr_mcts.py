@@ -43,7 +43,6 @@ from environment.cfr.mcts import (
 from environment.cfr.tactical_scenarios import (
     forced_baku_overflow_death,
     forced_hal_overflow_death,
-    leap_second_check_61_probe,
     safe_budget_pressure_at_cylinder_241,
 )
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
@@ -193,10 +192,14 @@ def test_make_node_snapshot_round_trips_position_after_mutation():
     assert scenario.game.game_clock == original_clock
 
 
-def test_make_node_in_leap_window_with_deduced_hal_includes_check_61():
-    scenario = leap_second_check_61_probe()
-    node = make_node(scenario.game, scenario.config)
-    assert 61 in node.check_seconds
+def test_make_node_never_includes_check_61_for_hal():
+    # Hal can never check at 61 (hard-coded). At a fresh game in the leap
+    # window, the candidate check seconds must not include 61.
+    game = _baku_checker_at_cylinder(0.0)
+    game.game_clock = 3540.0
+    game.current_half = 2  # Baku as dropper, Hal as checker
+    node = make_node(game, ExactSearchConfig())
+    assert 61 not in node.check_seconds
 
 
 def test_make_node_children_dict_is_empty_and_independent_per_node():

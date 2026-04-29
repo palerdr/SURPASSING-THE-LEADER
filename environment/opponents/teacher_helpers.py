@@ -14,23 +14,8 @@ from src.Constants import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
 from environment.legal_actions import clamp_action
 
 
-def clamp_second(
-    second: int,
-    *,
-    role: str,
-    turn_duration: int,
-    actor: str = "baku",
-    hal_leap_deduced: bool = False,
-    hal_memory_impaired: bool = False,
-) -> int:
-    return clamp_action(
-        second,
-        actor=actor,
-        role=role,
-        turn_duration=turn_duration,
-        hal_leap_deduced=hal_leap_deduced,
-        hal_memory_impaired=hal_memory_impaired,
-    )
+def clamp_second(second: int, *, role: str, turn_duration: int, actor: str = "baku") -> int:
+    return clamp_action(second, actor=actor, role=role, turn_duration=turn_duration)
 
 
 def safe_check(turn_duration: int) -> int:

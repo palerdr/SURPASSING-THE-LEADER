@@ -168,13 +168,9 @@ def _bucket_pair_for_state(
     """Get (hal_is_dropper, hal_buckets, baku_buckets) using actor-aware legality."""
     hal_is_dropper, hal_role, baku_role = _hal_role(game)
     turn_duration = game.get_turn_duration()
-    hal_memory_impaired = memory == MemoryMode.AMNESIA
+    del memory, leap_deduced  # legality no longer depends on Hal's deduction state
 
-    hal_buckets = get_legal_buckets(
-        "hal", hal_role, turn_duration,
-        hal_leap_deduced=leap_deduced,
-        hal_memory_impaired=hal_memory_impaired,
-    )
+    hal_buckets = get_legal_buckets("hal", hal_role, turn_duration)
     baku_buckets = get_legal_buckets("baku", baku_role, turn_duration)
     return hal_is_dropper, hal_buckets, baku_buckets
 

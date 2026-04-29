@@ -24,7 +24,7 @@ from environment.cfr.exact import (
 from environment.cfr.half_round import compute_payoff_matrix
 from environment.cfr.diagnostics import diagnose_exact_strategy
 from environment.cfr.exact import solve_minimax
-from environment.cfr.tactical_scenarios import forced_baku_overflow_death, leap_second_check_61_probe
+from environment.cfr.tactical_scenarios import forced_baku_overflow_death
 from environment.cfr.exact import terminal_value
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL, TURN_DURATION_NORMAL
 from src.Game import Game
@@ -64,15 +64,16 @@ def test_cfr_owned_minimax_solver_solves_matching_pennies():
 
 
 def test_exact_joint_actions_use_actor_aware_leap_legality():
+    # Hal can never check at 61 (hard-coded in legal_actions). Baku-dropper
+    # at clock=3540 inside the leap window can drop at 61. Result: 61 × 60
+    # joint actions, with (61, 61) not in the legal set.
     game = make_game(clock=3540.0, current_half=2)
 
-    unaware = enumerate_joint_actions(game, ExactSearchConfig(hal_leap_deduced=False))
-    deduced = enumerate_joint_actions(game, ExactSearchConfig(hal_leap_deduced=True))
+    actions = enumerate_joint_actions(game, ExactSearchConfig())
 
-    assert len(unaware) == 61 * 60  # Baku can drop 61; unaware Hal checks only 1..60.
-    assert len(deduced) == 61 * 61
-    assert ExactJointAction(61, 61) not in unaware
-    assert ExactJointAction(61, 61) in deduced
+    assert len(actions) == 61 * 60
+    assert ExactJointAction(61, 61) not in actions
+    assert ExactJointAction(61, 60) in actions
 
 
 def test_expand_joint_action_branches_death_chance_and_restores_game():
@@ -170,29 +171,6 @@ def test_forced_overflow_tactical_scenario_is_exact_terminal_tablebase():
     assert result.unresolved_probability == pytest.approx(0.0)
     assert result.payoff_for_hal is not None
     np.testing.assert_array_equal(result.payoff_for_hal, np.ones((60, 60)))
-
-
-def test_leap_second_probe_values_check_61_above_check_60_against_drop_61():
-    scenario = leap_second_check_61_probe()
-
-    check_60 = evaluate_joint_action(
-        scenario.game,
-        ExactJointAction(drop_time=61, check_time=60),
-        half_round_horizon=1,
-        config=scenario.config,
-    )
-    check_61 = evaluate_joint_action(
-        scenario.game,
-        ExactJointAction(drop_time=61, check_time=61),
-        half_round_horizon=1,
-        config=scenario.config,
-    )
-
-    assert check_60.value < 0.0
-    assert check_60.baku_win_probability > 0.0
-    assert check_61.value == pytest.approx(0.0)
-    assert check_61.unresolved_probability == pytest.approx(1.0)
-    assert check_61.value > check_60.value
 
 
 def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():

@@ -1,16 +1,26 @@
-"""Value-net training-target generation.
+"""Value-net training-target generation (Phase 2).
 
 Sweeps a corpus of game states and labels each with an exact
 Hal-perspective equilibrium value. Sources, in priority order:
 
-    1. Terminal positions: pinned by `terminal_value` (+1/-1/0).
-    2. Tablebase scenarios: pinned by the registry's expected_value.
-    3. Otherwise: solve_exact_finite_horizon at the requested horizon.
+    1. Terminal positions: pinned by ``terminal_value`` (+1/-1/0).
+    2. Tablebase scenarios: pinned by the registry's ``expected_value``.
+    3. LSR-significant non-terminal positions: solved at horizon=3.
+       Significance gate: ``rounds_until_leap_window(game) <= 2`` or
+       ``current_checker_fail_would_activate_lsr(game)``.
+    4. Other LSR-pressure positions: solved at horizon=2.
+       Pressure gate: ``is_active_lsr(game)`` or any player cylinder
+       >= 240 (near-overflow).
+    5. Otherwise: state is *excluded* from the gen-0 corpus.
+       Phase-3 MCTS bootstrap will cover those.
 
-No reward shaping, no rollouts. Every label is a genuine
-equilibrium value (or a finite-horizon lower bound on it). Output is
-a list of ValueTarget records or an .npz file with arrays X (N,
-FEATURE_DIM), y (N,), sources (N,), horizons (N,).
+No horizon=1 LP labels — they are LSR-blind by construction (the
+recursion bottoms out as unresolved on every non-terminal cell). No
+reward shaping, no rollouts. Every emitted label is either a true
+terminal value, a pinned tablebase value, or a finite-horizon exact
+LP minimax value at horizon >= 2. Output is a list of ValueTarget
+records or an .npz file with arrays X (N, FEATURE_DIM), y (N,),
+sources (N,), horizons (N,).
 """
 
 from __future__ import annotations
@@ -28,11 +38,40 @@ from environment.cfr.exact import (
     terminal_value,
 )
 from environment.cfr.tablebase import REGISTRY
+from environment.cfr.timing_features import (
+    current_checker_fail_would_activate_lsr,
+    is_active_lsr,
+    rounds_until_leap_window,
+)
 from hal.value_net import FEATURE_DIM, extract_features
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
 from src.Player import Player
 from src.Referee import Referee
+
+
+# ── Source labels ─────────────────────────────────────────────────────────
+
+SOURCE_TERMINAL = "terminal"
+SOURCE_TABLEBASE = "tablebase"
+SOURCE_EXACT_HORIZON_2 = "exact_horizon_2"
+SOURCE_EXACT_HORIZON_3 = "exact_horizon_3"
+
+VALID_SOURCES = (
+    SOURCE_TERMINAL,
+    SOURCE_TABLEBASE,
+    SOURCE_EXACT_HORIZON_2,
+    SOURCE_EXACT_HORIZON_3,
+)
+
+
+# ── Gating thresholds ─────────────────────────────────────────────────────
+
+NEAR_LEAP_ROUNDS_THRESHOLD = 2  # rounds_until_leap_window <= this => horizon=3
+NEAR_OVERFLOW_CYLINDER_THRESHOLD = 240.0  # any cylinder >= this => horizon=2
+
+
+# ── Target record ─────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -41,6 +80,9 @@ class ValueTarget:
     value: float
     source: str
     horizon: int
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 
 def _build_pinned_table() -> dict[ExactPublicState, float]:
@@ -78,26 +120,71 @@ def _build_game(
     return game
 
 
+def _is_lsr_significant(game: Game) -> bool:
+    """Horizon=3 gate: state's outcome is LSR-routing observable inside 3 half-rounds."""
+    if rounds_until_leap_window(game) <= NEAR_LEAP_ROUNDS_THRESHOLD:
+        return True
+    if current_checker_fail_would_activate_lsr(game):
+        return True
+    return False
+
+
+def _is_lsr_pressure(game: Game) -> bool:
+    """Horizon=2 gate: state is in active LSR variation or near-overflow on any side."""
+    if is_active_lsr(game):
+        return True
+    hal_cyl = float(game.player1.cylinder if game.player1.name.lower() == "hal" else game.player2.cylinder)
+    baku_cyl = float(game.player1.cylinder if game.player1.name.lower() == "baku" else game.player2.cylinder)
+    if hal_cyl >= NEAR_OVERFLOW_CYLINDER_THRESHOLD:
+        return True
+    if baku_cyl >= NEAR_OVERFLOW_CYLINDER_THRESHOLD:
+        return True
+    return False
+
+
+# ── Label hierarchy ───────────────────────────────────────────────────────
+
+
 def label_state(
     game: Game,
-    horizon: int,
-    pinned_table: dict[ExactPublicState, float] | None = None,
     config: ExactSearchConfig | None = None,
-) -> tuple[float, str]:
-    """Return (Hal-perspective value, source) for a game state."""
+    pinned_table: dict[ExactPublicState, float] | None = None,
+) -> tuple[float, str, int] | None:
+    """Return (Hal-perspective value, source, horizon) or None if excluded.
+
+    Hierarchy:
+      1. terminal_value(game) is not None        -> ("terminal", horizon=0)
+      2. exact_public_state(game) in pinned_table -> ("tablebase", horizon=0)
+      3. LSR-significant (rounds_until_leap_window <= 2
+         OR current_checker_fail_would_activate_lsr)
+                                                  -> ("exact_horizon_3", horizon=3)
+      4. LSR-pressure (is_active_lsr OR any cylinder >= 240)
+                                                  -> ("exact_horizon_2", horizon=2)
+      5. Otherwise                                -> None (state excluded).
+    """
     config = config or ExactSearchConfig()
     pinned_table = pinned_table if pinned_table is not None else _build_pinned_table()
 
     tval = terminal_value(game, perspective_name=config.perspective_name)
     if tval is not None:
-        return tval, "terminal"
+        return tval, SOURCE_TERMINAL, 0
 
     state = exact_public_state(game)
     if state in pinned_table:
-        return pinned_table[state], "tablebase"
+        return pinned_table[state], SOURCE_TABLEBASE, 0
 
-    result = solve_exact_finite_horizon(game, horizon, config)
-    return result.value_for_hal, "exact"
+    if _is_lsr_significant(game):
+        result = solve_exact_finite_horizon(game, 3, config)
+        return result.value_for_hal, SOURCE_EXACT_HORIZON_3, 3
+
+    if _is_lsr_pressure(game):
+        result = solve_exact_finite_horizon(game, 2, config)
+        return result.value_for_hal, SOURCE_EXACT_HORIZON_2, 2
+
+    return None
+
+
+# ── Corpus generation ─────────────────────────────────────────────────────
 
 
 def generate_targets(
@@ -108,13 +195,17 @@ def generate_targets(
     half_grid: tuple[int, ...] = (1, 2),
     deaths_grid: tuple[int, ...] = (0, 1),
     cpr_grid: tuple[int, ...] = (0, 5),
-    horizon: int = 1,
     config: ExactSearchConfig | None = None,
 ) -> list[ValueTarget]:
     """Sweep the cartesian product of axis grids; label each state.
 
-    Default grid is ~500 states; override any axis to tighten or widen
-    the corpus.
+    States that fall outside all label-source gates are skipped: the
+    Phase-3 MCTS bootstrap is responsible for those. This keeps the
+    gen-0 corpus concentrated on positions where exact LP minimax at
+    horizon 2 or 3 carries genuine LSR signal.
+
+    Default grid is ~500 candidate states; the emitted corpus is
+    smaller (only those passing one of the gates).
     """
     pinned_table = _build_pinned_table()
     targets: list[ValueTarget] = []
@@ -134,7 +225,10 @@ def generate_targets(
                                 hal_deaths=deaths,
                                 referee_cprs=cprs,
                             )
-                            value, source = label_state(game, horizon, pinned_table, config)
+                            label = label_state(game, config, pinned_table)
+                            if label is None:
+                                continue
+                            value, source, horizon = label
                             features = extract_features(game)
                             targets.append(
                                 ValueTarget(
@@ -145,6 +239,9 @@ def generate_targets(
                                 )
                             )
     return targets
+
+
+# ── I/O ───────────────────────────────────────────────────────────────────
 
 
 def save_targets(targets: list[ValueTarget], path: str | Path) -> None:
@@ -170,17 +267,19 @@ def source_breakdown(targets: list[ValueTarget]) -> dict[str, int]:
     return counts
 
 
+# ── CLI ───────────────────────────────────────────────────────────────────
+
+
 if __name__ == "__main__":
     import argparse
     import time
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=str, default="value_targets.npz")
-    parser.add_argument("--horizon", type=int, default=1)
     args = parser.parse_args()
 
     t0 = time.time()
-    targets = generate_targets(horizon=args.horizon)
+    targets = generate_targets()
     elapsed = time.time() - t0
     save_targets(targets, args.out)
     print(f"Wrote {len(targets)} targets to {args.out} in {elapsed:.1f}s")

@@ -24,7 +24,6 @@ from environment.cfr.tablebase import (
 EXPECTED_NAMES = (
     "forced_baku_overflow_death",
     "forced_hal_overflow_death",
-    "leap_second_check_61_probe",
     "safe_budget_pressure_at_cylinder_241",
     "safe_budget_pressure_at_cylinder_240",
     "cpr_degradation_fresh_referee",
@@ -85,7 +84,7 @@ def test_pinned_hal_overflow_value_is_minus_one():
 
 def test_verify_pinned_value_rejects_unpinned_scenarios():
     with pytest.raises(ValueError):
-        verify_pinned_value("leap_second_check_61_probe")
+        verify_pinned_value("safe_budget_pressure_at_cylinder_241")
 
 
 def test_safe_budget_threshold_pair_distinguishes_cylinder_value():
@@ -113,22 +112,3 @@ def test_late_cpr_degradation_pair_increases_hal_value_under_forced_fail():
     assert fatigued_branch.value > fresh_branch.value
 
 
-def test_leap_second_probe_check_61_dominates_check_60_against_drop_61():
-    scenario = get_scenario("leap_second_check_61_probe")
-
-    check_60 = evaluate_joint_action(
-        scenario.game,
-        ExactJointAction(drop_time=61, check_time=60),
-        half_round_horizon=1,
-        config=scenario.config,
-    )
-    check_61 = evaluate_joint_action(
-        scenario.game,
-        ExactJointAction(drop_time=61, check_time=61),
-        half_round_horizon=1,
-        config=scenario.config,
-    )
-
-    assert check_61.value > check_60.value
-    assert check_60.baku_win_probability > 0.0
-    assert check_61.unresolved_probability == pytest.approx(1.0)

@@ -29,7 +29,9 @@ def test_hal_unaware_checker_cannot_use_61_on_leap():
     assert env.action_masks()[60] == False
 
 
-def test_hal_deduced_checker_can_use_61_on_leap():
+def test_hal_checker_can_never_use_61_on_leap():
+    # Per the Stockfish-style design (HAL.md), Hal can never check at 61
+    # regardless of awareness state. The action mask must reflect that.
     env = make_env("hal")
     env.reset(options={
         "scenario": {
@@ -40,7 +42,7 @@ def test_hal_deduced_checker_can_use_61_on_leap():
         }
     })
 
-    assert env.action_masks()[60] == True
+    assert env.action_masks()[60] == False
 
 
 def test_baku_checker_cannot_use_61_on_leap_even_if_deduced():

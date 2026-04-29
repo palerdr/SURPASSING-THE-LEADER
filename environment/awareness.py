@@ -57,13 +57,7 @@ def build_action_mask(
     if not is_leap_turn:
         return mask
 
-    hal_leap_deduced = awareness == LeapAwareness.DEDUCED
-    hal_memory_impaired = awareness == LeapAwareness.MEMORY_IMPAIRED
-    max_sec = legal_max_second(
-        actor, role, TURN_DURATION_LEAP,
-        hal_leap_deduced=hal_leap_deduced,
-        hal_memory_impaired=hal_memory_impaired,
-    )
+    max_sec = legal_max_second(actor, role, TURN_DURATION_LEAP)
     if max_sec >= TURN_DURATION_LEAP:
         mask[TURN_DURATION_NORMAL] = True  # action index 60 -> second 61
 

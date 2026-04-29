@@ -49,11 +49,6 @@ def test_selective_audit_zero_gap_on_pinned_overflow_pair():
         assert audit.candidate_joint_count <= audit.full_width_joint_count
 
 
-def test_selective_audit_zero_gap_on_leap_second_probe():
-    audit = _audit("leap_second_check_61_probe")
-    assert audit.value_gap == pytest.approx(0.0, abs=1e-9)
-
-
 def test_selective_audit_zero_gap_on_safe_budget_pair():
     for name in ("safe_budget_pressure_at_cylinder_241", "safe_budget_pressure_at_cylinder_240"):
         audit = _audit(name)

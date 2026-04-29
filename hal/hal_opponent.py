@@ -6,7 +6,7 @@ from src.Game import Game
 from environment.opponents.base import Opponent
 from environment.legal_actions import clamp_action
 
-from .state import HalState, MemoryMode, update_belief, update_memory
+from .state import HalState, update_belief, update_memory
 from .action_model import get_legal_buckets, resolve_bucket
 from .search import search, adaptive_depth
 
@@ -20,11 +20,6 @@ class CanonicalHal(Opponent):
         self._rng = Random(seed)
         self._base_depth = depth
         self._use_adaptive = use_adaptive
-
-    def _hal_leap_flags(self) -> tuple[bool, bool]:
-        hal_leap_deduced = self._state.leap_deduced
-        hal_memory_impaired = self._state.memory == MemoryMode.AMNESIA
-        return hal_leap_deduced, hal_memory_impaired
 
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
         last_record = game.history[-1] if game.history else None
@@ -51,19 +46,10 @@ class CanonicalHal(Opponent):
             game, depth, self._state.belief, self._state.memory, leap_deduced,
         )
 
-        hal_leap_deduced, hal_memory_impaired = self._hal_leap_flags()
-
         if strategy is None:
-            return clamp_action(
-                turn_duration, actor="hal", role=role, turn_duration=turn_duration,
-                hal_leap_deduced=hal_leap_deduced, hal_memory_impaired=hal_memory_impaired,
-            )
+            return clamp_action(turn_duration, actor="hal", role=role, turn_duration=turn_duration)
 
-        buckets = get_legal_buckets(
-            "hal", role, turn_duration,
-            hal_leap_deduced=hal_leap_deduced,
-            hal_memory_impaired=hal_memory_impaired,
-        )
+        buckets = get_legal_buckets("hal", role, turn_duration)
 
         weights = strategy.tolist()
         if len(weights) != len(buckets):
@@ -78,10 +64,7 @@ class CanonicalHal(Opponent):
         chosen_bucket = buckets[chosen_idx]
         second = resolve_bucket(chosen_bucket, self._rng)
 
-        return clamp_action(
-            second, actor="hal", role=role, turn_duration=turn_duration,
-            hal_leap_deduced=hal_leap_deduced, hal_memory_impaired=hal_memory_impaired,
-        )
+        return clamp_action(second, actor="hal", role=role, turn_duration=turn_duration)
 
     def reset(self) -> None:
         self._state = HalState()

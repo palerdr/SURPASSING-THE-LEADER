@@ -26,7 +26,6 @@ from .tactical_scenarios import (
     cpr_degradation_fresh_referee,
     forced_baku_overflow_death,
     forced_hal_overflow_death,
-    leap_second_check_61_probe,
     safe_budget_pressure_at_cylinder_240,
     safe_budget_pressure_at_cylinder_241,
 )
@@ -40,7 +39,6 @@ REGISTRY: dict[str, ScenarioFactory] = {
     for factory in (
         forced_baku_overflow_death,
         forced_hal_overflow_death,
-        leap_second_check_61_probe,
         safe_budget_pressure_at_cylinder_241,
         safe_budget_pressure_at_cylinder_240,
         cpr_degradation_fresh_referee,

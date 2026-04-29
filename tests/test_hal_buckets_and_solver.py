@@ -226,60 +226,41 @@ class TestLegalActionAsymmetry:
         assert legal_max_second("hal", "dropper", 60) == 60
 
     def test_hal_dropper_max_is_60_on_leap_turn(self):
-        assert legal_max_second("hal", "dropper", 61, hal_leap_deduced=True) == 60
+        assert legal_max_second("hal", "dropper", 61) == 60
 
-    def test_hal_checker_max_is_60_when_unaware(self):
-        assert legal_max_second("hal", "checker", 61, hal_leap_deduced=False) == 60
+    def test_hal_checker_max_is_60_on_normal_turn(self):
+        assert legal_max_second("hal", "checker", 60) == 60
 
-    def test_hal_checker_max_is_61_when_deduced(self):
-        assert legal_max_second("hal", "checker", 61, hal_leap_deduced=True) == 61
-
-    def test_hal_checker_max_is_60_when_amnesia(self):
-        assert legal_max_second(
-            "hal", "checker", 61, hal_leap_deduced=True, hal_memory_impaired=True,
-        ) == 60
+    def test_hal_checker_max_is_60_on_leap_turn(self):
+        # Hal can never check at 61, period.
+        assert legal_max_second("hal", "checker", 61) == 60
 
     def test_baku_dropper_max_is_61_on_leap_turn(self):
         assert legal_max_second("baku", "dropper", 61) == 61
 
-    def test_baku_checker_max_is_60_even_when_aware(self):
-        assert legal_max_second("baku", "checker", 61, hal_leap_deduced=True) == 60
+    def test_baku_checker_max_is_60_on_leap_turn(self):
+        assert legal_max_second("baku", "checker", 61) == 60
 
-    def test_can_use_leap_second_hal_dropper_never(self):
-        assert not can_use_leap_second("hal", "dropper", hal_leap_deduced=True)
-
-    def test_can_use_leap_second_hal_checker_requires_deduced(self):
-        assert can_use_leap_second("hal", "checker", hal_leap_deduced=True)
-        assert not can_use_leap_second("hal", "checker", hal_leap_deduced=False)
-        assert not can_use_leap_second(
-            "hal", "checker", hal_leap_deduced=True, hal_memory_impaired=True,
-        )
+    def test_can_use_leap_second_hal_never(self):
+        assert not can_use_leap_second("hal", "dropper")
+        assert not can_use_leap_second("hal", "checker")
 
     def test_can_use_leap_second_baku_dropper_always(self):
         assert can_use_leap_second("baku", "dropper")
 
     def test_can_use_leap_second_baku_checker_never(self):
-        assert not can_use_leap_second("baku", "checker", hal_leap_deduced=True)
+        assert not can_use_leap_second("baku", "checker")
 
 
 class TestLegalBucketSelection:
     def test_hal_dropper_buckets_omit_leap_on_leap_turn(self):
-        buckets = get_legal_buckets("hal", "dropper", 61, hal_leap_deduced=True)
+        buckets = get_legal_buckets("hal", "dropper", 61)
         assert LEAP_BUCKET not in buckets
         assert buckets == STANDARD_BUCKETS
 
-    def test_hal_checker_buckets_include_leap_when_deduced(self):
-        buckets = get_legal_buckets("hal", "checker", 61, hal_leap_deduced=True)
-        assert LEAP_BUCKET in buckets
-
-    def test_hal_checker_buckets_omit_leap_when_unaware(self):
-        buckets = get_legal_buckets("hal", "checker", 61, hal_leap_deduced=False)
-        assert LEAP_BUCKET not in buckets
-
-    def test_hal_checker_buckets_omit_leap_when_amnesia(self):
-        buckets = get_legal_buckets(
-            "hal", "checker", 61, hal_leap_deduced=True, hal_memory_impaired=True,
-        )
+    def test_hal_checker_buckets_omit_leap_on_leap_turn(self):
+        # Hal-checker max is hard-coded to 60.
+        buckets = get_legal_buckets("hal", "checker", 61)
         assert LEAP_BUCKET not in buckets
 
     def test_baku_dropper_buckets_include_leap_on_leap_turn(self):

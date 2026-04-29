@@ -13,7 +13,6 @@ from environment.cfr.selective import (
 )
 from environment.cfr.exact import ExactSearchConfig
 from environment.cfr.tactical_scenarios import (
-    leap_second_check_61_probe,
     safe_budget_pressure_at_cylinder_240,
     safe_budget_pressure_at_cylinder_241,
 )
@@ -62,32 +61,26 @@ def test_candidates_include_legal_critical_seconds_at_normal_turn():
     assert {1, 2, 58, 59, 60}.issubset(set(candidates.check_seconds))
 
 
-def test_candidates_exclude_61_at_normal_turn_even_when_deduced():
-    # Outside the leap window, 61 is illegal regardless of deduction state.
+def test_candidates_exclude_61_at_normal_turn():
+    # Outside the leap window, 61 is illegal for everyone.
     game = make_game(clock=720.0)
-    candidates = generate_candidates(game, ExactSearchConfig(hal_leap_deduced=True))
+    candidates = generate_candidates(game, ExactSearchConfig())
     assert 61 not in candidates.drop_seconds
     assert 61 not in candidates.check_seconds
 
 
 def test_candidates_include_drop_61_for_baku_dropper_in_leap_window():
     # At clock=3540, current_half=2 and first_dropper=hal, Baku is the dropper
-    # and Baku always knows 61 is legal in the leap window.
+    # and can drop at 61 in the leap window.
     game = make_game(clock=3540.0, current_half=2)
     candidates = generate_candidates(game)
     assert 61 in candidates.drop_seconds
 
 
-def test_candidates_include_check_61_only_when_hal_deduced():
-    scenario = leap_second_check_61_probe()
-    candidates = generate_candidates(scenario.game, scenario.config)
-    assert 61 in candidates.check_seconds
-
-
-def test_candidates_omit_check_61_when_hal_unaware():
-    # Same leap-window state but with hal_leap_deduced=False:
-    base = leap_second_check_61_probe()
-    candidates = generate_candidates(base.game, ExactSearchConfig(hal_leap_deduced=False))
+def test_candidates_never_include_check_61_for_hal():
+    # Hal is hard-coded to never check at 61, regardless of any flag.
+    game = make_game(clock=3540.0, current_half=2)
+    candidates = generate_candidates(game, ExactSearchConfig())
     assert 61 not in candidates.check_seconds
 
 

@@ -68,23 +68,10 @@ def get_buckets(turn_duration: int, knows_leap: bool) -> tuple[Bucket, ...]:
     return STANDARD_BUCKETS
 
 
-def get_legal_buckets(
-    actor: str,
-    role: str,
-    turn_duration: int,
-    *,
-    hal_leap_deduced: bool = False,
-    hal_memory_impaired: bool = False,
-) -> tuple[Bucket, ...]:
+def get_legal_buckets(actor: str, role: str, turn_duration: int) -> tuple[Bucket, ...]:
     from environment.legal_actions import legal_max_second
 
-    max_sec = legal_max_second(
-        actor,
-        role,
-        turn_duration,
-        hal_leap_deduced=hal_leap_deduced,
-        hal_memory_impaired=hal_memory_impaired,
-    )
+    max_sec = legal_max_second(actor, role, turn_duration)
     if max_sec >= 61:
         return STANDARD_BUCKETS + (LEAP_BUCKET,)
     return STANDARD_BUCKETS
