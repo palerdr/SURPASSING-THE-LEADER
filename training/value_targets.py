@@ -56,12 +56,14 @@ SOURCE_TERMINAL = "terminal"
 SOURCE_TABLEBASE = "tablebase"
 SOURCE_EXACT_HORIZON_2 = "exact_horizon_2"
 SOURCE_EXACT_HORIZON_3 = "exact_horizon_3"
+SOURCE_MCTS_BOOTSTRAP = "mcts_bootstrap"
 
 VALID_SOURCES = (
     SOURCE_TERMINAL,
     SOURCE_TABLEBASE,
     SOURCE_EXACT_HORIZON_2,
     SOURCE_EXACT_HORIZON_3,
+    SOURCE_MCTS_BOOTSTRAP,
 )
 
 
@@ -236,6 +238,112 @@ def generate_targets(
                                     value=value,
                                     source=source,
                                     horizon=horizon,
+                                )
+                            )
+    return targets
+
+
+# ── Phase 3: MCTS bootstrap targets ───────────────────────────────────────
+
+
+def generate_mcts_bootstrap_targets(
+    predict_fn,
+    *,
+    baku_cylinder_grid: tuple[float, ...] = (0.0, 60.0, 120.0, 180.0, 240.0, 290.0),
+    hal_cylinder_grid: tuple[float, ...] = (0.0, 120.0, 240.0),
+    clock_grid: tuple[float, ...] = (720.0, 2000.0, 3540.0),
+    half_grid: tuple[int, ...] = (1, 2),
+    deaths_grid: tuple[int, ...] = (0, 1),
+    cpr_grid: tuple[int, ...] = (0, 5),
+    iterations_per_state: int = 2000,
+    exploration_c: float = 1.0,
+    seed: int = 0,
+    config: ExactSearchConfig | None = None,
+) -> list[ValueTarget]:
+    """Bootstrap labels: run MCTS using ``predict_fn`` at the leaves and record
+    the converged root value as the training target.
+
+    AlphaZero's self-improvement loop. The ``predict_fn`` is a callable
+    ``(game) -> float`` produced by wrapping a trained ValueNet
+    (e.g. via ``ValueNetEvaluator``). For each non-terminal, non-tablebase
+    state in the corpus, we run ``mcts_search`` with that predictor as the
+    leaf evaluator and record ``result.root_value_for_hal`` as the label.
+    Source = ``"mcts_bootstrap"``; horizon is reported as
+    ``iterations_per_state`` (a search-budget proxy, not an exact horizon).
+
+    Imports are deferred to keep this module's import graph tight: MCTS
+    machinery is only needed when the bootstrap is actually invoked.
+    """
+    from environment.cfr.evaluator import ValueNetEvaluator
+    from environment.cfr.mcts import MCTSConfig, mcts_search
+
+    config = config or ExactSearchConfig()
+    pinned_table = _build_pinned_table()
+    targets: list[ValueTarget] = []
+    rng_root = np.random.default_rng(seed)
+    evaluator = ValueNetEvaluator(model_fn=predict_fn)
+
+    for baku_cyl in baku_cylinder_grid:
+        for hal_cyl in hal_cylinder_grid:
+            for clock in clock_grid:
+                for half in half_grid:
+                    for deaths in deaths_grid:
+                        for cprs in cpr_grid:
+                            game = _build_game(
+                                baku_cylinder=baku_cyl,
+                                hal_cylinder=hal_cyl,
+                                clock=clock,
+                                current_half=half,
+                                baku_deaths=deaths,
+                                hal_deaths=deaths,
+                                referee_cprs=cprs,
+                            )
+
+                            tval = terminal_value(game, perspective_name=config.perspective_name)
+                            if tval is not None:
+                                targets.append(
+                                    ValueTarget(
+                                        features=extract_features(game),
+                                        value=tval,
+                                        source=SOURCE_TERMINAL,
+                                        horizon=0,
+                                    )
+                                )
+                                continue
+
+                            state = exact_public_state(game)
+                            if state in pinned_table:
+                                targets.append(
+                                    ValueTarget(
+                                        features=extract_features(game),
+                                        value=pinned_table[state],
+                                        source=SOURCE_TABLEBASE,
+                                        horizon=0,
+                                    )
+                                )
+                                continue
+
+                            state_seed = int(rng_root.integers(0, 1 << 31))
+                            mcts_rng = np.random.default_rng(state_seed)
+                            mcts_config = MCTSConfig(
+                                iterations=iterations_per_state,
+                                exploration_c=exploration_c,
+                                evaluator=None,
+                                use_tablebase=False,
+                            )
+                            result = mcts_search(
+                                game=game,
+                                config=mcts_config,
+                                evaluator=evaluator,
+                                rng=mcts_rng,
+                                exact_config=config,
+                            )
+                            targets.append(
+                                ValueTarget(
+                                    features=extract_features(game),
+                                    value=float(result.root_value_for_hal),
+                                    source=SOURCE_MCTS_BOOTSTRAP,
+                                    horizon=iterations_per_state,
                                 )
                             )
     return targets
