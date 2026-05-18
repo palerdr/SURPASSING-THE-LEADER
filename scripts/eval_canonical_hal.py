@@ -12,6 +12,7 @@ from src.Constants import PHYSICALITY_HAL, PHYSICALITY_BAKU
 from hal.hal_opponent import CanonicalHal
 from hal.train import load_checkpoint
 from hal.evaluate import set_nn_evaluator
+from environment.legal_actions import validate_action
 from environment.opponents.factory import create_scripted_opponent
 
 BAKU_OPPONENTS = [
@@ -49,10 +50,14 @@ def play_game(hal_ai, baku_bot, seed, verbose=False):
         if dropper.name.lower() == "hal":
             hal_action = hal_ai.choose_action(game, "dropper", td)
             baku_action = baku_bot.choose_action(game, "checker", td)
+            validate_action(hal_action, actor="hal", role="dropper", turn_duration=td)
+            validate_action(baku_action, actor="baku", role="checker", turn_duration=td)
             record = game.play_half_round(hal_action, baku_action)
         else:
             baku_action = baku_bot.choose_action(game, "dropper", td)
             hal_action = hal_ai.choose_action(game, "checker", td)
+            validate_action(baku_action, actor="baku", role="dropper", turn_duration=td)
+            validate_action(hal_action, actor="hal", role="checker", turn_duration=td)
             record = game.play_half_round(baku_action, hal_action)
 
         if verbose:

@@ -25,6 +25,7 @@ docs/canon/
 # Training artifacts
 models/checkpoints/
 models/self_play/
+checkpoints/
 
 # Generated media
 *.png

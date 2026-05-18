@@ -31,6 +31,7 @@ from .exact import (
     solve_minimax,
     terminal_value,
 )
+from .evaluator import LeafEvaluator, normalize_leaf_evaluation
 
 
 # ── Candidate generation ──────────────────────────────────────────────────
@@ -136,6 +137,13 @@ def _terminal_breakdown(value: float | None) -> UtilityBreakdown:
     return UtilityBreakdown(value, 0.0, 0.0, 0.0)
 
 
+def _frontier_breakdown(game: Game, evaluator: LeafEvaluator | None) -> UtilityBreakdown:
+    if evaluator is None:
+        return _terminal_breakdown(None)
+    value, _, _ = normalize_leaf_evaluation(evaluator(game), game)
+    return UtilityBreakdown(value=float(value), hal_win_probability=0.0, baku_win_probability=0.0, unresolved_probability=0.0)
+
+
 def _weighted_breakdown(parts: list[tuple[float, UtilityBreakdown]]) -> UtilityBreakdown:
     value = sum(weight * part.value for weight, part in parts)
     hal = sum(weight * part.hal_win_probability for weight, part in parts)
@@ -149,11 +157,12 @@ def _evaluate_joint_action_selective(
     action: ExactJointAction,
     half_round_horizon: int,
     config: ExactSearchConfig,
+    evaluator: LeafEvaluator | None = None,
 ) -> UtilityBreakdown:
     if game.game_over:
         return _terminal_breakdown(terminal_value(game, perspective_name=config.perspective_name))
     if half_round_horizon <= 0:
-        return _terminal_breakdown(None)
+        return _frontier_breakdown(game, evaluator)
 
     snap = ExactGameSnapshot(game)
     probe = game.resolve_half_round(action.drop_time, action.check_time, survived_outcome=None)
@@ -165,9 +174,9 @@ def _evaluate_joint_action_selective(
         game.resolve_half_round(action.drop_time, action.check_time, survived_outcome=None)
         value = terminal_value(game, perspective_name=config.perspective_name)
         if value is not None or half_round_horizon == 1:
-            part = _terminal_breakdown(value)
+            part = _terminal_breakdown(value) if value is not None else _frontier_breakdown(game, evaluator)
         else:
-            part = selective_solve(game, half_round_horizon - 1, config).breakdown
+            part = selective_solve(game, half_round_horizon - 1, config, evaluator=evaluator).breakdown
         snap.restore(game)
         return part
 
@@ -179,9 +188,9 @@ def _evaluate_joint_action_selective(
         game.resolve_half_round(action.drop_time, action.check_time, survived_outcome=survived)
         value = terminal_value(game, perspective_name=config.perspective_name)
         if value is not None or half_round_horizon == 1:
-            part = _terminal_breakdown(value)
+            part = _terminal_breakdown(value) if value is not None else _frontier_breakdown(game, evaluator)
         else:
-            part = selective_solve(game, half_round_horizon - 1, config).breakdown
+            part = selective_solve(game, half_round_horizon - 1, config, evaluator=evaluator).breakdown
         parts.append((probability, part))
         snap.restore(game)
     return _weighted_breakdown(parts)
@@ -193,12 +202,13 @@ def selective_solve(
     config: ExactSearchConfig | None = None,
     *,
     candidates: CandidateActions | None = None,
+    evaluator: LeafEvaluator | None = None,
 ) -> SelectiveSearchResult:
     """Selective candidate-only minimax over exact-second matrix games."""
     config = config or ExactSearchConfig()
     terminal = terminal_value(game, perspective_name=config.perspective_name)
     if terminal is not None or half_round_horizon <= 0:
-        breakdown = _terminal_breakdown(terminal)
+        breakdown = _terminal_breakdown(terminal) if terminal is not None else _frontier_breakdown(game, evaluator)
         return SelectiveSearchResult(
             value_for_hal=breakdown.value,
             breakdown=breakdown,
@@ -228,7 +238,13 @@ def selective_solve(
     for d in drop_actions:
         for c in check_actions:
             action = ExactJointAction(d, c)
-            breakdown = _evaluate_joint_action_selective(game, action, half_round_horizon, config)
+            breakdown = _evaluate_joint_action_selective(
+                game,
+                action,
+                half_round_horizon,
+                config,
+                evaluator=evaluator,
+            )
             i = d_index[d]
             j = c_index[c]
             hal_payoff[i, j] = breakdown.value

@@ -3,6 +3,7 @@
 import os
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,6 +34,28 @@ def test_selective_solve_pins_forced_baku_overflow_to_plus_one():
     assert result.unresolved_probability == pytest.approx(0.0)
     assert result.dropper_strategy.sum() == pytest.approx(1.0)
     assert result.checker_strategy.sum() == pytest.approx(1.0)
+
+
+def test_selective_solve_with_evaluator_returns_value_at_horizon_0():
+    scenario = get_scenario("safe_budget_pressure_at_cylinder_240")
+
+    class FixedEvaluator:
+        def __call__(self, game):
+            del game
+            return 0.7, np.zeros(61), np.zeros(61)
+
+    result = selective_solve(scenario.game, 0, scenario.config, evaluator=FixedEvaluator())
+
+    assert result.value_for_hal == pytest.approx(0.7)
+    assert result.unresolved_probability == pytest.approx(0.0)
+
+
+def test_selective_solve_without_evaluator_preserves_cutoff_unresolved():
+    scenario = get_scenario("safe_budget_pressure_at_cylinder_240")
+    result = selective_solve(scenario.game, 0, scenario.config)
+
+    assert result.value_for_hal == pytest.approx(0.0)
+    assert result.unresolved_probability == pytest.approx(1.0)
 
 
 def test_selective_solve_pins_forced_hal_overflow_to_minus_one():

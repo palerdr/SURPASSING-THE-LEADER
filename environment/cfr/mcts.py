@@ -14,7 +14,7 @@ import numpy as np
 from src.Game import Game
 
 from .selective import generate_candidates
-from .evaluator import LeafEvaluator
+from .evaluator import LeafEvaluator, normalize_leaf_evaluation
 from .exact import ExactGameSnapshot, ExactJointAction, ExactSearchConfig
 from .exact import solve_minimax
 from .exact import terminal_value
@@ -55,7 +55,41 @@ class MCTSResult:
     cells_used: int
 
 
-def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
+def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
+    if not candidates:
+        return np.zeros(0, dtype=np.float64)
+    projected = np.array([policy[second - 1] for second in candidates], dtype=np.float64)
+    projected = np.maximum(projected, 0.0)
+    total = float(projected.sum())
+    if total <= 1e-12:
+        return np.full(len(candidates), 1.0 / len(candidates), dtype=np.float64)
+    return projected / total
+
+
+def _prior_from_evaluator(
+    game: Game,
+    drop_seconds: tuple[int, ...],
+    check_seconds: tuple[int, ...],
+    evaluator: LeafEvaluator | None,
+) -> np.ndarray:
+    D = len(drop_seconds)
+    C = len(check_seconds)
+    if D == 0 or C == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+    if evaluator is None:
+        return np.full((D, C), 1.0 / (D * C), dtype=np.float64)
+
+    _, dropper_policy, checker_policy = normalize_leaf_evaluation(evaluator(game), game)
+    drop_prior = _project_policy_to_candidates(dropper_policy, drop_seconds)
+    check_prior = _project_policy_to_candidates(checker_policy, check_seconds)
+    return np.outer(drop_prior, check_prior).astype(np.float64)
+
+
+def make_node(
+    game: Game,
+    config: ExactSearchConfig | None = None,
+    evaluator: LeafEvaluator | None = None,
+) -> MCTSNode:
     """Build an MCTSNode at the current game state.
 
     Snapshots the engine state, generates candidates, allocates zero
@@ -85,10 +119,7 @@ def make_node(game: Game, config: ExactSearchConfig | None = None) -> MCTSNode:
     D = len(cands.drop_seconds)
     C = len(cands.check_seconds)
 
-    if D > 0 and C > 0:
-        prior = np.full((D, C), 1.0 / (D * C), dtype=np.float64)
-    else:
-        prior = np.zeros((0, 0), dtype=np.float64)
+    prior = _prior_from_evaluator(game, cands.drop_seconds, cands.check_seconds, evaluator)
 
     return MCTSNode(
         drop_seconds=cands.drop_seconds,
@@ -142,6 +173,7 @@ def _step_into_child(
     rng: np.random.Generator,
     config: ExactSearchConfig,
     transposition: dict[ExactPublicState, MCTSNode] | None = None,
+    evaluator: LeafEvaluator | None = None,
 ) -> tuple["MCTSNode", bool | None]:
     """Apply the joint action at (d_idx, c_idx) to the engine, sample the
     chance outcome if a death is possible, and return the child node along
@@ -169,7 +201,7 @@ def _step_into_child(
         if transposition is not None and state_key in transposition:
             node.children[key] = transposition[state_key]
         else:    
-            child = make_node(game, config)
+            child = make_node(game, config, evaluator=evaluator)
             node.children[key] = child
             if transposition is not None:
                 transposition[state_key] = child
@@ -211,7 +243,7 @@ def mcts_search(
     behavior.
     """
     exact_config = exact_config or ExactSearchConfig()
-    root = make_node(game, exact_config)
+    root = make_node(game, exact_config, evaluator=evaluator)
     c = config.exploration_c
 
     transposition : dict[ExactPublicState, MCTSNode] = {}
@@ -226,12 +258,21 @@ def mcts_search(
                 leaf_value = node.terminal_value
                 break
             if not node.is_expanded:
-                leaf_value = evaluator(game)
+                leaf_value, _, _ = normalize_leaf_evaluation(evaluator(game), game)
                 node.is_expanded = True
                 break
             d_idx, c_idx = _select_joint_action(node, c, rng)
             path.append((node, d_idx, c_idx))
-            node, _ = _step_into_child(node, game, d_idx, c_idx, rng, exact_config, transposition=transposition)
+            node, _ = _step_into_child(
+                node,
+                game,
+                d_idx,
+                c_idx,
+                rng,
+                exact_config,
+                transposition=transposition,
+                evaluator=evaluator,
+            )
         _backup(path, leaf_value)
 
     Q = root.Q
@@ -244,21 +285,41 @@ def mcts_search(
 
     value_for_hal = float(dropper_strat @ Q @ checker_strat)
 
+    principal_line = _principal_line(root)
+
     if subgame_resolve_at_critical:
         root.game_snapshot.restore(game=game)
         if is_critical(game):
-            resolve_result = resolve_subgame(game, config=exact_config)
+            resolve_result = resolve_subgame(game, config=exact_config, evaluator=evaluator)
             dropper_strat = resolve_result.dropper_strategy
             checker_strat = resolve_result.checker_strategy
             value_for_hal = float(resolve_result.value_for_hal)
+            if (
+                len(resolve_result.drop_seconds) > 0
+                and len(resolve_result.check_seconds) > 0
+                and dropper_strat.size > 0
+                and checker_strat.size > 0
+            ):
+                d_idx = int(np.argmax(dropper_strat))
+                c_idx = int(np.argmax(checker_strat))
+                principal_line = [
+                    ExactJointAction(
+                        resolve_result.drop_seconds[d_idx],
+                        resolve_result.check_seconds[c_idx],
+                    )
+                ]
+            else:
+                principal_line = []
         root.game_snapshot.restore(game=game)
+
+    root.game_snapshot.restore(game=game)
 
     return MCTSResult(
         root_strategy_dropper=dropper_strat,
         root_strategy_checker=checker_strat,
         root_value_for_hal=value_for_hal,
         root_visits=root.N_node,
-        principal_line= _principal_line(root),
+        principal_line=principal_line,
         cells_used=int(root.N_cell.sum()),
     )
 

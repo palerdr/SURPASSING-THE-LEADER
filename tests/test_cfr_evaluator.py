@@ -3,6 +3,8 @@
 import os
 import sys
 
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.cfr.evaluator import (
@@ -16,6 +18,18 @@ from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
 from src.Player import Player
 from src.Referee import Referee
+
+
+def _scalar(result) -> float:
+    return float(result[0])
+
+
+def _assert_policy_pair(result) -> None:
+    _, dropper_policy, checker_policy = result
+    assert dropper_policy.shape == (61,)
+    assert checker_policy.shape == (61,)
+    assert np.isclose(dropper_policy.sum(), 1.0) or np.isclose(dropper_policy.sum(), 0.0)
+    assert np.isclose(checker_policy.sum(), 1.0) or np.isclose(checker_policy.sum(), 0.0)
 
 
 def _make_fresh_game() -> Game:
@@ -41,19 +55,21 @@ def _make_terminal_game(*, hal_wins: bool) -> Game:
 def test_terminal_only_evaluator_returns_zero_on_non_terminal_game():
     evaluator = TerminalOnlyEvaluator()
     game = _make_fresh_game()
-    assert evaluator(game) == 0.0
+    result = evaluator(game)
+    assert _scalar(result) == 0.0
+    _assert_policy_pair(result)
 
 
 def test_terminal_only_evaluator_returns_plus_one_on_hal_win_terminal():
     evaluator = TerminalOnlyEvaluator()
     game = _make_terminal_game(hal_wins=True)
-    assert evaluator(game) == 1.0
+    assert _scalar(evaluator(game)) == 1.0
 
 
 def test_terminal_only_evaluator_returns_minus_one_on_baku_win_terminal():
     evaluator = TerminalOnlyEvaluator()
     game = _make_terminal_game(hal_wins=False)
-    assert evaluator(game) == -1.0
+    assert _scalar(evaluator(game)) == -1.0
 
 
 def test_terminal_only_evaluator_perspective_name_flips_sign():
@@ -62,15 +78,15 @@ def test_terminal_only_evaluator_perspective_name_flips_sign():
     hal_evaluator = TerminalOnlyEvaluator(perspective_name="Hal")
     baku_evaluator = TerminalOnlyEvaluator(perspective_name="Baku")
     game = _make_terminal_game(hal_wins=True)
-    assert hal_evaluator(game) == 1.0
-    assert baku_evaluator(game) == -1.0
+    assert _scalar(hal_evaluator(game)) == 1.0
+    assert _scalar(baku_evaluator(game)) == -1.0
 
 
 def test_terminal_only_evaluator_default_perspective_is_hal():
     evaluator = TerminalOnlyEvaluator()
     game = _make_terminal_game(hal_wins=True)
     # No perspective_name passed → default is "Hal" → Hal-win returns +1.
-    assert evaluator(game) == 1.0
+    assert _scalar(evaluator(game)) == 1.0
 
 
 def test_terminal_only_evaluator_satisfies_leaf_evaluator_protocol_structurally():
@@ -78,22 +94,25 @@ def test_terminal_only_evaluator_satisfies_leaf_evaluator_protocol_structurally(
     # whose __call__ has the right signature satisfies LeafEvaluator. We verify
     # the contract by exercising a function that takes a LeafEvaluator-typed
     # argument with our concrete class.
-    def call_with_protocol(evaluator: LeafEvaluator, game: Game) -> float:
+    def call_with_protocol(evaluator: LeafEvaluator, game: Game):
         return evaluator(game)
 
     evaluator = TerminalOnlyEvaluator()
     game = _make_terminal_game(hal_wins=True)
-    assert call_with_protocol(evaluator, game) == 1.0
+    assert _scalar(call_with_protocol(evaluator, game)) == 1.0
 
 
 def test_terminal_only_evaluator_returns_float_type():
-    # The protocol promises a float. Callers (MCTS backup) rely on this for
-    # numpy arithmetic, so make sure the return is actually a float, not None
-    # leaking through, not int.
+    # The protocol promises (value, dropper_policy, checker_policy).
     evaluator = TerminalOnlyEvaluator()
-    assert isinstance(evaluator(_make_fresh_game()), float)
-    assert isinstance(evaluator(_make_terminal_game(hal_wins=True)), float)
-    assert isinstance(evaluator(_make_terminal_game(hal_wins=False)), float)
+    for game in (
+        _make_fresh_game(),
+        _make_terminal_game(hal_wins=True),
+        _make_terminal_game(hal_wins=False),
+    ):
+        result = evaluator(game)
+        assert isinstance(_scalar(result), float)
+        _assert_policy_pair(result)
 
 
 # ── TablebaseEvaluator (Slice 4b) ─────────────────────────────────────────
@@ -127,7 +146,8 @@ def test_tablebase_evaluator_hit_returns_pinned_value_without_calling_fallback()
     scenario = get_scenario("forced_baku_overflow_death")
     value = evaluator(scenario.game)
 
-    assert value == 1.0
+    assert _scalar(value) == 1.0
+    _assert_policy_pair(value)
     assert recorder.calls == 0  # short-circuit; fallback never invoked
 
 
@@ -138,7 +158,7 @@ def test_tablebase_evaluator_hit_works_for_negative_pinned_value():
     scenario = get_scenario("forced_hal_overflow_death")
     value = evaluator(scenario.game)
 
-    assert value == -1.0
+    assert _scalar(value) == -1.0
     assert recorder.calls == 0
 
 
@@ -149,7 +169,7 @@ def test_tablebase_evaluator_miss_delegates_to_fallback():
 
     value = evaluator(_make_fresh_game())
 
-    assert value == 0.42
+    assert _scalar(value) == 0.42
     assert recorder.calls == 1
 
 
@@ -161,17 +181,17 @@ def test_tablebase_evaluator_composes_with_terminal_only_evaluator():
     pinned = get_scenario("forced_baku_overflow_death")
     fresh = _make_fresh_game()
 
-    assert evaluator(pinned.game) == 1.0
-    assert evaluator(fresh) == 0.0
+    assert _scalar(evaluator(pinned.game)) == 1.0
+    assert _scalar(evaluator(fresh)) == 0.0
 
 
 def test_tablebase_evaluator_satisfies_leaf_evaluator_protocol_structurally():
-    def call_with_protocol(evaluator: LeafEvaluator, game: Game) -> float:
+    def call_with_protocol(evaluator: LeafEvaluator, game: Game):
         return evaluator(game)
 
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
     scenario = get_scenario("forced_baku_overflow_death")
-    assert call_with_protocol(evaluator, scenario.game) == 1.0
+    assert _scalar(call_with_protocol(evaluator, scenario.game)) == 1.0
 
 
 # ── ValueNetEvaluator (Slice 4b Step 2) ───────────────────────────────────
@@ -179,7 +199,7 @@ def test_tablebase_evaluator_satisfies_leaf_evaluator_protocol_structurally():
 
 def test_value_net_evaluator_returns_model_fn_value():
     evaluator = ValueNetEvaluator(model_fn=lambda game: 0.42)
-    assert evaluator(_make_fresh_game()) == 0.42
+    assert _scalar(evaluator(_make_fresh_game())) == 0.42
 
 
 def test_value_net_evaluator_passes_game_to_model_fn():
@@ -191,15 +211,15 @@ def test_value_net_evaluator_passes_game_to_model_fn():
     g = _make_fresh_game()
     g.player2.cylinder = 173.0
     evaluator = ValueNetEvaluator(model_fn=model_fn)
-    assert evaluator(g) == 173.0
+    assert _scalar(evaluator(g)) == 173.0
 
 
 def test_value_net_evaluator_satisfies_leaf_evaluator_protocol_structurally():
-    def call_with_protocol(evaluator: LeafEvaluator, game: Game) -> float:
+    def call_with_protocol(evaluator: LeafEvaluator, game: Game):
         return evaluator(game)
 
     evaluator = ValueNetEvaluator(model_fn=lambda game: -0.3)
-    assert call_with_protocol(evaluator, _make_fresh_game()) == -0.3
+    assert _scalar(call_with_protocol(evaluator, _make_fresh_game())) == -0.3
 
 
 def test_value_net_evaluator_composes_as_tablebase_fallback():
@@ -210,8 +230,8 @@ def test_value_net_evaluator_composes_as_tablebase_fallback():
     evaluator = TablebaseEvaluator(fallback=fallback)
 
     pinned = get_scenario("forced_baku_overflow_death")
-    assert evaluator(pinned.game) == 1.0           # tablebase hit
-    assert evaluator(_make_fresh_game()) == 0.25   # delegates to value net
+    assert _scalar(evaluator(pinned.game)) == 1.0           # tablebase hit
+    assert _scalar(evaluator(_make_fresh_game())) == 0.25   # delegates to value net
 
 
 def test_tablebase_evaluator_relational_scenarios_are_not_in_table():

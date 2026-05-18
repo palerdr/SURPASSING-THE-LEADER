@@ -120,8 +120,11 @@ def test_load_checkpoint_restores_a_usable_model():
 
     x = torch.zeros(1, FEATURE_DIM)
     with torch.no_grad():
-        out = model(x).squeeze().item()
+        value, dropper_logits, checker_logits = model(x)
+        out = value.squeeze().item()
     assert -1.0 <= out <= 1.0
+    assert dropper_logits.shape == (1, 61)
+    assert checker_logits.shape == (1, 61)
 
 
 def test_make_predict_fn_returns_value_in_unit_interval():
@@ -144,9 +147,97 @@ def test_make_predict_fn_returns_value_in_unit_interval():
     game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
     game.seed(0)
 
-    value = predict(game)
+    value, dropper_dist, checker_dist = predict(game)
     assert isinstance(value, float)
     assert -1.0 <= value <= 1.0
+    assert dropper_dist.shape == (61,)
+    assert checker_dist.shape == (61,)
+    assert dropper_dist.sum() == pytest.approx(1.0)
+    assert checker_dist.sum() == pytest.approx(1.0)
+
+
+def _write_synthetic_targets_with_policy(path: Path, n: int = 128, seed: int = 0) -> None:
+    """Write a tiny synthetic .npz that includes non-uniform policy targets.
+
+    Policy targets concentrate dropper probability mass on second 30 and
+    checker probability mass on second 60 — both legal seconds for any
+    non-leap turn. A trained net must learn these peaked distributions or
+    its policy NLL will not decrease.
+    """
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(n, FEATURE_DIM)).astype(np.float32)
+    y = np.tanh(X.sum(axis=1) * 0.1).astype(np.float32)
+    sources = np.array(["terminal"] * n)
+    horizons = np.zeros(n, dtype=np.int32)
+
+    dropper_dists = np.zeros((n, 61), dtype=np.float32)
+    dropper_dists[:, 29] = 1.0  # second 30 (1-indexed)
+    checker_dists = np.zeros((n, 61), dtype=np.float32)
+    checker_dists[:, 59] = 1.0  # second 60
+
+    legal_masks = np.zeros((n, 61), dtype=np.float32)
+    legal_masks[:, :60] = 1.0  # seconds 1..60 legal; second 61 illegal
+
+    np.savez(
+        path,
+        X=X,
+        y=y,
+        sources=sources,
+        horizons=horizons,
+        dropper_dists=dropper_dists,
+        checker_dists=checker_dists,
+        dropper_legal_masks=legal_masks,
+        checker_legal_masks=legal_masks,
+    )
+
+
+def test_train_value_net_optimizes_both_value_and_policy_loss():
+    """Both value MSE and policy NLL must measurably decrease over training
+    when targets carry non-trivial policy distributions.
+
+    Without this gate, a bug that silently zeros the policy gradient (wrong
+    output dim, fully-masked logits, detached tensor in the loss path) would
+    ship green: shape tests would still pass and the value head would still
+    train. The only signal that the policy head is actually learning is its
+    own NLL falling.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets_with_policy(targets, n=128, seed=0)
+        out_dir = Path(tmp) / "out"
+
+        cfg = TrainConfig(
+            epochs=30,
+            batch_size=16,
+            learning_rate=3e-3,
+            policy_loss_weight=1.0,
+            seed=42,
+            early_stopping_patience=100,  # disable; let all 30 epochs run
+        )
+        result = train(targets, out_dir, cfg)
+
+    history = result.train_history
+    assert len(history) == 30, f"Expected all 30 epochs to run, got {len(history)}"
+
+    initial_value_mse = history[0]["train_mse"]
+    final_value_mse = history[-1]["train_mse"]
+    initial_policy_nll = history[0]["train_policy_nll"]
+    final_policy_nll = history[-1]["train_policy_nll"]
+
+    assert final_value_mse < initial_value_mse, (
+        f"Value MSE did not decrease: {initial_value_mse:.5f} → {final_value_mse:.5f}"
+    )
+    assert final_policy_nll < initial_policy_nll, (
+        f"Policy NLL did not decrease: {initial_policy_nll:.5f} → {final_policy_nll:.5f}"
+    )
+    # Stronger sanity: policy must drop materially, not just by floating-point noise.
+    # Random uniform over 60 legal seconds = ln(60) ≈ 4.094 NLL; perfect = 0.
+    # Two heads → initial ≈ 8.19. After 30 epochs on a peaked target, NLL should
+    # have dropped by at least 30%.
+    assert final_policy_nll < initial_policy_nll * 0.7, (
+        f"Policy NLL dropped only marginally ({initial_policy_nll:.3f} → "
+        f"{final_policy_nll:.3f}); possible silent gradient zeroing."
+    )
 
 
 def test_train_rejects_wrong_feature_dim():

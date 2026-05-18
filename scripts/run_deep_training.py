@@ -12,6 +12,7 @@ from hal.train import train_value_net, save_checkpoint, load_checkpoint
 from hal.evaluate import set_nn_evaluator
 from hal.hal_opponent import CanonicalHal
 from environment.opponents.factory import create_scripted_opponent
+from environment.legal_actions import validate_action
 from src.Player import Player
 from src.Referee import Referee
 from src.Game import Game
@@ -44,10 +45,14 @@ def evaluate_net(net, n_games=50, depth=1):
                 if dropper.name.lower() == "hal":
                     h = hal_ai.choose_action(game, "dropper", td)
                     b = opp.choose_action(game, "checker", td)
+                    validate_action(h, actor="hal", role="dropper", turn_duration=td)
+                    validate_action(b, actor="baku", role="checker", turn_duration=td)
                     game.play_half_round(h, b)
                 else:
                     b = opp.choose_action(game, "dropper", td)
                     h = hal_ai.choose_action(game, "checker", td)
+                    validate_action(b, actor="baku", role="dropper", turn_duration=td)
+                    validate_action(h, actor="hal", role="checker", turn_duration=td)
                     game.play_half_round(b, h)
                 turn += 1
             if game.game_over and game.winner.name.lower() == "hal":

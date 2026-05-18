@@ -4,7 +4,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.nn import MSELoss
 
-from .value_net import ValueNet, FEATURE_DIM
+from .value_net import ValueNet, FEATURE_DIM, value_output
 from .self_play import Experience
 
 
@@ -35,7 +35,7 @@ def train_value_net(
             batch_features = features[batch_idx]
             batch_outcomes = outcomes[batch_idx]
 
-            predictions = net(batch_features)
+            predictions = value_output(net(batch_features))
             loss = loss_fn(predictions, batch_outcomes)
 
             optimizer.zero_grad()
@@ -58,6 +58,18 @@ def save_checkpoint(net: ValueNet, path: str) -> None:
                                                                                   
 def load_checkpoint(path: str, n_features: int = FEATURE_DIM) -> ValueNet:
       net = ValueNet(n_features)
-      net.load_state_dict(torch.load(path))
+      state = torch.load(path)
+      try:
+          net.load_state_dict(state)
+      except RuntimeError:
+          migrated = {}
+          for key, value in state.items():
+              if key.startswith("layers.0."):
+                  migrated[key.replace("layers.0.", "trunk.0.")] = value
+              elif key.startswith("layers.2."):
+                  migrated[key.replace("layers.2.", "trunk.2.")] = value
+              elif key.startswith("layers.4."):
+                  migrated[key.replace("layers.4.", "value_head.0.")] = value
+          net.load_state_dict(migrated, strict=False)
       net.eval()
       return net

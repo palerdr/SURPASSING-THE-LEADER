@@ -13,7 +13,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from environment.cfr.timing_features import current_checker_fail_would_activate_lsr
+from environment.cfr.timing_features import (
+    current_checker_fail_would_activate_lsr,
+    current_lsr_variation,
+    rounds_until_leap_window,
+)
 from environment.opponents.baku_teachers import BakuLSREngineeringTeacher, BakuTeacher
 from src.Constants import (
     LS_WINDOW_START,
@@ -138,7 +142,149 @@ def test_baku_lsr_engineering_teacher_safe_check_outside_engineering_window():
         assert action == 60
 
 
-# ── 5. Manga validation script imports cleanly ────────────────────────────
+# ── 5. Self-play integration: mechanism actually fires and shifts parity ──
+
+
+def test_baku_lsr_engineering_self_play_attempts_engineering_at_least_once():
+    """Integration: across 60 half-rounds vs a deterministic safe Hal, the
+    teacher's engineering predicate fires AND the teacher actually returns the
+    engineering action (second=1) at least once. Proves the predicate-to-action
+    pipeline exercises in self-play, not just in isolated unit-state probes.
+    """
+    game = _new_game(seed=0)
+    teacher = BakuLSREngineeringTeacher()
+
+    predicate_firings = 0
+    engineering_attempts = 0
+    runway_in_window_firings = 0
+
+    for _ in range(60):
+        if game.game_over:
+            break
+        dropper, checker = game.get_roles_for_half(game.current_half)
+        turn_duration = game.get_turn_duration()
+
+        if checker.name.lower() == "baku":
+            check_action = teacher.choose_action(game, "checker", turn_duration)
+            if current_checker_fail_would_activate_lsr(game):
+                predicate_firings += 1
+                runway = rounds_until_leap_window(game)
+                if 4 <= runway <= 7:
+                    runway_in_window_firings += 1
+                if check_action == 1:
+                    engineering_attempts += 1
+        else:
+            check_action = 60
+
+        if dropper.name.lower() == "baku":
+            drop_action = teacher.choose_action(game, "dropper", turn_duration)
+        else:
+            drop_action = 30
+
+        try:
+            game.play_half_round(drop_action, check_action)
+        except Exception:
+            break
+
+    assert predicate_firings >= 1, "Engineering predicate never fired in self-play."
+    assert engineering_attempts >= 1, "Teacher never attempted engineering in self-play."
+    assert engineering_attempts == runway_in_window_firings, (
+        "Engineering attempts must equal runway-gated predicate firings."
+    )
+
+
+def test_baku_lsr_engineering_self_play_lands_baku_as_dropper_in_leap_window():
+    """Stronger Phase 7 assertion: under a deterministic Hal play pattern with
+    forced-survival revivals, the teacher's engineering causes the leap-turn
+    half-round (clock in [LS_WINDOW_START, LS_WINDOW_END)) to execute with
+    Baku as dropper and Hal as checker — the canonical realization of
+    "Active LSR" / 2-Second-Deviation territory.
+
+    Note on the variation label: ``current_lsr_variation`` is
+    ``(clock // 60) % 4 + 1``, which evaluates to 4 for any clock in the
+    leap window [3540, 3600) because 3540/60 = 59 ≡ 3 (mod 4). The label is
+    a projected/upstream parity *predictor* of who will drop at the leap
+    turn, not the in-window variation itself. The strategic content the
+    canonical Active LSR demands — "Baku drops, Hal checks during the leap
+    turn" — is asserted here by inspecting the actual role assignment at the
+    half-round whose clock lands in the leap window.
+
+    The chosen Hal play pattern (drop=20, check=30) plus seed=0 is one of
+    60 configurations found by exhaustive probe to enter the leap window
+    with Baku as dropper after a single engineered checker fail.
+    """
+    from environment.cfr.timing_features import (
+        current_dropper_checker,
+        is_leap_window,
+    )
+
+    teacher = BakuLSREngineeringTeacher()
+    game = _new_game(seed=0)
+    hal_drop = 20
+    hal_check = 30
+
+    leap_window_observations: list[tuple[float, str, str]] = []
+    safety_limit = 50
+
+    for _ in range(safety_limit):
+        if game.game_over:
+            break
+        dropper, checker = current_dropper_checker(game)
+        turn_duration = game.get_turn_duration()
+        if dropper.name.lower() == "baku":
+            drop_action = teacher.choose_action(game, "dropper", turn_duration)
+            check_action = hal_check
+        else:
+            drop_action = hal_drop
+            check_action = teacher.choose_action(game, "checker", turn_duration)
+
+        if is_leap_window(game.game_clock):
+            leap_window_observations.append(
+                (float(game.game_clock), dropper.name.lower(), checker.name.lower())
+            )
+
+        try:
+            game.resolve_half_round(drop_action, check_action, survived_outcome=True)
+        except Exception:
+            break
+
+    assert leap_window_observations, (
+        "Engineering self-play never landed a half-round inside the leap window."
+    )
+    _leap_clock, leap_dropper, leap_checker = leap_window_observations[0]
+    assert leap_dropper == "baku" and leap_checker == "hal", (
+        f"Leap-window half-round had wrong role assignment: "
+        f"dropper={leap_dropper!r}, checker={leap_checker!r}. "
+        f"Expected Baku-dropper / Hal-checker (Active LSR)."
+    )
+
+
+def test_baku_lsr_engineering_actually_flips_route_parity_on_engineered_fail():
+    """When the engineered fail is forced to a survived outcome, the LSR
+    variation observed at the resulting state differs from the pre-fail
+    variation. This is the proof that engineering MECHANICALLY shifts route
+    parity — beyond the predicate's static promise.
+    """
+    game = _find_lsr_activation_state()
+    pre_variation = current_lsr_variation(game)
+
+    teacher = BakuLSREngineeringTeacher()
+    turn_duration = game.get_turn_duration()
+    check_action = teacher.choose_action(game, "checker", turn_duration)
+    assert check_action == 1, "Setup violated: teacher should engineer here."
+
+    drop_action = 30
+    game.resolve_half_round(drop_action, check_action, survived_outcome=True)
+    assert not game.game_over, "Setup violated: forced-survived fail should not end the game."
+
+    post_variation = current_lsr_variation(game)
+    assert post_variation != pre_variation, (
+        f"Engineered checker fail did not change LSR variation: "
+        f"pre={pre_variation} post={post_variation}"
+    )
+
+
+# ── 6. Manga validation script imports cleanly ────────────────────────────
 
 
 def test_validate_against_manga_script_module_imports():

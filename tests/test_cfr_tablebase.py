@@ -28,6 +28,12 @@ EXPECTED_NAMES = (
     "safe_budget_pressure_at_cylinder_240",
     "cpr_degradation_fresh_referee",
     "cpr_degradation_fatigued_referee",
+    "baku_dropper_leap_window_alignment",
+    "hal_dropper_leap_window_asymmetry",
+    "near_overflow_marginal_baku_294",
+    "death_trade_double_pressure",
+    "role_alignment_active_lsr_runway",
+    "role_alignment_variation4_post_engineering",
 )
 
 
@@ -60,6 +66,7 @@ def test_scenarios_by_tag_filters_correctly():
     assert {s.name for s in near_overflow} == {
         "forced_baku_overflow_death",
         "forced_hal_overflow_death",
+        "near_overflow_marginal_baku_294",
     }
     safe_budget = scenarios_by_tag("safe_budget")
     assert {s.name for s in safe_budget} == {
@@ -110,5 +117,4 @@ def test_late_cpr_degradation_pair_increases_hal_value_under_forced_fail():
     assert fatigued_branch.unresolved_probability > 0.0
     assert fatigued_branch.hal_win_probability > fresh_branch.hal_win_probability
     assert fatigued_branch.value > fresh_branch.value
-
 

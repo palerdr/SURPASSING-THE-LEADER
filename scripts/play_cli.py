@@ -28,6 +28,7 @@ from src.Constants import (
 from hal.hal_opponent import CanonicalHal
 from hal.evaluate import set_nn_evaluator
 from hal.train import load_checkpoint
+from environment.legal_actions import validate_action
 
 # -- Display helpers -------------------------------------------------
 
@@ -293,6 +294,8 @@ def main():
                 drop_t = get_drop_time(dropper.name, turn_dur)
                 check_t = get_check_time(checker.name, turn_dur)
 
+            validate_action(drop_t, actor=dropper.name, role="dropper", turn_duration=turn_dur)
+            validate_action(check_t, actor=checker.name, role="checker", turn_duration=turn_dur)
             record = game.play_half_round(drop_t, check_t)
             print_half_result(record)
 

@@ -16,6 +16,7 @@ from src.Game import Game
 from hal.hal_opponent import CanonicalHal
 from hal.evaluate import set_nn_evaluator
 from hal.train import load_checkpoint
+from environment.legal_actions import validate_action
 from environment.opponents.factory import create_scripted_opponent
 
 
@@ -43,10 +44,14 @@ def run_games(baku_phys, opponent_name, n_games, depth, use_nn):
             if dropper.name.lower() == "hal":
                 h = hal_ai.choose_action(game, "dropper", td)
                 b = opp.choose_action(game, "checker", td)
+                validate_action(h, actor="hal", role="dropper", turn_duration=td)
+                validate_action(b, actor="baku", role="checker", turn_duration=td)
                 game.play_half_round(h, b)
             else:
                 b = opp.choose_action(game, "dropper", td)
                 h = hal_ai.choose_action(game, "checker", td)
+                validate_action(b, actor="baku", role="dropper", turn_duration=td)
+                validate_action(h, actor="hal", role="checker", turn_duration=td)
                 game.play_half_round(b, h)
             turn += 1
         if game.game_over and game.winner.name.lower() == "hal":

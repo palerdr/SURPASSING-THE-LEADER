@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from environment.cfr.evaluator import TerminalOnlyEvaluator
 from environment.cfr.exact import ExactSearchConfig
 from environment.cfr.mcts import MCTSConfig, MCTSResult, make_node, mcts_search
+from environment.legal_actions import validate_action
 from environment.opponents.baku_teachers import BakuLSREngineeringTeacher
 from src.Constants import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
@@ -127,10 +128,14 @@ def play_through(
         if hal_role == "dropper":
             hal_action = drop_seconds[d_choice] if d_choice < len(drop_seconds) else drop_seconds[0]
             baku_action = teacher.choose_action(game, "checker", turn_duration)
+            validate_action(hal_action, actor="hal", role="dropper", turn_duration=turn_duration)
+            validate_action(baku_action, actor="baku", role="checker", turn_duration=turn_duration)
             drop_time, check_time = hal_action, baku_action
         else:
             hal_action = check_seconds[c_choice] if c_choice < len(check_seconds) else check_seconds[0]
             baku_action = teacher.choose_action(game, "dropper", turn_duration)
+            validate_action(baku_action, actor="baku", role="dropper", turn_duration=turn_duration)
+            validate_action(hal_action, actor="hal", role="checker", turn_duration=turn_duration)
             drop_time, check_time = baku_action, hal_action
 
         logs.append(

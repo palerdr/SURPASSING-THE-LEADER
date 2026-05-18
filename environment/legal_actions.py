@@ -20,6 +20,10 @@ from __future__ import annotations
 from src.Constants import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
 
 
+class IllegalActionError(ValueError):
+    """Raised when an action second violates actor/role legality."""
+
+
 def legal_max_second(actor: str, role: str, turn_duration: int) -> int:
     actor_l = actor.lower()
     role_l = role.lower()
@@ -50,3 +54,26 @@ def can_use_leap_second(actor: str, role: str) -> bool:
 def clamp_action(second: int, *, actor: str, role: str, turn_duration: int) -> int:
     max_sec = legal_max_second(actor, role, turn_duration)
     return max(1, min(int(second), max_sec))
+
+
+def validate_action(second: int, *, actor: str, role: str, turn_duration: int) -> None:
+    """Validate a one-indexed second against the actor-aware legality rule."""
+    max_sec = legal_max_second(actor, role, turn_duration)
+    try:
+        value = int(second)
+    except (TypeError, ValueError) as exc:
+        raise IllegalActionError(
+            f"Illegal action second={second!r} for actor={actor!r} role={role!r}; "
+            "seconds must be integers."
+        ) from exc
+
+    if isinstance(second, bool) or value != second:
+        raise IllegalActionError(
+            f"Illegal action second={second!r} for actor={actor!r} role={role!r}; "
+            "seconds must be integral."
+        )
+    if not (1 <= value <= max_sec):
+        raise IllegalActionError(
+            f"Illegal action second={second!r} for actor={actor!r} role={role!r} "
+            f"turn_duration={turn_duration}; legal range is [1, {max_sec}]."
+        )

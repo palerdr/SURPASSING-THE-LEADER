@@ -10,8 +10,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.cfr.exact import (
+    clear_solve_cache,
     evaluate_joint_action,
     exact_immediate_checker_payoff_matrix,
+    solve_cache_size,
     solve_exact_finite_horizon,
 )
 from environment.cfr.exact import exact_public_state
@@ -198,3 +200,54 @@ def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():
         source = path.read_text()
         for marker in forbidden:
             assert marker not in source, f"{path} imports or references heuristic marker {marker!r}"
+
+
+# ── Memoization (cache for solve_exact_finite_horizon) ───────────────────
+
+
+def test_solve_cache_returns_bit_identical_results_with_and_without_cache():
+    """Cached value/strategies/breakdown must match the uncached recursion
+    bit-for-bit. This is correctness — if the cache key misses any state
+    component, two different subproblems collide and corrupt the corpus."""
+    scenario = forced_baku_overflow_death()
+    game1 = scenario.game
+    config = scenario.config
+
+    clear_solve_cache()
+    uncached = solve_exact_finite_horizon(game1, half_round_horizon=4, config=config)
+    cached_size_after_first = solve_cache_size()
+    assert cached_size_after_first > 0, (
+        "Recursion at horizon=4 must populate the cache for non-terminal states."
+    )
+
+    # Re-build a fresh game so we are not fooled by snapshot state-restore quirks.
+    scenario2 = forced_baku_overflow_death()
+    game2 = scenario2.game
+    cached = solve_exact_finite_horizon(game2, half_round_horizon=4, config=config)
+
+    assert uncached.value_for_hal == pytest.approx(cached.value_for_hal)
+    assert uncached.unresolved_probability == pytest.approx(cached.unresolved_probability)
+    np.testing.assert_array_equal(uncached.dropper_strategy, cached.dropper_strategy)
+    np.testing.assert_array_equal(uncached.checker_strategy, cached.checker_strategy)
+    assert uncached.drop_actions == cached.drop_actions
+    assert uncached.check_actions == cached.check_actions
+
+
+def test_solve_cache_is_populated_during_recursion():
+    """A horizon=3 solve at a near-overflow state must hit the cache at least
+    once during its recursion. If size after one solve == size during cold,
+    no recursive subproblems are sharing — the cache is dead."""
+    clear_solve_cache()
+    assert solve_cache_size() == 0
+    scenario = forced_baku_overflow_death()
+    solve_exact_finite_horizon(scenario.game, half_round_horizon=3, config=scenario.config)
+    assert solve_cache_size() > 0
+
+
+def test_clear_solve_cache_resets_to_empty():
+    clear_solve_cache()
+    scenario = forced_baku_overflow_death()
+    solve_exact_finite_horizon(scenario.game, half_round_horizon=3, config=scenario.config)
+    assert solve_cache_size() > 0
+    clear_solve_cache()
+    assert solve_cache_size() == 0

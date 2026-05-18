@@ -75,14 +75,29 @@ def extract_features(game: Game) -> np.ndarray:
 class ValueNet(nn.Module):
     def __init__(self, input_dim: int = FEATURE_DIM, hidden_dim: int = HIDDEN_DIM):
         super().__init__()
-        self.layers = nn.Sequential(
+        self.trunk = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
+        )
+        self.value_head = nn.Sequential(
             nn.Linear(hidden_dim, 1),
             nn.Tanh(),
         )
+        self.policy_head = nn.Linear(hidden_dim, 122)
 
     def forward(self, x):
-        return self.layers(x)
+        hidden = self.trunk(x)
+        value = self.value_head(hidden)
+        policy_logits = self.policy_head(hidden)
+        dropper_logits = policy_logits[..., :61]
+        checker_logits = policy_logits[..., 61:]
+        return value, dropper_logits, checker_logits
+
+
+def value_output(output) -> torch.Tensor:
+    """Return the scalar value tensor from a ValueNet-style output."""
+    if isinstance(output, tuple):
+        return output[0]
+    return output

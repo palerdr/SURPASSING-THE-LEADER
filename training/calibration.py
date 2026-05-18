@@ -47,6 +47,7 @@ class CalibrationReport:
     reliability_bins: list[tuple[float, float, int]]
     exact_target_error: float
     n_targets: int
+    mean_unresolved_probability_per_source: dict[str, float]
 
 
 def _predict_value(
@@ -125,18 +126,21 @@ def evaluate_value_net(
             ],
             exact_target_error=0.0,
             n_targets=0,
+            mean_unresolved_probability_per_source={},
         )
 
     n = len(held_out_targets)
     preds = np.empty(n, dtype=np.float64)
     labels = np.empty(n, dtype=np.float64)
     sources: list[str] = []
+    unresolved = np.empty(n, dtype=np.float64)
     tablebase_errors: list[float] = []
 
     for i, target in enumerate(held_out_targets):
         pred = _predict_value(predict_fn, target.features)
         preds[i] = pred
         labels[i] = target.value
+        unresolved[i] = float(target.unresolved_probability)
         sources.append(target.source)
         if target.source == "tablebase":
             tablebase_errors.append(abs(pred - target.value))
@@ -146,14 +150,27 @@ def evaluate_value_net(
     overall_mse = float(squared_error.mean())
 
     mse_per_source: dict[str, float] = {}
+    mean_unresolved_probability_per_source: dict[str, float] = {}
     for source in np.unique(sources_array):
         mask = sources_array == source
         mse_per_source[str(source)] = float(squared_error[mask].mean())
+        mean_unresolved_probability_per_source[str(source)] = float(unresolved[mask].mean())
 
     pred_unit = np.clip(_to_unit_interval(preds), 0.0, 1.0)
-    label_unit = (labels >= 0.0).astype(np.float64)
-    brier_score = float(((pred_unit - label_unit) ** 2).mean())
-    reliability = _reliability_bins(pred_unit, label_unit)
+    # Brier score is a binary proper scoring rule. Hal-perspective values
+    # of exactly 0.0 are draws / indeterminate equilibria — they have no
+    # binary direction and would otherwise be silently mapped to "Hal wins"
+    # by ``labels >= 0``. Drop them from the binary scoring set; reliability
+    # bins follow the same filter so observed-rate buckets stay coherent.
+    nonzero_mask = labels != 0.0
+    if nonzero_mask.any():
+        brier_pred = pred_unit[nonzero_mask]
+        brier_labels = (labels[nonzero_mask] > 0.0).astype(np.float64)
+        brier_score = float(((brier_pred - brier_labels) ** 2).mean())
+        reliability = _reliability_bins(brier_pred, brier_labels)
+    else:
+        brier_score = 0.0
+        reliability = _reliability_bins(np.empty(0), np.empty(0))
 
     exact_target_error = float(max(tablebase_errors)) if tablebase_errors else 0.0
 
@@ -164,4 +181,5 @@ def evaluate_value_net(
         reliability_bins=reliability,
         exact_target_error=exact_target_error,
         n_targets=n,
+        mean_unresolved_probability_per_source=mean_unresolved_probability_per_source,
     )

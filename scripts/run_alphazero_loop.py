@@ -9,6 +9,7 @@ from hal.value_net import ValueNet, FEATURE_DIM
 from hal.self_play import generate_dataset
 from hal.train import train_value_net, save_checkpoint, load_checkpoint
 from hal.evaluate import set_nn_evaluator
+from environment.legal_actions import validate_action
 
 OPPONENTS = ["baku_teacher", "baku_leap", "baku_route", "safe", "random"]
 CHECKPOINT_DIR = "models/checkpoints"
@@ -85,10 +86,14 @@ def evaluate_checkpoint(net, depth=1, n_games=20):
                 if dropper.name.lower() == "hal":
                     h = hal_ai.choose_action(game, "dropper", td)
                     b = opp.choose_action(game, "checker", td)
+                    validate_action(h, actor="hal", role="dropper", turn_duration=td)
+                    validate_action(b, actor="baku", role="checker", turn_duration=td)
                     game.play_half_round(h, b)
                 else:
                     b = opp.choose_action(game, "dropper", td)
                     h = hal_ai.choose_action(game, "checker", td)
+                    validate_action(b, actor="baku", role="dropper", turn_duration=td)
+                    validate_action(h, actor="hal", role="checker", turn_duration=td)
                     game.play_half_round(b, h)
                 turn += 1
             if game.game_over and game.winner.name.lower() == "hal":

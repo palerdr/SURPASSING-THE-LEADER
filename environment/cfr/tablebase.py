@@ -22,10 +22,16 @@ from collections.abc import Callable
 from .exact import ExactSolveResult, solve_exact_finite_horizon
 from .tactical_scenarios import (
     TacticalScenario,
+    baku_dropper_leap_window_alignment,
     cpr_degradation_fatigued_referee,
     cpr_degradation_fresh_referee,
+    death_trade_double_pressure,
     forced_baku_overflow_death,
     forced_hal_overflow_death,
+    hal_dropper_leap_window_asymmetry,
+    near_overflow_marginal_baku_294,
+    role_alignment_active_lsr_runway,
+    role_alignment_variation4_post_engineering,
     safe_budget_pressure_at_cylinder_240,
     safe_budget_pressure_at_cylinder_241,
 )
@@ -43,6 +49,12 @@ REGISTRY: dict[str, ScenarioFactory] = {
         safe_budget_pressure_at_cylinder_240,
         cpr_degradation_fresh_referee,
         cpr_degradation_fatigued_referee,
+        baku_dropper_leap_window_alignment,
+        hal_dropper_leap_window_asymmetry,
+        near_overflow_marginal_baku_294,
+        death_trade_double_pressure,
+        role_alignment_active_lsr_runway,
+        role_alignment_variation4_post_engineering,
     )
 }
 
@@ -61,8 +73,12 @@ def materialize_all() -> tuple[TacticalScenario, ...]:
     return tuple(factory() for factory in REGISTRY.values())
 
 
-def pinned_scenarios() -> tuple[TacticalScenario, ...]:
-    return tuple(s for s in materialize_all() if s.expected_value is not None)
+def pinned_scenarios(*, include_holdout: bool = False) -> tuple[TacticalScenario, ...]:
+    return tuple(
+        s
+        for s in materialize_all()
+        if s.expected_value is not None and (include_holdout or not s.holdout)
+    )
 
 
 def scenarios_by_tag(tag: str) -> tuple[TacticalScenario, ...]:

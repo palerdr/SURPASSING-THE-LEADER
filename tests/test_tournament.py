@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.cfr.tactical_scenarios import forced_baku_overflow_death
+from environment.legal_actions import IllegalActionError
 from src.Constants import TURN_DURATION_NORMAL
 from src.Game import Game
 from training.tournament import MatchResult, play_match
@@ -152,3 +153,31 @@ def test_play_match_all_games_run_to_completion():
     assert result.games_played == result.hal_wins + result.baku_wins + result.draws
     # No "unfinished" causes — the safety limit was never hit.
     assert "unfinished" not in result.cause_of_termination
+
+
+def test_tournament_rejects_illegal_hal_checker_second_61_from_callable():
+    def hal_illegal(game: Game, role: str, turn_duration: int) -> int:
+        del game, turn_duration
+        return 61 if role == "checker" else 1
+
+    with pytest.raises(IllegalActionError):
+        play_match(
+            hal_choose_action=hal_illegal,
+            baku_choose_action=_always_one,
+            n_games=1,
+            seed=0,
+        )
+
+
+def test_tournament_rejects_illegal_hal_dropper_second_61():
+    def hal_illegal(game: Game, role: str, turn_duration: int) -> int:
+        del game, role, turn_duration
+        return 61
+
+    with pytest.raises(IllegalActionError):
+        play_match(
+            hal_choose_action=hal_illegal,
+            baku_choose_action=_always_one,
+            n_games=1,
+            seed=0,
+        )

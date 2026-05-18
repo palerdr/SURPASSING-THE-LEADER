@@ -427,6 +427,33 @@ def evaluate_joint_action(
     return _weighted_breakdown(parts)
 
 
+# ── Memoization for solve_exact_finite_horizon ────────────────────────────
+#
+# Per-process cache keyed on (ExactPublicState, horizon, perspective_name).
+# Each multiprocessing worker has its own module state, so the cache is local
+# to one process — that's the right scope: the recursion within a single
+# corpus state often revisits the same (state, horizon) via distinct paths
+# (e.g. (drop=10,check=15) and (drop=20,check=25) can both land on the same
+# post-action state). Cross-state cache hits across workers would require
+# shared memory and the IPC overhead would eat the speedup.
+#
+# The cache is invalidated trivially: each worker process runs to completion
+# on its slice and exits, freeing the cache. Tests can call
+# ``clear_solve_cache()`` between runs to assert determinism.
+
+_SOLVE_CACHE: dict[tuple, ExactSolveResult] = {}
+
+
+def clear_solve_cache() -> None:
+    """Clear the per-process memoization cache. Tests use this to isolate runs."""
+    _SOLVE_CACHE.clear()
+
+
+def solve_cache_size() -> int:
+    """Diagnostic: number of cached (state, horizon, perspective) entries."""
+    return len(_SOLVE_CACHE)
+
+
 def solve_exact_finite_horizon(
     game: Game,
     half_round_horizon: int,
@@ -436,6 +463,12 @@ def solve_exact_finite_horizon(
 
     Horizon cutoff is reported as unresolved probability; no heuristic frontier
     value is used.
+
+    Memoized: results are cached on ``(exact_public_state(game), horizon,
+    perspective_name)``. The cache is per-process and grows only for the
+    duration of one worker's slice of corpus generation. On a near-leap-window
+    state at horizon=3, intra-recursion revisits saturate the cache quickly
+    and shrink wall-clock by orders of magnitude.
     """
     config = config or ExactSearchConfig()
     terminal = terminal_value(game, perspective_name=config.perspective_name)
@@ -450,6 +483,11 @@ def solve_exact_finite_horizon(
             half_round_horizon=half_round_horizon,
             payoff_for_hal=None,
         )
+
+    cache_key = (exact_public_state(game), half_round_horizon, config.perspective_name)
+    cached = _SOLVE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
 
     dropper, _checker = game.get_roles_for_half(game.current_half)
     hal_is_dropper = dropper.name.lower() == config.perspective_name.lower()
@@ -488,7 +526,7 @@ def solve_exact_finite_horizon(
 
     breakdown = _weighted_breakdown(parts)
     value = float(row_value if hal_is_dropper else -row_value)
-    return ExactSolveResult(
+    result = ExactSolveResult(
         dropper_strategy=dropper_strategy,
         checker_strategy=checker_strategy,
         value_for_hal=value,
@@ -499,3 +537,5 @@ def solve_exact_finite_horizon(
         check_actions=check_actions,
         payoff_for_hal=hal_payoff,
     )
+    _SOLVE_CACHE[cache_key] = result
+    return result

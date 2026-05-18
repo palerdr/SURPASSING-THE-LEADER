@@ -31,8 +31,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hal.value_net import FEATURE_DIM
 from training.bootstrap_loop import (
     BootstrapConfig,
+    CalibrationGateError,
     bootstrap_one_generation,
     calibration_check,
+    enforce_calibration_gate,
 )
 from training.train_value_net import TrainConfig, train
 from training.value_targets import (
@@ -169,6 +171,7 @@ def test_bootstrap_one_generation_chains_target_gen_and_training():
             iterations_per_state=20,
             seed=0,
             train_config=TrainConfig(epochs=2, batch_size=4, seed=0),
+            required_sources=(SOURCE_TERMINAL,),
         )
         result = bootstrap_one_generation(
             gen_in_checkpoint=gen0_ckpt,
@@ -214,3 +217,187 @@ def test_calibration_check_loads_checkpoint_and_returns_report():
     assert SOURCE_TERMINAL in report.mse_per_source
     assert SOURCE_EXACT_HORIZON_2 in report.mse_per_source
     assert 0.0 <= report.brier_score <= 1.0
+
+
+# ── regression-rejection gate ────────────────────────────────────────────
+
+
+def _build_held_out_targets() -> list[ValueTarget]:
+    """A fixed held-out reference set used by the gate tests."""
+    rng = np.random.default_rng(99)
+    items: list[ValueTarget] = []
+    for _ in range(8):
+        feats = rng.normal(size=(FEATURE_DIM,)).astype(np.float32)
+        items.append(
+            ValueTarget(
+                features=feats,
+                value=float(np.tanh(feats.sum() * 0.1)),
+                source=SOURCE_TERMINAL,
+                horizon=0,
+            )
+        )
+    return items
+
+
+def test_bootstrap_gate_accepts_when_no_prev_baseline_supplied():
+    """No prev_gen_holdout_mse means the gate cannot reject. Held-out
+    calibration is still scored when held_out_targets is provided."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        gen0_ckpt = _write_initial_checkpoint(tmp_path)
+        gen1_targets_path = tmp_path / "gen1_targets.npz"
+        gen1_dir = tmp_path / "gen1"
+
+        cfg = BootstrapConfig(
+            iterations_per_state=20,
+            seed=0,
+            train_config=TrainConfig(epochs=2, batch_size=4, seed=0),
+            required_sources=(SOURCE_TERMINAL,),
+        )
+        result = bootstrap_one_generation(
+            gen_in_checkpoint=gen0_ckpt,
+            gen_out_targets=gen1_targets_path,
+            gen_out_dir=gen1_dir,
+            config=cfg,
+            grids=_tiny_grids(),
+            held_out_targets=_build_held_out_targets(),
+            prev_gen_holdout_mse=None,
+        )
+
+        assert result.accepted is True
+        assert result.holdout_calibration is not None
+        assert result.holdout_calibration.n_targets == 8
+
+
+def test_bootstrap_gate_rejects_when_new_mse_strictly_exceeds_prev():
+    """If prev_gen_holdout_mse is below the new gen's MSE, the gate fires
+    and ``accepted`` is False. Use a deliberately impossible-to-beat baseline
+    of -1.0 so any non-negative MSE counts as a regression."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        gen0_ckpt = _write_initial_checkpoint(tmp_path)
+        gen1_targets_path = tmp_path / "gen1_targets.npz"
+        gen1_dir = tmp_path / "gen1"
+
+        cfg = BootstrapConfig(
+            iterations_per_state=20,
+            seed=0,
+            train_config=TrainConfig(epochs=2, batch_size=4, seed=0),
+            required_sources=(SOURCE_TERMINAL,),
+        )
+        result = bootstrap_one_generation(
+            gen_in_checkpoint=gen0_ckpt,
+            gen_out_targets=gen1_targets_path,
+            gen_out_dir=gen1_dir,
+            config=cfg,
+            grids=_tiny_grids(),
+            held_out_targets=_build_held_out_targets(),
+            prev_gen_holdout_mse=-1.0,  # impossible to beat → forced rejection
+        )
+
+        assert result.accepted is False
+        assert result.holdout_calibration is not None
+        assert result.holdout_calibration.overall_mse > -1.0
+        assert result.prev_gen_holdout_mse == -1.0
+
+
+def test_bootstrap_gate_accepts_when_new_mse_strictly_below_prev():
+    """If prev_gen_holdout_mse is above the new gen's MSE, the gate passes.
+    Use a deliberately huge baseline so any finite MSE counts as improvement."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        gen0_ckpt = _write_initial_checkpoint(tmp_path)
+        gen1_targets_path = tmp_path / "gen1_targets.npz"
+        gen1_dir = tmp_path / "gen1"
+
+        cfg = BootstrapConfig(
+            iterations_per_state=20,
+            seed=0,
+            train_config=TrainConfig(epochs=2, batch_size=4, seed=0),
+            required_sources=(SOURCE_TERMINAL,),
+        )
+        result = bootstrap_one_generation(
+            gen_in_checkpoint=gen0_ckpt,
+            gen_out_targets=gen1_targets_path,
+            gen_out_dir=gen1_dir,
+            config=cfg,
+            grids=_tiny_grids(),
+            held_out_targets=_build_held_out_targets(),
+            prev_gen_holdout_mse=1e6,  # any finite MSE beats this
+        )
+
+        assert result.accepted is True
+        assert result.holdout_calibration is not None
+
+
+def test_calibration_gate_raises_when_required_source_class_missing():
+    from training.calibration import CalibrationReport
+
+    report = CalibrationReport(
+        mse_per_source={SOURCE_TERMINAL: 0.0},
+        overall_mse=0.0,
+        brier_score=0.0,
+        reliability_bins=[],
+        exact_target_error=0.0,
+        n_targets=1,
+        mean_unresolved_probability_per_source={SOURCE_TERMINAL: 0.0},
+    )
+
+    with pytest.raises(CalibrationGateError, match="missing required"):
+        enforce_calibration_gate(report, BootstrapConfig())
+
+
+def test_calibration_gate_raises_when_tablebase_mse_above_threshold():
+    from training.calibration import CalibrationReport
+    from training.value_targets import SOURCE_EXACT_HORIZON_2, SOURCE_EXACT_HORIZON_3
+
+    report = CalibrationReport(
+        mse_per_source={
+            SOURCE_TERMINAL: 0.0,
+            SOURCE_TABLEBASE: 0.02,
+            SOURCE_EXACT_HORIZON_2: 0.0,
+            SOURCE_EXACT_HORIZON_3: 0.0,
+        },
+        overall_mse=0.005,
+        brier_score=0.0,
+        reliability_bins=[],
+        exact_target_error=0.0,
+        n_targets=4,
+        mean_unresolved_probability_per_source={
+            SOURCE_TERMINAL: 0.0,
+            SOURCE_TABLEBASE: 0.0,
+            SOURCE_EXACT_HORIZON_2: 0.0,
+            SOURCE_EXACT_HORIZON_3: 0.0,
+        },
+    )
+
+    with pytest.raises(CalibrationGateError, match="tablebase MSE"):
+        enforce_calibration_gate(report, BootstrapConfig(tablebase_mse_threshold=0.01))
+
+
+def test_calibration_gate_raises_when_mean_unresolved_above_threshold():
+    from training.calibration import CalibrationReport
+    from training.value_targets import SOURCE_EXACT_HORIZON_2, SOURCE_EXACT_HORIZON_3
+
+    report = CalibrationReport(
+        mse_per_source={
+            SOURCE_TERMINAL: 0.0,
+            SOURCE_TABLEBASE: 0.0,
+            SOURCE_EXACT_HORIZON_2: 0.0,
+            SOURCE_EXACT_HORIZON_3: 0.0,
+        },
+        overall_mse=0.0,
+        brier_score=0.0,
+        reliability_bins=[],
+        exact_target_error=0.0,
+        n_targets=4,
+        mean_unresolved_probability_per_source={
+            SOURCE_TERMINAL: 0.0,
+            SOURCE_TABLEBASE: 0.0,
+            SOURCE_EXACT_HORIZON_2: 0.2,
+            SOURCE_EXACT_HORIZON_3: 0.0,
+        },
+    )
+
+    with pytest.raises(CalibrationGateError, match="unresolved_probability"):
+        enforce_calibration_gate(report, BootstrapConfig(max_unresolved_per_source=0.05))

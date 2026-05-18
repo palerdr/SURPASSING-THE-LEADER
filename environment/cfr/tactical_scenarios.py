@@ -31,6 +31,7 @@ class TacticalScenario:
     expected_note: str
     expected_value: float | None = None
     tags: tuple[str, ...] = field(default_factory=tuple)
+    holdout: bool = False
 
 
 def _base_game(*, clock: float = 720.0, current_half: int = 1) -> Game:
@@ -164,4 +165,102 @@ def cpr_degradation_fatigued_referee() -> TacticalScenario:
         expected_note="Fatigue counterpart; cprs_performed=10 sits at REFEREE_FLOOR.",
         expected_value=None,
         tags=("cpr_fatigue", "monotonic_pair", "survival_branch"),
+    )
+
+
+def baku_dropper_leap_window_alignment() -> TacticalScenario:
+    """Baku is dropper and Hal is checker at the leap-window half-round."""
+    game = _base_game(clock=3540.0, current_half=2)
+    return TacticalScenario(
+        name="baku_dropper_leap_window_alignment",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note="Baku can legally drop at 61 while Hal checker remains capped at 60.",
+        expected_value=None,
+        tags=("forced_leap", "role_alignment", "baku_dropper_61", "holdout"),
+        holdout=True,
+    )
+
+
+def hal_dropper_leap_window_asymmetry() -> TacticalScenario:
+    """Hal is dropper at the leap-window half-round; Hal remains capped at 60."""
+    game = _base_game(clock=3540.0, current_half=1)
+    return TacticalScenario(
+        name="hal_dropper_leap_window_asymmetry",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note="Wrong-role leap alignment: Hal dropper cannot use second 61.",
+        expected_value=None,
+        tags=("forced_leap", "role_alignment", "hal_dropper", "holdout"),
+        holdout=True,
+    )
+
+
+def near_overflow_marginal_baku_294() -> TacticalScenario:
+    """Baku checker at cylinder=294: one-second spreads become decisive."""
+    game = _base_game()
+    game.player2.cylinder = 294.0
+    return TacticalScenario(
+        name="near_overflow_marginal_baku_294",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note="Marginal near-overflow bucket for audit diagnostics.",
+        expected_value=None,
+        tags=("near_overflow", "marginal", "holdout"),
+        holdout=True,
+    )
+
+
+def death_trade_double_pressure() -> TacticalScenario:
+    """Both players carry high cylinder and prior-death pressure."""
+    game = _base_game(clock=2580.0, current_half=1)
+    game.player1.cylinder = 220.0
+    game.player2.cylinder = 235.0
+    game.player1.ttd = 180.0
+    game.player2.ttd = 240.0
+    game.player1.deaths = 1
+    game.player2.deaths = 1
+    game.referee.cprs_performed = 2
+    return TacticalScenario(
+        name="death_trade_double_pressure",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=3,
+        expected_note="Death-trade pressure state: both sides near costly failure branches.",
+        expected_value=None,
+        tags=("death_trade", "cpr_fatigue", "holdout"),
+        holdout=True,
+    )
+
+
+def role_alignment_active_lsr_runway() -> TacticalScenario:
+    """Active LSR label with a short pre-leap runway."""
+    game = _base_game(clock=3420.0, current_half=2)
+    return TacticalScenario(
+        name="role_alignment_active_lsr_runway",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=3,
+        expected_note="Variation-2 role-alignment audit state before the leap window.",
+        expected_value=None,
+        tags=("role_alignment", "active_lsr", "holdout"),
+        holdout=True,
+    )
+
+
+def role_alignment_variation4_post_engineering() -> TacticalScenario:
+    """Variation-4 comparison state for post-engineering parity checks."""
+    game = _base_game(clock=3300.0, current_half=2)
+    return TacticalScenario(
+        name="role_alignment_variation4_post_engineering",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=3,
+        expected_note="Variation-4 role-alignment comparison bucket.",
+        expected_value=None,
+        tags=("role_alignment", "variation4", "holdout"),
+        holdout=True,
     )

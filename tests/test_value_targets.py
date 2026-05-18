@@ -20,6 +20,7 @@ import sys
 import tempfile
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -39,9 +40,12 @@ from training.value_targets import (
     generate_targets,
     label_state,
     load_targets,
+    load_targets_as_records,
+    load_rejected_pool,
     save_targets,
     source_breakdown,
 )
+import training.value_targets as vt
 
 
 # ── State factories used by the tests ─────────────────────────────────────
@@ -302,6 +306,48 @@ def test_generate_targets_emits_exact_horizon_2_label():
     assert target.horizon == 2
 
 
+def test_value_target_records_unresolved_probability_for_horizon_2(monkeypatch):
+    class FakeResult:
+        value_for_hal = 0.25
+        unresolved_probability = 0.25
+        drop_actions = (1, 60)
+        check_actions = (1, 60)
+        dropper_strategy = np.array([0.75, 0.25])
+        checker_strategy = np.array([0.4, 0.6])
+
+    monkeypatch.setattr(vt, "solve_exact_finite_horizon", lambda *args, **kwargs: FakeResult())
+
+    result = label_state(_lsr_pressure_non_significant_game())
+    assert result is not None
+    assert result.source == SOURCE_EXACT_HORIZON_2
+    assert result.unresolved_probability == pytest.approx(0.25)
+    assert result.dropper_dist[0] == pytest.approx(0.75)
+    assert result.checker_dist[59] == pytest.approx(0.6)
+
+
+def test_high_unresolved_label_excluded_from_corpus(monkeypatch, tmp_path):
+    class FakeResult:
+        value_for_hal = 0.0
+        unresolved_probability = 0.75
+        drop_actions = (1,)
+        check_actions = (1,)
+        dropper_strategy = np.array([1.0])
+        checker_strategy = np.array([1.0])
+
+    monkeypatch.setattr(vt, "solve_exact_finite_horizon", lambda *args, **kwargs: FakeResult())
+    rejected_path = tmp_path / "targets.rejected.npz"
+
+    targets = generate_targets(
+        **_h2_only_grid(),
+        rejected_pool_path=rejected_path,
+    )
+
+    assert targets == []
+    rejected = load_rejected_pool(rejected_path)
+    assert len(rejected) == 1
+    assert "game_clock" in rejected[0]
+
+
 def test_generate_targets_emits_exact_horizon_3_label():
     targets = generate_targets(**_h3_only_grid())
     assert len(targets) == 1
@@ -326,6 +372,34 @@ def test_save_load_targets_round_trip():
         os.unlink(path)
 
 
+def test_load_targets_as_records_round_trip_preserves_all_fields():
+    """load_targets_as_records must reconstruct ValueTarget records bit-identical
+    to the saved set, including policy distributions, legal masks, and
+    unresolved_probability. This is what bootstrap_loop's --held-out-targets CLI
+    consumes; any silent dimension mismatch would make calibration gates
+    score against zeroed policy targets."""
+    targets = generate_targets(**_tiny_grids())
+    assert targets
+    with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
+        path = f.name
+    try:
+        save_targets(targets, path)
+        loaded = load_targets_as_records(path)
+        assert len(loaded) == len(targets)
+        for orig, copy in zip(targets, loaded):
+            assert orig.source == copy.source
+            assert orig.horizon == copy.horizon
+            assert orig.value == pytest.approx(copy.value)
+            assert orig.unresolved_probability == pytest.approx(copy.unresolved_probability)
+            np.testing.assert_array_equal(orig.features, copy.features)
+            np.testing.assert_array_equal(orig.dropper_dist, copy.dropper_dist)
+            np.testing.assert_array_equal(orig.checker_dist, copy.checker_dist)
+            np.testing.assert_array_equal(orig.dropper_legal_mask, copy.dropper_legal_mask)
+            np.testing.assert_array_equal(orig.checker_legal_mask, copy.checker_legal_mask)
+    finally:
+        os.unlink(path)
+
+
 def test_source_breakdown_counts_match_target_total():
     targets = generate_targets(**_tiny_grids())
     breakdown = source_breakdown(targets)
@@ -337,3 +411,38 @@ def test_source_breakdown_keys_are_valid_sources():
     breakdown = source_breakdown(targets)
     for source in breakdown.keys():
         assert source in VALID_SOURCES
+
+
+def test_generate_targets_parallel_matches_serial():
+    """workers=2 must produce bit-identical targets to workers=1 on the same grid.
+
+    Pool.map preserves input ordering, _label_one_state is deterministic given
+    its inputs, and the worker globals are set identically by ``_worker_init``.
+    Any divergence here points at a stateful bug — non-determinism in
+    ``solve_exact_finite_horizon``, a non-pickleable default, or a thread-unsafe
+    cache somewhere in the call stack.
+    """
+    grids = dict(
+        baku_cylinder_grid=(0.0, 240.0, 290.0, 299.0),
+        hal_cylinder_grid=(0.0,),
+        clock_grid=(720.0,),
+        half_grid=(1,),
+        deaths_grid=(0,),
+        cpr_grid=(0,),
+    )
+    serial = generate_targets(workers=1, **grids)
+    parallel = generate_targets(workers=2, **grids)
+
+    assert len(serial) == len(parallel), (
+        f"corpus length differs: serial={len(serial)} parallel={len(parallel)}"
+    )
+    for s, p in zip(serial, parallel):
+        assert s.source == p.source
+        assert s.horizon == p.horizon
+        assert s.value == pytest.approx(p.value)
+        assert s.unresolved_probability == pytest.approx(p.unresolved_probability)
+        np.testing.assert_array_equal(s.features, p.features)
+        np.testing.assert_array_equal(s.dropper_dist, p.dropper_dist)
+        np.testing.assert_array_equal(s.checker_dist, p.checker_dist)
+        np.testing.assert_array_equal(s.dropper_legal_mask, p.dropper_legal_mask)
+        np.testing.assert_array_equal(s.checker_legal_mask, p.checker_legal_mask)

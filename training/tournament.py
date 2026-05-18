@@ -21,6 +21,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Callable
 
+from environment.legal_actions import validate_action
 from environment.cfr.tactical_scenarios import TacticalScenario
 from src.Constants import (
     OPENING_START_CLOCK,
@@ -106,6 +107,19 @@ def _half_round_count_for(game: Game) -> int:
     return len(game.history)
 
 
+def _checked_action(
+    choose: ChooseAction,
+    game: Game,
+    *,
+    actor: str,
+    role: str,
+    turn_duration: int,
+) -> int:
+    second = choose(game, role, turn_duration)
+    validate_action(second, actor=actor, role=role, turn_duration=turn_duration)
+    return int(second)
+
+
 def play_match(
     hal_choose_action: ChooseAction,
     baku_choose_action: ChooseAction,
@@ -162,11 +176,35 @@ def play_match(
             turn_duration = game.get_turn_duration()
 
             if dropper.name.lower() == "hal":
-                drop_time = hal_choose_action(game, "dropper", turn_duration)
-                check_time = baku_choose_action(game, "checker", turn_duration)
+                drop_time = _checked_action(
+                    hal_choose_action,
+                    game,
+                    actor="hal",
+                    role="dropper",
+                    turn_duration=turn_duration,
+                )
+                check_time = _checked_action(
+                    baku_choose_action,
+                    game,
+                    actor="baku",
+                    role="checker",
+                    turn_duration=turn_duration,
+                )
             else:
-                drop_time = baku_choose_action(game, "dropper", turn_duration)
-                check_time = hal_choose_action(game, "checker", turn_duration)
+                drop_time = _checked_action(
+                    baku_choose_action,
+                    game,
+                    actor="baku",
+                    role="dropper",
+                    turn_duration=turn_duration,
+                )
+                check_time = _checked_action(
+                    hal_choose_action,
+                    game,
+                    actor="hal",
+                    role="checker",
+                    turn_duration=turn_duration,
+                )
 
             game.play_half_round(drop_time, check_time)
 

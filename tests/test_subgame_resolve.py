@@ -80,6 +80,71 @@ def test_resolve_subgame_default_horizon_runs_without_error():
     assert result.value_for_hal == pytest.approx(1.0, abs=1e-6)
 
 
+def test_anchored_resolve_value_strictly_closer_to_deep_mcts_value_than_unanchored():
+    """Phase D's central claim: at a critical state, anchoring the boundary at
+    a value-net evaluator pulls the local solve closer to deep ground truth
+    than letting the boundary return unresolved=0.
+
+    On ``forced_baku_overflow_death``, the deep (horizon=4) selective solve
+    converges to +1.0 (Baku's cylinder is at threshold; every action injects).
+    A horizon=0 unanchored solve returns the unresolved frontier value (~0.0,
+    the pessimistic stand-in). A horizon=0 solve anchored to an evaluator that
+    returns 0.9 — close to deep truth — must produce a value strictly closer
+    to 1.0 than the unanchored 0.0. If anchoring is silently a no-op (the
+    evaluator's value is discarded), this assertion fails.
+    """
+    scenario = forced_baku_overflow_death()
+
+    deep_result = resolve_subgame(scenario.game, horizon=4, config=scenario.config)
+    deep_value = deep_result.value_for_hal
+    assert deep_value == pytest.approx(1.0, abs=1e-6), (
+        f"Setup violated: forced overflow should resolve to +1.0 deep, got {deep_value}"
+    )
+
+    unanchored = resolve_subgame(scenario.game, horizon=0, config=scenario.config)
+    unanchored_diff = abs(unanchored.value_for_hal - deep_value)
+    assert unanchored_diff > 0.1, (
+        f"Setup violated: horizon=0 unanchored should be far from deep truth at "
+        f"a critical state. Got unanchored={unanchored.value_for_hal}, deep={deep_value}."
+    )
+
+    class NearTruthEvaluator:
+        def __call__(self, game):
+            del game
+            return 0.9, np.zeros(61), np.zeros(61)
+
+    anchored = resolve_subgame(
+        scenario.game,
+        horizon=0,
+        config=scenario.config,
+        evaluator=NearTruthEvaluator(),
+    )
+    anchored_diff = abs(anchored.value_for_hal - deep_value)
+
+    assert anchored_diff < unanchored_diff, (
+        f"Anchored value not strictly closer to deep truth than unanchored: "
+        f"|anchored {anchored.value_for_hal} - deep {deep_value}| = {anchored_diff:.4f}, "
+        f"|unanchored {unanchored.value_for_hal} - deep {deep_value}| = {unanchored_diff:.4f}."
+    )
+    assert anchored.unresolved_probability == pytest.approx(0.0), (
+        "Anchored boundary must mark unresolved_probability=0 (DeepStack pattern)."
+    )
+
+
+def test_resolve_subgame_passes_evaluator_through_to_selective():
+    game = _fresh_game_far_from_leap()
+
+    class FixedEvaluator:
+        def __call__(self, state):
+            del state
+            return 0.33, np.zeros(61), np.zeros(61)
+
+    result = resolve_subgame(game, horizon=0, evaluator=FixedEvaluator())
+
+    assert result.value_for_hal == pytest.approx(0.33)
+    assert result.unresolved_probability == pytest.approx(0.0)
+
+
 # ── 3. mcts_search subgame_resolve_at_critical hook ───────────────────────
 
 

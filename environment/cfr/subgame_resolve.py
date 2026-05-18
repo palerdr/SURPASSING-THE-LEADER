@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from src.Game import Game
 
+from .evaluator import LeafEvaluator
 from .exact import ExactSearchConfig
 from .selective import SelectiveSearchResult, selective_solve
 from .timing_features import (
@@ -58,6 +59,7 @@ def resolve_subgame(
     game: Game,
     horizon: int = 4,
     config: ExactSearchConfig | None = None,
+    evaluator: LeafEvaluator | None = None,
 ) -> SelectiveSearchResult:
     """Fresh selective_solve at deeper horizon for a critical state.
 
@@ -67,4 +69,4 @@ def resolve_subgame(
     the current state.
     """
     config = config or ExactSearchConfig()
-    return selective_solve(game, horizon, config)
+    return selective_solve(game, horizon, config, evaluator=evaluator)

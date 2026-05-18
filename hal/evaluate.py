@@ -53,7 +53,8 @@ def evaluate(game: Game) -> float:
         features = extract_features(game)
         with torch.no_grad():
             tensor = torch.tensor(features, device=_nn_device).unsqueeze(0)
-            value = _nn_model(tensor).item()
+            out = _nn_model(tensor)
+            value = out[0].item() if isinstance(out, tuple) else out.item()
         return value
 
     return _handcrafted_evaluate(game)
@@ -82,7 +83,9 @@ def evaluate_batch(games: list[Game]) -> np.ndarray:
     if non_terminal_features and _nn_model is not None:
         batch = torch.tensor(np.stack(non_terminal_features), device=_nn_device)
         with torch.no_grad():
-            preds = _nn_model(batch).squeeze(-1).cpu().numpy()
+            out = _nn_model(batch)
+            values_out = out[0] if isinstance(out, tuple) else out
+            preds = values_out.squeeze(-1).cpu().numpy()
         for idx, pred in zip(non_terminal_indices, preds):
             values[idx] = float(pred)
     elif non_terminal_features:

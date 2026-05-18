@@ -5,6 +5,7 @@ from multiprocessing import Pool, cpu_count
 
 import numpy as np
 
+from environment.legal_actions import validate_action
 from environment.opponents.base import Opponent
 from environment.opponents.factory import create_scripted_opponent
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
@@ -44,9 +45,13 @@ def play_one_game(
         if dropper is hal:
             drop_time = hal_ai.choose_action(game, "dropper", turn_duration)
             check_time = opponent.choose_action(game, "checker", turn_duration)
+            validate_action(drop_time, actor="hal", role="dropper", turn_duration=turn_duration)
+            validate_action(check_time, actor="baku", role="checker", turn_duration=turn_duration)
         else:
             drop_time = opponent.choose_action(game, "dropper", turn_duration)
             check_time = hal_ai.choose_action(game, "checker", turn_duration)
+            validate_action(drop_time, actor="baku", role="dropper", turn_duration=turn_duration)
+            validate_action(check_time, actor="hal", role="checker", turn_duration=turn_duration)
 
         game.play_half_round(drop_time, check_time)
 
@@ -86,4 +91,3 @@ def generate_dataset(
         for result in pool.imap_unordered(_play_one_game_worker, tasks):
             dataset.extend(result)
     return dataset
-        

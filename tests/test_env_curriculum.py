@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.dth_env import DTHEnv
+from environment.opponents.base import Opponent
 from environment.opponents.random_bot import RandomBot
 from environment.opponents.safe_bot import SafeBot, LeapAwareSafeBot
 from training.curriculum import get_scenario
@@ -213,3 +214,98 @@ def test_invalid_named_scenario_semantics_raise_clear_error():
                 "awareness": "unaware",
             }
         })
+
+
+# ── runtime legality enforcement at step() boundary ───────────────────────
+
+
+class _FixedSecondOpponent(Opponent):
+    """Opponent that always returns ``second`` regardless of state."""
+
+    def __init__(self, second: int):
+        self._second = second
+
+    def reset(self):
+        pass
+
+    def choose_action(self, game, role, turn_duration):
+        del game, role, turn_duration
+        return self._second
+
+
+def test_step_rejects_illegal_agent_action_outside_mask():
+    """Agent passing an illegal action_index raises rather than slipping through.
+
+    Hal-as-dropper outside leap window: action=60 (second=61) is illegal for
+    Hal-dropper at any time. ``step(60)`` must raise ValueError.
+    """
+    env = DTHEnv(opponent=_FixedSecondOpponent(30), agent_role="hal", seed=0)
+    env.reset(seed=0)
+    # First half-round of the canonical opening: Hal is dropper, no leap window.
+    assert env.action_masks()[60] == False
+    with pytest.raises(ValueError, match="action=60.*illegal"):
+        env.step(60)
+
+
+def test_step_rejects_illegal_hal_dropper_61_when_opponent_controls_hal():
+    """Reviewer's exact Phase 1 leak: agent_role='baku', leap window, opponent
+    (= Hal) returns 61 for Hal-dropper. The env must reject it at step()."""
+    env = DTHEnv(opponent=_FixedSecondOpponent(61), agent_role="baku", seed=0)
+    env.reset(options={
+        "scenario": {
+            "game_clock": 3540.0,
+            "current_half": 1,
+            "first_dropper": "hal",
+            "awareness": "unaware",
+        }
+    })
+    # Sanity: Hal is dropper this half-round (first_dropper=hal, current_half=1).
+    D, _C = env.game.get_roles_for_half(env.game.current_half)
+    assert D.name == "Hal"
+    assert env.game.is_leap_second_turn()
+
+    # Agent (Baku) plays a legal checker action; opponent (Hal) returns 61, illegal.
+    with pytest.raises(ValueError, match="actor='hal'.*role='dropper'"):
+        env.step(0)
+
+
+def test_step_rejects_illegal_hal_checker_61_when_opponent_controls_hal():
+    """Symmetric case: leap window, Hal as checker — Hal-checker can never use
+    second 61 regardless of leap window. Opponent returning 61 must be rejected.
+    """
+    env = DTHEnv(opponent=_FixedSecondOpponent(61), agent_role="baku", seed=0)
+    env.reset(options={
+        "scenario": {
+            "game_clock": 3540.0,
+            "current_half": 2,
+            "first_dropper": "hal",
+            "awareness": "unaware",
+        }
+    })
+    # current_half=2 with first_dropper=hal: Baku=dropper, Hal=checker.
+    D, C = env.game.get_roles_for_half(env.game.current_half)
+    assert D.name == "Baku" and C.name == "Hal"
+
+    with pytest.raises(ValueError, match="actor='hal'.*role='checker'"):
+        env.step(0)
+
+
+def test_step_accepts_legal_baku_dropper_61_in_leap_window():
+    """Sanity: the Phase 1 asymmetry must let Baku-as-dropper play 61 inside
+    the leap window. With agent_role='hal' and Baku as opponent dropping at 61,
+    step() must succeed without raising."""
+    env = DTHEnv(opponent=_FixedSecondOpponent(61), agent_role="hal", seed=0)
+    env.reset(options={
+        "scenario": {
+            "game_clock": 3540.0,
+            "current_half": 2,
+            "first_dropper": "hal",
+            "awareness": "unaware",
+        }
+    })
+    # current_half=2 with first_dropper=hal: Baku=dropper, Hal=checker.
+    D, C = env.game.get_roles_for_half(env.game.current_half)
+    assert D.name == "Baku" and C.name == "Hal"
+    # Hal-checker plays second 30 (action=29). Opponent Baku-dropper returns 61 (legal).
+    obs, rew, term, trunc, info = env.step(29)
+    assert isinstance(obs, type(obs))  # no exception, environment advanced

@@ -25,6 +25,7 @@ from src.Constants import (
     TURN_DURATION_NORMAL, DEATH_PROCEDURE_OVERHEAD,
     OPENING_START_CLOCK,
 )
+from environment.legal_actions import validate_action
 from cfr.tree import solve_game, StrategyTable
 from cfr.game_state import make_abstract_state, CYL_BUCKET_SIZE, CLOCK_BUCKET_SIZE
 
@@ -241,6 +242,8 @@ def main():
                 drop_t = get_human_action("Baku", "Dropper", turn_dur)
                 check_t = cfr_action(strategy_table, game, hal, baku, False, rng)
 
+            validate_action(drop_t, actor=dropper.name, role="dropper", turn_duration=turn_dur)
+            validate_action(check_t, actor=checker.name, role="checker", turn_duration=turn_dur)
             record = game.play_half_round(drop_t, check_t)
             print_half_result(record)
 

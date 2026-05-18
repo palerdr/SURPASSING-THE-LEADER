@@ -137,6 +137,26 @@ def test_make_node_non_terminal_has_uniform_prior_summing_to_one():
     assert np.allclose(node.prior, 1.0 / (D * C))
 
 
+def test_make_node_uses_evaluator_policy_for_prior():
+    scenario = forced_baku_overflow_death()
+
+    class BiasedEvaluator:
+        def __call__(self, game):
+            del game
+            drop = np.zeros(61)
+            check = np.zeros(61)
+            drop[0] = 1.0
+            check[59] = 1.0
+            return 0.0, drop, check
+
+    node = make_node(scenario.game, scenario.config, evaluator=BiasedEvaluator())
+    d_idx = _idx(node.drop_seconds, 1)
+    c_idx = _idx(node.check_seconds, 60)
+
+    assert node.prior.sum() == pytest.approx(1.0)
+    assert node.prior[d_idx, c_idx] == pytest.approx(1.0)
+
+
 def test_make_node_stores_actual_seconds_not_indices():
     scenario = forced_baku_overflow_death()
     node = make_node(scenario.game, scenario.config)

@@ -278,7 +278,9 @@ def _search_depth1_batched(
     if leaf_features:
         batch = torch.tensor(np.stack(leaf_features), device=DEVICE)
         with torch.no_grad():
-            nn_values = nn_model(batch).squeeze(-1).cpu().numpy()
+            out = nn_model(batch)
+            values_out = out[0] if isinstance(out, tuple) else out
+            nn_values = values_out.squeeze(-1).cpu().numpy()
     else:
         nn_values = np.zeros(0, dtype=np.float64)
 

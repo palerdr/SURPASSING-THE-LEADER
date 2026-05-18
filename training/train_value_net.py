@@ -36,7 +36,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from hal.value_net import FEATURE_DIM, ValueNet
+from hal.value_net import FEATURE_DIM, ValueNet, value_output
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,7 @@ class TrainConfig:
     epochs: int = 100
     batch_size: int = 64
     learning_rate: float = 1.0e-3
+    policy_loss_weight: float = 1.0
     val_fraction: float = 0.1
     early_stopping_patience: int = 25
     seed: int = 0
@@ -102,24 +103,57 @@ def _evaluate(
     """Run the model on (X, y) and return (overall MSE, per-source MSE)."""
     model.eval()
     with torch.no_grad():
-        preds = model(X).squeeze(-1).cpu().numpy()
+        preds = value_output(model(X)).squeeze(-1).cpu().numpy()
     labels = y.cpu().numpy()
     overall = float(((preds - labels) ** 2).mean())
     per_source = _per_source_mse(preds, labels, sources)
     return overall, per_source
 
 
-def _load_targets_npz(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load X (N, FEATURE_DIM), y (N,), sources (N,) from a .npz file."""
+def _load_targets_npz(
+    path: str | Path,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load value and policy targets from a saved .npz file."""
     data = np.load(path, allow_pickle=True)
     X = data["X"].astype(np.float32)
     y = data["y"].astype(np.float32)
     sources = np.array(data["sources"]).astype(str)
+    n = len(X)
+    dropper_dists = data["dropper_dists"].astype(np.float32) if "dropper_dists" in data else np.zeros((n, 61), dtype=np.float32)
+    checker_dists = data["checker_dists"].astype(np.float32) if "checker_dists" in data else np.zeros((n, 61), dtype=np.float32)
+    dropper_masks = data["dropper_legal_masks"].astype(np.float32) if "dropper_legal_masks" in data else (dropper_dists > 0.0).astype(np.float32)
+    checker_masks = data["checker_legal_masks"].astype(np.float32) if "checker_legal_masks" in data else (checker_dists > 0.0).astype(np.float32)
     if X.shape[1] != FEATURE_DIM:
         raise ValueError(
             f"Expected FEATURE_DIM={FEATURE_DIM} columns in X, got {X.shape[1]}"
         )
-    return X, y, sources
+    for name, arr in (
+        ("dropper_dists", dropper_dists),
+        ("checker_dists", checker_dists),
+        ("dropper_legal_masks", dropper_masks),
+        ("checker_legal_masks", checker_masks),
+    ):
+        if arr.shape != (n, 61):
+            raise ValueError(f"Expected {name} shape {(n, 61)}, got {arr.shape}")
+    return X, y, sources, dropper_dists, checker_dists, dropper_masks, checker_masks
+
+
+def _masked_policy_loss(
+    logits: torch.Tensor,
+    target: torch.Tensor,
+    legal_mask: torch.Tensor,
+) -> torch.Tensor:
+    active = target.sum(dim=1) > 1e-8
+    if not bool(active.any()):
+        return logits.sum() * 0.0
+
+    logits_active = logits[active]
+    target_active = target[active]
+    mask_active = legal_mask[active] > 0.5
+    target_active = target_active / target_active.sum(dim=1, keepdim=True).clamp_min(1e-8)
+    masked_logits = logits_active.masked_fill(~mask_active, -1.0e9)
+    log_probs = torch.log_softmax(masked_logits, dim=1)
+    return -(target_active * log_probs).sum(dim=1).mean()
 
 
 def train(
@@ -146,17 +180,36 @@ def train(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    X_np, y_np, sources_np = _load_targets_npz(targets_npz_path)
+    (
+        X_np,
+        y_np,
+        sources_np,
+        dropper_dists_np,
+        checker_dists_np,
+        dropper_masks_np,
+        checker_masks_np,
+    ) = _load_targets_npz(targets_npz_path)
     train_idx, val_idx = _split_indices(len(X_np), config.val_fraction, rng)
 
     device = torch.device(config.device)
     X_train = torch.from_numpy(X_np[train_idx]).to(device)
     y_train = torch.from_numpy(y_np[train_idx]).to(device)
+    dropper_train = torch.from_numpy(dropper_dists_np[train_idx]).to(device)
+    checker_train = torch.from_numpy(checker_dists_np[train_idx]).to(device)
+    dropper_mask_train = torch.from_numpy(dropper_masks_np[train_idx]).to(device)
+    checker_mask_train = torch.from_numpy(checker_masks_np[train_idx]).to(device)
     X_val = torch.from_numpy(X_np[val_idx]).to(device)
     y_val = torch.from_numpy(y_np[val_idx]).to(device)
     val_sources = sources_np[val_idx]
 
-    train_ds = TensorDataset(X_train, y_train)
+    train_ds = TensorDataset(
+        X_train,
+        y_train,
+        dropper_train,
+        checker_train,
+        dropper_mask_train,
+        checker_mask_train,
+    )
     train_loader = DataLoader(
         train_ds,
         batch_size=config.batch_size,
@@ -186,23 +239,38 @@ def train(
         model.train()
         total_loss = 0.0
         n_seen = 0
-        for x_batch, y_batch in train_loader:
+        total_policy = 0.0
+        for (
+            x_batch,
+            y_batch,
+            dropper_batch,
+            checker_batch,
+            dropper_mask_batch,
+            checker_mask_batch,
+        ) in train_loader:
             optimizer.zero_grad()
-            preds = model(x_batch).squeeze(-1)
-            loss = loss_fn(preds, y_batch)
+            preds, dropper_logits, checker_logits = model(x_batch)
+            value_loss = loss_fn(preds.squeeze(-1), y_batch)
+            dropper_loss = _masked_policy_loss(dropper_logits, dropper_batch, dropper_mask_batch)
+            checker_loss = _masked_policy_loss(checker_logits, checker_batch, checker_mask_batch)
+            policy_loss = dropper_loss + checker_loss
+            loss = value_loss + config.policy_loss_weight * policy_loss
             loss.backward()
             optimizer.step()
             batch_size = x_batch.shape[0]
-            total_loss += float(loss.item()) * batch_size
+            total_loss += float(value_loss.item()) * batch_size
+            total_policy += float(policy_loss.item()) * batch_size
             n_seen += batch_size
         scheduler.step()
 
         train_mse = total_loss / max(1, n_seen)
+        train_policy_nll = total_policy / max(1, n_seen)
         val_mse, per_source = _evaluate(model, X_val, y_val, val_sources)
         history.append(
             {
                 "epoch": epoch,
                 "train_mse": train_mse,
+                "train_policy_nll": train_policy_nll,
                 "val_mse": val_mse,
                 "per_source_val_mse": per_source,
                 "lr": optimizer.param_groups[0]["lr"],
@@ -250,14 +318,25 @@ def load_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> ValueNe
     """Restore a ValueNet from a saved state_dict."""
     model = ValueNet(input_dim=FEATURE_DIM)
     state = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(state)
+    try:
+        model.load_state_dict(state)
+    except RuntimeError:
+        migrated = {}
+        for key, value in state.items():
+            if key.startswith("layers.0."):
+                migrated[key.replace("layers.0.", "trunk.0.")] = value
+            elif key.startswith("layers.2."):
+                migrated[key.replace("layers.2.", "trunk.2.")] = value
+            elif key.startswith("layers.4."):
+                migrated[key.replace("layers.4.", "value_head.0.")] = value
+        model.load_state_dict(migrated, strict=False)
     model.to(device)
     model.eval()
     return model
 
 
 def make_predict_fn(model: ValueNet, device: str = "cpu"):
-    """Return a callable ``(game) -> float`` that wraps the trained net.
+    """Return a callable ``(game) -> (value, dropper_dist, checker_dist)``.
 
     Suitable for ``ValueNetEvaluator(model_fn=predict_fn)`` and for
     ``generate_mcts_bootstrap_targets(predict_fn=...)``.
@@ -272,8 +351,36 @@ def make_predict_fn(model: ValueNet, device: str = "cpu"):
         features = extract_features(game)
         x = torch.from_numpy(features).unsqueeze(0).to(torch_device)
         with torch.no_grad():
-            y = model(x).squeeze().cpu().item()
-        return float(y)
+            value, dropper_logits, checker_logits = model(x)
+            y = value.squeeze().cpu().item()
+
+        from environment.cfr.evaluator import normalize_policy_vector
+        from environment.cfr.exact import ExactSearchConfig, legal_seconds_for_current_role
+
+        def masked_softmax(logits, seconds: tuple[int, ...]) -> np.ndarray:
+            dist = np.zeros(61, dtype=np.float64)
+            if not seconds:
+                return dist
+            raw = logits.squeeze(0).detach().cpu().numpy().astype(np.float64)
+            legal = np.array([raw[second - 1] for second in seconds], dtype=np.float64)
+            legal -= float(legal.max())
+            probs = np.exp(legal)
+            probs /= probs.sum()
+            for second, probability in zip(seconds, probs):
+                dist[second - 1] = float(probability)
+            return normalize_policy_vector(dist)
+
+        cfg = ExactSearchConfig()
+        if game.game_over:
+            dropper_dist = np.zeros(61, dtype=np.float64)
+            checker_dist = np.zeros(61, dtype=np.float64)
+        else:
+            dropper, checker = game.get_roles_for_half(game.current_half)
+            drop_seconds = tuple(legal_seconds_for_current_role(game, dropper.name, "dropper", cfg))
+            check_seconds = tuple(legal_seconds_for_current_role(game, checker.name, "checker", cfg))
+            dropper_dist = masked_softmax(dropper_logits, drop_seconds)
+            checker_dist = masked_softmax(checker_logits, check_seconds)
+        return float(y), dropper_dist, checker_dist
 
     return predict
 

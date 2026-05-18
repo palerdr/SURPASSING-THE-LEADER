@@ -41,6 +41,7 @@ from .awareness import (
     initial_awareness_for_role,
     update_awareness,
 )
+from .legal_actions import IllegalActionError, validate_action
 from .observation import OBS_SIZE, OBS_V2_SIZE, build_observation, build_observation_v2
 from .reward import compute_route_shaping_bonus, shaped_reward, sparse_reward
 from .route_stages import current_route_stage_flags
@@ -206,7 +207,18 @@ class DTHEnv(gym.Env):
         assert self.agent is not None
         assert self.opp_player is not None
         self.episode_steps += 1
-        
+
+        mask = self.action_masks()
+        if not (0 <= action < mask.shape[0]):
+            raise ValueError(
+                f"action={action} is outside the Discrete(61) range."
+            )
+        if not bool(mask[action]):
+            raise ValueError(
+                f"action={action} (second={action + 1}) is illegal at this state. "
+                f"action_masks()[{action}] is False; the env enforces legality at step()."
+            )
+
         agent_second = action + 1
 
         D, C = self.game.get_roles_for_half(self.game.current_half)
@@ -217,6 +229,21 @@ class DTHEnv(gym.Env):
         opp_role = "checker" if agent_is_dropper else "dropper"
 
         opp_second = self.opponent.choose_action(self.game, opp_role, turn_duration)
+
+        opp_actor = "baku" if self.agent_role.lower() == "hal" else "hal"
+        try:
+            validate_action(
+                opp_second,
+                actor=opp_actor,
+                role=opp_role,
+                turn_duration=turn_duration,
+            )
+        except IllegalActionError as exc:
+            raise ValueError(
+                f"Opponent returned illegal second={opp_second} for "
+                f"actor={opp_actor!r} role={opp_role!r} turn_duration={turn_duration}. "
+                "The env enforces opponent legality at step()."
+            ) from exc
 
         if agent_is_dropper:
             drop_time = agent_second
