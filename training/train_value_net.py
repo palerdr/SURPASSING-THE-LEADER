@@ -51,6 +51,15 @@ class TrainConfig:
     early_stopping_patience: int = 25
     seed: int = 0
     device: str = "cpu"
+    # Per-class value-loss weight overrides. Sources not listed default to 1.0.
+    # Default upweights extreme-valued anchors (terminal/tablebase) so the net
+    # actually fits them despite their small share of the corpus. Without
+    # this, the calibration-gate tablebase MSE threshold is unreachable
+    # whenever tablebase is <5% of training records.
+    source_weights: tuple[tuple[str, float], ...] = (
+        ("terminal", 20.0),
+        ("tablebase", 20.0),
+    )
 
 
 @dataclass
@@ -202,6 +211,14 @@ def train(
     y_val = torch.from_numpy(y_np[val_idx]).to(device)
     val_sources = sources_np[val_idx]
 
+    weight_lookup = dict(config.source_weights)
+    train_sources = sources_np[train_idx]
+    train_weights_np = np.array(
+        [weight_lookup.get(str(s), 1.0) for s in train_sources],
+        dtype=np.float32,
+    )
+    weights_train = torch.from_numpy(train_weights_np).to(device)
+
     train_ds = TensorDataset(
         X_train,
         y_train,
@@ -209,6 +226,7 @@ def train(
         checker_train,
         dropper_mask_train,
         checker_mask_train,
+        weights_train,
     )
     train_loader = DataLoader(
         train_ds,
@@ -222,7 +240,7 @@ def train(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, config.epochs)
     )
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.MSELoss(reduction="none")
 
     best_val = math.inf
     best_epoch = 0
@@ -247,10 +265,12 @@ def train(
             checker_batch,
             dropper_mask_batch,
             checker_mask_batch,
+            weight_batch,
         ) in train_loader:
             optimizer.zero_grad()
             preds, dropper_logits, checker_logits = model(x_batch)
-            value_loss = loss_fn(preds.squeeze(-1), y_batch)
+            per_sample_se = loss_fn(preds.squeeze(-1), y_batch)
+            value_loss = (per_sample_se * weight_batch).sum() / weight_batch.sum().clamp(min=1e-8)
             dropper_loss = _masked_policy_loss(dropper_logits, dropper_batch, dropper_mask_batch)
             checker_loss = _masked_policy_loss(checker_logits, checker_batch, checker_mask_batch)
             policy_loss = dropper_loss + checker_loss
