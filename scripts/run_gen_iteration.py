@@ -67,6 +67,11 @@ def main() -> int:
     parser.add_argument("--prev-gen-holdout-mse", type=float, default=None)
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
     parser.add_argument("--max-unresolved-per-source", type=float, default=0.35)
+    parser.add_argument(
+        "--subgame-resolve-at-critical",
+        action="store_true",
+        help="Use deeper root subgame re-solving for MCTS bootstrap labels at critical states.",
+    )
     args = parser.parse_args()
 
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
@@ -84,6 +89,7 @@ def main() -> int:
         predict_fn,
         iterations_per_state=args.iterations,
         seed=args.seed,
+        subgame_resolve_at_critical=args.subgame_resolve_at_critical,
     )
     print(
         f"  Bootstrap done in {time.time() - t0:.1f}s; {len(targets)} records",

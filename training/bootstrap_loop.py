@@ -74,6 +74,7 @@ class BootstrapConfig:
     audit_include_holdout: bool = True
     audit_seeds: tuple[int, ...] = (0,)
     audit_max_drift: float = 0.05
+    subgame_resolve_at_critical: bool = False
 
 
 @dataclass
@@ -179,6 +180,7 @@ def bootstrap_one_generation(
         iterations_per_state=config.iterations_per_state,
         exploration_c=config.exploration_c,
         seed=config.seed,
+        subgame_resolve_at_critical=config.subgame_resolve_at_critical,
         **grid_kwargs,
     )
 

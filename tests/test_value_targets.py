@@ -32,6 +32,7 @@ from training.value_targets import (
     SOURCE_TABLEBASE,
     SOURCE_TERMINAL,
     VALID_SOURCES,
+    LabelResult,
     ValueTarget,
     _build_game,
     _build_pinned_table,
@@ -346,6 +347,85 @@ def test_high_unresolved_label_excluded_from_corpus(monkeypatch, tmp_path):
     rejected = load_rejected_pool(rejected_path)
     assert len(rejected) == 1
     assert "game_clock" in rejected[0]
+
+
+def test_generate_targets_explicit_death_axes_include_asymmetric_states(monkeypatch):
+    zero = np.zeros(61, dtype=np.float32)
+
+    def fake_label_state(*args, **kwargs):
+        return LabelResult(
+            value=0.0,
+            source=SOURCE_TERMINAL,
+            horizon=0,
+            unresolved_probability=0.0,
+            dropper_dist=zero,
+            checker_dist=zero,
+            dropper_legal_mask=zero,
+            checker_legal_mask=zero,
+        )
+
+    monkeypatch.setattr(vt, "label_state", fake_label_state)
+    targets = generate_targets(
+        baku_cylinder_grid=(0.0,),
+        hal_cylinder_grid=(0.0,),
+        clock_grid=(720.0,),
+        half_grid=(1,),
+        baku_deaths_grid=(0, 1),
+        hal_deaths_grid=(0, 1),
+        cpr_grid=(0,),
+    )
+
+    assert len(targets) == 4
+    death_feature_pairs = {(float(t.features[5]), float(t.features[4])) for t in targets}
+    assert death_feature_pairs == {
+        (0.0, 0.0),
+        (0.25, 0.0),
+        (0.0, 0.25),
+        (0.25, 0.25),
+    }
+
+
+def test_generate_targets_legacy_deaths_grid_remains_symmetric(monkeypatch):
+    zero = np.zeros(61, dtype=np.float32)
+
+    def fake_label_state(*args, **kwargs):
+        return LabelResult(
+            value=0.0,
+            source=SOURCE_TERMINAL,
+            horizon=0,
+            unresolved_probability=0.0,
+            dropper_dist=zero,
+            checker_dist=zero,
+            dropper_legal_mask=zero,
+            checker_legal_mask=zero,
+        )
+
+    monkeypatch.setattr(vt, "label_state", fake_label_state)
+    targets = generate_targets(
+        baku_cylinder_grid=(0.0,),
+        hal_cylinder_grid=(0.0,),
+        clock_grid=(720.0,),
+        half_grid=(1,),
+        deaths_grid=(0, 1),
+        cpr_grid=(0,),
+    )
+
+    assert len(targets) == 2
+    death_feature_pairs = {(float(t.features[5]), float(t.features[4])) for t in targets}
+    assert death_feature_pairs == {(0.0, 0.0), (0.25, 0.25)}
+
+
+def test_generate_targets_rejects_mixed_legacy_and_explicit_death_axes():
+    with pytest.raises(ValueError):
+        generate_targets(
+            baku_cylinder_grid=(0.0,),
+            hal_cylinder_grid=(0.0,),
+            clock_grid=(720.0,),
+            half_grid=(1,),
+            deaths_grid=(0,),
+            baku_deaths_grid=(0,),
+            cpr_grid=(0,),
+        )
 
 
 def test_generate_targets_emits_exact_horizon_3_label():

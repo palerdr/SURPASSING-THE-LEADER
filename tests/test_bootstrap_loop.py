@@ -133,7 +133,11 @@ def test_bootstrap_terminal_source_pinned_to_known_value():
         cpr_grid=(0,),
     )
     targets = generate_mcts_bootstrap_targets(
-        _stub_predict_fn, iterations_per_state=20, seed=0, **grids
+        _stub_predict_fn,
+        iterations_per_state=20,
+        seed=0,
+        include_anchor_classes=False,
+        **grids,
     )
     tablebase_targets = [t for t in targets if t.source == SOURCE_TABLEBASE]
     assert len(tablebase_targets) == 1

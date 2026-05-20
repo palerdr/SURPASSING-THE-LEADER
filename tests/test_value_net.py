@@ -7,7 +7,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hal.value_net import FEATURE_DIM, ValueNet
+from hal.value_net import FEATURE_DIM, REFEREE_CPR_FEATURE_SCALE, ValueNet, extract_features
 from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
 from src.Player import Player
@@ -56,3 +56,19 @@ def test_baku_dropper_in_leap_window_keeps_second_61_mass():
     assert dropper_dist[60] > 0.0
     assert np.count_nonzero(dropper_dist) == 61
     assert dropper_dist.sum() == pytest.approx(1.0)
+
+
+def test_cpr_feature_distinguishes_fatigue_values_above_six():
+    hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
+    baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
+    game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
+
+    game.referee.cprs_performed = 8
+    cpr_at_8 = extract_features(game)[20]
+    game.referee.cprs_performed = 10
+    cpr_at_10 = extract_features(game)[20]
+    game.referee.cprs_performed = int(REFEREE_CPR_FEATURE_SCALE)
+    cpr_at_scale = extract_features(game)[20]
+
+    assert cpr_at_8 < cpr_at_10 < cpr_at_scale
+    assert cpr_at_scale == pytest.approx(1.0)

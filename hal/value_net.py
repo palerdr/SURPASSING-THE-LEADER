@@ -16,6 +16,7 @@ from src.Game import Game
 
 HIDDEN_DIM = 64
 FEATURE_DIM = 23
+REFEREE_CPR_FEATURE_SCALE = 12.0
 DEVICE = torch.device("cpu")
 
 
@@ -63,7 +64,7 @@ def extract_features(game: Game) -> np.ndarray:
         *lsr_one_hot,
         float(game.is_leap_second_turn()),
         _clip01(rounds_until_leap_window(game) / 10.0),
-        _clip01(game.referee.cprs_performed / 6.0),
+        _clip01(game.referee.cprs_performed / REFEREE_CPR_FEATURE_SCALE),
         float(lsr_variation == 2),
         _clip01(proximity_to_leap),
     ]

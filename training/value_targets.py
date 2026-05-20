@@ -393,20 +393,44 @@ def _worker_init(
     _WORKER_THRESHOLD = threshold
 
 
+def _death_grid_pairs(
+    *,
+    deaths_grid: tuple[int, ...] | None,
+    baku_deaths_grid: tuple[int, ...] | None,
+    hal_deaths_grid: tuple[int, ...] | None,
+) -> tuple[tuple[int, int], ...]:
+    """Return explicit ``(baku_deaths, hal_deaths)`` grid pairs.
+
+    ``deaths_grid`` is retained as a legacy shorthand for symmetric states.
+    New corpus generation should prefer the explicit axes so asymmetric
+    death-pressure states are not silently omitted.
+    """
+    if deaths_grid is not None:
+        if baku_deaths_grid is not None or hal_deaths_grid is not None:
+            raise ValueError(
+                "Use either deaths_grid or baku_deaths_grid/hal_deaths_grid, not both"
+            )
+        return tuple((deaths, deaths) for deaths in deaths_grid)
+
+    baku_axis = tuple((0, 1) if baku_deaths_grid is None else baku_deaths_grid)
+    hal_axis = tuple((0, 1) if hal_deaths_grid is None else hal_deaths_grid)
+    return tuple((baku_deaths, hal_deaths) for baku_deaths in baku_axis for hal_deaths in hal_axis)
+
+
 def _label_one_state(
-    state_tuple: tuple[float, float, float, int, int, int],
+    state_tuple: tuple[float, float, float, int, int, int, int],
 ) -> tuple[ValueTarget | None, ExactPublicState | None]:
     """Per-state worker. Returns ``(target, rejected_state)`` with at most one
     non-None, or ``(None, None)`` for skipped states. Module-level so it
     pickles cleanly for ``multiprocessing.Pool``."""
-    baku_cyl, hal_cyl, clock, half, deaths, cprs = state_tuple
+    baku_cyl, hal_cyl, clock, half, baku_deaths, hal_deaths, cprs = state_tuple
     game = _build_game(
         baku_cylinder=baku_cyl,
         hal_cylinder=hal_cyl,
         clock=clock,
         current_half=half,
-        baku_deaths=deaths,
-        hal_deaths=deaths,
+        baku_deaths=baku_deaths,
+        hal_deaths=hal_deaths,
         referee_cprs=cprs,
     )
     label = label_state(game, _WORKER_CONFIG, _WORKER_PINNED)
@@ -423,7 +447,9 @@ def generate_targets(
     hal_cylinder_grid: tuple[float, ...] = (0.0, 120.0, 240.0),
     clock_grid: tuple[float, ...] = (720.0, 2000.0, 3540.0),
     half_grid: tuple[int, ...] = (1, 2),
-    deaths_grid: tuple[int, ...] = (0, 1),
+    deaths_grid: tuple[int, ...] | None = None,
+    baku_deaths_grid: tuple[int, ...] | None = None,
+    hal_deaths_grid: tuple[int, ...] | None = None,
     cpr_grid: tuple[int, ...] = (0, 5),
     config: ExactSearchConfig | None = None,
     rejected_pool_path: str | Path | None = None,
@@ -437,7 +463,7 @@ def generate_targets(
     gen-0 corpus concentrated on positions where exact LP minimax at
     horizon 2 or 3 carries genuine LSR signal.
 
-    Default grid is ~500 candidate states; the emitted corpus is
+    Default grid is ~1,000 candidate states; the emitted corpus is
     smaller (only those passing one of the gates).
 
     With ``workers > 1`` the per-state labeling runs in a
@@ -448,13 +474,19 @@ def generate_targets(
     pinned_table = _build_pinned_table()
     rejected_states: list[ExactPublicState] = []
 
-    state_tuples: list[tuple[float, float, float, int, int, int]] = [
-        (baku_cyl, hal_cyl, clock, half, deaths, cprs)
+    death_pairs = _death_grid_pairs(
+        deaths_grid=deaths_grid,
+        baku_deaths_grid=baku_deaths_grid,
+        hal_deaths_grid=hal_deaths_grid,
+    )
+
+    state_tuples: list[tuple[float, float, float, int, int, int, int]] = [
+        (baku_cyl, hal_cyl, clock, half, baku_deaths, hal_deaths, cprs)
         for baku_cyl in baku_cylinder_grid
         for hal_cyl in hal_cylinder_grid
         for clock in clock_grid
         for half in half_grid
-        for deaths in deaths_grid
+        for baku_deaths, hal_deaths in death_pairs
         for cprs in cpr_grid
     ]
 
@@ -493,7 +525,8 @@ HOLDOUT_BAKU_CYL_GRID: tuple[float, ...] = (30.0, 150.0, 270.0, 294.0)
 HOLDOUT_HAL_CYL_GRID: tuple[float, ...] = (60.0, 180.0)
 HOLDOUT_CLOCK_GRID: tuple[float, ...] = (1200.0, 2400.0, 3450.0)
 HOLDOUT_HALF_GRID: tuple[int, ...] = (1, 2)
-HOLDOUT_DEATHS_GRID: tuple[int, ...] = (0, 1)
+HOLDOUT_BAKU_DEATHS_GRID: tuple[int, ...] = (0, 1)
+HOLDOUT_HAL_DEATHS_GRID: tuple[int, ...] = (0, 1)
 HOLDOUT_CPR_GRID: tuple[int, ...] = (1, 4)
 
 # Programmatically constructed terminal states. Each tuple is
@@ -668,7 +701,8 @@ def generate_holdout_targets(
         hal_cylinder_grid=HOLDOUT_HAL_CYL_GRID,
         clock_grid=HOLDOUT_CLOCK_GRID,
         half_grid=HOLDOUT_HALF_GRID,
-        deaths_grid=HOLDOUT_DEATHS_GRID,
+        baku_deaths_grid=HOLDOUT_BAKU_DEATHS_GRID,
+        hal_deaths_grid=HOLDOUT_HAL_DEATHS_GRID,
         cpr_grid=HOLDOUT_CPR_GRID,
         config=config,
         rejected_pool_path=rejected_pool_path,
@@ -690,13 +724,16 @@ def generate_mcts_bootstrap_targets(
     hal_cylinder_grid: tuple[float, ...] = (0.0, 120.0, 240.0),
     clock_grid: tuple[float, ...] = (720.0, 2000.0, 3540.0),
     half_grid: tuple[int, ...] = (1, 2),
-    deaths_grid: tuple[int, ...] = (0, 1),
+    deaths_grid: tuple[int, ...] | None = None,
+    baku_deaths_grid: tuple[int, ...] | None = None,
+    hal_deaths_grid: tuple[int, ...] | None = None,
     cpr_grid: tuple[int, ...] = (0, 5),
     iterations_per_state: int = 2000,
     exploration_c: float = 1.0,
     seed: int = 0,
     config: ExactSearchConfig | None = None,
     include_anchor_classes: bool = True,
+    subgame_resolve_at_critical: bool = False,
 ) -> list[ValueTarget]:
     """Bootstrap labels: run MCTS using ``predict_fn`` at the leaves and record
     the converged root value as the training target.
@@ -727,20 +764,25 @@ def generate_mcts_bootstrap_targets(
     targets: list[ValueTarget] = []
     rng_root = np.random.default_rng(seed)
     evaluator = ValueNetEvaluator(model_fn=predict_fn)
+    death_pairs = _death_grid_pairs(
+        deaths_grid=deaths_grid,
+        baku_deaths_grid=baku_deaths_grid,
+        hal_deaths_grid=hal_deaths_grid,
+    )
 
     for baku_cyl in baku_cylinder_grid:
         for hal_cyl in hal_cylinder_grid:
             for clock in clock_grid:
                 for half in half_grid:
-                    for deaths in deaths_grid:
+                    for baku_deaths, hal_deaths in death_pairs:
                         for cprs in cpr_grid:
                             game = _build_game(
                                 baku_cylinder=baku_cyl,
                                 hal_cylinder=hal_cyl,
                                 clock=clock,
                                 current_half=half,
-                                baku_deaths=deaths,
-                                hal_deaths=deaths,
+                                baku_deaths=baku_deaths,
+                                hal_deaths=hal_deaths,
                                 referee_cprs=cprs,
                             )
 
@@ -795,6 +837,7 @@ def generate_mcts_bootstrap_targets(
                                 evaluator=evaluator,
                                 rng=mcts_rng,
                                 exact_config=config,
+                                subgame_resolve_at_critical=subgame_resolve_at_critical,
                             )
                             drop_dist, check_dist = _strategy_vectors(
                                 drop_seconds=root_node.drop_seconds,
