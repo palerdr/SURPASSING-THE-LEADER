@@ -22,6 +22,7 @@ from environment.cfr.tablebase import (
 
 
 EXPECTED_NAMES = (
+    # Original Phase 8 scenarios
     "forced_baku_overflow_death",
     "forced_hal_overflow_death",
     "safe_budget_pressure_at_cylinder_241",
@@ -34,6 +35,28 @@ EXPECTED_NAMES = (
     "death_trade_double_pressure",
     "role_alignment_active_lsr_runway",
     "role_alignment_variation4_post_engineering",
+    # Phase F pinned-tablebase expansion (17 scenarios)
+    "forced_baku_overflow_mid_clock",
+    "forced_hal_overflow_mid_clock",
+    "forced_baku_overflow_pre_leap",
+    "forced_hal_overflow_pre_leap",
+    "forced_baku_overflow_leap_window_open",
+    "forced_hal_overflow_leap_window_open",
+    "forced_baku_overflow_leap_window_late",
+    "forced_baku_overflow_post_leap",
+    "forced_baku_overflow_fatigued_referee",
+    "forced_hal_overflow_fatigued_referee",
+    "forced_baku_overflow_high_ttd",
+    "forced_baku_overflow_with_baku_deaths",
+    "forced_hal_overflow_with_hal_deaths",
+    "forced_baku_overflow_with_hal_deaths",
+    "forced_hal_overflow_with_baku_deaths",
+    "both_overflow_baku_dies_first",
+    "both_overflow_hal_dies_first",
+)
+
+PINNED_NAMES = tuple(
+    name for name, factory in REGISTRY.items() if factory().expected_value is not None
 )
 
 
@@ -53,26 +76,34 @@ def test_materialize_all_returns_one_scenario_per_factory():
     assert {s.name for s in materialized} == set(EXPECTED_NAMES)
 
 
-def test_pinned_scenarios_are_forced_overflow_pair():
+def test_pinned_scenarios_include_phase_f_expansion():
+    """Phase F brought REGISTRY pinned count from 2 → 19. Two original
+    overflow pins plus 17 forced-terminal extensions across clock, leap-
+    window, fatigue, ttd, asymmetric-deaths, and double-overflow axes.
+    """
     pinned = pinned_scenarios()
-    assert {s.name for s in pinned} == {
-        "forced_baku_overflow_death",
-        "forced_hal_overflow_death",
-    }
+    pinned_names = {s.name for s in pinned}
+    # The two originals
+    assert "forced_baku_overflow_death" in pinned_names
+    assert "forced_hal_overflow_death" in pinned_names
+    # Phase F expansion present and accounted for
+    assert len(pinned_names) >= 19, (
+        f"expected >=19 pinned scenarios after Phase F, got {len(pinned_names)}: {pinned_names}"
+    )
 
 
 def test_scenarios_by_tag_filters_correctly():
-    near_overflow = scenarios_by_tag("near_overflow")
-    assert {s.name for s in near_overflow} == {
-        "forced_baku_overflow_death",
-        "forced_hal_overflow_death",
-        "near_overflow_marginal_baku_294",
-    }
     safe_budget = scenarios_by_tag("safe_budget")
     assert {s.name for s in safe_budget} == {
         "safe_budget_pressure_at_cylinder_241",
         "safe_budget_pressure_at_cylinder_240",
     }
+    # near_overflow is widely used across Phase F pins; just assert
+    # the original three remain present rather than enumerating all.
+    near_overflow = {s.name for s in scenarios_by_tag("near_overflow")}
+    assert "forced_baku_overflow_death" in near_overflow
+    assert "forced_hal_overflow_death" in near_overflow
+    assert "near_overflow_marginal_baku_294" in near_overflow
 
 
 def test_pinned_baku_overflow_value_is_plus_one():
@@ -117,4 +148,57 @@ def test_late_cpr_degradation_pair_increases_hal_value_under_forced_fail():
     assert fatigued_branch.unresolved_probability > 0.0
     assert fatigued_branch.hal_win_probability > fresh_branch.hal_win_probability
     assert fatigued_branch.value > fresh_branch.value
+
+
+# ── Phase F acceptance: every pinned scenario satisfies strict criteria ───
+
+
+@pytest.mark.parametrize("name", PINNED_NAMES)
+def test_every_pinned_scenario_resolves_to_expected_value(name):
+    """Strict acceptance gate for every pinned tablebase entry:
+
+      1. ``solve_exact_finite_horizon`` returns ``unresolved_probability == 0``
+         (chance tree fully resolves at the scenario's stated horizon).
+      2. ``value_for_hal`` matches ``expected_value`` within 1e-6.
+
+    Any scenario added to REGISTRY with a non-None ``expected_value`` must
+    satisfy both; the parameterized form fires once per scenario so the
+    failing one is named in the assertion output.
+    """
+    scenario = REGISTRY[name]()
+    result = solve_target(name)
+    assert result.unresolved_probability == pytest.approx(0.0, abs=1e-6), (
+        f"{name} has unresolved_probability {result.unresolved_probability:.6f} "
+        f"(expected 0). Scenario is not all-terminal at horizon "
+        f"{scenario.half_round_horizon}; drop the pin or deepen the horizon."
+    )
+    assert result.value_for_hal == pytest.approx(scenario.expected_value, abs=1e-6), (
+        f"{name} value drifted: got {result.value_for_hal:.6f}, "
+        f"expected {scenario.expected_value:.6f}"
+    )
+
+
+def test_pinned_scenarios_have_distinct_feature_vectors():
+    """No two pinned scenarios may produce identical ValueNet feature
+    vectors. If they do, the corpus's tablebase records can't be
+    distinguished by the net, so any net hedging on tablebase predictions
+    is masked into a single MSE statistic rather than per-scenario drift.
+
+    Uses the same feature-hash logic as ``corpus_diagnostics`` so a
+    failure here predicts a Phase F → Phase G collision before training.
+    """
+    from hal.value_net import extract_features
+    from training.corpus_diagnostics import _hash_features
+
+    pinned = pinned_scenarios()
+    hashes: dict[str, list[str]] = {}
+    for scenario in pinned:
+        h = _hash_features(extract_features(scenario.game))
+        hashes.setdefault(h, []).append(scenario.name)
+
+    collisions = {h: names for h, names in hashes.items() if len(names) > 1}
+    assert not collisions, (
+        f"Pinned scenarios collide on feature vectors (the net can't tell them "
+        f"apart): {collisions}"
+    )
 

@@ -110,11 +110,18 @@ def _excluded_game():
 # ── Pinned-table loading ──────────────────────────────────────────────────
 
 
-def test_pinned_table_contains_two_overflow_scenarios():
+def test_pinned_table_contains_overflow_scenarios():
+    """Phase F expanded the pinned table from 2 → 19 forced-terminal entries.
+
+    All pin to either +1.0 (Hal-win) or -1.0 (Baku-win); the table must
+    contain both signs and at least the original two opening overflows.
+    """
     table = _build_pinned_table()
-    assert len(table) == 2
+    assert len(table) >= 19, f"expected >= 19 pinned entries after Phase F, got {len(table)}"
     assert 1.0 in table.values()
     assert -1.0 in table.values()
+    # Exactly two values across the entire pinned table (every entry is ±1).
+    assert set(table.values()) == {1.0, -1.0}
 
 
 # ── Gate predicates (sanity) ──────────────────────────────────────────────

@@ -131,12 +131,17 @@ class _RecordingEvaluator:
 
 
 def test_tablebase_evaluator_construction_loads_pinned_registry_entries():
-    # Two pinned scenarios in the registry today: forced_baku_overflow_death
-    # (+1.0) and forced_hal_overflow_death (-1.0). The table must contain both.
+    """Phase F brought the pinned registry from 2 → 19 forced-terminal
+    entries. The evaluator's table must include the originals plus the
+    Phase F expansion, with both ±1.0 values represented."""
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
-    assert len(evaluator._table) == 2
+    assert len(evaluator._table) >= 19, (
+        f"expected >= 19 pinned entries after Phase F, got {len(evaluator._table)}"
+    )
     assert 1.0 in evaluator._table.values()
     assert -1.0 in evaluator._table.values()
+    # Every pinned entry must be exactly +1.0 or -1.0 (no non-extreme pins).
+    assert set(evaluator._table.values()) == {1.0, -1.0}
 
 
 def test_tablebase_evaluator_hit_returns_pinned_value_without_calling_fallback():

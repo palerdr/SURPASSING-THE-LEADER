@@ -264,3 +264,297 @@ def role_alignment_variation4_post_engineering() -> TacticalScenario:
         tags=("role_alignment", "variation4", "holdout"),
         holdout=True,
     )
+
+
+# ── Phase F: pinned-tablebase expansion ───────────────────────────────────
+# All scenarios below are forced-terminal extensions of the
+# ``forced_*_overflow_death`` template: cylinder=299 on the checker side
+# means every joint action drives the LP to a Hal-win (half=1, baku
+# checker) or Baku-win (half=2, hal checker) within one half-round.
+# Each variant changes one or more axes (clock, ttd, deaths, fatigue,
+# leap-window proximity) so feature vectors are distinct from the original
+# two pins while preserving the all-terminal structure that makes
+# ``unresolved_probability == 0`` provable.
+
+
+# Category 1: Forced overflow at varied clock positions ───────────────────
+
+
+def forced_baku_overflow_mid_clock() -> TacticalScenario:
+    """Forced Baku overflow at mid-game clock — value-invariant w.r.t. clock."""
+    game = _base_game(clock=1800.0, current_half=1)
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_baku_overflow_mid_clock",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Same all-terminal structure as the opening pin; clock=1800 differentiates features.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "clock_variant"),
+    )
+
+
+def forced_hal_overflow_mid_clock() -> TacticalScenario:
+    """Forced Hal overflow at mid-game clock."""
+    game = _base_game(clock=1800.0, current_half=2)
+    game.player1.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_hal_overflow_mid_clock",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Symmetric counterpart at clock=1800.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "clock_variant"),
+    )
+
+
+def forced_baku_overflow_pre_leap() -> TacticalScenario:
+    """Forced Baku overflow just before the leap-second window."""
+    game = _base_game(clock=3450.0, current_half=1)
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_baku_overflow_pre_leap",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Pre-leap clock pin (3450, rounds_until_leap_window flag active).",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "pre_leap"),
+    )
+
+
+def forced_hal_overflow_pre_leap() -> TacticalScenario:
+    """Forced Hal overflow just before the leap-second window."""
+    game = _base_game(clock=3450.0, current_half=2)
+    game.player1.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_hal_overflow_pre_leap",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Pre-leap clock pin, Baku-win counterpart.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "pre_leap"),
+    )
+
+
+# Category 2: Leap-window and post-leap pins ──────────────────────────────
+
+
+def forced_baku_overflow_leap_window_open() -> TacticalScenario:
+    """Forced Baku overflow at the leap-window opening (clock=3540)."""
+    game = _base_game(clock=3540.0, current_half=1)
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_baku_overflow_leap_window_open",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Leap-window open (clock=3540); is_leap_second_turn flag active.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "leap_window"),
+    )
+
+
+def forced_hal_overflow_leap_window_open() -> TacticalScenario:
+    """Forced Hal overflow at the leap-window opening, half=2."""
+    game = _base_game(clock=3540.0, current_half=2)
+    game.player1.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_hal_overflow_leap_window_open",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Leap-window open, Baku-win counterpart.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "leap_window"),
+    )
+
+
+def forced_baku_overflow_leap_window_late() -> TacticalScenario:
+    """Forced Baku overflow inside the leap-second window (clock=3580)."""
+    game = _base_game(clock=3580.0, current_half=1)
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_baku_overflow_leap_window_late",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Deep inside leap window (clock=3580).",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "leap_window"),
+    )
+
+
+def forced_baku_overflow_post_leap() -> TacticalScenario:
+    """Forced Baku overflow just after the leap-second window."""
+    game = _base_game(clock=3600.0, current_half=1)
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="forced_baku_overflow_post_leap",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Post-leap clock; leap flags inactive.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "post_leap"),
+    )
+
+
+# Category 3: Fatigue and TTD pressure ────────────────────────────────────
+
+
+def forced_baku_overflow_fatigued_referee() -> TacticalScenario:
+    """Forced Baku overflow with a fatigued referee (cprs_performed=10)."""
+    game = _base_game(clock=720.0, current_half=1)
+    game.player2.cylinder = 299.0
+    game.referee.cprs_performed = 10
+    return TacticalScenario(
+        name="forced_baku_overflow_fatigued_referee",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="cprs=10 raises the cpr feature; all-terminal structure unchanged.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "cpr_fatigue"),
+    )
+
+
+def forced_hal_overflow_fatigued_referee() -> TacticalScenario:
+    """Forced Hal overflow with a fatigued referee (cprs_performed=10)."""
+    game = _base_game(clock=720.0, current_half=2)
+    game.player1.cylinder = 299.0
+    game.referee.cprs_performed = 10
+    return TacticalScenario(
+        name="forced_hal_overflow_fatigued_referee",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Baku-win counterpart at cprs=10.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "cpr_fatigue"),
+    )
+
+
+def forced_baku_overflow_high_ttd() -> TacticalScenario:
+    """Forced Baku overflow with elevated baku_ttd=240."""
+    game = _base_game(clock=720.0, current_half=1)
+    game.player2.cylinder = 299.0
+    game.player2.ttd = 240.0
+    return TacticalScenario(
+        name="forced_baku_overflow_high_ttd",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="baku_ttd=240 raises the cardiac modifier on the death branch; outcome still pinned.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "ttd_pressure"),
+    )
+
+
+# Category 4: Asymmetric death-count pins ─────────────────────────────────
+
+
+def forced_baku_overflow_with_baku_deaths() -> TacticalScenario:
+    """Forced Baku overflow when Baku already carries a prior death."""
+    game = _base_game(clock=720.0, current_half=1)
+    game.player2.cylinder = 299.0
+    game.player2.deaths = 1
+    return TacticalScenario(
+        name="forced_baku_overflow_with_baku_deaths",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Asymmetric: baku_deaths=1; feature dim 5 (baku_deaths) is 0.25 here.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "asymmetric_deaths"),
+    )
+
+
+def forced_hal_overflow_with_hal_deaths() -> TacticalScenario:
+    """Forced Hal overflow when Hal already carries a prior death."""
+    game = _base_game(clock=720.0, current_half=2)
+    game.player1.cylinder = 299.0
+    game.player1.deaths = 1
+    return TacticalScenario(
+        name="forced_hal_overflow_with_hal_deaths",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Asymmetric: hal_deaths=1; feature dim 4 is 0.25.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "asymmetric_deaths"),
+    )
+
+
+def forced_baku_overflow_with_hal_deaths() -> TacticalScenario:
+    """Forced Baku overflow when Hal (not Baku) carries a prior death.
+
+    Verifies that opponent's prior deaths do not invert the equilibrium —
+    Baku is the one about to die, regardless of Hal's death history.
+    """
+    game = _base_game(clock=720.0, current_half=1)
+    game.player2.cylinder = 299.0
+    game.player1.deaths = 1
+    return TacticalScenario(
+        name="forced_baku_overflow_with_hal_deaths",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Hal-deaths set, Baku still about-to-overflow; pin tests that opponent deaths don't flip the outcome.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "asymmetric_deaths"),
+    )
+
+
+def forced_hal_overflow_with_baku_deaths() -> TacticalScenario:
+    """Forced Hal overflow when Baku (not Hal) carries a prior death."""
+    game = _base_game(clock=720.0, current_half=2)
+    game.player1.cylinder = 299.0
+    game.player2.deaths = 1
+    return TacticalScenario(
+        name="forced_hal_overflow_with_baku_deaths",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Baku-deaths set, Hal still about-to-overflow; symmetric counterpart.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "asymmetric_deaths"),
+    )
+
+
+# Category 5: Both-players-near-overflow pins ─────────────────────────────
+
+
+def both_overflow_baku_dies_first() -> TacticalScenario:
+    """Both players at cylinder=299, half=1 — Baku (checker) dies first."""
+    game = _base_game(clock=720.0, current_half=1)
+    game.player1.cylinder = 299.0
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="both_overflow_baku_dies_first",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Symmetric cylinders, role determines outcome: half=1 → Baku checker → Baku dies first.",
+        expected_value=1.0,
+        tags=("near_overflow", "forced_terminal", "hal_win", "double_overflow"),
+    )
+
+
+def both_overflow_hal_dies_first() -> TacticalScenario:
+    """Both players at cylinder=299, half=2 — Hal (checker) dies first."""
+    game = _base_game(clock=720.0, current_half=2)
+    game.player1.cylinder = 299.0
+    game.player2.cylinder = 299.0
+    return TacticalScenario(
+        name="both_overflow_hal_dies_first",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=1,
+        expected_note="Symmetric cylinders, half=2 → Hal checker → Hal dies first.",
+        expected_value=-1.0,
+        tags=("near_overflow", "forced_terminal", "baku_win", "double_overflow"),
+    )

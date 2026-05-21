@@ -23,11 +23,28 @@ from .exact import ExactSolveResult, solve_exact_finite_horizon
 from .tactical_scenarios import (
     TacticalScenario,
     baku_dropper_leap_window_alignment,
+    both_overflow_baku_dies_first,
+    both_overflow_hal_dies_first,
     cpr_degradation_fatigued_referee,
     cpr_degradation_fresh_referee,
     death_trade_double_pressure,
     forced_baku_overflow_death,
+    forced_baku_overflow_fatigued_referee,
+    forced_baku_overflow_high_ttd,
+    forced_baku_overflow_leap_window_late,
+    forced_baku_overflow_leap_window_open,
+    forced_baku_overflow_mid_clock,
+    forced_baku_overflow_post_leap,
+    forced_baku_overflow_pre_leap,
+    forced_baku_overflow_with_baku_deaths,
+    forced_baku_overflow_with_hal_deaths,
     forced_hal_overflow_death,
+    forced_hal_overflow_fatigued_referee,
+    forced_hal_overflow_leap_window_open,
+    forced_hal_overflow_mid_clock,
+    forced_hal_overflow_pre_leap,
+    forced_hal_overflow_with_baku_deaths,
+    forced_hal_overflow_with_hal_deaths,
     hal_dropper_leap_window_asymmetry,
     near_overflow_marginal_baku_294,
     role_alignment_active_lsr_runway,
@@ -43,18 +60,44 @@ ScenarioFactory = Callable[[], TacticalScenario]
 REGISTRY: dict[str, ScenarioFactory] = {
     factory.__name__: factory
     for factory in (
+        # Original pinned (Phase 8)
         forced_baku_overflow_death,
         forced_hal_overflow_death,
+        # Original relational (Phase 8)
         safe_budget_pressure_at_cylinder_241,
         safe_budget_pressure_at_cylinder_240,
         cpr_degradation_fresh_referee,
         cpr_degradation_fatigued_referee,
+        # Original holdout diagnostics (Phase 8)
         baku_dropper_leap_window_alignment,
         hal_dropper_leap_window_asymmetry,
         near_overflow_marginal_baku_294,
         death_trade_double_pressure,
         role_alignment_active_lsr_runway,
         role_alignment_variation4_post_engineering,
+        # Phase F: pinned-tablebase expansion (17 new) ───────────────────
+        # Clock variants
+        forced_baku_overflow_mid_clock,
+        forced_hal_overflow_mid_clock,
+        forced_baku_overflow_pre_leap,
+        forced_hal_overflow_pre_leap,
+        # Leap-window variants
+        forced_baku_overflow_leap_window_open,
+        forced_hal_overflow_leap_window_open,
+        forced_baku_overflow_leap_window_late,
+        forced_baku_overflow_post_leap,
+        # Fatigue / TTD pressure
+        forced_baku_overflow_fatigued_referee,
+        forced_hal_overflow_fatigued_referee,
+        forced_baku_overflow_high_ttd,
+        # Asymmetric death pins
+        forced_baku_overflow_with_baku_deaths,
+        forced_hal_overflow_with_hal_deaths,
+        forced_baku_overflow_with_hal_deaths,
+        forced_hal_overflow_with_baku_deaths,
+        # Double-overflow
+        both_overflow_baku_dies_first,
+        both_overflow_hal_dies_first,
     )
 }
 
