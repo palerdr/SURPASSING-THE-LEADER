@@ -405,3 +405,119 @@ def test_calibration_gate_raises_when_mean_unresolved_above_threshold():
 
     with pytest.raises(CalibrationGateError, match="unresolved_probability"):
         enforce_calibration_gate(report, BootstrapConfig(max_unresolved_per_source=0.05))
+
+
+# ── per_source_mse_thresholds gate (Phase 9.B) ────────────────────────────
+
+
+def _make_clean_calibration_report(**source_mse_overrides: float):
+    """Build a CalibrationReport with all gates passing by default.
+
+    Pass per-source MSE overrides as kwargs (e.g. exact_horizon_3=2.0) to
+    simulate a specific failure mode. The fixture keeps tablebase, terminal,
+    and unresolved-probability under their default thresholds so only the
+    overridden axes can fail the gate.
+    """
+    from training.calibration import CalibrationReport
+    from training.value_targets import SOURCE_EXACT_HORIZON_2, SOURCE_EXACT_HORIZON_3
+
+    mse_per_source = {
+        SOURCE_TERMINAL: 0.5,
+        SOURCE_TABLEBASE: 0.005,
+        SOURCE_EXACT_HORIZON_2: 0.05,
+        SOURCE_EXACT_HORIZON_3: 0.05,
+    }
+    mse_per_source.update(source_mse_overrides)
+    return CalibrationReport(
+        mse_per_source=mse_per_source,
+        overall_mse=sum(mse_per_source.values()) / 4,
+        brier_score=0.0,
+        reliability_bins=[],
+        exact_target_error=0.0,
+        n_targets=4,
+        mean_unresolved_probability_per_source={
+            SOURCE_TERMINAL: 0.0,
+            SOURCE_TABLEBASE: 0.0,
+            SOURCE_EXACT_HORIZON_2: 0.0,
+            SOURCE_EXACT_HORIZON_3: 0.0,
+        },
+    )
+
+
+def test_per_source_threshold_raises_on_horizon_3_overfit_collapse():
+    """The exact failure gen-3 strict v1 hit: tablebase passes by
+    overfitting (MSE 0.0006) at the cost of exact_horizon_3 collapsing
+    (MSE 2.025). Without a per-source ceiling on h3, the gate accepts
+    this. With one, it fires immediately."""
+    from training.value_targets import SOURCE_EXACT_HORIZON_3
+
+    report = _make_clean_calibration_report(exact_horizon_3=2.025)
+    config = BootstrapConfig(
+        tablebase_mse_threshold=0.01,
+        per_source_mse_thresholds={SOURCE_EXACT_HORIZON_3: 0.15},
+    )
+
+    with pytest.raises(CalibrationGateError, match=r"exact_horizon_3 MSE"):
+        enforce_calibration_gate(report, config)
+
+
+def test_per_source_threshold_passes_when_all_axes_within_ceilings():
+    from training.value_targets import (
+        SOURCE_EXACT_HORIZON_2,
+        SOURCE_EXACT_HORIZON_3,
+    )
+
+    report = _make_clean_calibration_report()
+    config = BootstrapConfig(
+        tablebase_mse_threshold=0.01,
+        per_source_mse_thresholds={
+            SOURCE_EXACT_HORIZON_2: 0.10,
+            SOURCE_EXACT_HORIZON_3: 0.15,
+        },
+    )
+
+    # No exception → gate passed
+    enforce_calibration_gate(report, config)
+
+
+def test_per_source_threshold_skips_sources_absent_from_report():
+    """If the held-out corpus lacks a class for which a threshold is set,
+    the gate must not error — it just doesn't apply the check.
+    """
+    from training.value_targets import SOURCE_MCTS_BOOTSTRAP
+
+    report = _make_clean_calibration_report()
+    # mcts_bootstrap isn't in the synthetic report at all
+    config = BootstrapConfig(
+        tablebase_mse_threshold=0.01,
+        per_source_mse_thresholds={SOURCE_MCTS_BOOTSTRAP: 0.01},
+    )
+
+    enforce_calibration_gate(report, config)
+
+
+def test_per_source_threshold_fires_on_first_offending_source():
+    """If multiple per-source thresholds are violated, the gate must
+    raise on the FIRST offender it encounters (deterministic dict
+    iteration order in Python 3.7+)."""
+    from training.value_targets import (
+        SOURCE_EXACT_HORIZON_2,
+        SOURCE_EXACT_HORIZON_3,
+    )
+
+    report = _make_clean_calibration_report(
+        exact_horizon_2=0.5,
+        exact_horizon_3=2.0,
+    )
+    config = BootstrapConfig(
+        tablebase_mse_threshold=0.01,
+        per_source_mse_thresholds={
+            SOURCE_EXACT_HORIZON_2: 0.10,
+            SOURCE_EXACT_HORIZON_3: 0.15,
+        },
+    )
+
+    # Either of the two could fire first depending on iteration order;
+    # either way it's a CalibrationGateError with a "MSE ... exceeds threshold" message.
+    with pytest.raises(CalibrationGateError, match=r"MSE .* exceeds threshold"):
+        enforce_calibration_gate(report, config)

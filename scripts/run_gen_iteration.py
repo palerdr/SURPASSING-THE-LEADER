@@ -68,11 +68,45 @@ def main() -> int:
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
     parser.add_argument("--max-unresolved-per-source", type=float, default=0.35)
     parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=64,
+        help="ValueNet hidden width (Phase I). Default 64 (13.7K params, "
+        "original). 128 gives 35.5K params (2.6× capacity) for fitting more "
+        "diverse tablebase pins; 192 exceeds the 50K guard.",
+    )
+    parser.add_argument(
+        "--per-source-mse-threshold",
+        action="append",
+        default=None,
+        metavar="SOURCE:VALUE",
+        help="Per-source MSE ceiling for the calibration gate. Format "
+        "'source_name:value' (e.g. exact_horizon_3:0.15). Repeat for "
+        "multiple. Catches the 'overfit tablebase, collapse h2/h3' "
+        "failure mode that the strict tablebase-only gate misses.",
+    )
+    parser.add_argument(
         "--subgame-resolve-at-critical",
         action="store_true",
         help="Use deeper root subgame re-solving for MCTS bootstrap labels at critical states.",
     )
     args = parser.parse_args()
+
+    per_source_mse_thresholds: dict[str, float] | None = None
+    if args.per_source_mse_threshold:
+        per_source_mse_thresholds = {}
+        for item in args.per_source_mse_threshold:
+            if ":" not in item:
+                raise SystemExit(
+                    f"--per-source-mse-threshold expects 'source_name:value', got {item!r}"
+                )
+            name, raw_value = item.rsplit(":", 1)
+            try:
+                per_source_mse_thresholds[name] = float(raw_value)
+            except ValueError as exc:
+                raise SystemExit(
+                    f"--per-source-mse-threshold {item!r}: value is not a float ({exc})"
+                ) from exc
 
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
 
@@ -117,11 +151,12 @@ def main() -> int:
     save_targets(targets, args.out_targets)
     print(f"  Saved: {args.out_targets}", flush=True)
 
-    print(f"[4/5] Training on rebalanced corpus", flush=True)
+    print(f"[4/5] Training on rebalanced corpus (hidden_dim={args.hidden_dim})", flush=True)
     cfg = TrainConfig(
         epochs=args.epochs,
         seed=args.seed,
         device=args.device,
+        hidden_dim=args.hidden_dim,
         source_weights=(
             (SOURCE_TERMINAL, args.terminal_weight),
             (SOURCE_EXACT_HORIZON_2, args.horizon_weight),
@@ -161,6 +196,7 @@ def main() -> int:
             SOURCE_EXACT_HORIZON_2,
             SOURCE_EXACT_HORIZON_3,
         ),
+        per_source_mse_thresholds=per_source_mse_thresholds,
     )
     try:
         enforce_calibration_gate(report, gate_cfg)

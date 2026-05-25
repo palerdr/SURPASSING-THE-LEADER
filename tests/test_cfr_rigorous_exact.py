@@ -251,3 +251,61 @@ def test_clear_solve_cache_resets_to_empty():
     assert solve_cache_size() > 0
     clear_solve_cache()
     assert solve_cache_size() == 0
+
+
+def test_solve_cache_respects_lru_maxsize_bound():
+    """The cache must never exceed its LRU ceiling. An unbounded cache
+    exhausts RAM during wide-grid corpus generation (each worker caches
+    the shared deep-substate space, ×N workers). This test patches the
+    maxsize down to a tiny value and verifies the bound holds after a
+    horizon-3 solve that would otherwise cache far more entries."""
+    import environment.cfr.exact as exact_mod
+
+    clear_solve_cache()
+    original_maxsize = exact_mod._SOLVE_CACHE_MAXSIZE
+    try:
+        exact_mod._SOLVE_CACHE_MAXSIZE = 10
+        scenario = forced_baku_overflow_death()
+        # A horizon=4 solve at a near-overflow state recurses through many
+        # substates — without the bound the cache would hold dozens.
+        solve_exact_finite_horizon(
+            scenario.game, half_round_horizon=4, config=scenario.config
+        )
+        assert solve_cache_size() <= 10, (
+            f"cache exceeded LRU bound: {solve_cache_size()} > 10"
+        )
+    finally:
+        exact_mod._SOLVE_CACHE_MAXSIZE = original_maxsize
+        clear_solve_cache()
+
+
+def test_solve_cache_bit_identical_under_eviction_pressure():
+    """Even when the LRU cap forces evictions mid-recursion, the final
+    result must match an unbounded solve bit-for-bit. Eviction is only
+    safe if recompute is identical — this guards that invariant."""
+    import numpy as np
+    import environment.cfr.exact as exact_mod
+
+    scenario = forced_baku_overflow_death()
+
+    clear_solve_cache()
+    unbounded = solve_exact_finite_horizon(
+        scenario.game, half_round_horizon=4, config=scenario.config
+    )
+
+    clear_solve_cache()
+    original_maxsize = exact_mod._SOLVE_CACHE_MAXSIZE
+    try:
+        exact_mod._SOLVE_CACHE_MAXSIZE = 3  # aggressive eviction
+        scenario2 = forced_baku_overflow_death()
+        bounded = solve_exact_finite_horizon(
+            scenario2.game, half_round_horizon=4, config=scenario2.config
+        )
+    finally:
+        exact_mod._SOLVE_CACHE_MAXSIZE = original_maxsize
+        clear_solve_cache()
+
+    assert bounded.value_for_hal == pytest.approx(unbounded.value_for_hal)
+    assert bounded.unresolved_probability == pytest.approx(unbounded.unresolved_probability)
+    np.testing.assert_array_equal(bounded.dropper_strategy, unbounded.dropper_strategy)
+    np.testing.assert_array_equal(bounded.checker_strategy, unbounded.checker_strategy)

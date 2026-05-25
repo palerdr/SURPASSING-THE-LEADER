@@ -330,6 +330,18 @@ if __name__ == "__main__":
         help="Required source class for calibration gate. Repeat for multiple.",
     )
     parser.add_argument(
+        "--per-source-mse-threshold",
+        action="append",
+        default=None,
+        metavar="SOURCE:VALUE",
+        help="Per-source MSE ceiling for the calibration gate. Format "
+        "'source_name:value' (e.g. exact_horizon_3:0.15). Repeat for "
+        "multiple sources. Without these, only tablebase MSE is gated; "
+        "with them, the gate fires on any source class exceeding its "
+        "ceiling — catching the 'overfit one class while collapsing "
+        "others' failure mode (gen-3 strict v1 lesson).",
+    )
+    parser.add_argument(
         "--anchor-targets",
         type=str,
         default=None,
@@ -338,6 +350,26 @@ if __name__ == "__main__":
         "generation's training corpus to prevent MCTS-only training drift.",
     )
     args = parser.parse_args()
+
+    def _parse_per_source_thresholds(items: list[str] | None) -> dict[str, float] | None:
+        if not items:
+            return None
+        parsed: dict[str, float] = {}
+        for item in items:
+            if ":" not in item:
+                raise SystemExit(
+                    f"--per-source-mse-threshold expects 'source_name:value', got {item!r}"
+                )
+            name, raw_value = item.rsplit(":", 1)
+            try:
+                parsed[name] = float(raw_value)
+            except ValueError as exc:
+                raise SystemExit(
+                    f"--per-source-mse-threshold {item!r}: value is not a float ({exc})"
+                ) from exc
+        return parsed
+
+    per_source_mse_thresholds = _parse_per_source_thresholds(args.per_source_mse_threshold)
 
     held_out_targets = None
     if args.held_out_targets is not None:
@@ -365,6 +397,7 @@ if __name__ == "__main__":
         tablebase_mse_threshold=args.tablebase_mse_threshold,
         max_unresolved_per_source=args.max_unresolved_per_source,
         audit_max_drift=args.audit_max_drift,
+        per_source_mse_thresholds=per_source_mse_thresholds,
     )
     result = bootstrap_one_generation(
         gen_in_checkpoint=args.in_checkpoint,

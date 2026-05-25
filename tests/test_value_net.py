@@ -72,3 +72,60 @@ def test_cpr_feature_distinguishes_fatigue_values_above_six():
 
     assert cpr_at_8 < cpr_at_10 < cpr_at_scale
     assert cpr_at_scale == pytest.approx(1.0)
+
+
+# ── Phase I-1: hidden_dim expansion ───────────────────────────────────────
+
+
+def test_value_net_default_hidden_dim_unchanged():
+    """Backward compat: default ValueNet still has 13.7K params + identical
+    forward shapes. Phase I-1 only adds a kwarg; it doesn't change defaults.
+    """
+    model = ValueNet()
+    total = sum(p.numel() for p in model.parameters())
+    assert 13_000 < total < 14_500, f"default arch param count regressed: {total}"
+
+
+def test_value_net_hidden_dim_128_has_expected_param_count_and_shapes():
+    """Phase I-1: hidden_dim=128 expands the trunk + policy/value heads.
+
+    Param count stays under the 50K guard (35.5K at hidden=128).
+    Forward output shapes are identical to hidden=64 — only the internal
+    capacity grows.
+    """
+    model = ValueNet(hidden_dim=128)
+    total = sum(p.numel() for p in model.parameters())
+    assert 30_000 < total < 50_000, (
+        f"hidden=128 should give ~35.5K params (well under 50K guard); got {total}"
+    )
+
+    x = torch.zeros(2, FEATURE_DIM)
+    value, dropper_logits, checker_logits = model(x)
+    assert value.shape == (2, 1)
+    assert dropper_logits.shape == (2, 61)
+    assert checker_logits.shape == (2, 61)
+
+
+def test_value_net_checkpoint_round_trip_at_hidden_128(tmp_path):
+    """Saving + loading a hidden=128 checkpoint must round-trip via
+    ``load_checkpoint``'s auto-inferred hidden_dim. Guards the inference
+    logic that reads the state_dict's trunk.0.weight shape — if it
+    misreads, the load either fails or produces wrong-capacity weights.
+    """
+    from training.train_value_net import load_checkpoint
+
+    model = ValueNet(hidden_dim=128)
+    ckpt_path = tmp_path / "phase_i_test.pt"
+    torch.save(model.state_dict(), ckpt_path)
+
+    loaded = load_checkpoint(str(ckpt_path), device="cpu")
+    assert sum(p.numel() for p in loaded.parameters()) == sum(
+        p.numel() for p in model.parameters()
+    )
+
+    x = torch.zeros(3, FEATURE_DIM)
+    with torch.no_grad():
+        out_orig = model(x)
+        out_loaded = loaded(x)
+    for a, b in zip(out_orig, out_loaded):
+        assert torch.allclose(a, b)

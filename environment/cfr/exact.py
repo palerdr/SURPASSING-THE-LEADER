@@ -440,8 +440,21 @@ def evaluate_joint_action(
 # The cache is invalidated trivially: each worker process runs to completion
 # on its slice and exits, freeing the cache. Tests can call
 # ``clear_solve_cache()`` between runs to assert determinism.
+#
+# BOUNDED LRU: the cache is capped at ``_SOLVE_CACHE_MAXSIZE`` entries with
+# least-recently-used eviction. An unbounded cache exhausts RAM during
+# wide-grid corpus generation: each worker independently caches the deep
+# horizon-3 substate space (shared across starting cylinders), and N workers
+# hold N duplicate copies. Eviction is correctness-safe — the cache is pure
+# memoization, so an evicted (state, horizon) is simply recomputed identically
+# on next visit. The cap trades a little recompute for bounded memory.
+# Override via STL_SOLVE_CACHE_MAXSIZE for tuning (default 30000 ≈ ~1 GiB/worker).
 
-_SOLVE_CACHE: dict[tuple, ExactSolveResult] = {}
+import os
+from collections import OrderedDict
+
+_SOLVE_CACHE_MAXSIZE: int = int(os.environ.get("STL_SOLVE_CACHE_MAXSIZE", "30000"))
+_SOLVE_CACHE: "OrderedDict[tuple, ExactSolveResult]" = OrderedDict()
 
 
 def clear_solve_cache() -> None:
@@ -452,6 +465,11 @@ def clear_solve_cache() -> None:
 def solve_cache_size() -> int:
     """Diagnostic: number of cached (state, horizon, perspective) entries."""
     return len(_SOLVE_CACHE)
+
+
+def solve_cache_maxsize() -> int:
+    """Diagnostic: the LRU eviction ceiling for the cache."""
+    return _SOLVE_CACHE_MAXSIZE
 
 
 def solve_exact_finite_horizon(
@@ -487,6 +505,7 @@ def solve_exact_finite_horizon(
     cache_key = (exact_public_state(game), half_round_horizon, config.perspective_name)
     cached = _SOLVE_CACHE.get(cache_key)
     if cached is not None:
+        _SOLVE_CACHE.move_to_end(cache_key)  # mark most-recently-used
         return cached
 
     dropper, _checker = game.get_roles_for_half(game.current_half)
@@ -538,4 +557,7 @@ def solve_exact_finite_horizon(
         payoff_for_hal=hal_payoff,
     )
     _SOLVE_CACHE[cache_key] = result
+    _SOLVE_CACHE.move_to_end(cache_key)
+    if len(_SOLVE_CACHE) > _SOLVE_CACHE_MAXSIZE:
+        _SOLVE_CACHE.popitem(last=False)  # evict least-recently-used
     return result

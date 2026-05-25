@@ -36,7 +36,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from hal.value_net import FEATURE_DIM, ValueNet, value_output
+from hal.value_net import FEATURE_DIM, HIDDEN_DIM, ValueNet, value_output
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,11 @@ class TrainConfig:
         ("terminal", 20.0),
         ("tablebase", 20.0),
     )
+    # Net architecture knobs (Phase I). hidden_dim=64 is the original 13.7K-
+    # param trunk; hidden_dim=128 gives 35.5K params (2.6× capacity) for
+    # fitting more diverse tablebase pins. hidden_dim=192 (65K) exceeds the
+    # 50K guard; raise the guard only with explicit justification.
+    hidden_dim: int = 64
 
 
 @dataclass
@@ -235,7 +240,7 @@ def train(
         generator=torch.Generator().manual_seed(config.seed),
     )
 
-    model = ValueNet(input_dim=FEATURE_DIM).to(device)
+    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=config.hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, config.epochs)
@@ -335,9 +340,21 @@ def train(
 
 
 def load_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> ValueNet:
-    """Restore a ValueNet from a saved state_dict."""
-    model = ValueNet(input_dim=FEATURE_DIM)
+    """Restore a ValueNet from a saved state_dict.
+
+    Infers ``hidden_dim`` from the checkpoint's ``trunk.0.weight`` shape so
+    Phase I (hidden=128) and pre-Phase-I (hidden=64) checkpoints both load
+    transparently. Falls back to legacy 'layers.*' key migration for very
+    early checkpoints written before the trunk/heads split.
+    """
     state = torch.load(checkpoint_path, map_location=device)
+    # Infer hidden_dim from the first linear layer's output dimension.
+    inferred_hidden_dim = HIDDEN_DIM
+    for key in ("trunk.0.weight", "layers.0.weight"):
+        if key in state:
+            inferred_hidden_dim = int(state[key].shape[0])
+            break
+    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=inferred_hidden_dim)
     try:
         model.load_state_dict(state)
     except RuntimeError:
