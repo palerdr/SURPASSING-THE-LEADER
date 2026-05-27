@@ -138,3 +138,74 @@ The biggest gains came on classes the prior generation was weakest at
 
 `checkpoints/gen_phaseG_iter2/best.pt`. Same architecture as iter 1
 (hidden_dim=128, 35.5K params).
+
+---
+
+## Phase G iter 3 — convergence
+
+Third iteration, `gen_phaseG_iter2/best.pt` as MCTS evaluator. Same
+anchors, same architecture, same gates.
+
+### Run characteristics
+
+- MCTS bootstrap: 8,100.7 s (basically identical to iter 2's 8,092.9 s).
+- Final training corpus: 6,357 records (identical breakdown to iter 2;
+  the bootstrap grid + anchor merge produces deterministic-shape output).
+- Best train val MSE 0.03405 at epoch 139 (early-stopped from 300).
+- Training-side terminal MSE jumped 0.84 (iter 2) → 1.23 (iter 3),
+  the first signal that the net is starting to thrash on its own
+  training-set terminals — characteristic of convergence on a fixed
+  corpus.
+
+### Held-out v2 calibration
+
+| Source | n | iter 2 | **iter 3** | Δ |
+|---|---|---|---|---|
+| terminal | 24 | 0.505 | **0.498** | −1.4% |
+| tablebase | 19 | 0.006 | 0.007 | basically tied |
+| exact_horizon_2 | 128 | 0.012 | 0.012 | tied |
+| exact_horizon_3 | 64 | 0.004 | 0.004 | tied |
+| **Overall MSE** | — | 0.06000 | **0.05934** | **−0.9%** ✅ |
+
+Strict gate passed.
+
+### Convergence rate across the full phase chain
+
+| Transition | Δ overall MSE |
+|---|---|
+| gen-0 → gen-2 v2 | −46% (rapid early gains, pre-Phase-G) |
+| gen-2 v2 → gen-3 v2 | +22% (plateau pre-Phase-G) |
+| Phase G + I-1 → iter 2 | −14.1% (Phase G data unlock) |
+| iter 2 → iter 3 | **−0.9% (convergence)** |
+
+The classic AlphaZero curve, twice: rapid gains until the corpus is
+exhausted, plateau at the data-imposed ceiling, rapid recovery once
+the corpus expands, plateau again at a much lower ceiling. Two
+plateaus, two ceilings — both data-imposed.
+
+### Best checkpoint after iter 3
+
+`checkpoints/gen_phaseG_iter3/best.pt`. Overall MSE 0.05934 on
+held-out v2 — a **45% improvement over the pre-Phase-G best**
+(gen-2 v2 at 0.108).
+
+### Status: converged within current data + architecture
+
+The Phase 9 chain (F + G + I-1 + iter 2 + iter 3) has fully landed.
+The system is now at the data-imposed performance ceiling under the
+current setup. Pushing further requires one of:
+
+- **Phase F-2**: expand REGISTRY beyond 19 pinned scenarios so the
+  anchor diversity isn't dominated by the cyl=299 forced-overflow
+  family.
+- **Phase H**: selective high-iter MCTS reanalysis on the highest-
+  variance states from the Phase G corpus.
+- **Phase I-2**: hidden=192 with 50K param-count guard raised; risk
+  of returning to the overfit regime unless paired with more data.
+- **Downstream applications**: the `gen_phaseG_iter3/best.pt`
+  checkpoint is ready for RL self-play, manga validation, CLI play,
+  or whatever the supervised-learning checkpoint enables next.
+
+The Phase 9 plan ended at "the bottleneck shifts from 'is the data
+sufficient' to 'is the game model sufficient'" — and that's where we
+are. The supervised-learning loop has extracted what's available.
