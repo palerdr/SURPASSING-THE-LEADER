@@ -86,3 +86,55 @@ evaluator.
   `per_source_mse_thresholds` populated.
 - LRU cache fix: `environment/cfr/exact.py:_SOLVE_CACHE` (OrderedDict
   with `move_to_end` + `popitem(last=False)`).
+
+---
+
+## Phase G iter 2 — policy-improvement loop continues
+
+Second iteration. Same architecture (`hidden_dim=128`), same anchor set
+(Phase G's 4812-record LP corpus), but `gen_phaseG_h128/best.pt` is now
+the MCTS evaluator instead of gen-2 v2. Tests whether the loop has
+signal left after the Phase G corpus expansion.
+
+### Run characteristics
+
+- MCTS bootstrap: 8,092.9 s (2 h 15 m) at 1000 iters.
+- CPU 260-274% sustained — hidden=128's 128×128 matmul saturates
+  PyTorch's intra-op BLAS threading much better than hidden=64 did
+  (~140%). Effective wall-clock per iter is *faster* than the smaller
+  net's, despite ~2.6× more arithmetic per forward.
+- Final training corpus: 6,357 records
+  (mcts_bootstrap 864 + terminal 24 + tablebase 660 [22 × 30 replicate]
+   + exact_horizon_3 2,938 + exact_horizon_2 1,871).
+- Best train val MSE 0.03220 at epoch 205 (early-stopped from 300).
+
+### Held-out v2 calibration
+
+| Source | n | iter 1 (G + I-1) | **iter 2** | Δ |
+|---|---|---|---|---|
+| terminal | 24 | 0.557 | **0.505** | **−9.3%** ✅ |
+| tablebase | 19 | 0.005 | 0.006 | +0.001 (passes 0.01) |
+| exact_horizon_2 | 128 | 0.021 | **0.012** | **−43%** ✅ |
+| exact_horizon_3 | 64 | 0.003 | 0.004 | +0.001 (passes 0.15) |
+| **Overall MSE** | — | 0.070 | **0.060** | **−14.1%** ✅ |
+
+Strict gate passed on all axes (tablebase 0.01, h2 0.10, h3 0.15,
+terminal 1.0, max_unresolved 0.35).
+
+### What this confirms
+
+The policy-improvement loop *is still extracting signal* after the
+Phase G corpus expansion. The pre-Phase-G plateau (gen-2 v2 → gen-3:
+0.108 → 0.132, noise-level) was data-imposed, not algorithm-imposed.
+With 24.7× the LP-labeled data, each subsequent iteration can still
+pull genuine improvement: 0.070 → 0.060 in one step is bigger than
+any improvement in the gen-2/gen-3 era.
+
+The biggest gains came on classes the prior generation was weakest at
+(terminal −9.3%, h2 −43%). The classes already near-perfect at iter 1
+(h3 at 0.003) didn't move much because there's no room left.
+
+### Best checkpoint after iter 2
+
+`checkpoints/gen_phaseG_iter2/best.pt`. Same architecture as iter 1
+(hidden_dim=128, 35.5K params).
