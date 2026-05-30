@@ -36,12 +36,6 @@ def exposes_leap_features(awareness: LeapAwareness) -> bool:
     return awareness == LeapAwareness.DEDUCED
 
 
-def checker_can_use_extra_second(awareness: LeapAwareness, *, actor: str = "baku") -> bool:
-    if actor.lower() != "hal":
-        return False
-    return awareness == LeapAwareness.DEDUCED
-
-
 def build_action_mask(
     *,
     role: str,

@@ -64,8 +64,6 @@ class Referee:
             return CARDIAC_DECAY**(ttd/60)
         def referee_modifier(n):
             return max(REFEREE_FLOOR, REFEREE_DECAY**n)
-        # def clamp(num, min_value, max_value):
-        #     return max(min(num, max_value), min_value)
         death_pr = death_curve(death_duration) * cardiac_modifier(player.ttd) * referee_modifier(self.cprs_performed) * player.physicality
 
         return 0.0 if death_duration >= 300 else death_pr

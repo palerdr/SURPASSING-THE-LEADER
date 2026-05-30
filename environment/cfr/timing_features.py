@@ -63,7 +63,9 @@ def is_active_lsr(game) -> bool:
 
 
 def is_leap_window(game_clock: float) -> bool:
-    return LS_WINDOW_START <= game_clock < LS_WINDOW_END
+    # Inclusive of LS_WINDOW_END to match the authoritative engine rule
+    # (Game.get_turn_duration treats game_clock == LS_WINDOW_END as a leap turn).
+    return LS_WINDOW_START <= game_clock <= LS_WINDOW_END
 
 
 def rounds_until_leap_window(game) -> int:

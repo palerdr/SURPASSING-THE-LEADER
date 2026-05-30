@@ -1,0 +1,45 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "LaTeX: build whitepaper",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "New-Item -ItemType Directory -Force -Path '${workspaceFolder}\\docs\\whitepaper\\build' | Out-Null; & '${workspaceFolder}\\.tools\\tectonic\\tectonic.exe' --keep-logs --synctex --outdir '${workspaceFolder}\\docs\\whitepaper\\build' '${workspaceFolder}\\docs\\whitepaper\\stl_solver_whitepaper.tex'"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Python: pytest",
+            "type": "shell",
+            "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "args": [
+                "-m",
+                "pytest",
+                "tests"
+            ],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Python: quick solver tests",
+            "type": "shell",
+            "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "args": [
+                "-m",
+                "pytest",
+                "tests/test_cfr_rigorous_exact.py",
+                "tests/test_cfr_mcts.py",
+                "tests/test_bootstrap_loop.py",
+                "tests/test_train_value_net.py"
+            ],
+            "group": "test",
+            "problemMatcher": []
+        }
+    ]
+}

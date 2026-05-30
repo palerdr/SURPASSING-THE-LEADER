@@ -6,6 +6,7 @@ __pycache__/
 # Virtualenvs / local tooling
 .venv/
 .python-version
+.tools/
 
 # Test / tool caches
 .pytest_cache/
@@ -21,6 +22,7 @@ demos/
 docs/audits/
 docs/.canon_text/
 docs/canon/
+docs/whitepaper/build/
 
 # Training artifacts
 models/checkpoints/

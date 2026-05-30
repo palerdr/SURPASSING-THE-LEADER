@@ -1,0 +1,691 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{microtype}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+\setlength{\emergencystretch}{3em}
+
+\newtheorem{assumption}{Assumption}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\stl}{\textsc{STL}}
+\newcommand{\hal}{\mathrm{Hal}}
+\newcommand{\baku}{\mathrm{Baku}}
+\newcommand{\states}{\mathcal{S}}
+\newcommand{\actions}{\mathcal{A}}
+\newcommand{\expect}{\mathbb{E}}
+\newcommand{\prob}{\mathbb{P}}
+\newcommand{\valuefn}{V}
+\newcommand{\policy}{\pi}
+
+\title{A Search-and-Learning Solver for the \stl{} Handkerchief Game}
+\author{Repository white-paper draft}
+\date{May 28, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This draft documents the current solver architecture in the repository and
+states the mathematical contract that must hold for the solver to be called
+defensible. The implemented system models the handkerchief game as a
+finite, stochastic, zero-sum, perfect-information game with simultaneous
+move matrix games at each half-round. The code currently contains an
+engine-derived exact finite-horizon minimax solver, a selective exact-second
+search layer, tablebase pins, matrix-game Monte Carlo tree search (MCTS), a
+neural value-and-policy network, supervised target generation, an
+AlphaZero-style bootstrap loop, calibration gates, tournament evaluation,
+and audit-pack checks. The latest documented run, Phase G iteration 3,
+reaches held-out overall MSE 0.05934, a 45 percent improvement over the
+pre-Phase-G baseline. The remaining rigor gap is not the existence of a
+formal game value, but the approximation chain: finite horizon, selective
+candidate sets, sampled MCTS values, and learned value-network error.
+\end{abstract}
+
+\section{Scope and Repository Snapshot}
+
+The repository has shifted from a playable baseline toward a
+Stockfish/AlphaZero-style solver. The central design choice is to keep the
+canonical game in a fixed public-state legality regime rather than introduce
+Bayesian type inference. In the current code, the strategic asymmetry is
+encoded directly in legality: Baku may drop on second 61 during the leap
+window, but Hal never may drop or check on second 61. This makes the solver
+a perfect-information stochastic-game solver with simultaneous actions, not
+a poker-style imperfect-information solver.
+
+The last few weeks of commits can be summarized as follows.
+
+\begin{itemize}[leftmargin=*]
+  \item April 28 built the rigorous core: exact public states, LP minimax,
+  engine-derived chance expansion, a firewall separating rigorous CFR code
+  from shaping and bucketed abstractions, tablebase targets, selective
+  exact-second search, and MCTS slices through selection, expansion, backup,
+  search, transposition, and principal-line diagnostics.
+  \item April 29--30 added the first value-target generation, the training
+  harness, calibration metrics, tournament evaluation, subgame resolve, and
+  the first bootstrap-loop API.
+  \item May 18 hardened the bootstrap loop into a defensibility gate:
+  stronger evaluator interfaces, audit packs, subgame-resolve hooks,
+  source-weighted training, held-out calibration, and tests for legality,
+  self-play, tournaments, and target generation.
+  \item May 19--21 fixed corpus death-axis handling and CPR scaling, added
+  corpus diagnostics, and expanded the pinned tablebase registry.
+  \item May 24 added per-source calibration thresholds, a hidden-width
+  architecture knob, a bounded LRU cache for exact LP recursion, and the
+  Phase G wider LP-corpus script.
+  \item May 26--27 recorded the Phase G + I-1 milestone and two subsequent
+  bootstrap iterations. Iteration 3 converged at held-out MSE 0.05934.
+\end{itemize}
+
+The most important implementation files are:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Path & Role \\
+\midrule
+\path{src/Game.py} & Authoritative half-round state machine \\
+\path{src/Player.py}, \path{src/Referee.py} & Player and survival dynamics \\
+\path{environment/legal_actions.py} & Actor-aware action legality \\
+\path{environment/cfr/exact.py} & Exact public state, LP minimax, finite-horizon recursion \\
+\path{environment/cfr/selective.py} & Candidate generation and selective minimax search \\
+\path{environment/cfr/mcts.py} & Matrix-game-at-node MCTS \\
+\path{environment/cfr/evaluator.py} & Terminal, tablebase, and value-net evaluators \\
+\path{environment/cfr/tablebase.py} & Pinned tactical registry \\
+\path{training/value_targets.py} & Exact and MCTS target generation \\
+\path{training/train_value_net.py} & Supervised value/policy training \\
+\path{training/bootstrap_loop.py} & Generation orchestration and hard gates \\
+\path{training/calibration.py} & Held-out MSE, Brier score, reliability bins \\
+\path{training/audit_pack.py} & Tactical audit records and drift gates \\
+\path{hal/value_net.py} & Current neural architecture and 23-feature extractor \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Canonical Game Model}
+
+\subsection{Public State}
+
+Let the two players be \(i \in \{\hal,\baku\}\). A public state
+\(s \in \states\) is represented in the engine by the tuple
+\[
+s =
+  (x_\hal,x_\baku,\tau_\hal,\tau_\baku,d_\hal,d_\baku,
+   a_\hal,a_\baku,k,t,h,r,f,g,w),
+\]
+where \(x_i\) is the current cylinder time, \(\tau_i\) is total prior time
+dead, \(d_i\) is the number of prior deaths, \(a_i\) records life status,
+\(k\) is referee CPR count, \(t\) is game-clock seconds since 8:00:00 AM,
+\(h \in \{1,2\}\) is the half-round, \(r\) is the round index, \(f\) is the
+first dropper, \(g\) records terminal status, and \(w\) records the winner
+when terminal. In code this is \path{environment/cfr/exact.py}'s
+\path{ExactPublicState}.
+
+The canonical opening state uses \(t=720\), i.e. 8:12:00 AM. The leap
+window is \([3540,3600]\) in engine seconds, corresponding to the 8:59
+minute and the inserted second 8:59:60.
+
+\subsection{Half-Round Actions}
+
+Each half-round has a dropper \(D(s)\) and checker \(C(s)\). The action is a
+simultaneous pair
+\[
+a=(d,c), \qquad d \in A_D(s), \quad c \in A_C(s),
+\]
+where \(d\) is the drop second and \(c\) is the check second. Normal turns
+have duration 60. Leap-window turns have duration 61.
+
+The current actor-aware legality rule is:
+\[
+\begin{aligned}
+  A_D(s) &= \{1,\ldots,60\} && \text{if } D(s)=\hal,\\
+  A_D(s) &= \{1,\ldots,T(s)\} && \text{if } D(s)=\baku,\\
+  A_C(s) &= \{1,\ldots,60\} && \text{for both players,}
+\end{aligned}
+\]
+where \(T(s)=61\) only in the leap window and \(T(s)=60\) otherwise. This is
+the decisive model reduction: Hal cannot act on second 61, and Baku's only
+leap-second privilege is as dropper.
+
+\subsection{Deterministic Resolution Before Death Chance}
+
+For action \(a=(d,c)\), the checker succeeds iff \(c \ge d\). If the checker
+succeeds, squandered time is
+\[
+\Delta x_C = \max(1,c-d).
+\]
+If the check fails, the checker receives the fixed failed-check penalty
+\[
+\Delta x_C = 60.
+\]
+If the checker cylinder reaches or exceeds 300 seconds, or if the checker
+failed, the checker enters a death episode. The death duration is
+\[
+z = \min(x_C+\Delta x_C,300).
+\]
+If no death occurs, the transition is deterministic. If a death occurs, the
+transition branches on survival.
+
+\subsection{Survival Probability}
+
+The referee computes survival probability as
+\[
+p_{\mathrm{survive}}(i,z,s)
+ =
+\left[1-\left(\frac{z}{300}\right)^3\right]_+
+\cdot 0.85^{\tau_i/60}
+\cdot \max(0.4,0.88^k)
+\cdot \rho_i,
+\]
+with \(\rho_\hal=1.0\) and \(\rho_\baku=0.94\). The engine returns
+probability zero at \(z \ge 300\). The chance branch is therefore
+\[
+\omega \in \{\mathrm{survive},\mathrm{die}\}, \qquad
+\prob(\omega=\mathrm{survive})=p_{\mathrm{survive}}.
+\]
+
+\subsection{Utility}
+
+All rigorous solver modules use terminal-only utility from Hal's
+perspective:
+\[
+u_\hal(s) =
+\begin{cases}
+  +1, & \text{Hal is the terminal winner},\\
+  -1, & \text{Baku is the terminal winner},\\
+  0, & \text{draw or neutral terminal state}.
+\end{cases}
+\]
+Nonterminal frontier states are not shaped in the exact solver. They are
+recorded as unresolved probability mass when the finite horizon is exhausted.
+
+\section{Game-Theoretic Foundation}
+
+\begin{assumption}[Fixed engine model]
+The Python engine is treated as the rules oracle. The solver is correct only
+relative to this engine's transition and legality functions.
+\end{assumption}
+
+\begin{definition}[Finite-horizon value]
+Let \(\valuefn_h(s)\) be Hal's value at state \(s\) with \(h\) half-rounds
+remaining in the exact recursion. If \(s\) is terminal, then
+\(\valuefn_h(s)=u_\hal(s)\). If \(h=0\) and \(s\) is nonterminal, then
+\(\valuefn_0(s)=0\) and the unresolved mass is 1.
+\end{definition}
+
+For nonterminal \(s\) and \(h>0\), form a Hal-payoff matrix \(M_h(s)\) over
+the legal exact seconds:
+\[
+M_h(s)_{d,c}
+ =
+\expect_{\omega \sim P(\cdot \mid s,d,c)}
+\left[
+  \valuefn_{h-1}(T(s,d,c,\omega))
+\right].
+\]
+If Hal is the dropper, the row player maximizes \(M_h\); if Hal is the
+checker, the signs are transposed so the row-player LP is still a maximin
+solve.
+
+The implemented row-player LP is the standard finite zero-sum matrix-game
+program:
+\[
+\begin{aligned}
+\max_{\sigma,v}\quad & v \\
+\mathrm{s.t.}\quad & \sum_i \sigma_i M_{ij} \ge v
+  \quad \forall j,\\
+& \sum_i \sigma_i = 1,\\
+& \sigma_i \ge 0.
+\end{aligned}
+\]
+This appears as \path{solve_minimax} in \path{environment/cfr/exact.py}.
+
+\begin{proposition}[Exact finite-horizon equilibrium value]
+For a fixed engine state \(s\), fixed horizon \(h\), and full legal action
+sets \(A_D(s),A_C(s)\), \path{solve_exact_finite_horizon} returns the value
+of the finite-horizon stochastic zero-sum game induced by the engine and the
+terminal-only utility.
+\end{proposition}
+
+\begin{proof}
+The base case is terminal utility or an explicit unresolved frontier value.
+For \(h>0\), every joint action is expanded through the engine. If death is
+possible, the two chance branches are weighted by the referee probability;
+otherwise the transition has probability one. The resulting \(M_h(s)\) is a
+finite zero-sum matrix game. By von Neumann's minimax theorem, the LP value
+equals the equilibrium value of that simultaneous move. Induction on \(h\)
+then gives the finite-horizon stochastic-game value.
+\end{proof}
+
+The proposition is intentionally narrow. It proves the exact finite-horizon
+solver, not the learned solver. The learned solver inherits strength only
+through approximation quality and validation.
+
+\section{Exact Core and Firewall}
+
+The rigorous namespace \path{environment/cfr/} is guarded by tests that
+prevent bucketed abstractions, reward shaping, observations, and route labels
+from leaking into exact search. This is important: once shaped reward or a
+bucket representative enters the exact core, the LP value is no longer a
+statement about the canonical engine game.
+
+The exact core currently provides:
+
+\begin{itemize}[leftmargin=*]
+  \item \path{ExactPublicState}: a full-precision public state key for cache
+  and tablebase comparisons.
+  \item \path{ExactGameSnapshot}: mutation-safe snapshot/restore around the
+  authoritative engine.
+  \item \path{enumerate_joint_actions}: full exact-second action enumeration.
+  \item \path{expand_joint_action}: engine-derived chance expansion.
+  \item \path{solve_exact_finite_horizon}: recursive exact minimax with
+  unresolved frontier accounting.
+  \item A bounded LRU cache keyed by public state, horizon, and perspective.
+\end{itemize}
+
+The latest cache change matters operationally. Phase G's wide LP grid would
+otherwise duplicate deep recursion caches across worker processes and exhaust
+memory. The current default cap is 30,000 entries per worker, controlled by
+\path{STL_SOLVE_CACHE_MAXSIZE}.
+
+\section{Selective Search and Tablebase}
+
+Full-width exact search is expensive: normal turns have up to \(60 \times 60\)
+joint actions and leap turns can include a 61st drop action for Baku. At
+horizon 3 the tree becomes too large for broad corpus generation.
+
+\path{environment/cfr/selective.py} defines a candidate generator that keeps:
+\[
+\{1,2,58,59,60,61\}
+\]
+where legal, plus local diagonals, safe-check boundaries, and overflow
+threshold boundaries. The central candidate quantities are
+\[
+\mathrm{overflow}(x_C)=300-\lfloor x_C \rfloor
+\]
+and
+\[
+\mathrm{safe}(x_C)=299-\lfloor x_C \rfloor.
+\]
+Selective search solves the same minimax recursion over this reduced
+candidate set and can audit against full-width exact search on small states.
+
+The tablebase registry in \path{environment/cfr/tablebase.py} stores tactical
+scenarios with pinned expected values or relational properties. Pinned entries
+are exact ground-truth anchors for training and calibration. Phase F expanded
+this registry from a tiny set to a broader suite of forced-overflow, clock,
+leap-window, fatigue, TTD, asymmetric-death, and double-overflow cases.
+
+\section{Matrix-Game MCTS}
+
+The MCTS layer is not a vanilla single-agent UCT tree. Each node is itself a
+simultaneous-move matrix game. A node stores candidate drop seconds, candidate
+check seconds, a value matrix \(Q\), visit counts \(N\), a prior matrix \(P\),
+and transposition links.
+
+At selection time it forms
+\[
+\widetilde{Q}_{ij}
+ =
+Q_{ij}
+ +
+c_{\mathrm{puct}}
+P_{ij}
+\frac{\sqrt{N_{\mathrm{node}}}}{1+N_{ij}},
+\]
+then solves the matrix game over \(\widetilde{Q}\) and samples a joint action
+from the resulting dropper/checker strategies. The engine is stepped into the
+child; if a death is possible, MCTS samples the survival branch. At an
+unexpanded nonterminal leaf, the supplied evaluator returns a
+Hal-perspective value and optional dropper/checker policy priors. Backup uses
+a running mean and does not flip signs, because every value is already in
+Hal's perspective.
+
+The current MCTS implementation includes:
+
+\begin{itemize}[leftmargin=*]
+  \item evaluator-supplied policy priors over 61 dropper and 61 checker
+  seconds;
+  \item transposition reuse keyed by exact public state;
+  \item principal-line extraction via most-visited cells;
+  \item optional root subgame re-solving at critical states.
+\end{itemize}
+
+\section{Value Network}
+
+The current neural evaluator in \path{hal/value_net.py} uses 23 scalar
+features:
+normalized cylinders, total time dead, death counts, safe budgets, projected
+fail-survival probabilities, role bit, normalized clock, round/half
+features, LSR variation one-hot features, leap-turn bit, rounds until the
+leap window, referee CPR count, active LSR bit, and leap proximity.
+
+The network is:
+\[
+\phi_\theta(x)
+ =
+\mathrm{ReLU}(W_2 \mathrm{ReLU}(W_1x+b_1)+b_2),
+\]
+with a scalar value head
+\[
+\hat v_\theta(x)=\tanh(w_v^\top \phi_\theta(x)+b_v)
+\]
+and a policy head with 122 logits: 61 for dropper seconds and 61 for checker
+seconds. The historical default is hidden width 64. Phase I-1 uses hidden
+width 128, giving about 35.5K parameters, up from about 13.7K.
+
+Training minimizes source-weighted value MSE plus masked policy cross-entropy:
+\[
+\mathcal{L}(\theta)
+ =
+\frac{1}{n}
+\sum_{m=1}^n
+\alpha_{s_m}
+(\hat v_\theta(x_m)-y_m)^2
++
+\lambda
+\left[
+  H(\pi^D_m,\hat\pi^D_\theta)
+  +H(\pi^C_m,\hat\pi^C_\theta)
+\right],
+\]
+where illegal seconds are masked before the softmax. Source weights are used
+because terminal and tablebase anchors can be numerically rare but
+strategically decisive.
+
+\section{Target Generation and Bootstrap Loop}
+
+The repository no longer treats horizon-1 exact labels as sufficient.
+Horizon-1 labels are too often unresolved and therefore blind to leap-second
+routing. The current target hierarchy is:
+
+\begin{enumerate}[leftmargin=*]
+  \item terminal state: terminal utility, source \path{terminal};
+  \item pinned tablebase state: exact pin, source \path{tablebase};
+  \item LSR-significant state: exact horizon 3, source
+  \path{exact_horizon_3};
+  \item active-LSR or near-overflow state: exact horizon 2, source
+  \path{exact_horizon_2};
+  \item otherwise: excluded from the exact corpus and left to MCTS bootstrap.
+\end{enumerate}
+
+The AlphaZero-style loop is:
+
+\begin{enumerate}[leftmargin=*]
+  \item train a value/policy network on exact and tablebase anchors;
+  \item run MCTS using that network at leaves;
+  \item record root MCTS values and root policies as bootstrap labels;
+  \item merge exact anchors back in to prevent self-referential drift;
+  \item train the next network;
+  \item reject the generation if calibration gates fail.
+\end{enumerate}
+
+This follows the expert-iteration pattern used by AlphaZero and related
+search-and-learning systems: search improves the policy/value estimate, then
+the network distills search output into a cheaper evaluator.
+
+\section{Current Empirical Results}
+
+The latest documented chain is Phase G + I-1 through Phase G iteration 3.
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Milestone & Held-out overall MSE & Comment \\
+\midrule
+gen-2 v2 baseline & 0.10841 & Pre-Phase-G best \\
+gen-3 v2 & 0.132 & Plateau/regression \\
+Phase G + I-1 & 0.070 & Strict per-source gate passed \\
+Phase G iter 2 & 0.06000 & Policy-improvement signal remains \\
+Phase G iter 3 & 0.05934 & Converged under current data/architecture \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The Phase G LP corpus had 7,168 candidate states and emitted 4,812 records:
+2,938 exact-horizon-3, 1,871 exact-horizon-2, and 3 direct tablebase records.
+After anchors and bootstrap merge, iteration 2 and iteration 3 trained on
+6,357-record corpora with 864 MCTS-bootstrap labels plus exact/tablebase and
+terminal anchors.
+
+The strict held-out gate checks per-source MSE, tablebase MSE, required
+source presence, and unresolved probability. Phase G iteration 3 passed with:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Source & n & MSE \\
+\midrule
+terminal & 24 & 0.498 \\
+tablebase & 19 & 0.007 \\
+exact\_horizon\_2 & 128 & 0.012 \\
+exact\_horizon\_3 & 64 & 0.004 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This is strong evidence that the supervised loop is now data-limited under
+the current target distribution. It is not yet proof that the root game is
+solved.
+
+\section{Relationship to AlphaZero, CFR, and Poker Solvers}
+
+The architecture resembles AlphaZero in its search-distillation loop:
+MCTS guided by a neural value/policy network produces improved targets, and
+the next generation network learns those targets. The difference is that
+each \stl{} node is a simultaneous zero-sum matrix game rather than a
+single-player choice by the side to move.
+
+The architecture resembles CFR systems in its use of equilibrium values for
+local matrix games and its concern with exploitability, but the current core
+does not perform regret minimization over information sets. The namespace
+name \path{environment/cfr/} is therefore historical and partially
+aspirational. The rigorous exact solver is better described as finite-horizon
+stochastic minimax with LP solves at simultaneous-move nodes.
+
+DeepStack, Libratus, Pluribus, Deep CFR, and ReBeL solve harder
+imperfect-information poker settings by combining abstraction, regret
+minimization, depth-limited solving, and learned value functions. Those tools
+are relevant literature, but they are not required if the canonical \stl{}
+model remains fully public after the legality reduction. If future canon
+work reintroduces hidden memory or belief states, the correct next framework
+would be public-belief-state solving or CFR over information sets. Under the
+current repo contract, that would add complexity without improving the
+formal model being solved.
+
+\section{What Is Rigorous and What Is Approximate}
+
+The mathematically rigorous pieces are:
+
+\begin{itemize}[leftmargin=*]
+  \item the engine-derived transition model, assuming the engine is the
+  accepted rule oracle;
+  \item the exact finite-horizon full-width solver;
+  \item LP minimax at each simultaneous move;
+  \item terminal-only utility in the rigorous core;
+  \item pinned tablebase scenarios whose expected values are exact by
+  construction.
+\end{itemize}
+
+The approximate pieces are:
+
+\begin{itemize}[leftmargin=*]
+  \item finite-horizon cutoff and unresolved mass;
+  \item selective candidate generation;
+  \item MCTS sampling variance and finite iteration budget;
+  \item learned value-network approximation error;
+  \item policy-head targets distilled from exact or MCTS root strategies;
+  \item empirical calibration gates, which measure but do not prove global
+  exploitability.
+\end{itemize}
+
+The most important distinction for the white paper is this: a low held-out
+MSE says the evaluator predicts the current target corpus well. It does not
+by itself bound exploitability across the full game tree. To make the solver
+paper-grade, the next version should add explicit exploitability and
+candidate-set regret audits on increasingly broad state samples.
+
+\section{Best Next Steps}
+
+\subsection{1. Expand the Held-Out and Training Anchors}
+
+Phase G iteration 3 appears to have reached a data ceiling. The highest-value
+next step is Phase F-2: expand the tablebase and held-out registry beyond the
+current forced-overflow-heavy family. Add pins around:
+
+\begin{itemize}[leftmargin=*]
+  \item non-299 near-overflow thresholds;
+  \item non-leap midgame states where the correct play routes into LSR
+  variation 2 several rounds later;
+  \item asymmetric TTD/death-count states that are not already collapsed by
+  the 23-feature representation;
+  \item role-swapped leap-window states;
+  \item states where Baku's second-61 drop is legal but not trivially winning.
+\end{itemize}
+
+Do this before increasing model size again. The hidden-128 run already showed
+that larger capacity without enough diverse data overfits.
+
+\subsection{2. Add High-Variance MCTS Reanalysis}
+
+Phase H should select states where MCTS value has high seed variance, high
+policy entropy, or disagreement with exact/selective labels, then re-run
+those states at higher iteration counts. This is a better use of compute than
+uniformly enlarging the bootstrap grid.
+
+\subsection{3. Quantify Exploitability}
+
+The repo has diagnostics for exact matrix games, but the white paper needs a
+headline exploitability story for the learned agent. Add:
+
+\begin{itemize}[leftmargin=*]
+  \item exact best-response gaps on small full-width subgames;
+  \item selective-vs-full-width candidate regret on audited states;
+  \item MCTS seed confidence intervals at fixed roots;
+  \item value error stratified by state feature axes, not only source class.
+\end{itemize}
+
+\subsection{4. Promote Policy Validation}
+
+The value head is currently better justified than the policy head. Add policy
+metrics:
+
+\begin{itemize}[leftmargin=*]
+  \item root-action KL against exact/selective strategies on held-out states;
+  \item illegal-mass checks after masking;
+  \item top-action agreement where the exact equilibrium has low entropy;
+  \item entropy calibration for mixed strategies.
+\end{itemize}
+
+\subsection{5. Run Canonical Principal-Line Validation}
+
+\path{scripts/validate_against_manga.py} currently supports the intended
+validation path, but its default evaluator is still the terminal-only
+placeholder. The next useful milestone is to load
+\path{checkpoints/gen_phaseG_iter3/best.pt}, run the canonical R1T1-to-R9T2
+scenario against \path{BakuLSREngineeringTeacher}, and report the principal
+line, root values, and deviations from the documented canonical strategy.
+
+\subsection{6. Decide Whether This Is a Solver or a Strong Agent}
+
+For a paper, terminology matters. The current system is defensibly a
+calibrated search-and-learning agent with exact local solvers. It is not yet
+a full-game solved equilibrium strategy unless the paper can bound
+exploitability over the relevant starting distribution. The next writing
+standard should be:
+
+\begin{itemize}[leftmargin=*]
+  \item call exact finite-horizon outputs ``solves'';
+  \item call Phase G iter 3 a ``calibrated evaluator'';
+  \item call MCTS plus evaluator a ``search policy'';
+  \item reserve ``solver'' for the packaged system only after exploitability
+  and candidate-regret bounds are included.
+\end{itemize}
+
+\section{Conclusion}
+
+The repository now has the right skeleton for a rigorous solver paper:
+canonical rules, a formal public-state model, engine-derived stochastic
+transitions, exact finite-horizon minimax, tablebase pins, matrix-game MCTS,
+value/policy distillation, calibration gates, and reproducible scripts. The
+main scientific work remaining is to turn empirical calibration into a
+stronger approximation argument: broader anchors, high-variance reanalysis,
+explicit exploitability estimates, and principal-line validation on the
+canonical scenario.
+
+\begin{thebibliography}{99}
+
+\bibitem{vonneumann1928}
+John von Neumann.
+\newblock Zur Theorie der Gesellschaftsspiele.
+\newblock \emph{Mathematische Annalen}, 100:295--320, 1928.
+\newblock \url{https://doi.org/10.1007/BF01448847}
+
+\bibitem{shapley1953}
+Lloyd S. Shapley.
+\newblock Stochastic games.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 39(10):1095--1100, 1953.
+\newblock \url{https://doi.org/10.1073/pnas.39.10.1095}
+
+\bibitem{zinkevich2007}
+Martin Zinkevich, Michael Johanson, Michael Bowling, and Carmelo Piccione.
+\newblock Regret minimization in games with incomplete information.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2007.
+\newblock \url{https://papers.nips.cc/paper_files/paper/2007/hash/08d98638c6fcd194a4b1e6992063e944-Abstract.html}
+
+\bibitem{browne2012}
+Cameron B. Browne, Edward Powley, Daniel Whitehouse, Simon M. Lucas, Peter I. Cowling, Philipp Rohlfshagen, Stephen Tavener, Diego Perez, Spyridon Samothrakis, and Simon Colton.
+\newblock A survey of Monte Carlo tree search methods.
+\newblock \emph{IEEE Transactions on Computational Intelligence and AI in Games}, 4(1):1--43, 2012.
+\newblock \url{https://doi.org/10.1109/TCIAIG.2012.2186810}
+
+\bibitem{deepstack2017}
+Matej Moravcik, Martin Schmid, Neil Burch, Viliam Lisy, Dustin Morrill, Nolan Bard, Trevor Davis, Kevin Waugh, Michael Johanson, and Michael Bowling.
+\newblock DeepStack: Expert-level artificial intelligence in heads-up no-limit poker.
+\newblock \emph{Science}, 356(6337):508--513, 2017.
+\newblock \url{https://doi.org/10.1126/science.aam6960}
+
+\bibitem{alphazero2018}
+David Silver, Thomas Hubert, Julian Schrittwieser, Ioannis Antonoglou, Matthew Lai, Arthur Guez, Marc Lanctot, Laurent Sifre, Dharshan Kumaran, Thore Graepel, Timothy Lillicrap, Karen Simonyan, and Demis Hassabis.
+\newblock A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play.
+\newblock \emph{Science}, 362(6419):1140--1144, 2018.
+\newblock \url{https://doi.org/10.1126/science.aar6404}
+
+\bibitem{libratus2018}
+Noam Brown and Tuomas Sandholm.
+\newblock Superhuman AI for heads-up no-limit poker: Libratus beats top professionals.
+\newblock \emph{Science}, 359(6374):418--424, 2018.
+\newblock \url{https://doi.org/10.1126/science.aao1733}
+
+\bibitem{pluribus2019}
+Noam Brown and Tuomas Sandholm.
+\newblock Superhuman AI for multiplayer poker.
+\newblock \emph{Science}, 365(6456):885--890, 2019.
+\newblock \url{https://doi.org/10.1126/science.aay2400}
+
+\bibitem{deepcfr2019}
+Noam Brown, Adam Lerer, Sam Gross, and Tuomas Sandholm.
+\newblock Deep counterfactual regret minimization.
+\newblock \emph{Proceedings of the 36th International Conference on Machine Learning}, 2019.
+\newblock \url{https://proceedings.mlr.press/v97/brown19b.html}
+
+\bibitem{rebel2020}
+Noam Brown, Anton Bakhtin, Adam Lerer, and Qucheng Gong.
+\newblock Combining deep reinforcement learning and search for imperfect-information games.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2020.
+\newblock \url{https://proceedings.neurips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html}
+
+\end{thebibliography}
+
+\end{document}

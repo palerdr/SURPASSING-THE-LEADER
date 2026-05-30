@@ -525,14 +525,19 @@ def solve_exact_finite_horizon(
         hal_payoff[i, j] = breakdown.value
         breakdowns[(i, j)] = breakdown
 
-    row_payoff = hal_payoff if hal_is_dropper else -hal_payoff.T
-    row_strategy, row_value = solve_minimax(row_payoff)
+    # Place the maximizing player on the LP rows. ``hal_payoff`` is Hal-perspective
+    # with rows=drop, cols=check. The dropper maximizes Hal value; the checker, as
+    # the opponent, maximizes -Hal. When Hal is the checker we solve Hal over
+    # ``hal_payoff.T`` (Hal still maximizing) and give Baku the dropper LP over
+    # ``-hal_payoff``. Feeding the un-negated matrix to the off-side role (the prior
+    # bug) returned the wrong player's best response AND a wrong value_for_hal
+    # whenever Hal was the checker.
     if hal_is_dropper:
-        dropper_strategy = row_strategy
+        dropper_strategy, value_for_hal = solve_minimax(hal_payoff)
         checker_strategy, _ = solve_minimax((-hal_payoff).T)
     else:
-        checker_strategy = row_strategy
-        dropper_strategy, _ = solve_minimax(hal_payoff)
+        checker_strategy, value_for_hal = solve_minimax(hal_payoff.T)
+        dropper_strategy, _ = solve_minimax(-hal_payoff)
 
     parts: list[tuple[float, UtilityBreakdown]] = []
     for i, dp in enumerate(dropper_strategy):
@@ -544,7 +549,7 @@ def solve_exact_finite_horizon(
                 parts.append((weight, breakdowns[(i, j)]))
 
     breakdown = _weighted_breakdown(parts)
-    value = float(row_value if hal_is_dropper else -row_value)
+    value = float(value_for_hal)
     result = ExactSolveResult(
         dropper_strategy=dropper_strategy,
         checker_strategy=checker_strategy,

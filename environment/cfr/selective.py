@@ -250,14 +250,17 @@ def selective_solve(
             hal_payoff[i, j] = breakdown.value
             breakdowns[(i, j)] = breakdown
 
-    row_payoff = hal_payoff if hal_is_dropper else -hal_payoff.T
-    row_strategy, row_value = solve_minimax(row_payoff)
+    # See exact.py: the maximizing player must sit on the LP rows. Hal=dropper
+    # maximizes hal_payoff; Hal=checker maximizes hal_payoff.T; Baku takes the
+    # negated matrix for whichever role he plays. The prior code reused the
+    # un-negated matrix for the off-side role, returning a wrong strategy and a
+    # wrong value_for_hal whenever Hal was the checker.
     if hal_is_dropper:
-        dropper_strategy = row_strategy
+        dropper_strategy, value_for_hal = solve_minimax(hal_payoff)
         checker_strategy, _ = solve_minimax((-hal_payoff).T)
     else:
-        checker_strategy = row_strategy
-        dropper_strategy, _ = solve_minimax(hal_payoff)
+        checker_strategy, value_for_hal = solve_minimax(hal_payoff.T)
+        dropper_strategy, _ = solve_minimax(-hal_payoff)
 
     parts: list[tuple[float, UtilityBreakdown]] = []
     for i, dp in enumerate(dropper_strategy):
@@ -269,7 +272,7 @@ def selective_solve(
                 parts.append((weight, breakdowns[(i, j)]))
 
     breakdown = _weighted_breakdown(parts)
-    value = float(row_value if hal_is_dropper else -row_value)
+    value = float(value_for_hal)
     return SelectiveSearchResult(
         value_for_hal=value,
         breakdown=breakdown,
