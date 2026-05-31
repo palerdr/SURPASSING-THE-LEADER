@@ -111,17 +111,22 @@ def _excluded_game():
 
 
 def test_pinned_table_contains_overflow_scenarios():
-    """Phase F expanded the pinned table from 2 → 19 forced-terminal entries.
+    """Phase F expanded the pinned table to 19 forced-terminal ±1 entries;
+    Phase F-2 then added interior-valued pins (|value| < 1).
 
-    All pin to either +1.0 (Hal-win) or -1.0 (Baku-win); the table must
-    contain both signs and at least the original two opening overflows.
+    The table must contain BOTH boundary signs (±1, the forced overflows) AND at
+    least one genuinely interior value — the all-±1 invariant the old assertion
+    encoded is exactly what F-2 set out to break.
     """
     table = _build_pinned_table()
-    assert len(table) >= 19, f"expected >= 19 pinned entries after Phase F, got {len(table)}"
-    assert 1.0 in table.values()
-    assert -1.0 in table.values()
-    # Exactly two values across the entire pinned table (every entry is ±1).
-    assert set(table.values()) == {1.0, -1.0}
+    values = set(table.values())
+    assert len(table) >= 22, f"expected >= 22 pinned entries after Phase F-2, got {len(table)}"
+    # Boundary pins: both signs present.
+    assert 1.0 in values
+    assert -1.0 in values
+    # Phase F-2: at least one genuinely interior pinned value (no longer all ±1).
+    interior = [v for v in values if abs(v) < 1.0 - 1e-9]
+    assert interior, "no interior-valued pins in the table; Phase F-2 regressed"
 
 
 # ── Gate predicates (sanity) ──────────────────────────────────────────────
@@ -498,6 +503,36 @@ def test_source_breakdown_keys_are_valid_sources():
     breakdown = source_breakdown(targets)
     for source in breakdown.keys():
         assert source in VALID_SOURCES
+
+
+# ── Phase F-2: held-out-only interior-pin source split ─────────────────────
+
+
+def test_holdout_tablebase_targets_split_interior_into_separate_source():
+    """On the held-out path, interior-valued pins are labeled
+    SOURCE_TABLEBASE_INTERIOR so the calibration gate scores them as a distinct
+    class; the ±1 boundary pins stay SOURCE_TABLEBASE."""
+    targets = vt._generate_tablebase_targets(None, split_interior=True)
+    by_source: dict[str, list] = {}
+    for t in targets:
+        by_source.setdefault(t.source, []).append(t)
+
+    assert vt.SOURCE_TABLEBASE_INTERIOR in by_source, "interior pins were not split out"
+    interior = by_source[vt.SOURCE_TABLEBASE_INTERIOR]
+    assert len(interior) == 3
+    assert all(abs(t.value) < 1.0 for t in interior), "an interior pin sits on the ±1 boundary"
+    # Boundary pins remain and are all exactly ±1.
+    boundary = by_source[SOURCE_TABLEBASE]
+    assert boundary
+    assert all(abs(t.value) == pytest.approx(1.0) for t in boundary)
+
+
+def test_training_tablebase_targets_keep_interior_as_tablebase():
+    """The split is held-out-ONLY. Without ``split_interior`` the interior pins
+    stay SOURCE_TABLEBASE, so the Phase-G training corpus shape is unchanged."""
+    targets = vt._generate_tablebase_targets(None)
+    assert all(t.source != vt.SOURCE_TABLEBASE_INTERIOR for t in targets)
+    assert any(t.source == SOURCE_TABLEBASE for t in targets)
 
 
 def test_generate_targets_parallel_matches_serial():

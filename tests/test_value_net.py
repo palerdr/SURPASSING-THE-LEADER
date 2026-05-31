@@ -106,6 +106,27 @@ def test_value_net_hidden_dim_128_has_expected_param_count_and_shapes():
     assert checker_logits.shape == (2, 61)
 
 
+def test_value_net_hidden_dim_192_under_raised_guard():
+    """Phase I-2: hidden_dim=192 widens the trunk to ~65.4K params, exceeding
+    the original 50K guard. The guard is raised to 70K — justified because the
+    F-2-expanded ruler + interior anchors and the larger exact corpus give the
+    bigger net enough signal to generalize rather than memorize (the
+    bias-vs-overfit transition the Phase-9 plan predicted). Forward shapes are
+    identical to hidden=64; only capacity grows.
+    """
+    model = ValueNet(hidden_dim=192)
+    total = sum(p.numel() for p in model.parameters())
+    assert 60_000 < total < 70_000, (
+        f"hidden=192 should give ~65.4K params (under the raised 70K guard); got {total}"
+    )
+
+    x = torch.zeros(2, FEATURE_DIM)
+    value, dropper_logits, checker_logits = model(x)
+    assert value.shape == (2, 1)
+    assert dropper_logits.shape == (2, 61)
+    assert checker_logits.shape == (2, 61)
+
+
 def test_value_net_checkpoint_round_trip_at_hidden_128(tmp_path):
     """Saving + loading a hidden=128 checkpoint must round-trip via
     ``load_checkpoint``'s auto-inferred hidden_dim. Guards the inference

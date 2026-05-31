@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.Constants import PHYSICALITY_BAKU, PHYSICALITY_HAL
+from src.Constants import CYLINDER_MAX, FAILED_CHECK_PENALTY, PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
 from src.Player import Player
 from src.Referee import Referee
@@ -557,4 +557,130 @@ def both_overflow_hal_dies_first() -> TacticalScenario:
         expected_note="Symmetric cylinders, half=2 → Hal checker → Hal dies first.",
         expected_value=-1.0,
         tags=("near_overflow", "forced_terminal", "baku_win", "double_overflow"),
+    )
+
+
+# ── Phase F-2: interior-valued pins (survivable forced fail) ───────────────
+# The Phase-8/F pins above are ALL ±1.0 forced-overflow terminals, so the
+# pinned ruler only constrains the BOUNDARY of [-1, 1]. The pins below constrain
+# the INTERIOR.
+#
+# Construction (leap-window forced fail on Hal):
+#   In the leap-second window Baku (dropper) may legally drop at 61 while Hal
+#   (checker) is capped at 60 (environment/legal_actions.py: Hal may never check
+#   61). So Baku drop=61 forces Hal to fail on EVERY check — a single death of
+#   duration hal_cylinder + FAILED_CHECK_PENALTY. Chosen < CYLINDER_MAX so the
+#   referee roll is survivable (0 < p < 1):
+#       die  (prob 1-p): Hal permanently dies                      → Baku win (-1)
+#       live (prob p)  : Hal revived → next round Baku is the checker at cyl=299,
+#                        a forced overflow → Baku permanent death → Hal win (+1)
+#   Both branches terminate within 2 half-rounds (drop=61 is strictly dominant
+#   for Baku, since any drop ≤ 60 lets Hal check safely and reach the +1
+#   continuation), so unresolved_probability == 0 and the exact value is 2p-1.
+#
+# The expected_value is derived from the engine's OWN survival formula
+# (Referee.compute_survival_probability) — never read back from
+# solve_exact_finite_horizon — so verify_pinned_value stays a genuine
+# cross-check of the solver rather than a tautology.
+#
+# This forced-fail lever is leap-window- and Hal-checker-only: outside the leap
+# window no player can force the opponent to fail, and Hal can never drop 61, so
+# there is deliberately no Baku-checker mirror. That asymmetry IS the structural
+# point of the leap second.
+
+_INTERIOR_FAIL_HAL_CYLINDER: float = 120.0
+
+
+def _survivable_fail_value(hal_cylinder: float, cprs_performed: int) -> float:
+    """Exact Hal-perspective value (2p-1) of a leap-window forced-fail-on-Hal pin.
+
+    Derived independently of the solver: a forced fail injects
+    ``hal_cylinder + FAILED_CHECK_PENALTY`` (< CYLINDER_MAX by construction),
+    survived with probability ``p`` from the engine's survival curve; the two
+    terminal branches are +1 (survive → Baku forced overflow next round) and -1
+    (die). Hence 2p-1.
+    """
+    death_duration = hal_cylinder + FAILED_CHECK_PENALTY
+    if death_duration >= CYLINDER_MAX:
+        raise ValueError(
+            f"hal_cylinder={hal_cylinder} gives death_duration {death_duration} >= "
+            f"{CYLINDER_MAX}: the forced fail would be unsurvivable (p=0) and the pin "
+            "would collapse to the ±1 boundary, defeating its interior purpose."
+        )
+    referee = Referee(cprs_performed=cprs_performed)
+    dying_hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
+    p = referee.compute_survival_probability(dying_hal, death_duration=death_duration)
+    return 2.0 * p - 1.0
+
+
+def _interior_fail_game(hal_cylinder: float, cprs_performed: int) -> Game:
+    """Leap-window half-2 state: Baku dropper (may use 61), Hal checker (capped 60)."""
+    game = _base_game(clock=3540.0, current_half=2)
+    game.player1.cylinder = hal_cylinder   # Hal is the checker this half-round
+    game.player2.cylinder = 299.0          # Baku is the checker NEXT round → forced overflow
+    game.referee.cprs_performed = cprs_performed
+    return game
+
+
+def forced_hal_fail_survivable_fresh() -> TacticalScenario:
+    """Interior pin: survivable forced fail on Hal, fresh referee → value 2p-1 > 0."""
+    game = _interior_fail_game(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=0)
+    return TacticalScenario(
+        name="forced_hal_fail_survivable_fresh",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note=(
+            "Leap-window Baku drop=61 forces Hal to fail every check (death_duration "
+            "180, survivable). Survive → Baku@299 overflow next round (Hal win); die → "
+            "Baku win. Exact interior value 2p-1 at fresh referee (p=0.784 → +0.568)."
+        ),
+        expected_value=_survivable_fail_value(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=0),
+        tags=("leap_window", "forced_fail", "interior_value", "survivable_death",
+              "hal_checker", "cpr_fatigue_pair"),
+    )
+
+
+def forced_hal_fail_survivable_fatigued() -> TacticalScenario:
+    """Interior pin: survivable forced fail on Hal, fatigued referee (cprs=10).
+
+    Monotone counterpart to ``forced_hal_fail_survivable_fresh``: more referee
+    fatigue lowers Hal's revival probability on the forced fail, lowering the
+    interior value (+0.568 fresh → -0.3728 fatigued).
+    """
+    game = _interior_fail_game(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=10)
+    return TacticalScenario(
+        name="forced_hal_fail_survivable_fatigued",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note=(
+            "Fatigued counterpart (cprs=10 → referee floor 0.4): p=0.3136 → value "
+            "-0.3728. Pairs with the fresh pin for the monotone fatigue invariant."
+        ),
+        expected_value=_survivable_fail_value(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=10),
+        tags=("leap_window", "forced_fail", "interior_value", "survivable_death",
+              "hal_checker", "cpr_fatigue_pair"),
+    )
+
+
+def forced_hal_fail_survivable_deep() -> TacticalScenario:
+    """Interior pin on the death-duration axis: Hal cyl=180 → death_duration 240.
+
+    p=0.488 → value -0.024, a near-balanced anchor at the center of [-1, 1] — the
+    region the all-±1 Phase-F ruler never constrained.
+    """
+    game = _interior_fail_game(180.0, cprs_performed=0)
+    return TacticalScenario(
+        name="forced_hal_fail_survivable_deep",
+        game=game,
+        config=ExactSearchConfig(),
+        half_round_horizon=2,
+        expected_note=(
+            "Death-duration axis: hal_cylinder=180 → death_duration 240 → p=0.488 → "
+            "value -0.024. Near-zero interior anchor at the center of the value range."
+        ),
+        expected_value=_survivable_fail_value(180.0, cprs_performed=0),
+        tags=("leap_window", "forced_fail", "interior_value", "survivable_death",
+              "hal_checker", "death_duration_axis"),
     )

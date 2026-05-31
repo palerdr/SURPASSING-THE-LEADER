@@ -496,6 +496,36 @@ def test_per_source_threshold_skips_sources_absent_from_report():
     enforce_calibration_gate(report, config)
 
 
+# ── Phase F-2: interior-tablebase gate (separate from the ±1 boundary class) ─
+
+
+def test_calibration_gate_raises_when_interior_tablebase_mse_above_threshold():
+    """The defining Phase F-2 gate behaviour: interior pins are scored as a
+    SEPARATE source, so a net that nails the 19 easy ±1 boundary pins but is
+    badly wrong on the 3 interior pins still fails. Folding them into the
+    boundary class would let 19 near-zero errors average-mask the interior."""
+    report = _make_clean_calibration_report(tablebase_interior=0.20)
+    config = BootstrapConfig(tablebase_interior_mse_threshold=0.05)
+
+    with pytest.raises(CalibrationGateError, match=r"tablebase_interior MSE"):
+        enforce_calibration_gate(report, config)
+
+
+def test_calibration_gate_passes_when_interior_tablebase_mse_within_threshold():
+    report = _make_clean_calibration_report(tablebase_interior=0.03)
+    # Below the 0.05 interior ceiling → no exception.
+    enforce_calibration_gate(report, BootstrapConfig(tablebase_interior_mse_threshold=0.05))
+
+
+def test_calibration_gate_backward_safe_when_interior_source_absent():
+    """Pre-F-2 held-out rulers have no tablebase_interior source. The interior
+    check must be skipped (not error), so existing gate runs keep working until
+    the ruler is regenerated to include the interior anchors."""
+    report = _make_clean_calibration_report()
+    assert "tablebase_interior" not in report.mse_per_source
+    enforce_calibration_gate(report, BootstrapConfig())  # must not raise
+
+
 def test_per_source_threshold_fires_on_first_offending_source():
     """If multiple per-source thresholds are violated, the gate must
     raise on the FIRST offender it encounters (deterministic dict

@@ -43,6 +43,9 @@ from .tactical_scenarios import (
     forced_hal_overflow_leap_window_open,
     forced_hal_overflow_mid_clock,
     forced_hal_overflow_pre_leap,
+    forced_hal_fail_survivable_deep,
+    forced_hal_fail_survivable_fatigued,
+    forced_hal_fail_survivable_fresh,
     forced_hal_overflow_with_baku_deaths,
     forced_hal_overflow_with_hal_deaths,
     hal_dropper_leap_window_asymmetry,
@@ -98,6 +101,10 @@ REGISTRY: dict[str, ScenarioFactory] = {
         # Double-overflow
         both_overflow_baku_dies_first,
         both_overflow_hal_dies_first,
+        # Phase F-2: interior-valued pins (survivable leap-window forced fail) ─
+        forced_hal_fail_survivable_fresh,
+        forced_hal_fail_survivable_fatigued,
+        forced_hal_fail_survivable_deep,
     )
 }
 

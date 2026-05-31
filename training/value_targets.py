@@ -56,17 +56,36 @@ from src.Referee import Referee
 
 SOURCE_TERMINAL = "terminal"
 SOURCE_TABLEBASE = "tablebase"
+# Phase F-2: interior-valued pins are scored as a SEPARATE held-out class so the
+# gate can't average-mask a badly-calibrated interior behind the 19 easy ±1
+# boundary pins. They still TRAIN under SOURCE_TABLEBASE (they are tablebase
+# pins) — the split is held-out-only, so the Phase-G training corpus is byte-for-
+# byte unchanged. See ``_generate_tablebase_targets(split_interior=...)``.
+SOURCE_TABLEBASE_INTERIOR = "tablebase_interior"
 SOURCE_EXACT_HORIZON_2 = "exact_horizon_2"
 SOURCE_EXACT_HORIZON_3 = "exact_horizon_3"
 SOURCE_MCTS_BOOTSTRAP = "mcts_bootstrap"
+# Phase H reanalysis: states the horizon-2/3 LP left unresolved (the rejected
+# pool) are re-solved at a deeper horizon. Those that now resolve exactly are
+# SOURCE_EXACT_HORIZON_4; those still unresolved even at the deeper exact horizon
+# fall back to a high-iter MCTS estimate (SOURCE_REANALYSIS_MCTS). Both are
+# ADDITIVE — Phase H never overwrites the Phase-G corpus.
+SOURCE_EXACT_HORIZON_4 = "exact_horizon_4"
+SOURCE_REANALYSIS_MCTS = "reanalysis_mcts"
 
 VALID_SOURCES = (
     SOURCE_TERMINAL,
     SOURCE_TABLEBASE,
+    SOURCE_TABLEBASE_INTERIOR,
     SOURCE_EXACT_HORIZON_2,
     SOURCE_EXACT_HORIZON_3,
+    SOURCE_EXACT_HORIZON_4,
+    SOURCE_REANALYSIS_MCTS,
     SOURCE_MCTS_BOOTSTRAP,
 )
+
+# Pins carrying this tag are the Phase F-2 interior-valued anchors.
+INTERIOR_PIN_TAG = "interior_value"
 
 
 # ── Gating thresholds ─────────────────────────────────────────────────────
@@ -254,6 +273,48 @@ def _save_rejected_pool(states: list[ExactPublicState], path: str | Path) -> Non
 def load_rejected_pool(path: str | Path) -> list[dict]:
     data = np.load(path, allow_pickle=False)
     return [json.loads(str(item)) for item in data["state_snapshots"]]
+
+
+def game_from_public_state(state: ExactPublicState | dict) -> Game:
+    """Reconstruct a Game from an ExactPublicState (or its JSON-dict form).
+
+    Inverse of ``exact_public_state`` / ``_save_rejected_pool``: rebuilds the
+    mutable Game so a rejected (high-``unresolved_probability``) pool entry can be
+    re-solved at a deeper horizon for Phase H reanalysis. Round-trips exactly —
+    ``exact_public_state(game_from_public_state(s)) == s`` — for every field the
+    public state carries (cylinder, ttd, deaths, alive, physicality, referee
+    CPRs, clock, half, round, first_dropper, and the terminal flags), so the
+    deeper solve sees the identical position the shallow solve rejected.
+    """
+    s = state if isinstance(state, dict) else asdict(state)
+
+    p1 = Player(name=s["p1_name"], physicality=s["p1_physicality"])
+    p1.cylinder = s["p1_cylinder"]
+    p1.ttd = s["p1_ttd"]
+    p1.deaths = s["p1_deaths"]
+    p1.alive = s["p1_alive"]
+
+    p2 = Player(name=s["p2_name"], physicality=s["p2_physicality"])
+    p2.cylinder = s["p2_cylinder"]
+    p2.ttd = s["p2_ttd"]
+    p2.deaths = s["p2_deaths"]
+    p2.alive = s["p2_alive"]
+
+    referee = Referee()
+    referee.cprs_performed = s["referee_cprs"]
+
+    by_name = {p1.name: p1, p2.name: p2}
+    first_dropper = by_name.get(s["first_dropper_name"]) if s["first_dropper_name"] else None
+
+    game = Game(player1=p1, player2=p2, referee=referee, first_dropper=first_dropper)
+    game.seed(0)
+    game.game_clock = s["game_clock"]
+    game.current_half = s["current_half"]
+    game.round_num = s["round_num"]
+    game.game_over = s["game_over"]
+    game.winner = by_name.get(s["winner_name"]) if s["winner_name"] else None
+    game.loser = by_name.get(s["loser_name"]) if s["loser_name"] else None
+    return game
 
 
 def _is_lsr_significant(game: Game) -> bool:
@@ -636,6 +697,8 @@ def _generate_terminal_targets(
 
 def _generate_tablebase_targets(
     config: ExactSearchConfig | None,
+    *,
+    split_interior: bool = False,
 ) -> list[ValueTarget]:
     """Materialize tablebase-pinned scenarios for the held-out corpus.
 
@@ -648,6 +711,14 @@ def _generate_tablebase_targets(
     a learning regression (catastrophic forgetting), not approximation
     error. The calibration gate's tablebase_mse_threshold (default 0.01)
     fires on this.
+
+    Args:
+        split_interior: When True (held-out path only), Phase F-2 interior
+            pins (tagged ``INTERIOR_PIN_TAG``) are labeled
+            ``SOURCE_TABLEBASE_INTERIOR`` instead of ``SOURCE_TABLEBASE`` so the
+            calibration gate scores them as a distinct class. The 19 all-±1
+            boundary pins otherwise average-mask a miscalibrated interior. The
+            training path leaves this False, so the training corpus is unchanged.
     """
     config = config or ExactSearchConfig()
     targets: list[ValueTarget] = []
@@ -657,11 +728,12 @@ def _generate_tablebase_targets(
             continue
         game = scenario.game
         drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
+        is_interior = split_interior and INTERIOR_PIN_TAG in scenario.tags
         targets.append(
             ValueTarget(
                 features=extract_features(game),
                 value=float(scenario.expected_value),
-                source=SOURCE_TABLEBASE,
+                source=SOURCE_TABLEBASE_INTERIOR if is_interior else SOURCE_TABLEBASE,
                 horizon=0,
                 dropper_dist=drop_dist,
                 checker_dist=check_dist,
@@ -710,7 +782,7 @@ def generate_holdout_targets(
         workers=workers,
     )
     terminal_targets = _generate_terminal_targets(config, HOLDOUT_TERMINAL_CONFIGS)
-    tablebase_targets = _generate_tablebase_targets(config)
+    tablebase_targets = _generate_tablebase_targets(config, split_interior=True)
     return lp_targets + terminal_targets + tablebase_targets
 
 

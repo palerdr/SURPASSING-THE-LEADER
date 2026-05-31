@@ -42,6 +42,7 @@ from training.value_targets import (
     SOURCE_EXACT_HORIZON_3,
     SOURCE_MCTS_BOOTSTRAP,
     SOURCE_TABLEBASE,
+    SOURCE_TABLEBASE_INTERIOR,
     SOURCE_TERMINAL,
     ValueTarget,
     generate_mcts_bootstrap_targets,
@@ -69,6 +70,12 @@ class BootstrapConfig:
     )
     per_source_mse_thresholds: dict[str, float] | None = None
     tablebase_mse_threshold: float = 0.01
+    # Phase F-2: interior-valued pins are gated separately from the ±1 boundary
+    # pins so a miscalibrated interior can't hide behind the easy boundary class.
+    # Looser than the boundary ceiling (0.01) because hitting an exact interior
+    # value like 0.568 is genuinely harder than saturating to ±1. Only fires when
+    # the held-out ruler actually contains the interior source (backward-safe).
+    tablebase_interior_mse_threshold: float = 0.05
     max_unresolved_per_source: float = 0.05
     run_audit_pack: bool = True
     audit_include_holdout: bool = True
@@ -110,6 +117,13 @@ def enforce_calibration_gate(report: CalibrationReport, config: BootstrapConfig)
     if tablebase_mse is not None and tablebase_mse > config.tablebase_mse_threshold:
         raise CalibrationGateError(
             f"tablebase MSE {tablebase_mse:.6f} exceeds threshold {config.tablebase_mse_threshold:.6f}"
+        )
+
+    interior_mse = report.mse_per_source.get(SOURCE_TABLEBASE_INTERIOR)
+    if interior_mse is not None and interior_mse > config.tablebase_interior_mse_threshold:
+        raise CalibrationGateError(
+            f"tablebase_interior MSE {interior_mse:.6f} exceeds threshold "
+            f"{config.tablebase_interior_mse_threshold:.6f}"
         )
 
     thresholds = config.per_source_mse_thresholds or {}

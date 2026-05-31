@@ -54,6 +54,26 @@ def test_train_runs_and_returns_train_result():
     assert len(result.train_history) == 3
 
 
+def test_train_hidden_dim_192_runs_end_to_end():
+    """Phase I-2: the widened net (hidden_dim=192, ~65.4K params) must train
+    through the real loop and produce a checkpoint that ``load_checkpoint``
+    auto-infers back to width 192. Tiny synthetic corpus + few epochs — a
+    pipeline smoke test, not a convergence claim."""
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=96)
+        out_dir = Path(tmp) / "out"
+
+        cfg = TrainConfig(epochs=3, batch_size=16, seed=0, hidden_dim=192)
+        result = train(targets, out_dir, cfg)
+
+        assert isinstance(result, TrainResult)
+        assert result.checkpoint_path.endswith("best.pt")
+        model = load_checkpoint(result.checkpoint_path)
+        total = sum(p.numel() for p in model.parameters())
+        assert 60_000 < total < 70_000, f"checkpoint did not preserve hidden=192; got {total}"
+
+
 def test_train_produces_best_last_checkpoints_and_log():
     with tempfile.TemporaryDirectory() as tmp:
         targets = Path(tmp) / "targets.npz"

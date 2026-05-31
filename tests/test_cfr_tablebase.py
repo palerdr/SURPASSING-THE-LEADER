@@ -53,6 +53,16 @@ EXPECTED_NAMES = (
     "forced_hal_overflow_with_baku_deaths",
     "both_overflow_baku_dies_first",
     "both_overflow_hal_dies_first",
+    # Phase F-2 interior-valued pins (survivable leap-window forced fail)
+    "forced_hal_fail_survivable_fresh",
+    "forced_hal_fail_survivable_fatigued",
+    "forced_hal_fail_survivable_deep",
+)
+
+INTERIOR_PIN_NAMES = (
+    "forced_hal_fail_survivable_fresh",
+    "forced_hal_fail_survivable_fatigued",
+    "forced_hal_fail_survivable_deep",
 )
 
 PINNED_NAMES = tuple(
@@ -201,4 +211,57 @@ def test_pinned_scenarios_have_distinct_feature_vectors():
         f"Pinned scenarios collide on feature vectors (the net can't tell them "
         f"apart): {collisions}"
     )
+
+
+# ── Phase F-2 acceptance: interior-valued pins ────────────────────────────
+
+
+@pytest.mark.parametrize("name", INTERIOR_PIN_NAMES)
+def test_interior_pins_are_genuinely_interior(name):
+    """Phase F-2 pins exist specifically to constrain the INTERIOR of [-1, 1].
+
+    Every Phase-8/F pin is a ±1 forced-overflow boundary terminal, so the pinned
+    ruler never constrained interior values. A pin here whose value sat on the
+    boundary would be mislabeled — the whole construction is a *survivable*
+    (0 < p < 1) forced fail. Asserts: all-terminal (unresolved 0), genuinely
+    interior (|value| < 1), and the engine-derived pin matches the solver to 1e-9.
+    """
+    result = solve_target(name)
+    assert result.unresolved_probability == pytest.approx(0.0, abs=1e-9), (
+        f"{name} unresolved_probability {result.unresolved_probability:.6f} != 0; "
+        "not all-terminal at horizon 2."
+    )
+    assert abs(result.value_for_hal) < 1.0 - 1e-6, (
+        f"{name} value {result.value_for_hal:.6f} is on the ±1 boundary, not interior."
+    )
+    # Cross-checks the engine-derived expected_value against the solver at 1e-9.
+    verify_pinned_value(name)
+
+
+def test_interior_fail_pins_monotone_in_referee_fatigue():
+    """Relational invariant backing the interior-pin family: more CPR fatigue
+    lowers Hal's revival probability on the forced fail, so the fresh pin's
+    interior value must strictly exceed the fatigued pin's. The fresh state is
+    Hal-favored (p > 0.5 → value > 0); at the referee floor the fatigued state
+    is Baku-favored (p < 0.5 → value < 0), so the pair also straddles zero.
+    """
+    fresh = solve_target("forced_hal_fail_survivable_fresh")
+    fatigued = solve_target("forced_hal_fail_survivable_fatigued")
+
+    assert fresh.value_for_hal > fatigued.value_for_hal
+    assert fresh.value_for_hal > 0.0 > fatigued.value_for_hal
+
+
+def test_interior_pins_break_the_all_boundary_ruler():
+    """The defining Phase F-2 outcome: the pinned ruler now contains at least one
+    genuinely interior anchor. Before F-2 every pinned value was exactly ±1, so a
+    value net could score the tablebase source perfectly while learning nothing
+    about the interior of [-1, 1]. This guards that the ruler keeps interior
+    coverage."""
+    interior = [
+        s for s in pinned_scenarios()
+        if abs(s.expected_value) < 1.0 - 1e-6
+    ]
+    assert interior, "no interior pinned anchors present; the ruler is all-boundary again"
+    assert {s.name for s in interior} >= set(INTERIOR_PIN_NAMES)
 

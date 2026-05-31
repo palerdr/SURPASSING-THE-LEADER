@@ -131,17 +131,19 @@ class _RecordingEvaluator:
 
 
 def test_tablebase_evaluator_construction_loads_pinned_registry_entries():
-    """Phase F brought the pinned registry from 2 → 19 forced-terminal
-    entries. The evaluator's table must include the originals plus the
-    Phase F expansion, with both ±1.0 values represented."""
+    """Phase F brought the pinned registry to 19 forced-terminal ±1 entries;
+    Phase F-2 added interior-valued pins. The evaluator's table must include the
+    boundary pins (both ±1 signs) AND the interior pins — at an MCTS leaf that
+    matches an interior pin, returning the exact value (e.g. 0.568) is correct."""
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
-    assert len(evaluator._table) >= 19, (
-        f"expected >= 19 pinned entries after Phase F, got {len(evaluator._table)}"
+    assert len(evaluator._table) >= 22, (
+        f"expected >= 22 pinned entries after Phase F-2, got {len(evaluator._table)}"
     )
     assert 1.0 in evaluator._table.values()
     assert -1.0 in evaluator._table.values()
-    # Every pinned entry must be exactly +1.0 or -1.0 (no non-extreme pins).
-    assert set(evaluator._table.values()) == {1.0, -1.0}
+    # Phase F-2: the table is no longer all-±1 — at least one interior pin.
+    interior = [v for v in evaluator._table.values() if abs(v) < 1.0 - 1e-9]
+    assert interior, "no interior-valued pins loaded; Phase F-2 regressed"
 
 
 def test_tablebase_evaluator_hit_returns_pinned_value_without_calling_fallback():

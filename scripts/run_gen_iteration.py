@@ -73,7 +73,8 @@ def main() -> int:
         default=64,
         help="ValueNet hidden width (Phase I). Default 64 (13.7K params, "
         "original). 128 gives 35.5K params (2.6× capacity) for fitting more "
-        "diverse tablebase pins; 192 exceeds the 50K guard.",
+        "diverse tablebase pins; 192 gives ~65.4K params (Phase I-2, under the "
+        "raised 70K guard).",
     )
     parser.add_argument(
         "--per-source-mse-threshold",

@@ -142,7 +142,10 @@ def evaluate_value_net(
         labels[i] = target.value
         unresolved[i] = float(target.unresolved_probability)
         sources.append(target.source)
-        if target.source == "tablebase":
+        if str(target.source).startswith("tablebase"):
+            # Both "tablebase" (±1 boundary) and "tablebase_interior" (Phase F-2)
+            # pins are exact by construction, so both feed the exact-target drift
+            # diagnostic.
             tablebase_errors.append(abs(pred - target.value))
 
     sources_array = np.array(sources)
