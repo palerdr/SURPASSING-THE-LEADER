@@ -806,6 +806,7 @@ def generate_mcts_bootstrap_targets(
     config: ExactSearchConfig | None = None,
     include_anchor_classes: bool = True,
     subgame_resolve_at_critical: bool = False,
+    split_interior: bool = False,
 ) -> list[ValueTarget]:
     """Bootstrap labels: run MCTS using ``predict_fn`` at the leaves and record
     the converged root value as the training target.
@@ -934,7 +935,7 @@ def generate_mcts_bootstrap_targets(
 
     if include_anchor_classes:
         targets.extend(_generate_terminal_targets(config, TRAINING_TERMINAL_CONFIGS))
-        targets.extend(_generate_tablebase_targets(config))
+        targets.extend(_generate_tablebase_targets(config, split_interior=split_interior))
 
     return targets
 

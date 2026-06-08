@@ -46,6 +46,7 @@ class TrainConfig:
     epochs: int = 100
     batch_size: int = 64
     learning_rate: float = 1.0e-3
+    weight_decay: float = 0.0  # Adam L2 regularization; 0.0 = original behavior.
     policy_loss_weight: float = 1.0
     val_fraction: float = 0.1
     early_stopping_patience: int = 25
@@ -241,7 +242,9 @@ def train(
     )
 
     model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=config.hidden_dim).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, config.epochs)
     )

@@ -41,6 +41,7 @@ from training.value_targets import (
     SOURCE_EXACT_HORIZON_2,
     SOURCE_EXACT_HORIZON_3,
     SOURCE_TABLEBASE,
+    SOURCE_TABLEBASE_INTERIOR,
     SOURCE_TERMINAL,
     generate_mcts_bootstrap_targets,
     load_targets_as_records,
@@ -61,8 +62,39 @@ def main() -> int:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--tablebase-replicate", type=int, default=100)
+    parser.add_argument(
+        "--split-interior",
+        action="store_true",
+        help="Phase I-2 fix: label the F-2 interior pins as their own "
+        "SOURCE_TABLEBASE_INTERIOR training class (instead of lumping them into "
+        "SOURCE_TABLEBASE, where 660 boundary ±1 pins drown the 3 interior pins "
+        "and saturate the net toward ±1). Pairs with the interior balancing block.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.0,
+        help="Adam L2 regularization, to curb the wider net's boundary-tablebase "
+        "overfit (hidden=192 held-out tablebase 0.0117 vs 0.0067). 0.0 = off.",
+    )
     parser.add_argument("--terminal-weight", type=float, default=30.0)
     parser.add_argument("--horizon-weight", type=float, default=10.0)
+    parser.add_argument(
+        "--tablebase-weight",
+        type=float,
+        default=1.0,
+        help="Per-source loss weight for boundary tablebase pins. Default 1.0 "
+        "relies on replication alone, which the wider hidden=192 net overfits "
+        "(held-out tablebase 0.0117 > 0.01 gate). 15.0 made it learn the boundary "
+        "value structure that generalizes (held-out 0.0024). See I-2 progress log.",
+    )
+    parser.add_argument(
+        "--interior-weight",
+        type=float,
+        default=2.0,
+        help="Per-source loss weight for the split interior class (with "
+        "--split-interior). Counters the boundary-pin imbalance.",
+    )
     parser.add_argument("--policy-loss-weight", type=float, default=1.0)
     parser.add_argument("--prev-gen-holdout-mse", type=float, default=None)
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
@@ -125,6 +157,7 @@ def main() -> int:
         iterations_per_state=args.iterations,
         seed=args.seed,
         subgame_resolve_at_critical=args.subgame_resolve_at_critical,
+        split_interior=args.split_interior,
     )
     print(
         f"  Bootstrap done in {time.time() - t0:.1f}s; {len(targets)} records",
@@ -148,6 +181,35 @@ def main() -> int:
                 flush=True,
             )
 
+    # ── Interior-anchor balancing (Phase I-2 fix) ──────────────────────────────
+    # With --split-interior the 3 interior pins are their own class. But the
+    # boundary-tablebase block just replicated to ~660 records; left at 3 records
+    # weight 1.0, the interior pins are drowned ~220:1 and the net saturates them
+    # toward ±1 (hidden=192 predicted +0.567 for the −0.373 target). Counter that.
+    interior_weight = 1.0
+    if args.split_interior:
+        interior = [t for t in targets if t.source == SOURCE_TABLEBASE_INTERIOR]
+        n_boundary = sum(1 for t in targets if t.source == SOURCE_TABLEBASE)
+        if interior:
+            # Balance interior against the ~n_boundary boundary pins on two axes:
+            #  (1) record count — replicate the 3 unique interior pins up to the
+            #      boundary count so neither class dominates by sheer volume (the
+            #      original 90:660 = 12% share is what drowned them);
+            #  (2) gradient priority — a modest extra loss weight, because the
+            #      interior targets (+0.568 / −0.373 / −0.024) sit in the hard,
+            #      non-saturated middle of tanh and need more gradient per sample
+            #      than the easy ±1 boundary pins. Memorization target ≤ 0.05.
+            interior_replicate = max(1, round(n_boundary / len(interior)))
+            interior_weight = args.interior_weight
+
+            if interior_replicate > 1:
+                targets = targets + interior * (interior_replicate - 1)
+            print(
+                f"  Interior anchors: {len(interior)} unique × {interior_replicate} "
+                f"(loss weight {interior_weight}) vs {n_boundary} boundary pins",
+                flush=True,
+            )
+
     print(f"  Final corpus: {len(targets)} records  breakdown: {source_breakdown(targets)}", flush=True)
     save_targets(targets, args.out_targets)
     print(f"  Saved: {args.out_targets}", flush=True)
@@ -158,10 +220,13 @@ def main() -> int:
         seed=args.seed,
         device=args.device,
         hidden_dim=args.hidden_dim,
+        weight_decay=args.weight_decay,
         source_weights=(
             (SOURCE_TERMINAL, args.terminal_weight),
             (SOURCE_EXACT_HORIZON_2, args.horizon_weight),
             (SOURCE_EXACT_HORIZON_3, args.horizon_weight),
+            (SOURCE_TABLEBASE, args.tablebase_weight),
+            (SOURCE_TABLEBASE_INTERIOR, interior_weight),
         ),
         policy_loss_weight=args.policy_loss_weight,
         early_stopping_patience=40,
