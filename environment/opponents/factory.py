@@ -12,6 +12,7 @@ from .baku_teachers import (
     BakuActiveLsrPreserverTeacher,
     BakuAntiEcholocationTeacher,
     BakuLeapExecutorTeacher,
+    BakuLSREngineeringTeacher,
     BakuResilienceFallbackTeacher,
     BakuRouteBuilderTeacher,
     BakuTeacher,
@@ -34,6 +35,19 @@ from .safe_bot import BridgePressureBot, LeapAwareSafeBot, SafeBot
 from hal.hal_opponent import CanonicalHal
 
 
+def _hal_solver():
+    """Lazy import: the solver agent pulls in the cfr/search stack + torch."""
+    from hal.agent import HalSolverAgent
+
+    return HalSolverAgent()
+
+
+def _baku_solver():
+    from hal.agent import BakuSolverAgent
+
+    return BakuSolverAgent()
+
+
 SCRIPTED_OPPONENTS = {
     "none": None,
     "random": RandomBot,
@@ -44,6 +58,7 @@ SCRIPTED_OPPONENTS = {
     "baku_route": BakuRouteBuilderTeacher,
     "baku_preserve": BakuActiveLsrPreserverTeacher,
     "baku_leap": BakuLeapExecutorTeacher,
+    "baku_lsr_engineering": BakuLSREngineeringTeacher,
     "baku_counter": BakuAntiEcholocationTeacher,
     "baku_resilience": BakuResilienceFallbackTeacher,
     "hal_teacher": HalTeacher,
@@ -55,6 +70,8 @@ SCRIPTED_OPPONENTS = {
     "hal_memory": HalMemoryLossTeacher,
     "hal_resilience": HalResilienceTeacher,
     "hal_canonical": CanonicalHal,
+    "hal_solver": _hal_solver,
+    "baku_solver": _baku_solver,
 }
 
 

@@ -53,6 +53,11 @@ class MCTSResult:
     root_visits: int
     principal_line: list[ExactJointAction]
     cells_used: int
+    # The seconds each strategy index refers to. When a critical-root
+    # subgame resolve replaces the MCTS output these reflect the resolve's
+    # action sets, so (seconds, strategy) always pair up.
+    root_drop_seconds: tuple[int, ...] = ()
+    root_check_seconds: tuple[int, ...] = ()
 
 
 def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
@@ -72,17 +77,34 @@ def _prior_from_evaluator(
     check_seconds: tuple[int, ...],
     evaluator: LeafEvaluator | None,
 ) -> np.ndarray:
+    prior, _ = _prior_and_value_from_evaluator(game, drop_seconds, check_seconds, evaluator)
+    return prior
+
+
+def _prior_and_value_from_evaluator(
+    game: Game,
+    drop_seconds: tuple[int, ...],
+    check_seconds: tuple[int, ...],
+    evaluator: LeafEvaluator | None,
+) -> tuple[np.ndarray, float]:
+    """Single evaluator call yielding both the joint prior and the leaf value.
+
+    The value seeds Q for never-visited cells so they enter the selection
+    and root LPs at the node's estimated value rather than a synthetic 0.0
+    (which sits at the midpoint of the value scale and mispriced
+    off-equilibrium cells permanently).
+    """
     D = len(drop_seconds)
     C = len(check_seconds)
     if D == 0 or C == 0:
-        return np.zeros((0, 0), dtype=np.float64)
+        return np.zeros((0, 0), dtype=np.float64), 0.0
     if evaluator is None:
-        return np.full((D, C), 1.0 / (D * C), dtype=np.float64)
+        return np.full((D, C), 1.0 / (D * C), dtype=np.float64), 0.0
 
-    _, dropper_policy, checker_policy = normalize_leaf_evaluation(evaluator(game), game)
+    value, dropper_policy, checker_policy = normalize_leaf_evaluation(evaluator(game), game)
     drop_prior = _project_policy_to_candidates(dropper_policy, drop_seconds)
     check_prior = _project_policy_to_candidates(checker_policy, check_seconds)
-    return np.outer(drop_prior, check_prior).astype(np.float64)
+    return np.outer(drop_prior, check_prior).astype(np.float64), float(value)
 
 
 def make_node(
@@ -119,13 +141,15 @@ def make_node(
     D = len(cands.drop_seconds)
     C = len(cands.check_seconds)
 
-    prior = _prior_from_evaluator(game, cands.drop_seconds, cands.check_seconds, evaluator)
+    prior, leaf_value = _prior_and_value_from_evaluator(
+        game, cands.drop_seconds, cands.check_seconds, evaluator
+    )
 
     return MCTSNode(
         drop_seconds=cands.drop_seconds,
         check_seconds=cands.check_seconds,
         game_snapshot=ExactGameSnapshot(game=game),
-        Q=np.zeros((D, C), dtype=np.float64),
+        Q=np.full((D, C), leaf_value, dtype=np.float64),
         N_cell=np.zeros((D, C), dtype=np.int64),
         N_node=0,
         is_expanded=False,
@@ -148,17 +172,27 @@ def _select_joint_action(
     rng: np.random.Generator,
 ) -> tuple[int, int]:
     """Sample (d_idx, c_idx) from the matrix-game equilibrium of the
-    exploration-augmented Q at this node."""
+    exploration-augmented Q at this node.
+
+    Each player solves the saddle point of the matrix that is optimistic in
+    its OWN direction (O'Donoghue, Lattimore & Osband, UAI 2021): the
+    Hal-perspective maximizer sees Q + U; the minimizer's payoff is -Q, so
+    its optimistic matrix is -Q + U = -(Q - U). Giving both players the
+    same Q + U makes the bonus repel the minimizer from under-visited
+    cells, breaking the guaranteed-exploration property.
+    """
     D = len(node.drop_seconds)
     C = len(node.check_seconds)
-    Q_explore = _exploration_augmented_matrix(node, exploration_c)
+    U = exploration_c * node.prior * np.sqrt(node.N_node) / (1 + node.N_cell)
+    Q_max_optimistic = node.Q + U
+    Q_min_optimistic = -(node.Q - U)
 
     if node.hal_is_dropper:
-        dropper_strategy, _ = solve_minimax(Q_explore)
-        checker_strategy, _ = solve_minimax((-Q_explore).T)
+        dropper_strategy, _ = solve_minimax(Q_max_optimistic)
+        checker_strategy, _ = solve_minimax(Q_min_optimistic.T)
     else:
-        dropper_strategy, _ = solve_minimax(-Q_explore)
-        checker_strategy, _ = solve_minimax(Q_explore.T)
+        dropper_strategy, _ = solve_minimax(Q_min_optimistic)
+        checker_strategy, _ = solve_minimax(Q_max_optimistic.T)
 
     d_idx = rng.choice(D, p=dropper_strategy)
     c_idx = rng.choice(C, p=checker_strategy)
@@ -228,6 +262,7 @@ def mcts_search(
     rng: np.random.Generator,
     exact_config: ExactSearchConfig | None = None,
     subgame_resolve_at_critical: bool = False,
+    subgame_resolve_horizon: int = 4,
 ) -> MCTSResult:
     """Run MCTS for config.iterations iterations from the current game state.
 
@@ -286,14 +321,23 @@ def mcts_search(
     value_for_hal = float(dropper_strat @ Q @ checker_strat)
 
     principal_line = _principal_line(root)
+    root_drop_seconds = root.drop_seconds
+    root_check_seconds = root.check_seconds
 
     if subgame_resolve_at_critical:
         root.game_snapshot.restore(game=game)
         if is_critical(game):
-            resolve_result = resolve_subgame(game, config=exact_config, evaluator=evaluator)
+            resolve_result = resolve_subgame(
+                game,
+                horizon=subgame_resolve_horizon,
+                config=exact_config,
+                evaluator=evaluator,
+            )
             dropper_strat = resolve_result.dropper_strategy
             checker_strat = resolve_result.checker_strategy
             value_for_hal = float(resolve_result.value_for_hal)
+            root_drop_seconds = tuple(resolve_result.drop_seconds)
+            root_check_seconds = tuple(resolve_result.check_seconds)
             if (
                 len(resolve_result.drop_seconds) > 0
                 and len(resolve_result.check_seconds) > 0
@@ -321,6 +365,8 @@ def mcts_search(
         root_visits=root.N_node,
         principal_line=principal_line,
         cells_used=int(root.N_cell.sum()),
+        root_drop_seconds=root_drop_seconds,
+        root_check_seconds=root_check_seconds,
     )
 
 

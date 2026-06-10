@@ -214,29 +214,49 @@ def print_history(game: Game):
 
 # -- Main game loop --------------------------------------------------
 
-def load_hal_ai(depth: int, checkpoint: str | None) -> CanonicalHal:
+def load_hal_ai(
+    depth: int,
+    checkpoint: str | None,
+    agent: str = "solver",
+    iterations: int = 200,
+    seed: int = 0,
+):
+    """Build the Hal opponent.
+
+    ``solver`` (default): trained value net + matrix-game MCTS via
+    hal.agent.SolverAgent. Fails LOUDLY if the checkpoint is missing —
+    no silent fallback to the legacy handcrafted eval.
+    ``legacy``: the bucketed CanonicalHal forward search.
+    """
+    if agent == "solver":
+        from hal.agent import DEFAULT_CHECKPOINT, SolverAgent
+
+        path = checkpoint or DEFAULT_CHECKPOINT
+        hal_ai = SolverAgent(path, iterations=iterations, seed=seed)
+        print(f"  Solver Hal: {iterations} MCTS iterations/move, net {os.path.basename(path)}")
+        return hal_ai
+
+    if agent != "legacy":
+        raise ValueError(f"Unknown --agent {agent!r}; expected 'solver' or 'legacy'")
+
     if checkpoint:
         net = load_checkpoint(checkpoint)
         set_nn_evaluator(net)
         print(f"  Loaded value net: {checkpoint}")
     else:
-        default = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "models", "checkpoints", "hal_deep_best.pt",
-        )
-        if os.path.exists(default):
-            net = load_checkpoint(default)
-            set_nn_evaluator(net)
-            print(f"  Loaded value net: hal_deep_best.pt")
-        else:
-            print("  No value net found, using handcrafted eval.")
+        print("  Legacy Hal: handcrafted eval (no net).")
     return CanonicalHal(depth=depth)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Drop The Handkerchief -- CLI")
     parser.add_argument("--pvp", action="store_true", help="Two human players (no AI)")
-    parser.add_argument("--depth", type=int, default=2, help="Hal search depth (default: 2)")
+    parser.add_argument("--agent", choices=("solver", "legacy"), default="solver",
+                        help="Hal implementation: solver = net+MCTS (default), legacy = CanonicalHal")
+    parser.add_argument("--iterations", type=int, default=200,
+                        help="Solver MCTS iterations per move (default: 200, ~2s/move)")
+    parser.add_argument("--seed", type=int, default=0, help="Agent RNG seed")
+    parser.add_argument("--depth", type=int, default=2, help="Legacy Hal search depth (default: 2)")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to value net checkpoint")
     args = parser.parse_args()
 
@@ -248,7 +268,7 @@ def main():
         p2_name = input("  Player 2 name [Baku]: ").strip() or "Baku"
     else:
         print("  Loading Hal AI...")
-        hal_ai = load_hal_ai(args.depth, args.checkpoint)
+        hal_ai = load_hal_ai(args.depth, args.checkpoint, args.agent, args.iterations, args.seed)
         print()
         p1_name = "Hal"
         p2_name = input("  Your name [Baku]: ").strip() or "Baku"

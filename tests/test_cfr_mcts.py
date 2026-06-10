@@ -743,3 +743,99 @@ def test_principal_line_returns_legal_seconds_in_actions():
     first = result.principal_line[0]
     assert 1 <= first.drop_time <= 61
     assert 1 <= first.check_time <= 61
+
+# ── 8. Soundness: per-player optimism + value-seeded Q (B1/B2) ─────────────
+
+
+class _ConstantEvaluator:
+    """Leaf evaluator returning a fixed Hal-perspective value (uniform policies)."""
+
+    def __init__(self, value: float):
+        self.value = value
+
+    def __call__(self, game):
+        del game
+        return float(self.value)
+
+
+def test_minimizer_selection_prefers_unvisited_cells_when_q_is_flat():
+    """B1: the exploration bonus must attract BOTH players to under-visited
+    cells. With flat Q, a checker column never tried carries the largest
+    bonus; the checker (minimizer of Hal-perspective Q) must move there.
+    Under the old shared Q+U matrix the bonus actively repelled it."""
+    game = _baku_checker_at_cylinder(0.0)  # half 1, first_dropper=Hal => Hal drops
+    node = make_node(game, ExactSearchConfig())
+    node.is_expanded = True
+
+    C = len(node.check_seconds)
+    assert C >= 2
+    node.N_node = 1000
+    node.N_cell[:, :] = 100
+    node.N_cell[:, -1] = 0          # one never-visited checker column
+    node.Q[:, :] = 0.0              # flat values: only the bonus differs
+
+    rng = np.random.default_rng(0)
+    counts = np.zeros(C, dtype=np.int64)
+    for _ in range(50):
+        _, c_idx = _select_joint_action(node, exploration_c=1.0, rng=rng)
+        counts[c_idx] += 1
+
+    assert counts[-1] == 50, f"checker ignored the unvisited column: {counts}"
+
+
+def test_minimizer_selection_optimism_mirrors_when_hal_is_checker():
+    """B1 mirror: in half 2 the dropper (Baku) is the Hal-perspective
+    minimizer and must likewise be drawn to its own unvisited row."""
+    game = _baku_checker_at_cylinder(0.0)
+    game.current_half = 2               # dropper=Baku, checker=Hal
+    node = make_node(game, ExactSearchConfig())
+    node.is_expanded = True
+
+    D = len(node.drop_seconds)
+    assert D >= 2
+    node.N_node = 1000
+    node.N_cell[:, :] = 100
+    node.N_cell[-1, :] = 0          # one never-visited dropper row
+    node.Q[:, :] = 0.0
+
+    rng = np.random.default_rng(0)
+    counts = np.zeros(D, dtype=np.int64)
+    for _ in range(50):
+        d_idx, _ = _select_joint_action(node, exploration_c=1.0, rng=rng)
+        counts[d_idx] += 1
+
+    assert counts[-1] == 50, f"dropper ignored the unvisited row: {counts}"
+
+
+def test_make_node_seeds_q_with_evaluator_value():
+    """B2: never-visited cells carry the node's estimated value, not 0.0,
+    and the running-mean backup still fully overwrites on first visit."""
+    game = _baku_checker_at_cylinder(0.0)
+    node = make_node(game, ExactSearchConfig(), evaluator=_ConstantEvaluator(0.7))
+
+    assert np.allclose(node.Q, 0.7)
+
+    _backup([(node, 0, 0)], -0.2)
+    assert node.Q[0, 0] == pytest.approx(-0.2)
+    assert np.allclose(node.Q[0, 1:], 0.7)
+    assert np.allclose(node.Q[1:, :], 0.7)
+
+
+def test_make_node_without_evaluator_keeps_zero_q():
+    """No evaluator => no value estimate => Q stays zero (legacy behavior)."""
+    game = _baku_checker_at_cylinder(0.0)
+    node = make_node(game, ExactSearchConfig())
+    assert node.Q.sum() == 0.0
+
+
+def test_root_value_not_dragged_to_zero_by_unvisited_cells():
+    """B2 end-to-end: with a constant evaluator v*=0.8 and a tiny budget the
+    root LP must report a value near 0.8. Under phantom-zero Q the minimizer
+    routed through never-visited cells and reported ~0 instead."""
+    game = _baku_checker_at_cylinder(0.0)
+    rng = np.random.default_rng(0)
+    result = mcts_search(game, _config(3), _ConstantEvaluator(0.8), rng)
+
+    assert result.root_value_for_hal > 0.5, (
+        f"root value {result.root_value_for_hal} collapsed toward 0"
+    )

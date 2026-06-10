@@ -57,19 +57,47 @@ def save_checkpoint(net: ValueNet, path: str) -> None:
                                                                                  
                                                                                   
 def load_checkpoint(path: str, n_features: int = FEATURE_DIM) -> ValueNet:
-      net = ValueNet(n_features)
-      state = torch.load(path)
-      try:
-          net.load_state_dict(state)
-      except RuntimeError:
-          migrated = {}
-          for key, value in state.items():
-              if key.startswith("layers.0."):
-                  migrated[key.replace("layers.0.", "trunk.0.")] = value
-              elif key.startswith("layers.2."):
-                  migrated[key.replace("layers.2.", "trunk.2.")] = value
-              elif key.startswith("layers.4."):
-                  migrated[key.replace("layers.4.", "value_head.0.")] = value
-          net.load_state_dict(migrated, strict=False)
-      net.eval()
-      return net
+    """Load a ValueNet checkpoint, inferring hidden width from the file.
+
+    Fails loudly on any unrecognized or partially-loadable checkpoint —
+    the previous implementation fell through to ``load_state_dict({},
+    strict=False)`` for modern ``trunk.*``-keyed checkpoints and silently
+    returned a random-weight net.
+    """
+    state = torch.load(path, map_location="cpu", weights_only=True)
+
+    if "trunk.0.weight" in state:
+        hidden_dim = int(state["trunk.0.weight"].shape[0])
+        net = ValueNet(n_features, hidden_dim=hidden_dim)
+        net.load_state_dict(state)  # strict: any mismatch raises
+    elif any(key.startswith("layers.") for key in state):
+        # Legacy pre-policy-head checkpoints: layers.{0,2,4} -> trunk/value_head.
+        migrated = {}
+        for key, value in state.items():
+            if key.startswith("layers.0."):
+                migrated[key.replace("layers.0.", "trunk.0.")] = value
+            elif key.startswith("layers.2."):
+                migrated[key.replace("layers.2.", "trunk.2.")] = value
+            elif key.startswith("layers.4."):
+                migrated[key.replace("layers.4.", "value_head.0.")] = value
+        if "trunk.0.weight" not in migrated:
+            raise RuntimeError(
+                f"Legacy checkpoint at {path} has no layers.0 weights; "
+                f"keys: {sorted(state)[:6]}"
+            )
+        hidden_dim = int(migrated["trunk.0.weight"].shape[0])
+        net = ValueNet(n_features, hidden_dim=hidden_dim)
+        missing, unexpected = net.load_state_dict(migrated, strict=False)
+        # The ONLY tolerated gap: legacy checkpoints predate the policy head.
+        bad_missing = [k for k in missing if not k.startswith("policy_head.")]
+        if bad_missing or unexpected:
+            raise RuntimeError(
+                f"Checkpoint at {path} did not migrate cleanly: "
+                f"missing={bad_missing}, unexpected={list(unexpected)}"
+            )
+    else:
+        raise RuntimeError(
+            f"Unrecognized checkpoint format at {path}; keys: {sorted(state)[:6]}"
+        )
+    net.eval()
+    return net
