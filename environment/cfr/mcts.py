@@ -58,6 +58,13 @@ class MCTSResult:
     # action sets, so (seconds, strategy) always pair up.
     root_drop_seconds: tuple[int, ...] = ()
     root_check_seconds: tuple[int, ...] = ()
+    # Average of the per-iteration root selection strategies — the object
+    # SM-MCTS theory proves convergent (Lisy et al. 2013), and smoother
+    # than a single LP vertex over mean-Q at small budgets where flat
+    # matrices make the final LP degenerate (and arbitrarily PURE — an
+    # exploitable tell). Empty when no root selections occurred.
+    root_strategy_dropper_avg: np.ndarray = None  # type: ignore[assignment]
+    root_strategy_checker_avg: np.ndarray = None  # type: ignore[assignment]
 
 
 def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
@@ -166,6 +173,25 @@ def _exploration_augmented_matrix(node: MCTSNode, exploration_c: float) -> np.nd
     return node.Q + U
 
 
+def _selection_strategies(
+    node: MCTSNode,
+    exploration_c: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per-player equilibrium strategies of the optimism-augmented node
+    matrices (each player optimistic in its own direction)."""
+    U = exploration_c * node.prior * np.sqrt(node.N_node) / (1 + node.N_cell)
+    Q_max_optimistic = node.Q + U
+    Q_min_optimistic = -(node.Q - U)
+
+    if node.hal_is_dropper:
+        dropper_strategy, _ = solve_minimax(Q_max_optimistic)
+        checker_strategy, _ = solve_minimax(Q_min_optimistic.T)
+    else:
+        dropper_strategy, _ = solve_minimax(Q_min_optimistic)
+        checker_strategy, _ = solve_minimax(Q_max_optimistic.T)
+    return dropper_strategy, checker_strategy
+
+
 def _select_joint_action(
     node: MCTSNode,
     exploration_c: float,
@@ -183,16 +209,7 @@ def _select_joint_action(
     """
     D = len(node.drop_seconds)
     C = len(node.check_seconds)
-    U = exploration_c * node.prior * np.sqrt(node.N_node) / (1 + node.N_cell)
-    Q_max_optimistic = node.Q + U
-    Q_min_optimistic = -(node.Q - U)
-
-    if node.hal_is_dropper:
-        dropper_strategy, _ = solve_minimax(Q_max_optimistic)
-        checker_strategy, _ = solve_minimax(Q_min_optimistic.T)
-    else:
-        dropper_strategy, _ = solve_minimax(Q_min_optimistic)
-        checker_strategy, _ = solve_minimax(Q_max_optimistic.T)
+    dropper_strategy, checker_strategy = _selection_strategies(node, exploration_c)
 
     d_idx = rng.choice(D, p=dropper_strategy)
     c_idx = rng.choice(C, p=checker_strategy)
@@ -284,6 +301,10 @@ def mcts_search(
     transposition : dict[ExactPublicState, MCTSNode] = {}
     transposition[exact_public_state(game)] = root
 
+    root_drop_sum = np.zeros(len(root.drop_seconds), dtype=np.float64)
+    root_check_sum = np.zeros(len(root.check_seconds), dtype=np.float64)
+    root_strat_count = 0
+
     for _ in range(config.iterations):
         root.game_snapshot.restore(game=game)
         node = root
@@ -296,7 +317,15 @@ def mcts_search(
                 leaf_value, _, _ = normalize_leaf_evaluation(evaluator(game), game)
                 node.is_expanded = True
                 break
-            d_idx, c_idx = _select_joint_action(node, c, rng)
+            if node is root:
+                drop_strat, check_strat = _selection_strategies(node, c)
+                root_drop_sum += drop_strat
+                root_check_sum += check_strat
+                root_strat_count += 1
+                d_idx = int(rng.choice(len(node.drop_seconds), p=drop_strat))
+                c_idx = int(rng.choice(len(node.check_seconds), p=check_strat))
+            else:
+                d_idx, c_idx = _select_joint_action(node, c, rng)
             path.append((node, d_idx, c_idx))
             node, _ = _step_into_child(
                 node,
@@ -323,6 +352,12 @@ def mcts_search(
     principal_line = _principal_line(root)
     root_drop_seconds = root.drop_seconds
     root_check_seconds = root.check_seconds
+    if root_strat_count > 0:
+        dropper_avg = root_drop_sum / root_strat_count
+        checker_avg = root_check_sum / root_strat_count
+    else:
+        dropper_avg = np.asarray(dropper_strat, dtype=np.float64).copy()
+        checker_avg = np.asarray(checker_strat, dtype=np.float64).copy()
 
     if subgame_resolve_at_critical:
         root.game_snapshot.restore(game=game)
@@ -338,6 +373,8 @@ def mcts_search(
             value_for_hal = float(resolve_result.value_for_hal)
             root_drop_seconds = tuple(resolve_result.drop_seconds)
             root_check_seconds = tuple(resolve_result.check_seconds)
+            dropper_avg = np.asarray(dropper_strat, dtype=np.float64).copy()
+            checker_avg = np.asarray(checker_strat, dtype=np.float64).copy()
             if (
                 len(resolve_result.drop_seconds) > 0
                 and len(resolve_result.check_seconds) > 0
@@ -367,6 +404,8 @@ def mcts_search(
         cells_used=int(root.N_cell.sum()),
         root_drop_seconds=root_drop_seconds,
         root_check_seconds=root_check_seconds,
+        root_strategy_dropper_avg=dropper_avg,
+        root_strategy_checker_avg=checker_avg,
     )
 
 

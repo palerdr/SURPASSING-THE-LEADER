@@ -591,3 +591,59 @@ same split; API unchanged. Leakage test added (a record replicated 50x never app
 both sides). Note: historical `best_val_mse` numbers were computed under the leaky split
 and are not directly comparable to post-fix values; held-out ruler numbers (the gate
 metrics) are unaffected — the ruler was never part of the training split.
+
+### 2026-06-10 — Phase 0/1 of the HAL-agent plan landed + tablebase pilot: GO
+
+**Playable solver agent (Track A).** `hal/agent.py::SolverAgent` — trained 192-net
+(`gen_ceiling_tbw15_wd1e-4/best.pt`, recovered to VCS) + matrix-MCTS behind the Opponent
+interface; SAMPLES the root equilibrium mixture (argmax is maximally exploitable here:
+a fixed check c invites drop c+1; a fixed drop d invites check d); policy is a pure
+function of the public state (state-derived search seed) so best-response DP against it
+is valid; loud checkpoint loading (B3 silent-random-net bug fixed). Wired into
+`play_cli --agent solver` (default), factory (`hal_solver`/`baku_solver`), and
+`validate_against_manga.py` (argmax removed). ~2 s/move at 200 iterations.
+
+**MCTS soundness (B1/B2).** Selection LPs are now per-player optimistic (the minimizer
+solved −(Q+U) and was actively REPELLED from under-visited cells — no exploration
+guarantee); unvisited Q cells are seeded from the leaf evaluation instead of entering
+selection/root LPs as phantom 0.0 payoffs. Regression tests pin both.
+
+**Strength measurement (Track C, first leg).** `training/strength/best_response.py` —
+exact depth-limited best response vs a frozen Markov policy, certified [-1,1] frontier
+brackets, outcome-class child dedup (≈61 engine expansions/state, not 3600).
+First measurements: deterministic fixed-second checker certified at −1.0 (depth 1);
+net-policy BR at depth 3 ≈ 8 s / 3,031 states. Calm-state intervals stay wide until the
+tablebase replaces the ±1 frontier — as predicted.
+
+**Canonical line locked (ticket 11).** `tests/test_canonical_line.py` replays the full
+HAL-DOC R1–R9 record through the engine: every doc-pinned round-start clock matches
+(720/1020/1140/1560/1800/2040/2280/2700/2940/3420/3540); Hal's ttd lands at exactly
+298 s (4 m 58 s — the 2-Second Deviation payoff) before the leap-window forced fail;
+R9T2 survival probability = 0.3122 (corrects HAL.md's stale ≈0.28 derivation).
+
+**Tablebase pilot (tickets 13/14): VERDICT GO.** `environment/cfr/backward.py` —
+analytic stage-transition map (success children depend only on ST; one shared fail
+death; chance via the engine referee, G4 intact) verified ENGINE-EQUIVALENT, exact
+equality, over 10,000 randomized states. Tier-0 all-deaths-fatal limit game solved over
+the post-leap quotient: 180,000 states in 662.5 s single-core = **3.68 ms/state**
+(GO bar ≤ 10 ms; artifacts + sha256 in `checkpoints/tablebase_pilot/`). Audit vs
+`solve_exact_finite_horizon` on the both-cylinders ≥ 295 band (where the limit game IS
+the real game): 111 resolvable states, **max gap 3.1e-15**. Interval-sweep probe
+(2 LPs/state): 7.4–7.6 ms/state. Cost model for the build, measured on this 24-core
+machine: Tier A (≤ 1 death, exact) ≈ 88 core-h ≈ 3.7 h at 24 cores; Tier B (2–10
+deaths, certified intervals) ≈ 5–9 days stock scipy. First strategic constant: the
+limit game values first-mover (dropper) advantage at ±0.1633 from fresh cylinders.
+
+Full suite at landing: 599+ passing; firewall green with `backward.py` in the rigorous
+namespace (it is exact: no action coarsening, terminal-only utilities, engine chance).
+
+**First ladder measurements (N=10/opponent, provisional thresholds — direction, not
+verdicts).** SolverAgent@30 iters: 10-0 vs `safe` (pure overflow pressure — correct
+plan), 6-4 vs `random`, but 3-7 vs the new `pattern_reader` exploiter with 7
+hal_failed_check terminations — at small budgets the final root LP over a near-flat
+mean-Q returns an arbitrary (pure) vertex: a readable tell. Two confirmations: 5x
+budget (150 iters, old extraction) recovers to 5-5; switching deployment to the
+AVERAGE of per-iteration root selection strategies (the provably convergent SM-MCTS
+object, Lisy et al. 2013) recovers to 5-5 at 30 iters for 1/5 the cost. The agent now
+plays the average strategy (`MCTSResult.root_strategy_*_avg`). Real verdicts need
+SPRT-scale N — the harness exists for exactly that.

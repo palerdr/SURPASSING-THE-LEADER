@@ -143,12 +143,16 @@ class SolverAgent(Opponent):
             return self._policy_cache[key]
 
         result = self.search(game)
+        # Play the AVERAGE of the per-iteration root selection strategies —
+        # the provably convergent SM-MCTS object. The final LP over mean-Q
+        # picks an arbitrary vertex when the matrix is near-flat (small
+        # budgets), which collapses to a pure, pattern-readable strategy.
         if role == "dropper":
             seconds = result.root_drop_seconds
-            probs = np.asarray(result.root_strategy_dropper, dtype=np.float64)
+            probs = np.asarray(result.root_strategy_dropper_avg, dtype=np.float64)
         else:
             seconds = result.root_check_seconds
-            probs = np.asarray(result.root_strategy_checker, dtype=np.float64)
+            probs = np.asarray(result.root_strategy_checker_avg, dtype=np.float64)
 
         if len(seconds) == 0 or probs.size == 0:
             raise RuntimeError(f"search produced an empty {role} strategy at {key[0]!r}")

@@ -29,6 +29,7 @@ from .hal_teachers import (
 )
 from .league import LeagueEntry, WeightedOpponentLeague
 from .model_opponent import ModelOpponent
+from .pattern_reader import PatternReaderBaku
 from .random_bot import RandomBot
 from .safe_bot import BridgePressureBot, LeapAwareSafeBot, SafeBot
 
@@ -61,6 +62,7 @@ SCRIPTED_OPPONENTS = {
     "baku_lsr_engineering": BakuLSREngineeringTeacher,
     "baku_counter": BakuAntiEcholocationTeacher,
     "baku_resilience": BakuResilienceFallbackTeacher,
+    "pattern_reader": PatternReaderBaku,
     "hal_teacher": HalTeacher,
     "hal_infer": HalLeapInferenceTeacher,
     "hal_death_trade": HalDeathTradeTeacher,

@@ -18,3 +18,25 @@ __all__ = [
     "net_policy",
     "uniform_policy",
 ]
+
+# ── Match gate / SPRT layer (tickets 9+10) — appended exports only ──
+from .sprt import SPRTState, sprt_verdict
+from .match_gate import (
+    LadderEntry,
+    gate_report,
+    reset_per_game,
+    run_ladder,
+    run_ladder_entries,
+    wilson_interval,
+)
+
+__all__ += [
+    "SPRTState",
+    "sprt_verdict",
+    "LadderEntry",
+    "gate_report",
+    "reset_per_game",
+    "run_ladder",
+    "run_ladder_entries",
+    "wilson_interval",
+]
