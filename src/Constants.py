@@ -15,9 +15,11 @@ OPENING_START_CLOCK = 12 * 60       # Canonical R1 start: 8:12:00 AM
 
 # Leap second: inserted at exactly 8:59:60 AM.
 # In game clock seconds: 8:59:00 AM = 59 * 60 = 3540s after game start.
-# A half-round whose start falls in [3540, 3600) spans the leap second.
+# A half-round whose start falls in the CLOSED interval [3540, 3600] spans the
+# leap second — a half-round starting at exactly 3600 (8:59:60) still spans
+# the inserted second.
 LS_WINDOW_START = 59 * 60         # 3540 — start of the 8:59 minute
-LS_WINDOW_END = 60 * 60               #8:59:60 AM
+LS_WINDOW_END = 60 * 60               #8:59:60 AM (inclusive)
 
 
 # ──────────────────────────────────────────────

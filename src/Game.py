@@ -99,7 +99,9 @@ class Game:
     def get_turn_duration(self) -> int:
         """
         Returns 60 normally, 61 if the current game_clock falls in the
-        leap second window [LS_WINDOW_START, LS_WINDOW_END).
+        leap second window [LS_WINDOW_START, LS_WINDOW_END] — the CLOSED
+        interval [3540, 3600]: a half-round starting at exactly 3600
+        (8:59:60) still spans the inserted second.
 
         This is called at the START of a half-round to determine how long
         the turn lasts. The D player gets the full turn_duration to drop.
@@ -185,11 +187,10 @@ class Game:
         Half 1: whoever is D this round drops, the other checks.
         Half 2: roles swap.
 
-        Who starts as D in round 1 is determined before the game
-        (in the manga: rock-paper-scissors). After that, the starting D
-        alternates each round? Or stays the same?
-
-        They play rock paper scissors to decide so it's a coin flip 
+        Settled: the starting D does NOT alternate across rounds —
+        ``first_dropper`` is fixed for the whole match, decided by
+        rock-paper-scissors before the game (canon doc: First D = Leader
+        every round R1-R9).
         """
         if self.first_dropper == self.player1:
             if half == 1:

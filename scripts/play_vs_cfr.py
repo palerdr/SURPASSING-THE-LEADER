@@ -26,8 +26,8 @@ from src.Constants import (
     OPENING_START_CLOCK,
 )
 from environment.legal_actions import validate_action
-from cfr.tree import solve_game, StrategyTable
-from cfr.game_state import make_abstract_state, CYL_BUCKET_SIZE, CLOCK_BUCKET_SIZE
+from environment.abstractions.tree import solve_game, StrategyTable
+from environment.abstractions.game_state import make_abstract_state, CYL_BUCKET_SIZE, CLOCK_BUCKET_SIZE
 
 
 # ── Display helpers (reused from play_cli.py) ────────────────────────────

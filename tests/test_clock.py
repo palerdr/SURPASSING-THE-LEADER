@@ -284,3 +284,22 @@ class TestMangaTimeline:
                 f"After R{round_num}: gc={g.game_clock}, "
                 f"expected R{round_num + 1} at {next_expected}"
             )
+
+
+class TestLeapWindowClosedBoundary:
+    """Owner ruling (2026-06-10): the leap window is the CLOSED interval
+    [3540, 3600] — a half-round starting at exactly 3600 (8:59:60) still
+    spans the inserted second. Pins the boundary semantics of
+    Game.get_turn_duration against doc drift."""
+
+    def test_turn_starting_exactly_at_3600_is_leap_turn(self):
+        g = make_game(3600.0)
+        assert g.get_turn_duration() == 61
+
+    def test_turn_starting_at_3601_is_normal(self):
+        g = make_game(3601.0)
+        assert g.get_turn_duration() == 60
+
+    def test_turn_starting_at_3539_is_normal(self):
+        g = make_game(3539.0)
+        assert g.get_turn_duration() == 60

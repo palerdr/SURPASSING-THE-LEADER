@@ -50,7 +50,17 @@ from training.value_targets import (
 )
 
 
-def main() -> int:
+def monotonicity_verdict(new_mse: float, prev_mse: float) -> bool:
+    """True iff the new generation strictly improved on the previous one.
+
+    The AlphaZero acceptance rule (charter §2 criterion 5): the new gen's
+    held-out overall MSE must be STRICTLY below the prior gen's. Equal or
+    worse is a regression.
+    """
+    return new_mse < prev_mse
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--in-checkpoint", required=True)
     parser.add_argument("--out-dir", required=True)
@@ -97,6 +107,15 @@ def main() -> int:
     )
     parser.add_argument("--policy-loss-weight", type=float, default=1.0)
     parser.add_argument("--prev-gen-holdout-mse", type=float, default=None)
+    parser.add_argument(
+        "--enforce-monotonicity",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Fail (exit 1) when --prev-gen-holdout-mse is given and the new "
+        "overall held-out MSE is not strictly below it (charter §2 criterion "
+        "5: AlphaZero accept). --no-enforce-monotonicity restores the old "
+        "report-only behavior.",
+    )
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
     parser.add_argument("--max-unresolved-per-source", type=float, default=0.35)
     parser.add_argument(
@@ -123,7 +142,11 @@ def main() -> int:
         action="store_true",
         help="Use deeper root subgame re-solving for MCTS bootstrap labels at critical states.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     per_source_mse_thresholds: dict[str, float] | None = None
     if args.per_source_mse_threshold:
@@ -269,12 +292,21 @@ def main() -> int:
         print()
         print("CALIBRATION GATE PASSED", flush=True)
         if args.prev_gen_holdout_mse is not None:
+            improved = monotonicity_verdict(report.overall_mse, args.prev_gen_holdout_mse)
             delta = (args.prev_gen_holdout_mse - report.overall_mse) / args.prev_gen_holdout_mse * 100
-            verdict = "improvement" if report.overall_mse < args.prev_gen_holdout_mse else "regression"
+            verdict = "improvement" if improved else "regression"
             print(
                 f"  vs prev-gen baseline {args.prev_gen_holdout_mse:.5f}: {delta:+.1f}% ({verdict})",
                 flush=True,
             )
+            if not improved and args.enforce_monotonicity:
+                print(
+                    "MONOTONICITY GATE FAILED: held-out MSE "
+                    f"{report.overall_mse:.5f} >= prev-gen {args.prev_gen_holdout_mse:.5f} "
+                    "(use --no-enforce-monotonicity to report without failing)",
+                    flush=True,
+                )
+                return 1
         return 0
     except CalibrationGateError as e:
         print()

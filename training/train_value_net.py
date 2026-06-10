@@ -86,13 +86,30 @@ def _seed_all(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def _split_indices(n: int, val_fraction: float, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
-    """Deterministic train/val split via permutation under a seeded rng."""
-    indices = rng.permutation(n)
-    n_val = max(1, int(round(n * val_fraction)))
-    val_idx = indices[:n_val]
-    train_idx = indices[n_val:]
-    return train_idx, val_idx
+def _split_indices(X: np.ndarray, val_fraction: float, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+    """Deterministic, group-aware train/val split under a seeded rng.
+
+    Rows are grouped by unique state identity (``features.tobytes()``) and
+    whole groups are assigned to train or val. Callers (e.g.
+    ``scripts/run_gen_iteration.py``) replicate tablebase/interior anchor
+    records 30-660x before training; a raw row permutation scattered those
+    identical replicas across both splits, so the validation MSE (and hence
+    best-epoch selection) was leakage-biased. Group assignment guarantees no
+    state appears on both sides. Same seed -> same split (dict insertion
+    order is row order, so the grouping is deterministic for a given X).
+    """
+    groups: dict[bytes, list[int]] = {}
+    for i in range(len(X)):
+        groups.setdefault(X[i].tobytes(), []).append(i)
+    keys = list(groups.keys())
+    order = rng.permutation(len(keys))
+    n_val_groups = max(1, int(round(len(keys) * val_fraction)))
+    val_idx: list[int] = []
+    train_idx: list[int] = []
+    for rank, key_pos in enumerate(order):
+        bucket = val_idx if rank < n_val_groups else train_idx
+        bucket.extend(groups[keys[key_pos]])
+    return np.array(train_idx, dtype=np.int64), np.array(val_idx, dtype=np.int64)
 
 
 def _per_source_mse(
@@ -204,7 +221,7 @@ def train(
         dropper_masks_np,
         checker_masks_np,
     ) = _load_targets_npz(targets_npz_path)
-    train_idx, val_idx = _split_indices(len(X_np), config.val_fraction, rng)
+    train_idx, val_idx = _split_indices(X_np, config.val_fraction, rng)
 
     device = torch.device(config.device)
     X_train = torch.from_numpy(X_np[train_idx]).to(device)

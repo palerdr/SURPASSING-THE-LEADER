@@ -260,6 +260,36 @@ def test_train_value_net_optimizes_both_value_and_policy_loss():
     )
 
 
+def test_split_keeps_replicated_records_out_of_both_splits():
+    """Ticket B7: callers replicate tablebase/interior records 30-660x before
+    training; a raw row-permutation split scattered identical replicas across
+    train AND val, so best-epoch selection validated on memorized rows. The
+    split must group rows by unique state identity (features bytes) and
+    assign whole groups to one side."""
+    from training.train_value_net import _split_indices
+
+    rng_data = np.random.default_rng(0)
+    base = rng_data.normal(size=(20, FEATURE_DIM)).astype(np.float32)
+    replicated = np.repeat(base[:1], 50, axis=0)  # one record replicated 50x
+    X = np.concatenate([base, replicated], axis=0)  # 70 rows, 20 unique keys
+
+    train_idx, val_idx = _split_indices(X, 0.25, np.random.default_rng(123))
+
+    train_keys = {X[i].tobytes() for i in train_idx}
+    val_keys = {X[i].tobytes() for i in val_idx}
+    assert not (train_keys & val_keys), (
+        f"{len(train_keys & val_keys)} state key(s) leaked into both splits"
+    )
+    # Partition: every row lands in exactly one split.
+    combined = sorted(np.concatenate([train_idx, val_idx]).tolist())
+    assert combined == list(range(len(X)))
+    assert len(train_idx) > 0 and len(val_idx) > 0
+    # Determinism: same seed -> same split.
+    train_idx2, val_idx2 = _split_indices(X, 0.25, np.random.default_rng(123))
+    assert np.array_equal(np.sort(train_idx), np.sort(train_idx2))
+    assert np.array_equal(np.sort(val_idx), np.sort(val_idx2))
+
+
 def test_train_rejects_wrong_feature_dim():
     with tempfile.TemporaryDirectory() as tmp:
         targets = Path(tmp) / "targets.npz"

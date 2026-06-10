@@ -8,7 +8,7 @@
 - **Status:** ✅ **OVERALL GOAL MET (2026-06-08).** Phase I-2 complete: hidden=192 +
   interior-class split + tablebase loss-weight passes the full strict gate on the clean
   F-2-expanded ruler AND beats the baseline — held-out overall **0.05683** (< 0.05934 target,
-  < 0.06986 prev), interior 0.0025, tablebase 0.0024, §4 invariants green (94 passed). All
+  < 0.06986 prev), interior 0.0025, tablebase 0.0024, §4 invariants green (86 collected). All
   five §2 criteria true. See the 2026-06-08 progress-log entry. (Prior phases: F-2 interior
   pins + gate, Phase H machinery + pilot — finding: deep-equilibrium pool is post-I-2 work,
   not an I-2 dependency.)
@@ -548,3 +548,46 @@ bootstrap via the fast validation path (`scripts/validate_interior_fix.py` →
 >5.5 min/state on 2,160 deep-equilibrium states (~8 days serial) AND mis-targeted: the gate
 blockers were training-config (class imbalance, pin weight), not coverage gaps. Phase H remains
 a future lever for h2/h3 generalization, not an I-2 dependency.
+
+### 2026-06-10 — Audit follow-up: doc-drift corrections, leap-window ruling, gate enforcement, split-before-replication
+
+**Doc-drift corrections (no behavior claims changed, only false statements).**
+- README §4: "(The bootstrap step has no RNG, so a rerun is bit-equivalent.)" was FALSE —
+  the bootstrap is seeded throughout (`training/value_targets.py` seeded generators,
+  `environment/cfr/mcts.py` `rng.choice`). Reworded to "seeded-deterministic — a rerun with
+  the same seed and the same numpy/scipy versions is bit-equivalent."
+- This charter's status header claimed "§4 invariants green (94 passed)"; the 6-file §4
+  block actually collects **86** tests (`pytest ... --collect-only`). Header corrected;
+  prior log entries left untouched (append-only).
+- `scripts/play_vs_cfr.py` crashed at import: it still imported `cfr.tree` /
+  `cfr.game_state`, which moved to `environment/abstractions/`. Imports fixed (same class
+  and function names exist there).
+
+**Leap-window boundary ruling (owner canon, settled).** The leap window is the CLOSED
+interval **[3540, 3600]**: `Game.py` (`LS_WINDOW_START <= game_clock <= LS_WINDOW_END`) is
+CORRECT — a half-round starting at exactly 3600 (8:59:60) still spans the inserted second.
+The `Constants.py` comment and the `get_turn_duration` docstring said half-open
+"[3540, 3600)"; both were stale and are corrected to the closed interval. Boundary tests
+added (`tests/test_clock.py`): clock 3600 → 61s turn, 3601 → 60s, 3539 → 60s. Also settled
+per the canon strategy doc ("First D = Leader every round R1-R9"): `first_dropper` is fixed
+for the whole match (RPS pre-game), roles do NOT alternate across rounds —
+`get_roles_for_half` docstring updated from an open question to the settled rule.
+
+**Monotonicity gate now enforced (B6).** `scripts/run_gen_iteration.py` only PRINTED
+'improvement'/'regression' vs `--prev-gen-holdout-mse` and returned 0 either way — §2
+criterion 5 was advisory in the one place it should bind. New `--enforce-monotonicity`
+(default ON, `BooleanOptionalAction`): after the calibration gate passes, a held-out MSE
+>= prev gen's exits 1. `monotonicity_verdict(new, prev)` extracted and unit-tested
+(`tests/test_run_gen_iteration_gate.py`); strict inequality required, equal counts as
+regression.
+
+**Train/val split is now replication-safe (B7).** `training/train_value_net.py` split by
+raw row permutation, but `run_gen_iteration.py` replicates tablebase/interior anchors
+30-660x BEFORE training — identical replicas landed in both splits, so best-epoch
+selection validated on memorized rows (leakage-biased). `_split_indices` now groups rows
+by unique state identity (`features.tobytes()`), permutes the unique keys under the same
+seeded rng, and assigns whole groups to train/val (group-count fraction). Same seed →
+same split; API unchanged. Leakage test added (a record replicated 50x never appears on
+both sides). Note: historical `best_val_mse` numbers were computed under the leaky split
+and are not directly comparable to post-fix values; held-out ruler numbers (the gate
+metrics) are unaffected — the ruler was never part of the training split.

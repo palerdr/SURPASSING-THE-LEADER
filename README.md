@@ -239,7 +239,8 @@ python scripts/run_gen_iteration.py \
 ```
 
 Result: overall **0.05683**, tablebase 0.00239, tablebase_interior 0.00246, h2 0.02031, h3 0.00290 —
-all five charter success criteria met. (The bootstrap step has no RNG, so a rerun is bit-equivalent.)
+all five charter success criteria met. (The bootstrap step is seeded-deterministic — a rerun with the
+same seed and the same numpy/scipy versions is bit-equivalent.)
 
 ---
 
