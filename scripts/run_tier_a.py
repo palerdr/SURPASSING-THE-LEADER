@@ -66,7 +66,7 @@ def solve_one_d1_epoch(args: tuple[str, int]) -> tuple[str, int, float]:
     return dier, ttd, elapsed
 
 
-def stage1(workers: int, limit: int | None) -> None:
+def stage1(workers: int, limit: int | None, max_tasks_per_child: int = 8) -> None:
     todo = [
         (dier, ttd)
         for dier in ("hal", "baku")
@@ -76,26 +76,37 @@ def stage1(workers: int, limit: int | None) -> None:
     if limit is not None:
         todo = todo[:limit]
     total = len(todo)
-    print(f"[stage1] {total} epochs to solve ({480 - total + (0 if limit is None else 0)} already done)",
-          flush=True)
+    print(f"[stage1] {total} epochs to solve ({480 - total} already done)", flush=True)
     if not todo:
         return
 
     done = 0
     start = time.perf_counter()
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    last_beat = start
+    with ProcessPoolExecutor(
+        max_workers=workers, max_tasks_per_child=max_tasks_per_child
+    ) as pool:
         futures = {pool.submit(solve_one_d1_epoch, item): item for item in todo}
-        for future in as_completed(futures):
-            dier, ttd, elapsed = future.result()
-            done += 1
-            wall = time.perf_counter() - start
-            rate = done / wall * 3600
-            eta_h = (total - done) / max(rate, 1e-9)
-            print(
-                f"[stage1] d1_{dier}_{ttd} solved in {elapsed/60:.1f} min "
-                f"({done}/{total}, {rate:.1f} epochs/h, ETA {eta_h:.1f} h)",
-                flush=True,
-            )
+        pending = set(futures)
+        while pending:
+            from concurrent.futures import FIRST_COMPLETED, wait
+
+            finished, pending = wait(pending, timeout=120, return_when=FIRST_COMPLETED)
+            now = time.perf_counter()
+            for future in finished:
+                dier, ttd, elapsed = future.result()
+                done += 1
+                rate = done / (now - start) * 3600
+                eta_h = (total - done) / max(rate, 1e-9)
+                print(
+                    f"[stage1] d1_{dier}_{ttd} solved in {elapsed/60:.1f} min "
+                    f"({done}/{total}, {rate:.1f} epochs/h, ETA {eta_h:.1f} h)",
+                    flush=True,
+                )
+            if now - last_beat >= 300:
+                print(f"[heartbeat] alive: {done}/{total} done, {len(pending)} pending, "
+                      f"wall {(now - start)/60:.0f} min", flush=True)
+                last_beat = now
 
 
 def stage2() -> None:
@@ -168,6 +179,44 @@ def write_manifest() -> None:
     print(f"[manifest] {len(manifest)} artifacts hashed", flush=True)
 
 
+def _pid_alive(pid: int) -> bool:
+    """Windows-safe liveness check (os.kill(pid, 0) TERMINATES on Windows)."""
+    import subprocess
+
+    out = subprocess.run(
+        ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+        capture_output=True, text=True, check=False,
+    ).stdout
+    return str(pid) in out
+
+
+def acquire_lock() -> bool:
+    """Single-instance guard so a scheduled auto-resume never double-runs."""
+    lock = os.path.join(OUT_DIR, ".lock")
+    if os.path.exists(lock):
+        try:
+            with open(lock) as fh:
+                pid = int(fh.read().strip())
+        except (ValueError, OSError):
+            pid = -1
+        if pid > 0 and _pid_alive(pid):
+            print(f"[lock] another build (pid {pid}) is running; exiting", flush=True)
+            return False
+        print(f"[lock] removing stale lock (pid {pid})", flush=True)
+        os.remove(lock)
+    with open(lock, "w") as fh:
+        fh.write(str(os.getpid()))
+    return True
+
+
+def release_lock() -> None:
+    lock = os.path.join(OUT_DIR, ".lock")
+    try:
+        os.remove(lock)
+    except OSError:
+        pass
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers", type=int, default=20)
@@ -177,11 +226,19 @@ def main() -> None:
     args = parser.parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    if args.stage in ("1", "all"):
-        stage1(args.workers, args.limit)
-    if args.stage in ("2", "all") and args.limit is None:
-        stage2()
-    write_manifest()
+    if not acquire_lock():
+        return
+    try:
+        if args.stage in ("1", "all"):
+            stage1(args.workers, args.limit)
+        if args.stage in ("2", "all") and args.limit is None:
+            if os.path.exists(os.path.join(OUT_DIR, "d0.npz")):
+                print("[stage2] d0.npz already exists; skipping", flush=True)
+            else:
+                stage2()
+        write_manifest()
+    finally:
+        release_lock()
 
 
 if __name__ == "__main__":
