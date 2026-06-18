@@ -1,12 +1,16 @@
-# Docs Layout
+# `docs/`
 
-- `docs/architecture/` - OCaml architecture and system design notes
-- `docs/canon/` - source PDFs and canon-facing reference material
-- `docs/reports/` - generated run reports, matrices, checklists, and JSON summaries
-- `docs/audits/` - audit artifacts and raw analysis outputs
+Design notes, canon references, reports, and long-form solver rationale.
 
-Recent key files:
+Important files and folders:
 
-- `docs/reports/round7_run_matrix_2026-03-26.md`
-- `docs/reports/retention_matrix_1024_report_2026-03-26.md`
-- `docs/reports/improvement_matrix_report_2026-03-26.md`
+- `SOLVER_EXTENSION_GOAL.md` - detailed historical charter for the exact solver
+  and value-net gate work.
+- `phase_g_i1_validation.md` - validation notes from the Phase G/I path.
+- `architecture/` - target architecture notes, including the older OCaml plan.
+- `canon/` - source PDFs and canon-facing references.
+- `reports/` - historical run reports and JSON summaries.
+- `whitepaper/` - LaTeX whitepaper source.
+
+The root `README.md` is the current orientation document. Use this directory
+when you need background, not as the source of executable behavior.

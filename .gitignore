@@ -16,18 +16,28 @@ __pycache__/
 htmlcov/
 
 # Generated reports and experiment outputs
-docs/reports/
-logs/
-demos/
-docs/audits/
-docs/.canon_text/
-docs/canon/
+docs/reports/*
+!docs/reports/README.md
+!docs/reports/json/
+docs/reports/json/*
+!docs/reports/json/README.md
+logs/*
+!logs/README.md
+demos/*
+!demos/README.md
+docs/audits/*
+!docs/audits/README.md
+docs/.canon_text/*
+!docs/.canon_text/README.md
+docs/canon/*
+!docs/canon/README.md
 docs/whitepaper/build/
 
 # Training artifacts
 models/checkpoints/
 models/self_play/
-checkpoints/
+checkpoints/*
+!checkpoints/README.md
 
 # Generated media
 *.png
