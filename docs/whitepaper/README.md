@@ -1,4 +1,6 @@
-# STL Solver White Paper
+# `docs/whitepaper/`
+
+LaTeX source for the STL solver whitepaper.
 
 Build from the repository root:
 

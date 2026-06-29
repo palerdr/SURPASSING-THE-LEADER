@@ -540,8 +540,10 @@ invariants green; (5) monotone — 0.05683 < baseline 0.06986. **The overall goa
 --held-out-targets ceiling_holdout_clean.npz --prev-gen-holdout-mse 0.06986
 --per-source-mse-threshold tablebase_interior:0.05 ...`. The winning checkpoint
 (`checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt`) was trained on the prior run's deterministic
-bootstrap via the fast validation path (`scripts/validate_interior_fix.py` →
-`scripts/train_gate_wd.py`); a full-pipeline rerun is bit-equivalent (bootstrap has no RNG).
+bootstrap via the archived fast validation path
+(`scripts/archive/validate_interior_fix.py` →
+`scripts/archive/train_gate_wd.py`); a full-pipeline rerun is bit-equivalent
+(bootstrap has no RNG).
 
 **Note — Phase H not needed for I-2.** The pool-reanalysis pilot showed MCTS-with-net is
 >5.5 min/state on 2,160 deep-equilibrium states (~8 days serial) AND mis-targeted: the gate

@@ -17,17 +17,22 @@ __pycache__/
 htmlcov/
 
 # Generated reports and experiment outputs
-docs/reports/
+docs/reports/*
+!docs/reports/README.md
+!docs/reports/json/
+docs/reports/json/*
+!docs/reports/json/README.md
 logs/
 demos/
-docs/audits/
+docs/audits/*
+!docs/audits/README.md
 docs/.canon_text/
-docs/canon/
+docs/canon/*
+!docs/canon/README.md
 docs/whitepaper/build/
 
 # Training artifacts
-models/checkpoints/
-models/self_play/
+models/
 checkpoints/
 
 # Generated media
