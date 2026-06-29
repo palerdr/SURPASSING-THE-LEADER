@@ -6,9 +6,10 @@ products from one engine:
 
 1. **A playable game** — a human plays Madarame Baku in the terminal against a scripted/searched Hal.
 2. **A solved "Hal" evaluator** — a small value net, trained against an exact finite-horizon minimax
-   oracle, that scores any game state from Hal's perspective. The current best evaluator clears the
-   full strict calibration gate on a held-out ruler at **overall MSE 0.05683** (interior 0.0025,
-   boundary tablebase 0.0024).
+   oracle, that scores any game state from Hal's perspective. The current local best evaluator is a
+   low-impact Tier A auxiliary fine-tune that clears the strict held-out gate at **overall MSE
+   0.05591** (interior 0.0044, boundary tablebase 0.0025) and beat the previous default by +15 wins
+   on a deterministic 240-game ladder comparison.
 
 The design vision lives in [`AGENTS.md`](AGENTS.md); the solver's pass/fail charter lives in
 [`docs/SOLVER_EXTENSION_GOAL.md`](docs/SOLVER_EXTENSION_GOAL.md); the formal rules are summarized in
@@ -60,23 +61,23 @@ stdbuf -oL -eL python scripts/run_ceiling.py 2>&1 | tee checkpoints/ceiling_run.
 
 ## 1.2 Environment
 
-Python 3.12. Clone, create a virtualenv, install pinned deps:
+Use Python 3.12+ and `uv` for dependency management:
 
 ```bash
 git clone <your-remote> STL && cd STL/STL
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt        # numpy, scipy, torch, gymnasium, sb3-contrib, pytest
+uv sync --dev
+uv run pytest -q
 ```
 
 All commands below are run from the `STL/` project directory (the inner one, containing `src/`,
-`environment/`, `training/`, `scripts/`) with the venv active.
+`environment/`, `training/`, `scripts/`). Use `uv run python ...` when you do not have the virtual
+environment activated.
 
 ## 1.3 Repo layout & import convention
 
-There is no `pyproject.toml`. Imports rely on `sys.path` insertion; scripts add the project root at
-the top, and tests do it via `conftest.py`. Engine imports are `from src.Game import Game`, solver
-imports are `from environment.cfr.exact import ...`, etc.
+Dependencies live in `pyproject.toml` and are locked by `uv.lock`. Imports still use the stable
+top-level packages (`src`, `environment`, `training`, `hal`) so historical scripts and checkpoints
+remain usable.
 
 | Path | What lives there |
 |---|---|
@@ -87,7 +88,7 @@ imports are `from environment.cfr.exact import ...`, etc.
 | `environment/` (top) | Gymnasium wrapper, observations, route math, opponents (scripted teachers). |
 | `scripts/` | Every entry point (generation, training, evaluation, play). |
 | `tests/` | 553-test pytest suite, including the firewall and gate invariants. |
-| `docs/canon/` | Source PDFs (rules + strategy docs). Gitignored. |
+| `docs/papers/` | Solver literature PDFs and the current literature assessment. |
 
 ---
 
@@ -242,6 +243,101 @@ Result: overall **0.05683**, tablebase 0.00239, tablebase_interior 0.00246, h2 0
 all five charter success criteria met. (The bootstrap step is seeded-deterministic — a rerun with the
 same seed and the same numpy/scipy versions is bit-equivalent.)
 
+## 4.5 Tier A auxiliary fine-tune now used by default
+
+After the Tier A frontier event, the accepted local default is a conservative fine-tune from
+`checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt` over a 50k low-width Tier A target file:
+
+```bash
+python scripts/run_tier_a_targets.py --out checkpoints/tier_a_targets_50k_w001.npz \
+  --limit 50000 --max-width 0.01 --runtime-width 0.0 --policy-horizon 1 \
+  --include-d1 --verify-manifest --seed 0
+```
+
+Create the merged generation corpus (`checkpoints/gen_tier_a_aux_50k_w001_targets.npz`) with the
+Tier A frontier event's generated `run_gen_iteration.py` command, then run the accepted low-impact
+fine-tune:
+
+```bash
+python scripts/train_saved_corpus_gate.py \
+  --targets checkpoints/gen_tier_a_aux_50k_w001_targets.npz \
+  --out-dir checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5 \
+  --held-out-targets checkpoints/ceiling_holdout_clean.npz \
+  --epochs 5 --hidden-dim 192 \
+  --init-checkpoint checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt \
+  --learning-rate 5e-6 --weight-decay 1e-4 \
+  --tablebase-weight 15 --interior-weight 100 \
+  --tier-a-weight 0.001 --tier-a-policy-weight 0.0 \
+  --prev-gen-holdout-mse 0.0568296855
+```
+
+Calibration result: overall **0.05591**, tablebase 0.00247, tablebase_interior 0.00436, h2 0.02046,
+h3 0.00269. Deterministic checkpoint ladder comparison at 30 search iterations, 20 games/opponent,
+seeds 0,1,2: candidate **170/240** vs previous default **155/240**. The heavier 50k Tier A run with
+`tier-a-weight=0.1` was rejected despite better held-out MSE because it regressed against
+`pattern_reader`.
+
+Certified exploitability comparison with Tier A frontiers, depth 1, seeds 0,1,2: the fine-tune is
+certified better on all three `postleap_230` probes, but the one-death
+`postleap_d1_hal_120_230` probes still overlap and trend mixed. A focused one-death Hal target file
+was generated from the supported d1-Hal artifacts:
+
+```bash
+python scripts/run_tier_a_targets.py --out checkpoints/tier_a_targets_d1_hal_20k_w001.npz \
+  --source tier_a_d1_hal --limit 20000 --max-width 0.01 --runtime-width 0.0 --policy-horizon 1 \
+  --include-d1 --death-filter d1_hal --ttd-min 100 --ttd-max 140 \
+  --verify-manifest --seed 0
+```
+
+The filter exhausted at **8,406** accepted rows (`d1_hal_113/120/140`, no misses). Two low-impact
+fine-tunes using that focused file passed calibration but were rejected by the deterministic
+240-game ladder versus the current default (`-11/240` and `-15/240`). Do not promote d1-Hal append
+fine-tunes without a positive checkpoint ladder and exploitability check.
+
+For safer targeted probes, `train_saved_corpus_gate.py` supports `--trainable-parts value_head`,
+which freezes the trunk and policy head. This preserves policy priors exactly, but the tested
+d1-Hal value-head-only variants were still rejected by certified exploitability precheck: the
+append variant introduced one fresh-postleap certified regression, and the d1-only variant introduced
+two fresh-postleap certified regressions despite strong held-out MSE.
+
+It also supports `--reference-checkpoint` + `--value-distill-weight` for trust-region value
+fine-tuning. A d1-only value-head trust-region run removed certified exploitability regressions and
+passed calibration (`0.05549`), but the promotion event rejected it on live strength (`-14/240`
+ladder delta). Current default remains unchanged.
+
+Promotion is now an explicit three-report event. A candidate must pass calibration, beat the
+deterministic checkpoint ladder, and avoid certified exploitability regressions. The event also
+verifies that the calibration, ladder, and exploitability reports all name the same candidate
+checkpoint, and that the ladder/exploitability reports use the same champion baseline:
+
+```bash
+python scripts/run_checkpoint_promotion_event.py \
+  --calibration-report checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/gate_report.json \
+  --ladder-report checkpoints/checkpoint_ladder_compare/tier_a_50k_ft_lowimpact_seeds012_g20_seeded_report.json \
+  --exploitability-report checkpoints/checkpoint_exploitability_compare/tier_a_50k_ft_seeds012_report.json \
+  --policy-drift-report checkpoints/checkpoint_policy_drift/tier_a_50k_lowimpact_vs_old_seeds012_report.json
+```
+
+The post-promotion next-run event consumes the accepted promotion report, rejected d1-Hal reports,
+and runtime comparison and emits the next long job as a reproducible artifact:
+
+```bash
+python scripts/run_solver_next_event.py \
+  --accepted-promotion-report checkpoints/checkpoint_promotion_event/tier_a_50k_lowimpact_accept_report.json \
+  --rejected-promotion-report checkpoints/checkpoint_promotion_event/tier_a_d1hal_append_reject_report.json \
+  --rejected-promotion-report checkpoints/checkpoint_promotion_event/tier_a_d1hal_valuehead_trust_reject_report.json \
+  --runtime-report checkpoints/tier_a_runtime_compare/current_default_exact_seeded_seeds012_g20_report.json \
+  --out checkpoints/solver_next_event/tier_a_post_promotion_next_run_report.json
+```
+
+Current event verdict after executing the d0 and MCTS-refresh probes:
+`needs_pattern_reader_hardening_generation`. Static Tier A append runs and a fresh 300-iteration
+MCTS refresh improved the held-out ruler but failed live promotion, with pattern_reader the
+recurring regression. An unbounded critical-resolve generation attempt ran for four hours without
+producing a target corpus, so `run_gen_iteration.py` now supports
+`--bootstrap-critical-only --bootstrap-max-states N`. The next run should use that bounded
+critical-only path before spending another full overnight job.
+
 ---
 
 # 5. Evaluation & validation
@@ -290,9 +386,73 @@ peek:
 python scripts/play_cli.py
 ```
 
-`scripts/play_cli.py` plays against `CanonicalHal` (forward search; optionally backed by a trained
-value net via `set_nn_evaluator`). `scripts/play_vs_cfr.py` plays against a precomputed
-equilibrium-strategy table (the legacy bucketed CFR baseline).
+`scripts/play_cli.py` defaults to `SolverAgent` (trained value net + matrix-game MCTS). If the
+generated Tier A tablebase is present, you can enable its exact-only runtime lookup for
+experiments (only collapsed intervals with width 0.0 are used directly by default):
+
+```bash
+python scripts/play_cli.py --use-tier-a
+```
+
+Tier A runtime is **not** the default play path yet. In the current evidence it is useful as a
+frontier/diagnostic tool, but runtime leaf replacement has not produced a robust ladder win:
+`width<=0.01` regressed on a 3-seed 360-game ladder (`baseline 236/360`, Tier A `222/360`), and
+exact-only `width=0.0` is neutral under the promoted default on the deterministic seeded 240-game
+ladder (`170/240` vs `170/240`; 60 exact hits, 62 wide hits). Re-measure before promoting it:
+
+```bash
+python scripts/compare_tier_a_runtime.py --agent-iterations 30 --games 20 --seeds 0,1,2 --tier-a-width 0.0
+```
+
+The stronger current use of Tier A is exploitability measurement: it replaces the old `[-1,+1]`
+frontier bracket with certified intervals on supported post-leap states, without changing runtime
+play:
+
+```bash
+python scripts/run_exploitability.py --policy agent --iterations 30 --scenario postleap_230 --depth 1 --tier-a-frontier
+python scripts/run_exploitability.py --policy agent --iterations 30 --scenario postleap_d1_hal_120_230 --depth 1 --tier-a-frontier
+```
+
+For a repeatable go/no-go event that compares baseline frontiers against Tier A frontiers and emits
+the next long generation command:
+
+```bash
+python scripts/run_tier_a_frontier_event.py --checkpoint checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt
+```
+
+Checkpoint candidates can be compared directly with:
+
+```bash
+python scripts/compare_checkpoints_ladder.py \
+  --champion-checkpoint checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt \
+  --candidate-checkpoint checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt \
+  --agent-iterations 30 --games 20 --seeds 0,1,2
+```
+
+For certified exploitability comparisons:
+
+```bash
+python scripts/compare_checkpoints_exploitability.py \
+  --champion-checkpoint checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt \
+  --candidate-checkpoint checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt \
+  --iterations 30 --depth 1 --seeds 0,1,2
+```
+
+For a cheaper explanation of where search behavior changed before paying for a ladder:
+
+```bash
+python scripts/compare_checkpoints_policy_drift.py \
+  --champion-checkpoint checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt \
+  --candidate-checkpoint checkpoints/gen_tier_a_aux_50k_plus_d1hal8k_ft_lr5e-6_tw001_d1w01_d1pw02_iw100_e5/best.pt \
+  --iterations 30 --seeds 0,1,2
+```
+
+This is diagnostic, not a promotion gate. The rejected d1-Hal append candidate showed broad root
+policy drift versus the current default (mean TV 0.181, max TV 0.282), including opening-dropper
+drift, which explains why a local d1 label update can hurt the live ladder.
+
+Use `--agent legacy` for `CanonicalHal` (the older forward-search baseline). `scripts/play_vs_cfr.py`
+plays against a precomputed equilibrium-strategy table (the legacy bucketed CFR baseline).
 
 ---
 

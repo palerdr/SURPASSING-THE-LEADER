@@ -22,6 +22,7 @@ Two facts about ``play_match`` this module compensates for (verified in
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 from typing import Callable
@@ -46,6 +47,11 @@ __all__ = [
 # duplicated rather than imported so this module never reaches into a
 # private name — keep in sync if tournament.py ever changes it).
 _ENGINE_HALF_ROUND_CAP = 200
+
+
+def _opponent_seed(base_seed: int, name: str) -> int:
+    digest = hashlib.sha256(f"{base_seed}|{name}".encode()).digest()
+    return int.from_bytes(digest[:4], "little")
 
 
 @dataclass(frozen=True)
@@ -125,7 +131,10 @@ def run_ladder(
         LadderEntry(
             name=name,
             # Bind ``name`` at definition time (default-arg idiom).
-            opponent_factory=lambda name=name: create_scripted_opponent(name),
+            opponent_factory=lambda name=name: create_scripted_opponent(
+                name,
+                seed=_opponent_seed(seed, name),
+            ),
         )
         for name in opponent_names
     ]

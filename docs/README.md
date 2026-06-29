@@ -1,12 +1,13 @@
 # Docs Layout
 
-- `docs/architecture/` - OCaml architecture and system design notes
-- `docs/canon/` - source PDFs and canon-facing reference material
-- `docs/reports/` - generated run reports, matrices, checklists, and JSON summaries
-- `docs/audits/` - audit artifacts and raw analysis outputs
+- `docs/papers/` - solver literature PDFs, links, and the current literature assessment.
+- `docs/whitepaper/` - project whitepaper source and generated build output.
+- `docs/reports/` - generated run reports, matrices, checklists, and JSON summaries.
+- `docs/audits/` - audit artifacts and raw analysis outputs.
+- `docs/canon/` - source PDFs and canon-facing reference material when present locally.
 
-Recent key files:
+Key files:
 
-- `docs/reports/round7_run_matrix_2026-03-26.md`
-- `docs/reports/retention_matrix_1024_report_2026-03-26.md`
-- `docs/reports/improvement_matrix_report_2026-03-26.md`
+- `docs/SOLVER_EXTENSION_GOAL.md` - governing solver-extension gate contract and progress log.
+- `docs/papers/literature_assessment.md` - audit of the current approach against solver literature.
+- `docs/phase_g_i1_validation.md` - validation notes from the earlier generation chain.

@@ -74,6 +74,134 @@ def test_train_hidden_dim_192_runs_end_to_end():
         assert 60_000 < total < 70_000, f"checkpoint did not preserve hidden=192; got {total}"
 
 
+def test_train_can_warm_start_from_checkpoint():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=64)
+
+        base = train(
+            targets,
+            Path(tmp) / "base",
+            TrainConfig(epochs=1, batch_size=16, seed=0),
+        )
+        fine_tuned = train(
+            targets,
+            Path(tmp) / "fine_tuned",
+            TrainConfig(
+                epochs=1,
+                batch_size=16,
+                seed=0,
+                init_checkpoint=base.checkpoint_path,
+            ),
+        )
+
+        assert Path(fine_tuned.checkpoint_path).exists()
+
+
+def test_train_rejects_init_checkpoint_hidden_dim_mismatch():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=64)
+
+        base = train(
+            targets,
+            Path(tmp) / "base",
+            TrainConfig(epochs=1, batch_size=16, seed=0, hidden_dim=192),
+        )
+        with pytest.raises(ValueError, match="hidden_dim"):
+            train(
+                targets,
+                Path(tmp) / "mismatch",
+                TrainConfig(
+                    epochs=1,
+                    batch_size=16,
+                    seed=0,
+                    hidden_dim=64,
+                    init_checkpoint=base.checkpoint_path,
+                ),
+            )
+
+
+def test_train_value_head_mode_freezes_trunk_and_policy_head():
+    import torch
+
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=64)
+
+        base = train(
+            targets,
+            Path(tmp) / "base",
+            TrainConfig(epochs=1, batch_size=16, seed=0),
+        )
+        before = load_checkpoint(base.checkpoint_path).state_dict()
+        fine_tuned = train(
+            targets,
+            Path(tmp) / "fine_tuned",
+            TrainConfig(
+                epochs=2,
+                batch_size=16,
+                seed=0,
+                init_checkpoint=base.checkpoint_path,
+                trainable_parts="value_head",
+                learning_rate=1e-3,
+                early_stopping_patience=10,
+            ),
+        )
+        after = load_checkpoint(fine_tuned.checkpoint_path).state_dict()
+
+        for key in before:
+            if key.startswith("value_head."):
+                continue
+            assert torch.equal(before[key], after[key]), f"{key} changed despite value_head freeze"
+
+
+def test_train_records_reference_value_distillation_loss():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=64)
+
+        base = train(
+            targets,
+            Path(tmp) / "base",
+            TrainConfig(epochs=1, batch_size=16, seed=0),
+        )
+        result = train(
+            targets,
+            Path(tmp) / "distill",
+            TrainConfig(
+                epochs=2,
+                batch_size=16,
+                seed=0,
+                init_checkpoint=base.checkpoint_path,
+                reference_checkpoint=base.checkpoint_path,
+                value_distill_weight=10.0,
+                trainable_parts="value_head",
+            ),
+        )
+
+        assert "train_value_distill_mse" in result.train_history[0]
+        assert result.train_history[0]["train_value_distill_mse"] >= 0.0
+
+
+def test_train_rejects_unknown_trainable_parts():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "targets.npz"
+        _write_synthetic_targets(targets, n=64)
+
+        with pytest.raises(ValueError, match="trainable_parts"):
+            train(
+                targets,
+                Path(tmp) / "bad",
+                TrainConfig(
+                    epochs=1,
+                    batch_size=16,
+                    seed=0,
+                    trainable_parts="not_a_mode",
+                ),
+            )
+
+
 def test_train_produces_best_last_checkpoints_and_log():
     with tempfile.TemporaryDirectory() as tmp:
         targets = Path(tmp) / "targets.npz"

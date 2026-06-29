@@ -62,13 +62,19 @@ def build_hal_choose_action(args):
 
     from hal.agent import DEFAULT_CHECKPOINT, SolverAgent, make_choose_action
 
+    checkpoint = args.checkpoint or DEFAULT_CHECKPOINT
     agent = SolverAgent(
-        DEFAULT_CHECKPOINT,
+        checkpoint,
         player_name="Hal",
         iterations=args.agent_iterations,
         seed=args.seed,
+        use_tier_a=args.use_tier_a,
+        tier_a_width=args.tier_a_width,
     )
-    label = f"SolverAgent(iterations={args.agent_iterations}, seed={args.seed})"
+    label = (
+        f"SolverAgent(iterations={args.agent_iterations}, seed={args.seed}, "
+        f"checkpoint={checkpoint}, tier_a={args.use_tier_a})"
+    )
     # No per-game reset wrapper: the agent's policy is a pure function of
     # the public state (state-seeded, cached search), so resets only cost
     # time. The action-sampling RNG intentionally persists.
@@ -173,6 +179,22 @@ def main() -> int:
     parser.add_argument(
         "--agent-iterations", type=int, default=50,
         help="MCTS iterations per SolverAgent move (default 50)",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        help="ValueNet checkpoint for SolverAgent; default is hal.agent.DEFAULT_CHECKPOINT",
+    )
+    parser.add_argument(
+        "--use-tier-a",
+        action="store_true",
+        help="Wrap the SolverAgent leaf evaluator with Tier A tablebase lookup.",
+    )
+    parser.add_argument(
+        "--tier-a-width",
+        type=float,
+        default=0.0,
+        help="Maximum Tier A interval width used directly by the runtime evaluator.",
     )
     parser.add_argument(
         "--games", type=int, default=20,

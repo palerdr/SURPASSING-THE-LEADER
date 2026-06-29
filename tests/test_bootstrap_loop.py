@@ -109,6 +109,26 @@ def test_bootstrap_targets_horizon_field_records_iteration_budget():
             assert t.horizon == 0
 
 
+def test_bootstrap_targets_can_cap_mcts_rows_without_dropping_anchors():
+    targets = generate_mcts_bootstrap_targets(
+        _stub_predict_fn,
+        iterations_per_state=1,
+        seed=0,
+        include_anchor_classes=True,
+        bootstrap_max_states=1,
+        baku_cylinder_grid=(0.0, 60.0, 120.0),
+        hal_cylinder_grid=(0.0,),
+        clock_grid=(720.0,),
+        half_grid=(1,),
+        deaths_grid=(0,),
+        cpr_grid=(0,),
+    )
+
+    mcts_targets = [t for t in targets if t.source == SOURCE_MCTS_BOOTSTRAP]
+    assert len(mcts_targets) == 1
+    assert SOURCE_TERMINAL in {t.source for t in targets}
+
+
 def test_bootstrap_targets_are_deterministic_under_same_seed():
     a = generate_mcts_bootstrap_targets(
         _stub_predict_fn, iterations_per_state=20, seed=42, **_tiny_grids()

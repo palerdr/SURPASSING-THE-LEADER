@@ -12,5 +12,15 @@ engine referee (invariant G4).
 """
 
 from .epoch_sweep import EpochSpec, solve_epoch, survival_table
+from .tier_a import TierAEvaluator, TierAInterval, TierALookup, TierALookupResult, frontier_interval_fn
 
-__all__ = ["EpochSpec", "solve_epoch", "survival_table"]
+__all__ = [
+    "EpochSpec",
+    "solve_epoch",
+    "survival_table",
+    "TierAEvaluator",
+    "TierAInterval",
+    "TierALookup",
+    "TierALookupResult",
+    "frontier_interval_fn",
+]

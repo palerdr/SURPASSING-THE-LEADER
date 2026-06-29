@@ -220,6 +220,7 @@ def load_hal_ai(
     agent: str = "solver",
     iterations: int = 200,
     seed: int = 0,
+    use_tier_a: bool = False,
 ):
     """Build the Hal opponent.
 
@@ -232,8 +233,12 @@ def load_hal_ai(
         from hal.agent import DEFAULT_CHECKPOINT, SolverAgent
 
         path = checkpoint or DEFAULT_CHECKPOINT
-        hal_ai = SolverAgent(path, iterations=iterations, seed=seed)
-        print(f"  Solver Hal: {iterations} MCTS iterations/move, net {os.path.basename(path)}")
+        hal_ai = SolverAgent(path, iterations=iterations, seed=seed, use_tier_a=use_tier_a)
+        tier_a_label = " + Tier A" if use_tier_a else ""
+        print(
+            f"  Solver Hal: {iterations} MCTS iterations/move, "
+            f"net {os.path.basename(path)}{tier_a_label}"
+        )
         return hal_ai
 
     if agent != "legacy":
@@ -258,6 +263,8 @@ def main():
     parser.add_argument("--seed", type=int, default=0, help="Agent RNG seed")
     parser.add_argument("--depth", type=int, default=2, help="Legacy Hal search depth (default: 2)")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to value net checkpoint")
+    parser.add_argument("--use-tier-a", action="store_true",
+                        help="Enable Tier A runtime tablebase lookup for Solver Hal")
     args = parser.parse_args()
 
     print_banner()
@@ -268,7 +275,14 @@ def main():
         p2_name = input("  Player 2 name [Baku]: ").strip() or "Baku"
     else:
         print("  Loading Hal AI...")
-        hal_ai = load_hal_ai(args.depth, args.checkpoint, args.agent, args.iterations, args.seed)
+        hal_ai = load_hal_ai(
+            args.depth,
+            args.checkpoint,
+            args.agent,
+            args.iterations,
+            args.seed,
+            args.use_tier_a,
+        )
         print()
         p1_name = "Hal"
         p2_name = input("  Your name [Baku]: ").strip() or "Baku"

@@ -61,11 +61,27 @@ class TrainConfig:
         ("terminal", 20.0),
         ("tablebase", 20.0),
     )
+    # Per-class policy-loss weight overrides. Sources not listed default to 1.0.
+    # This is intentionally separate from value loss: a tablebase- or MCTS-
+    # produced source can be useful as a policy prior without deserving the
+    # same weight as a value target on the held-out ruler.
+    policy_source_weights: tuple[tuple[str, float], ...] = ()
     # Net architecture knobs (Phase I). hidden_dim=64 is the original 13.7K-
     # param trunk; hidden_dim=128 gives 35.5K params (2.6× capacity) for
     # fitting more diverse tablebase pins. hidden_dim=192 (65K) exceeds the
     # 50K guard; raise the guard only with explicit justification.
     hidden_dim: int = 64
+    # Optional warm start for fine-tuning from an accepted checkpoint. When
+    # omitted, training starts from a seeded random initialization as before.
+    init_checkpoint: str | None = None
+    # Which module subset may update during training. Use "value_head" for
+    # conservative calibration tweaks that should leave policy priors and the
+    # shared feature trunk intact.
+    trainable_parts: str = "all"
+    # Optional trust-region reference. When set with value_distill_weight > 0,
+    # training penalizes value-output drift from this checkpoint on each batch.
+    reference_checkpoint: str | None = None
+    value_distill_weight: float = 0.0
 
 
 @dataclass
@@ -170,10 +186,38 @@ def _load_targets_npz(
     return X, y, sources, dropper_dists, checker_dists, dropper_masks, checker_masks
 
 
+def _configure_trainable_parts(model: ValueNet, mode: str) -> None:
+    valid = {"all", "value_head", "policy_head", "heads", "trunk_value"}
+    if mode not in valid:
+        raise ValueError(f"trainable_parts must be one of {sorted(valid)}, got {mode!r}")
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    if mode == "all":
+        for parameter in model.parameters():
+            parameter.requires_grad = True
+    elif mode == "value_head":
+        for parameter in model.value_head.parameters():
+            parameter.requires_grad = True
+    elif mode == "policy_head":
+        for parameter in model.policy_head.parameters():
+            parameter.requires_grad = True
+    elif mode == "heads":
+        for parameter in model.value_head.parameters():
+            parameter.requires_grad = True
+        for parameter in model.policy_head.parameters():
+            parameter.requires_grad = True
+    elif mode == "trunk_value":
+        for parameter in model.trunk.parameters():
+            parameter.requires_grad = True
+        for parameter in model.value_head.parameters():
+            parameter.requires_grad = True
+
+
 def _masked_policy_loss(
     logits: torch.Tensor,
     target: torch.Tensor,
     legal_mask: torch.Tensor,
+    sample_weight: torch.Tensor | None = None,
 ) -> torch.Tensor:
     active = target.sum(dim=1) > 1e-8
     if not bool(active.any()):
@@ -185,7 +229,11 @@ def _masked_policy_loss(
     target_active = target_active / target_active.sum(dim=1, keepdim=True).clamp_min(1e-8)
     masked_logits = logits_active.masked_fill(~mask_active, -1.0e9)
     log_probs = torch.log_softmax(masked_logits, dim=1)
-    return -(target_active * log_probs).sum(dim=1).mean()
+    per_sample = -(target_active * log_probs).sum(dim=1)
+    if sample_weight is None:
+        return per_sample.mean()
+    weight_active = sample_weight[active]
+    return (per_sample * weight_active).sum() / weight_active.sum().clamp(min=1e-8)
 
 
 def train(
@@ -235,12 +283,18 @@ def train(
     val_sources = sources_np[val_idx]
 
     weight_lookup = dict(config.source_weights)
+    policy_weight_lookup = dict(config.policy_source_weights)
     train_sources = sources_np[train_idx]
     train_weights_np = np.array(
         [weight_lookup.get(str(s), 1.0) for s in train_sources],
         dtype=np.float32,
     )
+    train_policy_weights_np = np.array(
+        [policy_weight_lookup.get(str(s), 1.0) for s in train_sources],
+        dtype=np.float32,
+    )
     weights_train = torch.from_numpy(train_weights_np).to(device)
+    policy_weights_train = torch.from_numpy(train_policy_weights_np).to(device)
 
     train_ds = TensorDataset(
         X_train,
@@ -250,6 +304,7 @@ def train(
         dropper_mask_train,
         checker_mask_train,
         weights_train,
+        policy_weights_train,
     )
     train_loader = DataLoader(
         train_ds,
@@ -258,9 +313,26 @@ def train(
         generator=torch.Generator().manual_seed(config.seed),
     )
 
-    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=config.hidden_dim).to(device)
+    if config.init_checkpoint is not None:
+        model = load_checkpoint(config.init_checkpoint, device=config.device).to(device)
+        loaded_hidden = int(model.trunk[0].out_features)
+        if loaded_hidden != config.hidden_dim:
+            raise ValueError(
+                f"init_checkpoint hidden_dim={loaded_hidden} does not match "
+                f"TrainConfig.hidden_dim={config.hidden_dim}"
+            )
+    else:
+        model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=config.hidden_dim).to(device)
+    _configure_trainable_parts(model, config.trainable_parts)
+    trainable_parameters = [p for p in model.parameters() if p.requires_grad]
+    if not trainable_parameters:
+        raise ValueError(f"trainable_parts={config.trainable_parts!r} left no trainable parameters")
+    reference_model = None
+    if config.reference_checkpoint is not None and config.value_distill_weight > 0.0:
+        reference_model = load_checkpoint(config.reference_checkpoint, device=config.device).to(device)
+        reference_model.eval()
     optimizer = torch.optim.Adam(
-        model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+        trainable_parameters, lr=config.learning_rate, weight_decay=config.weight_decay
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, config.epochs)
@@ -283,6 +355,7 @@ def train(
         total_loss = 0.0
         n_seen = 0
         total_policy = 0.0
+        total_distill = 0.0
         for (
             x_batch,
             y_batch,
@@ -291,31 +364,55 @@ def train(
             dropper_mask_batch,
             checker_mask_batch,
             weight_batch,
+            policy_weight_batch,
         ) in train_loader:
             optimizer.zero_grad()
             preds, dropper_logits, checker_logits = model(x_batch)
             per_sample_se = loss_fn(preds.squeeze(-1), y_batch)
             value_loss = (per_sample_se * weight_batch).sum() / weight_batch.sum().clamp(min=1e-8)
-            dropper_loss = _masked_policy_loss(dropper_logits, dropper_batch, dropper_mask_batch)
-            checker_loss = _masked_policy_loss(checker_logits, checker_batch, checker_mask_batch)
+            if reference_model is not None:
+                with torch.no_grad():
+                    ref_preds = value_output(reference_model(x_batch)).squeeze(-1)
+                value_distill_loss = loss_fn(preds.squeeze(-1), ref_preds).mean()
+            else:
+                value_distill_loss = preds.sum() * 0.0
+            dropper_loss = _masked_policy_loss(
+                dropper_logits,
+                dropper_batch,
+                dropper_mask_batch,
+                policy_weight_batch,
+            )
+            checker_loss = _masked_policy_loss(
+                checker_logits,
+                checker_batch,
+                checker_mask_batch,
+                policy_weight_batch,
+            )
             policy_loss = dropper_loss + checker_loss
-            loss = value_loss + config.policy_loss_weight * policy_loss
+            loss = (
+                value_loss
+                + config.policy_loss_weight * policy_loss
+                + config.value_distill_weight * value_distill_loss
+            )
             loss.backward()
             optimizer.step()
             batch_size = x_batch.shape[0]
             total_loss += float(value_loss.item()) * batch_size
             total_policy += float(policy_loss.item()) * batch_size
+            total_distill += float(value_distill_loss.item()) * batch_size
             n_seen += batch_size
         scheduler.step()
 
         train_mse = total_loss / max(1, n_seen)
         train_policy_nll = total_policy / max(1, n_seen)
+        train_value_distill_mse = total_distill / max(1, n_seen)
         val_mse, per_source = _evaluate(model, X_val, y_val, val_sources)
         history.append(
             {
                 "epoch": epoch,
                 "train_mse": train_mse,
                 "train_policy_nll": train_policy_nll,
+                "train_value_distill_mse": train_value_distill_mse,
                 "val_mse": val_mse,
                 "per_source_val_mse": per_source,
                 "lr": optimizer.param_groups[0]["lr"],

@@ -14,9 +14,12 @@ from .base import Opponent
 class RandomBot(Opponent):
     """Picks a uniformly random second each turn."""
 
+    def __init__(self, seed: int | None = None) -> None:
+        self._rng = random.Random(seed)
+
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
         if role == "dropper":
-            return random.randint(1, turn_duration)
+            return self._rng.randint(1, turn_duration)
         else:
             # Checker doesn't know about leap seconds — max is always 60
-            return random.randint(1, TURN_DURATION_NORMAL)
+            return self._rng.randint(1, TURN_DURATION_NORMAL)

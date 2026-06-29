@@ -276,6 +276,13 @@ def test_run_ladder_smoke_and_report_shape():
     assert overall["wins"] + overall["draws"] + overall["losses"] == 3
 
 
+def test_run_ladder_random_rung_is_reproducible_for_same_seed():
+    first = run_ladder(_hal_stub, ["random"], n_games=5, seed=123)["random"]
+    second = run_ladder(_hal_stub, ["random"], n_games=5, seed=123)["random"]
+
+    assert first == second
+
+
 def test_run_ladder_rejects_subengine_half_round_cap():
     with pytest.raises(ValueError):
         run_ladder(_hal_stub, ["random"], n_games=1, seed=0, max_half_rounds=50)

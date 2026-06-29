@@ -79,3 +79,39 @@ class TestEnforceMonotonicityFlagPlumbing:
         improved = monotonicity_verdict(0.07, args.prev_gen_holdout_mse)
         exit_code = 1 if (not improved and args.enforce_monotonicity) else 0
         assert exit_code == 0
+
+
+class TestTierAExtraTargetPlumbing:
+    def test_extra_targets_are_repeatable_and_weighted(self):
+        args = build_parser().parse_args(
+            REQUIRED_ARGS
+            + [
+                "--extra-targets", "tier_a_1.npz",
+                "--extra-targets", "tier_a_2.npz",
+                "--tier-a-weight", "3.5",
+                "--tier-a-policy-weight", "0.25",
+                "--tier-a-replicate", "4",
+            ]
+        )
+        assert args.extra_targets == ["tier_a_1.npz", "tier_a_2.npz"]
+        assert args.tier_a_weight == 3.5
+        assert args.tier_a_policy_weight == 0.25
+        assert args.tier_a_replicate == 4
+
+    def test_generation_training_can_warm_start_from_checkpoint(self):
+        args = build_parser().parse_args(
+            REQUIRED_ARGS
+            + ["--init-checkpoint", "current/best.pt", "--learning-rate", "3e-6"]
+        )
+
+        assert args.init_checkpoint == "current/best.pt"
+        assert args.learning_rate == 3e-6
+
+    def test_bootstrap_can_be_bounded_to_critical_states(self):
+        args = build_parser().parse_args(
+            REQUIRED_ARGS
+            + ["--bootstrap-critical-only", "--bootstrap-max-states", "12"]
+        )
+
+        assert args.bootstrap_critical_only is True
+        assert args.bootstrap_max_states == 12

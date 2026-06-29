@@ -66,11 +66,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--out-targets", required=True)
     parser.add_argument("--anchor-targets", default=None)
+    parser.add_argument(
+        "--extra-targets",
+        action="append",
+        default=None,
+        help="Additional saved ValueTarget .npz files to append after anchors "
+        "(for example Tier A policy/value targets). Repeatable.",
+    )
     parser.add_argument("--held-out-targets", required=True)
     parser.add_argument("--iterations", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=150)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--init-checkpoint",
+        default=None,
+        help="Optional checkpoint to warm-start the trained generation from. "
+        "The --in-checkpoint evaluator is still used to generate MCTS labels.",
+    )
     parser.add_argument("--tablebase-replicate", type=int, default=100)
     parser.add_argument(
         "--split-interior",
@@ -117,6 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
         "report-only behavior.",
     )
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
+    parser.add_argument("--tier-a-weight", type=float, default=1.0)
+    parser.add_argument("--tier-a-policy-weight", type=float, default=1.0)
+    parser.add_argument("--tier-a-replicate", type=int, default=1)
     parser.add_argument("--max-unresolved-per-source", type=float, default=0.35)
     parser.add_argument(
         "--hidden-dim",
@@ -141,6 +158,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--subgame-resolve-at-critical",
         action="store_true",
         help="Use deeper root subgame re-solving for MCTS bootstrap labels at critical states.",
+    )
+    parser.add_argument(
+        "--bootstrap-critical-only",
+        action="store_true",
+        help="Generate MCTS bootstrap labels only for states flagged by is_critical(). "
+        "Anchor/tablebase classes are still merged afterward.",
+    )
+    parser.add_argument(
+        "--bootstrap-max-states",
+        type=int,
+        default=None,
+        help="Cap the number of non-anchor MCTS bootstrap states. Useful for bounded "
+        "critical-resolve runs that would otherwise take hours without artifacts.",
     )
     return parser
 
@@ -174,12 +204,21 @@ def main() -> int:
         f"[2/5] MCTS bootstrap sweep at {args.iterations} iter (this is the long step)",
         flush=True,
     )
+    if args.bootstrap_critical_only or args.bootstrap_max_states is not None:
+        print(
+            "  Bootstrap scope: "
+            f"critical_only={args.bootstrap_critical_only} "
+            f"max_states={args.bootstrap_max_states}",
+            flush=True,
+        )
     t0 = time.time()
     targets = generate_mcts_bootstrap_targets(
         predict_fn,
         iterations_per_state=args.iterations,
         seed=args.seed,
         subgame_resolve_at_critical=args.subgame_resolve_at_critical,
+        bootstrap_critical_only=args.bootstrap_critical_only,
+        bootstrap_max_states=args.bootstrap_max_states,
         split_interior=args.split_interior,
     )
     print(
@@ -192,6 +231,23 @@ def main() -> int:
         anchors = load_targets_as_records(args.anchor_targets)
         targets = targets + anchors
         print(f"  After anchor merge: {len(targets)} records", flush=True)
+    else:
+        print("[3/5] No anchor targets supplied", flush=True)
+
+    if args.extra_targets:
+        for path in args.extra_targets:
+            extra = load_targets_as_records(path)
+            if args.tier_a_replicate > 1:
+                tier_a = [t for t in extra if t.source == "tier_a"]
+                if tier_a:
+                    extra = extra + tier_a * (args.tier_a_replicate - 1)
+                    print(
+                        f"  Tier A replicated {args.tier_a_replicate}x in {path}: "
+                        f"{len(tier_a)} -> {len(tier_a) * args.tier_a_replicate} records",
+                        flush=True,
+                    )
+            targets = targets + extra
+            print(f"  Added extra targets from {path}: +{len(extra)} records", flush=True)
 
     if args.tablebase_replicate > 1:
         tb = [t for t in targets if t.source == SOURCE_TABLEBASE]
@@ -240,9 +296,11 @@ def main() -> int:
     print(f"[4/5] Training on rebalanced corpus (hidden_dim={args.hidden_dim})", flush=True)
     cfg = TrainConfig(
         epochs=args.epochs,
+        learning_rate=args.learning_rate,
         seed=args.seed,
         device=args.device,
         hidden_dim=args.hidden_dim,
+        init_checkpoint=args.init_checkpoint,
         weight_decay=args.weight_decay,
         source_weights=(
             (SOURCE_TERMINAL, args.terminal_weight),
@@ -250,8 +308,10 @@ def main() -> int:
             (SOURCE_EXACT_HORIZON_3, args.horizon_weight),
             (SOURCE_TABLEBASE, args.tablebase_weight),
             (SOURCE_TABLEBASE_INTERIOR, interior_weight),
+            ("tier_a", args.tier_a_weight),
         ),
         policy_loss_weight=args.policy_loss_weight,
+        policy_source_weights=(("tier_a", args.tier_a_policy_weight),),
         early_stopping_patience=40,
     )
     train_result = train(args.out_targets, args.out_dir, cfg)

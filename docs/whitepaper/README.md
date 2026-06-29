@@ -3,8 +3,8 @@
 Build from the repository root:
 
 ```powershell
-.\.tools\tectonic\tectonic.exe --keep-logs --synctex --outdir docs\whitepaper\build docs\whitepaper\stl_solver_whitepaper.tex
+tectonic --keep-logs --synctex --outdir docs\whitepaper\build docs\whitepaper\stl_solver_whitepaper.tex
 ```
 
-In VS Code, use the `LaTeX: build whitepaper` task or the LaTeX Workshop
-`tectonic` recipe.
+Install `tectonic` with your system package manager, or run it through a local
+tool wrapper outside the repository. The binary is intentionally not checked in.

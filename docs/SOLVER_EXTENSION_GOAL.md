@@ -5,20 +5,19 @@
 > **pass/fail**, not advisory. A change that does not clear its phase gate is not
 > "done" — it is reverted or reported, never merged by weakening the gate.
 
-- **Status:** ✅ **OVERALL GOAL MET (2026-06-08).** Phase I-2 complete: hidden=192 +
+- **Status:** ✅ **OVERALL GOAL MET (2026-06-08); current local best advanced 2026-06-19.** Phase I-2 complete: hidden=192 +
   interior-class split + tablebase loss-weight passes the full strict gate on the clean
   F-2-expanded ruler AND beats the baseline — held-out overall **0.05683** (< 0.05934 target,
   < 0.06986 prev), interior 0.0025, tablebase 0.0024, §4 invariants green (86 collected). All
   five §2 criteria true. See the 2026-06-08 progress-log entry. (Prior phases: F-2 interior
   pins + gate, Phase H machinery + pilot — finding: deep-equilibrium pool is post-I-2 work,
   not an I-2 dependency.)
-- **Last updated:** 2026‑06‑08
+- **Last updated:** 2026‑06‑19
 - **Owner:** jdewitte632@gmail.com
-- **Current best evaluator:** `checkpoints/gen_ceiling_tbw15_wd1e-4/best.pt` (hidden=192;
-  reproduce via `run_gen_iteration.py --split-interior --interior-weight 2 --tablebase-weight 15
-  --weight-decay 1e-4`)
-- **Current goal metric:** clean F-2-expanded ruler **overall MSE = 0.05683** (beaten; prior
-  bar was boundary-only 0.05934)
+- **Current best evaluator:** `checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt`
+  (hidden=192; low-impact Tier A auxiliary fine-tune from the 2026-06-08 checkpoint)
+- **Current goal metric:** clean F-2-expanded ruler **overall MSE = 0.05591**; deterministic
+  240-game checkpoint ladder comparison vs the prior default: **170/240 vs 155/240**.
 
 ---
 
@@ -647,3 +646,110 @@ AVERAGE of per-iteration root selection strategies (the provably convergent SM-M
 object, Lisy et al. 2013) recovers to 5-5 at 30 iters for 1/5 the cost. The agent now
 plays the average strategy (`MCTSResult.root_strategy_*_avg`). Real verdicts need
 SPRT-scale N — the harness exists for exactly that.
+
+### 2026-06-19 — Tier A frontier integration + accepted low-impact auxiliary fine-tune
+
+**Tier A integration result.** Tier A is now wired as a certified frontier source for
+best-response/exploitability probes and as an optional exact-only runtime evaluator. Runtime leaf
+replacement remains diagnostic only: earlier `width<=0.01` and exact-only runtime ladders did not
+produce a robust play-strength win. Re-measuring exact-only `width=0.0` under the promoted default
+with deterministic opponent seeds was neutral on the 240-game checkpoint ladder (`170/240` both
+ways; aggregate evaluator stats: 60 exact hits, 62 wide hits). The useful path remains frontier
+tightening and auxiliary labels.
+
+**Frontier event.** `scripts/run_tier_a_frontier_event.py` compares ordinary `[-1,+1]` BR frontiers
+against Tier A intervals on supported post-leap states and emits the next generation command. The
+event hit 4/4 supported cases, 238/240 tablebase frontier hits, median width-reduction fraction
+0.810, and recommended a 50k low-width Tier A auxiliary run.
+
+**Training outcome.** The heavy 50k auxiliary run improved held-out MSE but failed the interior gate
+or regressed pattern-reader strength depending on weight. The accepted checkpoint is the low-impact
+warm-start fine-tune:
+`checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt`. Held-out ruler:
+overall 0.055905, tablebase 0.002466, tablebase_interior 0.004360, h2 0.020456, h3 0.002688.
+
+**Strength gate hygiene.** Ladder reproducibility bug fixed: `RandomBot` now owns a seeded RNG and
+`run_ladder()` passes stable per-opponent seeds through the factory. With deterministic opponents,
+the accepted fine-tune beat the previous default on the checkpoint ladder at 30 search iterations,
+20 games/opponent, seeds 0,1,2: **170/240 vs 155/240**. Per-rung deltas: random +1/60, safe +1/60,
+`baku_lsr_engineering` +12/60, `pattern_reader` +1/60. The default `SolverAgent` checkpoint now
+points to the accepted Tier A auxiliary fine-tune.
+
+**Certified exploitability follow-up.** `scripts/compare_checkpoints_exploitability.py` compares two
+checkpoints with the same depth-limited BR probe and Tier A frontier intervals. The accepted
+fine-tune is certified better on all three `postleap_230` seeds (midpoint deltas +0.058, +0.080,
++0.076), while `postleap_d1_hal_120_230` remains overlapping/mixed (midpoint deltas -0.082,
+-0.003, -0.079). A one-death-Hal focused target file was generated with
+`run_tier_a_targets.py --source tier_a_d1_hal --death-filter d1_hal --ttd-min 100 --ttd-max 140`;
+the filtered candidate set exhausted at 8,406 accepted rows from `d1_hal_113/120/140`, with no
+lookup misses. Two warm-start append fine-tunes passed calibration but failed the deterministic
+checkpoint ladder against the current default: `tier_a_d1_hal:0.01` + policy 0.02 was **-11/240**;
+value-only `tier_a_d1_hal:0.002` was **-15/240**. Do not promote d1-Hal append fine-tunes without
+both positive ladder evidence and non-regressing fresh-postleap exploitability.
+
+**Promotion event codified.** `scripts/run_checkpoint_promotion_event.py` consumes the calibration
+gate report, deterministic checkpoint-ladder report, and certified exploitability report and returns
+one accept/reject decision. It also rejects mismatched evidence bundles: all three reports must name
+the same candidate checkpoint, and ladder/exploitability must share the same champion checkpoint.
+The accepted current default passes this event (ladder +15/240, exploitability median midpoint delta
++0.0273, 0 certified-worse cases). The d1-Hal append candidate is rejected despite better
+calibration: ladder -11/240, `safe` -3/60, `baku_lsr_engineering` -7/60, `pattern_reader` -4/60, and
+1 certified-worse exploitability case. Future default-checkpoint changes should go through this
+event rather than calibration alone.
+
+**Safer fine-tune control added.** `training.train_value_net.TrainConfig.trainable_parts` and
+`train_saved_corpus_gate.py --trainable-parts` support conservative warm-start modes including
+`value_head`, which freezes the trunk and policy head. This preserves policy priors exactly for
+targeted calibration probes. Two d1-Hal value-head-only experiments were run: append-to-base
+(`overall 0.05477`) and d1-only (`overall 0.05104`). Both passed calibration, but both failed the
+certified exploitability precheck via fresh-postleap regressions (append: 1 certified-worse case;
+d1-only: 2 certified-worse cases). The lesson is now explicit: d1-Hal labels improve the held-out
+ruler easily, but the current target distribution is not yet a safe policy-improvement update.
+
+**Trust-region probe.** `TrainConfig.reference_checkpoint` + `value_distill_weight` add optional
+value-output distillation against a reference checkpoint. A d1-only value-head trust-region run
+(`value_distill_weight=100`) passed calibration at overall 0.05549 and removed certified
+exploitability regressions (5 overlaps, 1 certified-better case), but the promotion event rejected
+it on the deterministic ladder: **-14/240** with regressions on every rung. Trust regions reduce
+certified value drift, but they are not sufficient to promote the current d1-Hal target distribution.
+
+**Policy drift diagnostic.** `scripts/compare_checkpoints_policy_drift.py` compares deployed
+SolverAgent root mixed strategies by scenario/role using total variation and Jensen-Shannon
+divergence. The accepted Tier A fine-tune versus the old ceiling checkpoint had mean TV 0.195
+(worst: d1-Hal dropper seed 1, TV 0.389), while the rejected d1-Hal append candidate versus the
+current default had mean TV 0.181 and broad opening/post-leap drift (worst: opening dropper seed 2,
+TV 0.282). This diagnostic explains candidate behavior before the expensive ladder, but promotion
+still depends on the promotion event. The promotion event now accepts `--policy-drift-report` as an
+optional non-gating diagnostic input; when supplied, its checkpoint identities are consistency-checked
+and its summary is embedded in the accept/reject artifact.
+
+**Post-promotion next-run event.** `scripts/run_solver_next_event.py` now consumes the accepted
+promotion report, rejected d1-Hal promotion reports, and exact-only Tier A runtime comparison to
+emit the next long-run plan. The generated artifact
+`checkpoints/solver_next_event/tier_a_post_promotion_next_run_report.json` reports
+`needs_pattern_reader_hardening_generation` after executing the follow-up probes. Rationale: the
+current default is accepted by calibration + ladder + certified exploitability, but every subsequent
+calibration-improving candidate failed live strength.
+
+Follow-up evidence:
+- d0-only Tier A target generation requested 150k rows but exhausted the d0 low-width grid at 4,049
+  accepted rows (`d0.npz`, no misses). The warm-start append passed calibration (`overall 0.055612`,
+  better than 0.055905) and had no certified exploitability regressions (2 certified-better, 4
+  overlap), but promotion rejected it on the deterministic ladder: **-10/240** with regressions on
+  random (-3), safe (-4), and `baku_lsr_engineering` (-4).
+- A fresh 300-iteration MCTS-bootstrap refresh from the current default produced 910 bootstrap
+  records. The first warm-start training attempt used `run_gen_iteration.py`'s old default learning
+  rate (`1e-3`) and failed the interior gate (`tablebase_interior 0.08798 > 0.05`), so
+  `run_gen_iteration.py` now exposes `--learning-rate`. A low-rate retrain passed calibration
+  (`overall 0.055740`) but was rejected: ladder **-10/240**, `pattern_reader` **-12/60**, and 3
+  certified-worse `postleap_230` exploitability cases.
+- A value-head-only trust-region fit on the same MCTS-refresh corpus passed calibration
+  (`overall 0.055865`) and removed certified exploitability regressions (6 overlaps, tiny median
+  midpoint delta), but still failed promotion: ladder **-4/240**, entirely from
+  `pattern_reader` **-9/60**. A deployment-like 200-iteration pattern_reader diagnostic also
+  regressed (**-7/30**), so this is not just a 30-iteration gate artifact.
+- The next-event report now recommends a critical-state subgame-resolve generation with low learning
+  rate from the start, but the first unbounded attempt ran for four hours and produced no target or
+  gate artifact. `run_gen_iteration.py` now exposes `--bootstrap-critical-only` and
+  `--bootstrap-max-states N` so the next critical-resolve experiment is bounded to a small set of
+  critical bootstrap states before another full overnight spend.

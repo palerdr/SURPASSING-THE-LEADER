@@ -40,7 +40,7 @@ from src.Game import Game
 DEFAULT_CHECKPOINT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "checkpoints",
-    "gen_ceiling_tbw15_wd1e-4",
+    "gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5",
     "best.pt",
 )
 
@@ -83,6 +83,8 @@ class SolverAgent(Opponent):
         resolve_at_critical: bool = False,
         resolve_horizon: int = 3,
         evaluator: LeafEvaluator | None = None,
+        use_tier_a: bool = False,
+        tier_a_width: float = 0.0,
     ) -> None:
         self.player_name = player_name
         self.iterations = int(iterations)
@@ -96,7 +98,13 @@ class SolverAgent(Opponent):
         self._exact_config = ExactSearchConfig()
         self._policy_cache: dict = {}
         self._search_cache: dict = {}
-        self.evaluator = evaluator if evaluator is not None else _load_evaluator(checkpoint_path)
+        base_evaluator = evaluator if evaluator is not None else _load_evaluator(checkpoint_path)
+        if use_tier_a:
+            from training.tablebase.tier_a import TierAEvaluator
+
+            self.evaluator = TierAEvaluator(base_evaluator, max_width=tier_a_width)
+        else:
+            self.evaluator = base_evaluator
 
     # ── Strategic core ────────────────────────────────────────────────
 

@@ -36,6 +36,7 @@ from src.Game import Game
 
 # (game, role) -> (seconds, probabilities) for the frozen seat's mixture.
 PolicyFn = Callable[[Game, str], tuple[tuple[int, ...], np.ndarray]]
+FrontierFn = Callable[[Game], tuple[float, float] | None]
 
 FRONTIER = (-1.0, 1.0)
 
@@ -53,6 +54,7 @@ class BRResult:
     engine_expansions: int
     policy_queries: int
     frontier_hits: int
+    tablebase_frontier_hits: int
     elapsed_seconds: float
 
     @property
@@ -68,16 +70,19 @@ class _BRSolver:
         *,
         support_mass: float,
         max_states: int,
+        frontier_fn: FrontierFn | None,
     ) -> None:
         self.policy = policy
         self.frozen_name = frozen_name.lower()
         self.support_mass = float(support_mass)
         self.max_states = int(max_states)
+        self.frontier_fn = frontier_fn
         self.memo: dict = {}
         self.states_solved = 0
         self.engine_expansions = 0
         self.policy_queries = 0
         self.frontier_hits = 0
+        self.tablebase_frontier_hits = 0
 
     # ── outcome-class child expansion ────────────────────────────────
 
@@ -119,6 +124,12 @@ class _BRSolver:
             return float(tval), float(tval)
         if depth_to_go <= 0:
             self.frontier_hits += 1
+            if self.frontier_fn is not None:
+                frontier = self.frontier_fn(game)
+                if frontier is not None:
+                    lo, hi = frontier
+                    self.tablebase_frontier_hits += 1
+                    return max(float(lo), -1.0), min(float(hi), 1.0)
             return FRONTIER
 
         key = (exact_public_state(game), depth_to_go)
@@ -207,6 +218,7 @@ def best_response_interval(
     frozen_name: str = "Hal",
     support_mass: float = 1.0,
     max_states: int = 2_000_000,
+    frontier_fn: FrontierFn | None = None,
 ) -> BRResult:
     """Certified interval on the adversary's best-response value vs ``policy``.
 
@@ -223,7 +235,11 @@ def best_response_interval(
     adversary_name = (names - {frozen_name.lower()}).pop()
 
     solver = _BRSolver(
-        policy, frozen_name, support_mass=support_mass, max_states=max_states
+        policy,
+        frozen_name,
+        support_mass=support_mass,
+        max_states=max_states,
+        frontier_fn=frontier_fn,
     )
     start = time.perf_counter()
     lo, hi = solver._solve(game, depth)
@@ -240,5 +256,6 @@ def best_response_interval(
         engine_expansions=solver.engine_expansions,
         policy_queries=solver.policy_queries,
         frontier_hits=solver.frontier_hits,
+        tablebase_frontier_hits=solver.tablebase_frontier_hits,
         elapsed_seconds=elapsed,
     )

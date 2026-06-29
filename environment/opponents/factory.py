@@ -6,6 +6,7 @@ opponents only need to be registered once.
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 from .baku_teachers import (
@@ -86,6 +87,16 @@ SCRIPTED_LEAGUES = {
 }
 
 
+def _construct_with_optional_seed(constructor, seed: int | None):
+    try:
+        signature = inspect.signature(constructor)
+    except (TypeError, ValueError):
+        return constructor()
+    if "seed" in signature.parameters:
+        return constructor(seed=seed)
+    return constructor()
+
+
 def scripted_opponent_names() -> list[str]:
     return sorted([*SCRIPTED_OPPONENTS.keys(), *SCRIPTED_LEAGUES.keys()])
 
@@ -102,7 +113,7 @@ def create_scripted_opponent(name: str, seed: int | None = None):
     constructor = SCRIPTED_OPPONENTS[name]
     if constructor is None:
         return None
-    return constructor()
+    return _construct_with_optional_seed(constructor, seed)
 
 
 def opponent_role_for_agent(agent_role: str) -> str:

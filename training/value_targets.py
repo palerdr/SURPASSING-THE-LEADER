@@ -806,6 +806,8 @@ def generate_mcts_bootstrap_targets(
     config: ExactSearchConfig | None = None,
     include_anchor_classes: bool = True,
     subgame_resolve_at_critical: bool = False,
+    bootstrap_critical_only: bool = False,
+    bootstrap_max_states: int | None = None,
     split_interior: bool = False,
 ) -> list[ValueTarget]:
     """Bootstrap labels: run MCTS using ``predict_fn`` at the leaves and record
@@ -831,6 +833,7 @@ def generate_mcts_bootstrap_targets(
     """
     from environment.cfr.evaluator import ValueNetEvaluator
     from environment.cfr.mcts import MCTSConfig, make_node, mcts_search
+    from environment.cfr.subgame_resolve import is_critical
 
     config = config or ExactSearchConfig()
     pinned_table = _build_pinned_table()
@@ -842,6 +845,7 @@ def generate_mcts_bootstrap_targets(
         baku_deaths_grid=baku_deaths_grid,
         hal_deaths_grid=hal_deaths_grid,
     )
+    bootstrap_count = 0
 
     for baku_cyl in baku_cylinder_grid:
         for hal_cyl in hal_cylinder_grid:
@@ -895,6 +899,14 @@ def generate_mcts_bootstrap_targets(
                                 )
                                 continue
 
+                            if bootstrap_critical_only and not is_critical(game):
+                                continue
+                            if (
+                                bootstrap_max_states is not None
+                                and bootstrap_count >= bootstrap_max_states
+                            ):
+                                continue
+
                             state_seed = int(rng_root.integers(0, 1 << 31))
                             mcts_rng = np.random.default_rng(state_seed)
                             mcts_config = MCTSConfig(
@@ -932,6 +944,7 @@ def generate_mcts_bootstrap_targets(
                                     unresolved_probability=0.0,
                                 )
                             )
+                            bootstrap_count += 1
 
     if include_anchor_classes:
         targets.extend(_generate_terminal_targets(config, TRAINING_TERMINAL_CONFIGS))

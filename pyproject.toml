@@ -1,0 +1,27 @@
+[project]
+name = "stl-solver"
+version = "0.1.0"
+description = "Exact-second solver and AlphaZero-style training loop for Surpassing The Leader."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "gymnasium>=1.0,<2",
+    "matplotlib>=3.8",
+    "numpy>=2.0,<3",
+    "sb3-contrib>=2.5",
+    "scipy>=1.14,<2",
+    "stable-baselines3>=2.5",
+    "torch>=2.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.uv]
+package = false

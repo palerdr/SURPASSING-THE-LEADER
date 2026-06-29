@@ -29,6 +29,16 @@ from src.Referee import Referee
 
 HAS_CHECKPOINT = os.path.exists(DEFAULT_CHECKPOINT)
 needs_checkpoint = pytest.mark.skipif(not HAS_CHECKPOINT, reason="headline checkpoint not pulled")
+HAS_TIER_A = os.path.exists(
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "checkpoints",
+        "tablebase",
+        "tier_a",
+        "manifest.json",
+    )
+)
+needs_tier_a = pytest.mark.skipif(not HAS_TIER_A, reason="Tier A artifacts absent")
 
 
 def make_game(*, clock=720.0, half=1, hal_cyl=0.0, baku_cyl=0.0, seed=7) -> Game:
@@ -67,6 +77,32 @@ def test_missing_checkpoint_raises_not_falls_back(tmp_path):
 def test_default_checkpoint_constructs_real_agent():
     agent = HalSolverAgent()
     assert agent.player_name == "Hal"
+
+
+@needs_tier_a
+def test_solver_agent_can_wrap_tier_a_runtime_evaluator():
+    from training.tablebase.tier_a import TierAEvaluator
+
+    agent = terminal_agent("Hal", use_tier_a=True, tier_a_width=0.05)
+    assert isinstance(agent.evaluator, TierAEvaluator)
+    game = make_game(clock=3661.0, half=1, hal_cyl=240.0, baku_cyl=240.0)
+    value, _, _ = agent.evaluator(game)
+    assert value != 0.0
+
+
+def test_tier_a_agent_with_missing_artifacts_matches_base_policy(tmp_path, monkeypatch):
+    from training.tablebase import tier_a
+
+    monkeypatch.setattr(tier_a, "DEFAULT_TIER_A_DIR", tmp_path)
+    game = make_game(clock=720.0, half=1)
+    base = terminal_agent("Hal", iterations=8, seed=11)
+    wrapped = terminal_agent("Hal", iterations=8, seed=11, use_tier_a=True)
+
+    base_seconds, base_probs = base.policy(game, "dropper")
+    wrapped_seconds, wrapped_probs = wrapped.policy(game, "dropper")
+
+    assert wrapped_seconds == base_seconds
+    np.testing.assert_array_equal(wrapped_probs, base_probs)
 
 
 # ── Legality ──────────────────────────────────────────────────────────────
@@ -181,6 +217,24 @@ def test_play_cli_solver_path_builds_solver_agent():
 
     hal_ai = play_cli.load_hal_ai(depth=2, checkpoint=None, agent="solver", iterations=8)
     assert isinstance(hal_ai, SolverAgent)
+
+
+@needs_checkpoint
+def test_play_cli_solver_path_can_enable_tier_a():
+    from training.tablebase.tier_a import TierAEvaluator
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+    import play_cli
+
+    hal_ai = play_cli.load_hal_ai(
+        depth=2,
+        checkpoint=None,
+        agent="solver",
+        iterations=8,
+        use_tier_a=True,
+    )
+    assert isinstance(hal_ai, SolverAgent)
+    assert isinstance(hal_ai.evaluator, TierAEvaluator)
 
 
 def test_play_cli_solver_path_fails_loudly_without_checkpoint(tmp_path):
