@@ -120,7 +120,7 @@ def reanalyze_state(
         )
 
     # Tier 2: high-iter MCTS fallback for states still unresolved at depth.
-    from environment.cfr.mcts import MCTSConfig, make_node, mcts_search
+    from environment.cfr.mcts import MCTSConfig, mcts_search
 
     leaf = evaluator or TerminalOnlyEvaluator()
     if rng is None:
@@ -128,7 +128,6 @@ def reanalyze_state(
     mcts_config = MCTSConfig(
         iterations=mcts_iters, exploration_c=1.0, evaluator=None, use_tablebase=False
     )
-    root = make_node(game, config, evaluator=leaf)
     result = mcts_search(
         game=game,
         config=mcts_config,
@@ -138,10 +137,10 @@ def reanalyze_state(
         subgame_resolve_at_critical=True,
     )
     drop_dist, check_dist = _strategy_vectors(
-        drop_seconds=root.drop_seconds,
-        check_seconds=root.check_seconds,
-        dropper_strategy=result.root_strategy_dropper,
-        checker_strategy=result.root_strategy_checker,
+        drop_seconds=result.root_drop_seconds,
+        check_seconds=result.root_check_seconds,
+        dropper_strategy=result.root_strategy_dropper_avg,
+        checker_strategy=result.root_strategy_checker_avg,
     )
     _, _, drop_mask, check_mask = _legal_policy_vectors(game, config)
     target = ValueTarget(

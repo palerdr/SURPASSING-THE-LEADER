@@ -48,7 +48,7 @@ def is_critical(game: Game) -> bool:
         (
             rounds_until_leap_window(game) <= _LEAP_WINDOW_PROXIMITY,
             current_checker_fail_would_activate_lsr(game),
-            is_active_lsr(game) and game.current_half == 1,
+            is_active_lsr(game),
             game.player1.cylinder >= _NEAR_OVERFLOW_CYLINDER,
             game.player2.cylinder >= _NEAR_OVERFLOW_CYLINDER,
         )

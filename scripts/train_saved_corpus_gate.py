@@ -22,10 +22,13 @@ from training.bootstrap_loop import (
     calibration_check,
     enforce_calibration_gate,
 )
+from training.target_merge import merge_duplicate_targets
 from training.train_value_net import TrainConfig, train
 from training.value_targets import (
     SOURCE_EXACT_HORIZON_2,
     SOURCE_EXACT_HORIZON_3,
+    SOURCE_MCTS_BOOTSTRAP,
+    SOURCE_POLICY_GUARD,
     SOURCE_TABLEBASE,
     SOURCE_TABLEBASE_INTERIOR,
     SOURCE_TERMINAL,
@@ -74,6 +77,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Additional saved ValueTarget .npz files to append before training. Repeatable.",
     )
+    parser.add_argument(
+        "--dedupe-targets",
+        action="store_true",
+        help=(
+            "Average exact duplicate same-contract target rows after loading "
+            "--targets and --extra-targets. Writes target_merge_report.json."
+        ),
+    )
+    parser.add_argument(
+        "--dedupe-source",
+        action="append",
+        default=None,
+        help=(
+            "Source eligible for --dedupe-targets. Repeatable. Defaults to "
+            "mcts_bootstrap and policy_guard."
+        ),
+    )
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--held-out-targets", required=True)
     parser.add_argument("--epochs", type=int, default=120)
@@ -94,9 +114,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reference-checkpoint",
         default=None,
-        help="Optional checkpoint whose value outputs define a trust-region penalty.",
+        help="Optional checkpoint whose value/policy outputs define distillation penalties.",
     )
     parser.add_argument("--value-distill-weight", type=float, default=0.0)
+    parser.add_argument("--policy-distill-weight", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--terminal-weight", type=float, default=30.0)
@@ -120,6 +141,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Additional/override per-source policy-loss weight. Repeatable.",
     )
     parser.add_argument("--policy-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--selection-metric",
+        choices=("value_mse", "policy_nll", "value_plus_policy"),
+        default="value_mse",
+        help="Validation metric used to choose best.pt.",
+    )
+    parser.add_argument(
+        "--force-train-source",
+        action="append",
+        default=None,
+        metavar="SOURCE",
+        help=(
+            "Move validation feature groups containing this source into the "
+            "training split. Repeat for sparse repair sources such as "
+            "opponent_trace_guard or mcts_bootstrap."
+        ),
+    )
     parser.add_argument("--early-stopping-patience", type=int, default=40)
     parser.add_argument("--prev-gen-holdout-mse", type=float, default=None)
     parser.add_argument("--tablebase-mse-threshold", type=float, default=0.01)
@@ -148,6 +186,32 @@ def main() -> int:
             extra = load_targets_as_records(path)
             print(f"Extra targets: {path}  +{len(extra)}  breakdown={source_breakdown(extra)}")
             records.extend(extra)
+    merge_summary = None
+    if args.dedupe_targets:
+        merge_sources = (
+            set(args.dedupe_source)
+            if args.dedupe_source
+            else {SOURCE_MCTS_BOOTSTRAP, SOURCE_POLICY_GUARD}
+        )
+        records, merge_summary = merge_duplicate_targets(
+            records,
+            merge_sources=merge_sources,
+        )
+        merge_report_path = out_dir / "target_merge_report.json"
+        with merge_report_path.open("w", encoding="utf-8") as fh:
+            json.dump(
+                {
+                    "merge_sources": sorted(merge_sources),
+                    "summary": merge_summary.to_json(),
+                },
+                fh,
+                indent=2,
+            )
+        print(
+            f"Target dedupe: merge_sources={sorted(merge_sources)} "
+            f"summary={merge_summary.to_json()}  report={merge_report_path}"
+        )
+    if args.extra_targets or args.dedupe_targets:
         combined_path = out_dir / "training_corpus.npz"
         save_targets(records, combined_path)
         train_targets = combined_path
@@ -165,6 +229,7 @@ def main() -> int:
         trainable_parts=args.trainable_parts,
         reference_checkpoint=args.reference_checkpoint,
         value_distill_weight=args.value_distill_weight,
+        policy_distill_weight=args.policy_distill_weight,
         weight_decay=args.weight_decay,
         source_weights=(
             (SOURCE_TERMINAL, args.terminal_weight),
@@ -181,6 +246,8 @@ def main() -> int:
             *extra_policy_source_weights,
         ),
         early_stopping_patience=args.early_stopping_patience,
+        selection_metric=args.selection_metric,
+        force_train_sources=tuple(args.force_train_source or ()),
     )
     result = train(train_targets, out_dir, cfg)
     print(
@@ -230,11 +297,14 @@ def main() -> int:
         "targets": args.targets,
         "train_targets": str(train_targets),
         "extra_targets": args.extra_targets or [],
+        "target_merge": merge_summary.to_json() if merge_summary is not None else None,
         "out_dir": str(out_dir),
         "checkpoint": result.checkpoint_path,
         "config": vars(args),
         "train_best_val_mse": result.best_val_mse,
         "train_best_epoch": result.best_epoch,
+        "train_selection_metric": args.selection_metric,
+        "train_best_selection_score": result.best_selection_score,
         "train_best_per_source_mse": result.best_per_source_mse,
         "held_out_overall_mse": report.overall_mse,
         "held_out_mse_per_source": report.mse_per_source,

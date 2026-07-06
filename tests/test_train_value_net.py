@@ -22,6 +22,7 @@ from hal.value_net import FEATURE_DIM, ValueNet
 from training.train_value_net import (
     TrainConfig,
     TrainResult,
+    _force_sources_into_train,
     load_checkpoint,
     make_predict_fn,
     train,
@@ -184,6 +185,44 @@ def test_train_records_reference_value_distillation_loss():
         assert result.train_history[0]["train_value_distill_mse"] >= 0.0
 
 
+def test_train_policy_distillation_loss_is_finite_and_decreases():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "policy_targets.npz"
+        _write_synthetic_targets_with_policy(targets, n=96, seed=2)
+
+        teacher = train(
+            targets,
+            Path(tmp) / "teacher",
+            TrainConfig(
+                epochs=12,
+                batch_size=16,
+                learning_rate=3e-3,
+                policy_loss_weight=1.0,
+                seed=0,
+                early_stopping_patience=100,
+            ),
+        )
+        student = train(
+            targets,
+            Path(tmp) / "student",
+            TrainConfig(
+                epochs=12,
+                batch_size=16,
+                learning_rate=3e-3,
+                policy_loss_weight=0.0,
+                policy_distill_weight=5.0,
+                reference_checkpoint=teacher.checkpoint_path,
+                seed=11,
+                early_stopping_patience=100,
+            ),
+        )
+
+    history = student.train_history
+    losses = [row["train_policy_distill_nll"] for row in history]
+    assert all(np.isfinite(loss) for loss in losses)
+    assert losses[-1] < losses[0]
+
+
 def test_train_rejects_unknown_trainable_parts():
     with tempfile.TemporaryDirectory() as tmp:
         targets = Path(tmp) / "targets.npz"
@@ -236,6 +275,30 @@ def test_train_per_source_mse_tracks_both_sources_in_corpus():
     sources = set(result.best_per_source_mse.keys())
     # With val_fraction=0.5 the validation set is large enough to span both.
     assert "terminal" in sources or "exact_horizon_2" in sources
+
+
+def test_force_train_sources_moves_whole_feature_group_from_validation():
+    X = np.zeros((4, FEATURE_DIM), dtype=np.float32)
+    X[0, 0] = 1.0
+    X[1, 0] = 1.0
+    X[2, 0] = 2.0
+    X[3, 0] = 3.0
+    sources = np.array(
+        ["opponent_trace_guard", "mcts_bootstrap", "terminal", "exact_horizon_2"]
+    )
+    train_idx = np.array([2], dtype=np.int64)
+    val_idx = np.array([0, 1, 3], dtype=np.int64)
+
+    train_idx, val_idx = _force_sources_into_train(
+        X=X,
+        sources=sources,
+        train_idx=train_idx,
+        val_idx=val_idx,
+        force_sources=("mcts_bootstrap",),
+    )
+
+    assert set(train_idx.tolist()) == {0, 1, 2}
+    assert set(val_idx.tolist()) == {3}
 
 
 def test_train_is_deterministic_under_same_seed():
@@ -386,6 +449,34 @@ def test_train_value_net_optimizes_both_value_and_policy_loss():
         f"Policy NLL dropped only marginally ({initial_policy_nll:.3f} → "
         f"{final_policy_nll:.3f}); possible silent gradient zeroing."
     )
+
+
+def test_train_can_select_best_checkpoint_by_policy_nll():
+    with tempfile.TemporaryDirectory() as tmp:
+        targets = Path(tmp) / "policy_targets.npz"
+        _write_synthetic_targets_with_policy(targets, n=96, seed=3)
+        out_dir = Path(tmp) / "policy_selected"
+
+        result = train(
+            targets,
+            out_dir,
+            TrainConfig(
+                epochs=12,
+                batch_size=16,
+                learning_rate=3e-3,
+                policy_loss_weight=1.0,
+                trainable_parts="policy_head",
+                selection_metric="policy_nll",
+                seed=7,
+                early_stopping_patience=100,
+            ),
+        )
+
+        val_policy = [row["val_policy_nll"] for row in result.train_history]
+        assert result.best_epoch == int(np.argmin(val_policy))
+        assert result.best_epoch > 0
+        assert result.best_selection_score == pytest.approx(min(val_policy))
+        assert (Path(out_dir) / "best.pt").exists()
 
 
 def test_split_keeps_replicated_records_out_of_both_splits():

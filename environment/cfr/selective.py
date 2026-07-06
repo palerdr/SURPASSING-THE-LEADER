@@ -24,8 +24,10 @@ from src.Game import Game
 from .exact import (
     ExactGameSnapshot,
     ExactJointAction,
+    ExactPublicState,
     ExactSearchConfig,
     UtilityBreakdown,
+    exact_public_state,
     legal_seconds_for_current_role,
     solve_exact_finite_horizon,
     solve_minimax,
@@ -127,6 +129,9 @@ class SelectiveAuditResult:
     full_width_joint_count: int
 
 
+_SelectiveCache = dict[tuple[ExactPublicState, int, str], SelectiveSearchResult]
+
+
 def _terminal_breakdown(value: float | None) -> UtilityBreakdown:
     if value is None:
         return UtilityBreakdown(0.0, 0.0, 0.0, 1.0)
@@ -158,6 +163,7 @@ def _evaluate_joint_action_selective(
     half_round_horizon: int,
     config: ExactSearchConfig,
     evaluator: LeafEvaluator | None = None,
+    cache: _SelectiveCache | None = None,
 ) -> UtilityBreakdown:
     if game.game_over:
         return _terminal_breakdown(terminal_value(game, perspective_name=config.perspective_name))
@@ -176,7 +182,13 @@ def _evaluate_joint_action_selective(
         if value is not None or half_round_horizon == 1:
             part = _terminal_breakdown(value) if value is not None else _frontier_breakdown(game, evaluator)
         else:
-            part = selective_solve(game, half_round_horizon - 1, config, evaluator=evaluator).breakdown
+            part = selective_solve(
+                game,
+                half_round_horizon - 1,
+                config,
+                evaluator=evaluator,
+                _cache=cache,
+            ).breakdown
         snap.restore(game)
         return part
 
@@ -190,7 +202,13 @@ def _evaluate_joint_action_selective(
         if value is not None or half_round_horizon == 1:
             part = _terminal_breakdown(value) if value is not None else _frontier_breakdown(game, evaluator)
         else:
-            part = selective_solve(game, half_round_horizon - 1, config, evaluator=evaluator).breakdown
+            part = selective_solve(
+                game,
+                half_round_horizon - 1,
+                config,
+                evaluator=evaluator,
+                _cache=cache,
+            ).breakdown
         parts.append((probability, part))
         snap.restore(game)
     return _weighted_breakdown(parts)
@@ -203,13 +221,27 @@ def selective_solve(
     *,
     candidates: CandidateActions | None = None,
     evaluator: LeafEvaluator | None = None,
+    _cache: _SelectiveCache | None = None,
 ) -> SelectiveSearchResult:
     """Selective candidate-only minimax over exact-second matrix games."""
     config = config or ExactSearchConfig()
+    cache_key = None
+    if candidates is None:
+        if _cache is None:
+            _cache = {}
+        cache_key = (
+            exact_public_state(game),
+            int(half_round_horizon),
+            str(config.perspective_name),
+        )
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     terminal = terminal_value(game, perspective_name=config.perspective_name)
     if terminal is not None or half_round_horizon <= 0:
         breakdown = _terminal_breakdown(terminal) if terminal is not None else _frontier_breakdown(game, evaluator)
-        return SelectiveSearchResult(
+        result = SelectiveSearchResult(
             value_for_hal=breakdown.value,
             breakdown=breakdown,
             unresolved_probability=breakdown.unresolved_probability,
@@ -221,6 +253,9 @@ def selective_solve(
             payoff_for_hal=None,
             candidate_count=0,
         )
+        if cache_key is not None:
+            _cache[cache_key] = result
+        return result
 
     if candidates is None:
         candidates = generate_candidates(game, config)
@@ -244,6 +279,7 @@ def selective_solve(
                 half_round_horizon,
                 config,
                 evaluator=evaluator,
+                cache=_cache,
             )
             i = d_index[d]
             j = c_index[c]
@@ -273,7 +309,7 @@ def selective_solve(
 
     breakdown = _weighted_breakdown(parts)
     value = float(value_for_hal)
-    return SelectiveSearchResult(
+    result = SelectiveSearchResult(
         value_for_hal=value,
         breakdown=breakdown,
         unresolved_probability=breakdown.unresolved_probability,
@@ -285,6 +321,9 @@ def selective_solve(
         payoff_for_hal=hal_payoff,
         candidate_count=len(drop_actions) * len(check_actions),
     )
+    if cache_key is not None:
+        _cache[cache_key] = result
+    return result
 
 
 def audit_against_full_width(

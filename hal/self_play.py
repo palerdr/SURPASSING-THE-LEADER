@@ -1,3 +1,10 @@
+"""Legacy CanonicalHal self-play loop.
+
+New RL-style data should use ``training.solver_self_play`` /
+``scripts/run_solver_self_play.py`` so labels match ``SolverAgent`` search
+policies and the current value/policy training schema.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

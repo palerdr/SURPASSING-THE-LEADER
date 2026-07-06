@@ -721,9 +721,12 @@ divergence. The accepted Tier A fine-tune versus the old ceiling checkpoint had 
 (worst: d1-Hal dropper seed 1, TV 0.389), while the rejected d1-Hal append candidate versus the
 current default had mean TV 0.181 and broad opening/post-leap drift (worst: opening dropper seed 2,
 TV 0.282). This diagnostic explains candidate behavior before the expensive ladder, but promotion
-still depends on the promotion event. The promotion event now accepts `--policy-drift-report` as an
-optional non-gating diagnostic input; when supplied, its checkpoint identities are consistency-checked
-and its summary is embedded in the accept/reject artifact.
+still depends on the promotion event. The promotion event now requires `--policy-drift-report` by
+default as a policy-readability gate; checkpoint identities are consistency-checked and the summary
+is embedded in the accept/reject artifact. The ladder report must include `pattern_reader` by
+default, making the readability canary mandatory instead of relying on the caller to remember that
+rung. Targeted trace-policy gate reports may also be supplied, and can be made mandatory with
+`--require-trace-policy-gate-report` for candidates with known trace-local readability failures.
 
 **Post-promotion next-run event.** `scripts/run_solver_next_event.py` now consumes the accepted
 promotion report, rejected d1-Hal promotion reports, and exact-only Tier A runtime comparison to
@@ -755,3 +758,6 @@ Follow-up evidence:
   gate artifact. `run_gen_iteration.py` now exposes `--bootstrap-critical-only` and
   `--bootstrap-max-states N` so the next critical-resolve experiment is bounded to a small set of
   critical bootstrap states before another full overnight spend.
+- If a generated candidate has a pattern_reader smoke report, `run_gen_iteration.py --canary-report`
+  now treats it as a gate artifact. The default `--canary-min-wins-delta 0` rejects any canary
+  regression even when the held-out ruler improves.

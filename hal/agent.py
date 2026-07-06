@@ -34,6 +34,7 @@ from environment.cfr.evaluator import (
 )
 from environment.cfr.exact import ExactSearchConfig, exact_public_state
 from environment.cfr.mcts import MCTSConfig, MCTSResult, mcts_search
+from environment.cfr.subgame_resolve import is_critical
 from environment.opponents.base import Opponent
 from src.Game import Game
 
@@ -85,10 +86,22 @@ class SolverAgent(Opponent):
         evaluator: LeafEvaluator | None = None,
         use_tier_a: bool = False,
         tier_a_width: float = 0.0,
+        policy_ensemble_size: int = 1,
+        policy_uniform_mix: float = 0.0,
+        search_prior_uniform_mix: float = 0.0,
     ) -> None:
         self.player_name = player_name
         self.iterations = int(iterations)
         self.exploration_c = float(exploration_c)
+        if policy_ensemble_size <= 0:
+            raise ValueError("policy_ensemble_size must be positive")
+        self.policy_ensemble_size = int(policy_ensemble_size)
+        if not 0.0 <= policy_uniform_mix < 1.0:
+            raise ValueError("policy_uniform_mix must be in [0, 1)")
+        self.policy_uniform_mix = float(policy_uniform_mix)
+        if not 0.0 <= search_prior_uniform_mix < 1.0:
+            raise ValueError("search_prior_uniform_mix must be in [0, 1)")
+        self.search_prior_uniform_mix = float(search_prior_uniform_mix)
         self.resolve_at_critical = bool(resolve_at_critical)
         # Horizon 3 keeps the critical-root resolve ~15s (measured); the
         # library default of 4 costs ~15min/state and is unplayable.
@@ -108,6 +121,25 @@ class SolverAgent(Opponent):
 
     # ── Strategic core ────────────────────────────────────────────────
 
+    def _run_search_with_seed(self, game: Game, base_seed: int) -> MCTSResult:
+        rng = np.random.default_rng(_state_seed(base_seed, game))
+        config = MCTSConfig(
+            iterations=self.iterations,
+            exploration_c=self.exploration_c,
+            evaluator=None,
+            use_tablebase=False,
+            prior_uniform_mix=self.search_prior_uniform_mix,
+        )
+        return mcts_search(
+            game,
+            config,
+            self.evaluator,
+            rng,
+            self._exact_config,
+            subgame_resolve_at_critical=self.resolve_at_critical,
+            subgame_resolve_horizon=self.resolve_horizon,
+        )
+
     def search(self, game: Game) -> MCTSResult:
         """One fresh, state-seeded search from the current public state.
 
@@ -118,24 +150,61 @@ class SolverAgent(Opponent):
         if key in self._search_cache:
             return self._search_cache[key]
 
-        rng = np.random.default_rng(_state_seed(self._base_seed, game))
-        config = MCTSConfig(
-            iterations=self.iterations,
-            exploration_c=self.exploration_c,
-            evaluator=None,
-            use_tablebase=False,
-        )
-        result = mcts_search(
-            game,
-            config,
-            self.evaluator,
-            rng,
-            self._exact_config,
-            subgame_resolve_at_critical=self.resolve_at_critical,
-            subgame_resolve_horizon=self.resolve_horizon,
-        )
+        result = self._run_search_with_seed(game, self._base_seed)
         self._search_cache[key] = result
         return result
+
+    @staticmethod
+    def _policy_vector(seconds: tuple[int, ...], probs: np.ndarray) -> np.ndarray:
+        vector = np.zeros(61, dtype=np.float64)
+        for second, probability in zip(seconds, probs):
+            vector[int(second) - 1] = float(probability)
+        total = float(vector.sum())
+        if total > 0.0:
+            vector /= total
+        return vector
+
+    def _ensemble_policy(self, game: Game, role: str) -> tuple[tuple[int, ...], np.ndarray]:
+        if self.resolve_at_critical and is_critical(game):
+            result = self.search(game)
+            if role == "dropper":
+                return (
+                    tuple(int(second) for second in result.root_drop_seconds),
+                    np.asarray(result.root_strategy_dropper_avg, dtype=np.float64),
+                )
+            return (
+                tuple(int(second) for second in result.root_check_seconds),
+                np.asarray(result.root_strategy_checker_avg, dtype=np.float64),
+            )
+
+        vector = np.zeros(61, dtype=np.float64)
+        candidate_seconds: set[int] = set()
+        for idx in range(self.policy_ensemble_size):
+            if idx == 0:
+                result = self.search(game)
+            else:
+                # Large odd stride keeps member searches deterministic but
+                # independent for a public state.
+                result = self._run_search_with_seed(game, self._base_seed + 104729 * idx)
+            if role == "dropper":
+                candidate_seconds.update(int(second) for second in result.root_drop_seconds)
+                vector += self._policy_vector(
+                    result.root_drop_seconds,
+                    np.asarray(result.root_strategy_dropper_avg, dtype=np.float64),
+                )
+            else:
+                candidate_seconds.update(int(second) for second in result.root_check_seconds)
+                vector += self._policy_vector(
+                    result.root_check_seconds,
+                    np.asarray(result.root_strategy_checker_avg, dtype=np.float64),
+                )
+        vector /= float(self.policy_ensemble_size)
+        if self.policy_uniform_mix > 0.0 and candidate_seconds:
+            seconds = tuple(sorted(candidate_seconds))
+        else:
+            seconds = tuple(int(idx) + 1 for idx, probability in enumerate(vector) if probability > 0.0)
+        probs = np.array([vector[second - 1] for second in seconds], dtype=np.float64)
+        return seconds, probs
 
     def policy(self, game: Game, role: str) -> tuple[tuple[int, ...], np.ndarray]:
         """The agent's mixed strategy for ``role`` at this state.
@@ -150,22 +219,29 @@ class SolverAgent(Opponent):
         if key in self._policy_cache:
             return self._policy_cache[key]
 
-        result = self.search(game)
-        # Play the AVERAGE of the per-iteration root selection strategies —
-        # the provably convergent SM-MCTS object. The final LP over mean-Q
-        # picks an arbitrary vertex when the matrix is near-flat (small
-        # budgets), which collapses to a pure, pattern-readable strategy.
-        if role == "dropper":
-            seconds = result.root_drop_seconds
-            probs = np.asarray(result.root_strategy_dropper_avg, dtype=np.float64)
+        if self.policy_ensemble_size > 1:
+            seconds, probs = self._ensemble_policy(game, role)
         else:
-            seconds = result.root_check_seconds
-            probs = np.asarray(result.root_strategy_checker_avg, dtype=np.float64)
+            result = self.search(game)
+            # Play the AVERAGE of the per-iteration root selection strategies —
+            # the provably convergent SM-MCTS object. The final LP over mean-Q
+            # picks an arbitrary vertex when the matrix is near-flat (small
+            # budgets), which collapses to a pure, pattern-readable strategy.
+            if role == "dropper":
+                seconds = result.root_drop_seconds
+                probs = np.asarray(result.root_strategy_dropper_avg, dtype=np.float64)
+            else:
+                seconds = result.root_check_seconds
+                probs = np.asarray(result.root_strategy_checker_avg, dtype=np.float64)
 
         if len(seconds) == 0 or probs.size == 0:
             raise RuntimeError(f"search produced an empty {role} strategy at {key[0]!r}")
         probs = np.maximum(probs, 0.0)
         probs = probs / probs.sum()
+        if self.policy_uniform_mix > 0.0:
+            uniform = np.full_like(probs, 1.0 / len(probs), dtype=np.float64)
+            probs = (1.0 - self.policy_uniform_mix) * probs + self.policy_uniform_mix * uniform
+            probs = probs / probs.sum()
 
         self._policy_cache[key] = (seconds, probs)
         return seconds, probs

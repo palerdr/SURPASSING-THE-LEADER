@@ -19,8 +19,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.cfr.evaluator import TerminalOnlyEvaluator
+from environment.cfr.mcts import MCTSResult
 from environment.legal_actions import legal_max_second
 from environment.opponents.factory import SCRIPTED_OPPONENTS, create_scripted_opponent
+import hal.agent as agent_module
 from hal.agent import DEFAULT_CHECKPOINT, BakuSolverAgent, HalSolverAgent, SolverAgent
 from src.Constants import LS_WINDOW_START, PHYSICALITY_BAKU, PHYSICALITY_HAL
 from src.Game import Game
@@ -183,6 +185,178 @@ def test_policy_is_pure_function_of_state():
 
     assert sec_a == sec_b
     np.testing.assert_array_equal(probs_a, probs_b)
+
+
+def test_policy_ensemble_averages_independent_root_policies(monkeypatch):
+    calls = []
+    root_drop = [
+        np.array([1.0, 0.0]),
+        np.array([0.0, 1.0]),
+        np.array([0.25, 0.75]),
+    ]
+
+    def fake_mcts_search(*args, **kwargs):
+        idx = len(calls)
+        calls.append((args, kwargs))
+        return MCTSResult(
+            root_strategy_dropper=root_drop[idx],
+            root_strategy_checker=np.array([1.0, 0.0]),
+            root_value_for_hal=0.0,
+            root_visits=1,
+            principal_line=[],
+            cells_used=1,
+            root_drop_seconds=(1, 2),
+            root_check_seconds=(1, 2),
+            root_strategy_dropper_avg=root_drop[idx],
+            root_strategy_checker_avg=np.array([1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(agent_module, "mcts_search", fake_mcts_search)
+    agent = terminal_agent("Hal", iterations=1, seed=0, policy_ensemble_size=3)
+    game = make_game(clock=720.0, half=1)
+
+    seconds, probs = agent.policy(game, "dropper")
+
+    assert seconds == (1, 2)
+    np.testing.assert_allclose(probs, np.array([1.25 / 3.0, 1.75 / 3.0]))
+    assert len(calls) == 3
+    agent.policy(game, "dropper")
+    assert len(calls) == 3
+
+
+def test_resolved_critical_policy_ensemble_uses_single_search(monkeypatch):
+    calls = []
+
+    def fake_mcts_search(*args, **kwargs):
+        calls.append((args, kwargs))
+        return MCTSResult(
+            root_strategy_dropper=np.array([0.25, 0.75]),
+            root_strategy_checker=np.array([1.0, 0.0]),
+            root_value_for_hal=0.0,
+            root_visits=0,
+            principal_line=[],
+            cells_used=0,
+            root_drop_seconds=(1, 2),
+            root_check_seconds=(1, 2),
+            root_strategy_dropper_avg=np.array([0.25, 0.75]),
+            root_strategy_checker_avg=np.array([1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(agent_module, "mcts_search", fake_mcts_search)
+    monkeypatch.setattr(agent_module, "is_critical", lambda _game: True)
+    agent = terminal_agent(
+        "Hal",
+        iterations=1,
+        seed=0,
+        policy_ensemble_size=3,
+        resolve_at_critical=True,
+    )
+    game = make_game(clock=720.0, half=1)
+
+    seconds, probs = agent.policy(game, "dropper")
+
+    assert seconds == (1, 2)
+    np.testing.assert_allclose(probs, np.array([0.25, 0.75]))
+    assert len(calls) == 1
+    assert calls[0][1]["subgame_resolve_at_critical"] is True
+
+
+def test_policy_ensemble_size_must_be_positive():
+    with pytest.raises(ValueError, match="positive"):
+        terminal_agent("Hal", policy_ensemble_size=0)
+
+
+def test_policy_uniform_mix_blends_over_policy_support(monkeypatch):
+    def fake_mcts_search(*args, **kwargs):
+        return MCTSResult(
+            root_strategy_dropper=np.array([1.0, 0.0]),
+            root_strategy_checker=np.array([1.0, 0.0]),
+            root_value_for_hal=0.0,
+            root_visits=1,
+            principal_line=[],
+            cells_used=1,
+            root_drop_seconds=(1, 2),
+            root_check_seconds=(1, 2),
+            root_strategy_dropper_avg=np.array([1.0, 0.0]),
+            root_strategy_checker_avg=np.array([1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(agent_module, "mcts_search", fake_mcts_search)
+    agent = terminal_agent("Hal", iterations=1, seed=0, policy_uniform_mix=0.25)
+    game = make_game(clock=720.0, half=1)
+
+    seconds, probs = agent.policy(game, "dropper")
+
+    assert seconds == (1, 2)
+    np.testing.assert_allclose(probs, np.array([0.875, 0.125]))
+
+
+def test_ensemble_uniform_mix_keeps_zero_mass_root_candidates(monkeypatch):
+    def fake_mcts_search(*args, **kwargs):
+        return MCTSResult(
+            root_strategy_dropper=np.array([1.0, 0.0]),
+            root_strategy_checker=np.array([1.0, 0.0]),
+            root_value_for_hal=0.0,
+            root_visits=1,
+            principal_line=[],
+            cells_used=1,
+            root_drop_seconds=(1, 2),
+            root_check_seconds=(1, 2),
+            root_strategy_dropper_avg=np.array([1.0, 0.0]),
+            root_strategy_checker_avg=np.array([1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(agent_module, "mcts_search", fake_mcts_search)
+    agent = terminal_agent(
+        "Hal",
+        iterations=1,
+        seed=0,
+        policy_ensemble_size=3,
+        policy_uniform_mix=0.25,
+    )
+    game = make_game(clock=720.0, half=1)
+
+    seconds, probs = agent.policy(game, "dropper")
+
+    assert seconds == (1, 2)
+    np.testing.assert_allclose(probs, np.array([0.875, 0.125]))
+
+
+def test_policy_uniform_mix_must_be_valid():
+    with pytest.raises(ValueError, match="policy_uniform_mix"):
+        terminal_agent("Hal", policy_uniform_mix=1.0)
+
+
+def test_search_prior_uniform_mix_is_passed_to_mcts(monkeypatch):
+    calls = []
+
+    def fake_mcts_search(*args, **kwargs):
+        calls.append((args, kwargs))
+        return MCTSResult(
+            root_strategy_dropper=np.array([1.0, 0.0]),
+            root_strategy_checker=np.array([1.0, 0.0]),
+            root_value_for_hal=0.0,
+            root_visits=1,
+            principal_line=[],
+            cells_used=1,
+            root_drop_seconds=(1, 2),
+            root_check_seconds=(1, 2),
+            root_strategy_dropper_avg=np.array([1.0, 0.0]),
+            root_strategy_checker_avg=np.array([1.0, 0.0]),
+        )
+
+    monkeypatch.setattr(agent_module, "mcts_search", fake_mcts_search)
+    agent = terminal_agent("Hal", iterations=1, search_prior_uniform_mix=0.2)
+    game = make_game(clock=720.0, half=1)
+
+    agent.policy(game, "dropper")
+
+    assert calls[0][0][1].prior_uniform_mix == pytest.approx(0.2)
+
+
+def test_search_prior_uniform_mix_must_be_valid():
+    with pytest.raises(ValueError, match="search_prior_uniform_mix"):
+        terminal_agent("Hal", search_prior_uniform_mix=1.0)
 
 
 def test_action_stream_is_deterministic_under_same_seed():

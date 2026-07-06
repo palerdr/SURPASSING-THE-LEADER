@@ -43,6 +43,7 @@ class MCTSConfig:
     exploration_c: float
     evaluator: None
     use_tablebase: bool
+    prior_uniform_mix: float = 0.0
 
 
 @dataclass
@@ -65,6 +66,11 @@ class MCTSResult:
     # exploitable tell). Empty when no root selections occurred.
     root_strategy_dropper_avg: np.ndarray = None  # type: ignore[assignment]
     root_strategy_checker_avg: np.ndarray = None  # type: ignore[assignment]
+    # Diagnostics only: root evaluator prior, final mean-Q matrix, and cell
+    # visit counts. SolverAgent play uses the strategy fields above.
+    root_prior: np.ndarray | None = None
+    root_q: np.ndarray | None = None
+    root_n_cell: np.ndarray | None = None
 
 
 def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
@@ -114,10 +120,25 @@ def _prior_and_value_from_evaluator(
     return np.outer(drop_prior, check_prior).astype(np.float64), float(value)
 
 
+def _mix_prior_with_uniform(prior: np.ndarray, prior_uniform_mix: float) -> np.ndarray:
+    if not 0.0 <= prior_uniform_mix < 1.0:
+        raise ValueError("prior_uniform_mix must be in [0, 1)")
+    if prior.size == 0 or prior_uniform_mix == 0.0:
+        return prior
+    uniform = np.full_like(prior, 1.0 / prior.size, dtype=np.float64)
+    mixed = (1.0 - prior_uniform_mix) * prior + prior_uniform_mix * uniform
+    total = float(mixed.sum())
+    if total > 0.0:
+        mixed /= total
+    return mixed
+
+
 def make_node(
     game: Game,
     config: ExactSearchConfig | None = None,
     evaluator: LeafEvaluator | None = None,
+    *,
+    prior_uniform_mix: float = 0.0,
 ) -> MCTSNode:
     """Build an MCTSNode at the current game state.
 
@@ -151,6 +172,7 @@ def make_node(
     prior, leaf_value = _prior_and_value_from_evaluator(
         game, cands.drop_seconds, cands.check_seconds, evaluator
     )
+    prior = _mix_prior_with_uniform(prior, prior_uniform_mix)
 
     return MCTSNode(
         drop_seconds=cands.drop_seconds,
@@ -225,6 +247,7 @@ def _step_into_child(
     config: ExactSearchConfig,
     transposition: dict[ExactPublicState, MCTSNode] | None = None,
     evaluator: LeafEvaluator | None = None,
+    prior_uniform_mix: float = 0.0,
 ) -> tuple["MCTSNode", bool | None]:
     """Apply the joint action at (d_idx, c_idx) to the engine, sample the
     chance outcome if a death is possible, and return the child node along
@@ -252,7 +275,12 @@ def _step_into_child(
         if transposition is not None and state_key in transposition:
             node.children[key] = transposition[state_key]
         else:    
-            child = make_node(game, config, evaluator=evaluator)
+            child = make_node(
+                game,
+                config,
+                evaluator=evaluator,
+                prior_uniform_mix=prior_uniform_mix,
+            )
             node.children[key] = child
             if transposition is not None:
                 transposition[state_key] = child
@@ -272,6 +300,56 @@ def _backup(path: list[tuple[MCTSNode, int, int]], value: float) -> None:
         node.Q[d_idx, c_idx] += (value - node.Q[d_idx, c_idx]) / node.N_cell[d_idx, c_idx]
 
 
+def _result_from_resolve(
+    game: Game,
+    *,
+    horizon: int,
+    exact_config: ExactSearchConfig,
+    evaluator: LeafEvaluator,
+) -> MCTSResult:
+    snap = ExactGameSnapshot(game)
+    resolve_result = resolve_subgame(
+        game,
+        horizon=horizon,
+        config=exact_config,
+        evaluator=evaluator,
+    )
+    dropper_strat = np.asarray(resolve_result.dropper_strategy, dtype=np.float64).copy()
+    checker_strat = np.asarray(resolve_result.checker_strategy, dtype=np.float64).copy()
+    if (
+        len(resolve_result.drop_seconds) > 0
+        and len(resolve_result.check_seconds) > 0
+        and dropper_strat.size > 0
+        and checker_strat.size > 0
+    ):
+        d_idx = int(np.argmax(dropper_strat))
+        c_idx = int(np.argmax(checker_strat))
+        principal_line = [
+            ExactJointAction(
+                resolve_result.drop_seconds[d_idx],
+                resolve_result.check_seconds[c_idx],
+            )
+        ]
+    else:
+        principal_line = []
+    snap.restore(game)
+    return MCTSResult(
+        root_strategy_dropper=dropper_strat,
+        root_strategy_checker=checker_strat,
+        root_value_for_hal=float(resolve_result.value_for_hal),
+        root_visits=0,
+        principal_line=principal_line,
+        cells_used=0,
+        root_drop_seconds=tuple(resolve_result.drop_seconds),
+        root_check_seconds=tuple(resolve_result.check_seconds),
+        root_strategy_dropper_avg=dropper_strat.copy(),
+        root_strategy_checker_avg=checker_strat.copy(),
+        root_prior=None,
+        root_q=None,
+        root_n_cell=None,
+    )
+
+
 def mcts_search(
     game: Game,
     config: MCTSConfig,
@@ -279,7 +357,7 @@ def mcts_search(
     rng: np.random.Generator,
     exact_config: ExactSearchConfig | None = None,
     subgame_resolve_at_critical: bool = False,
-    subgame_resolve_horizon: int = 4,
+    subgame_resolve_horizon: int = 3,
 ) -> MCTSResult:
     """Run MCTS for config.iterations iterations from the current game state.
 
@@ -295,7 +373,20 @@ def mcts_search(
     behavior.
     """
     exact_config = exact_config or ExactSearchConfig()
-    root = make_node(game, exact_config, evaluator=evaluator)
+    if subgame_resolve_at_critical and is_critical(game):
+        return _result_from_resolve(
+            game,
+            horizon=subgame_resolve_horizon,
+            exact_config=exact_config,
+            evaluator=evaluator,
+        )
+
+    root = make_node(
+        game,
+        exact_config,
+        evaluator=evaluator,
+        prior_uniform_mix=config.prior_uniform_mix,
+    )
     c = config.exploration_c
 
     transposition : dict[ExactPublicState, MCTSNode] = {}
@@ -336,6 +427,7 @@ def mcts_search(
                 exact_config,
                 transposition=transposition,
                 evaluator=evaluator,
+                prior_uniform_mix=config.prior_uniform_mix,
             )
         _backup(path, leaf_value)
 
@@ -362,35 +454,20 @@ def mcts_search(
     if subgame_resolve_at_critical:
         root.game_snapshot.restore(game=game)
         if is_critical(game):
-            resolve_result = resolve_subgame(
+            resolved = _result_from_resolve(
                 game,
                 horizon=subgame_resolve_horizon,
-                config=exact_config,
+                exact_config=exact_config,
                 evaluator=evaluator,
             )
-            dropper_strat = resolve_result.dropper_strategy
-            checker_strat = resolve_result.checker_strategy
-            value_for_hal = float(resolve_result.value_for_hal)
-            root_drop_seconds = tuple(resolve_result.drop_seconds)
-            root_check_seconds = tuple(resolve_result.check_seconds)
-            dropper_avg = np.asarray(dropper_strat, dtype=np.float64).copy()
-            checker_avg = np.asarray(checker_strat, dtype=np.float64).copy()
-            if (
-                len(resolve_result.drop_seconds) > 0
-                and len(resolve_result.check_seconds) > 0
-                and dropper_strat.size > 0
-                and checker_strat.size > 0
-            ):
-                d_idx = int(np.argmax(dropper_strat))
-                c_idx = int(np.argmax(checker_strat))
-                principal_line = [
-                    ExactJointAction(
-                        resolve_result.drop_seconds[d_idx],
-                        resolve_result.check_seconds[c_idx],
-                    )
-                ]
-            else:
-                principal_line = []
+            dropper_strat = resolved.root_strategy_dropper
+            checker_strat = resolved.root_strategy_checker
+            value_for_hal = resolved.root_value_for_hal
+            root_drop_seconds = resolved.root_drop_seconds
+            root_check_seconds = resolved.root_check_seconds
+            dropper_avg = resolved.root_strategy_dropper_avg
+            checker_avg = resolved.root_strategy_checker_avg
+            principal_line = resolved.principal_line
         root.game_snapshot.restore(game=game)
 
     root.game_snapshot.restore(game=game)
@@ -406,6 +483,9 @@ def mcts_search(
         root_check_seconds=root_check_seconds,
         root_strategy_dropper_avg=dropper_avg,
         root_strategy_checker_avg=checker_avg,
+        root_prior=root.prior.copy(),
+        root_q=root.Q.copy(),
+        root_n_cell=root.N_cell.copy(),
     )
 
 

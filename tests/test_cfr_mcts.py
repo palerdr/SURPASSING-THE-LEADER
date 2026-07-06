@@ -157,6 +157,33 @@ def test_make_node_uses_evaluator_policy_for_prior():
     assert node.prior[d_idx, c_idx] == pytest.approx(1.0)
 
 
+def test_make_node_can_mix_evaluator_prior_with_uniform():
+    scenario = forced_baku_overflow_death()
+
+    class BiasedEvaluator:
+        def __call__(self, game):
+            del game
+            drop = np.zeros(61)
+            check = np.zeros(61)
+            drop[0] = 1.0
+            check[59] = 1.0
+            return 0.0, drop, check
+
+    node = make_node(
+        scenario.game,
+        scenario.config,
+        evaluator=BiasedEvaluator(),
+        prior_uniform_mix=0.25,
+    )
+    d_idx = _idx(node.drop_seconds, 1)
+    c_idx = _idx(node.check_seconds, 60)
+    uniform = 1.0 / node.prior.size
+
+    assert node.prior.sum() == pytest.approx(1.0)
+    assert node.prior[d_idx, c_idx] == pytest.approx(0.75 + 0.25 * uniform)
+    assert node.prior.min() == pytest.approx(0.25 * uniform)
+
+
 def test_make_node_stores_actual_seconds_not_indices():
     scenario = forced_baku_overflow_death()
     node = make_node(scenario.game, scenario.config)
@@ -537,6 +564,21 @@ def test_mcts_search_returns_proper_probability_distributions():
     assert result.root_strategy_checker.sum() == pytest.approx(1.0)
     assert (result.root_strategy_dropper >= 0).all()
     assert (result.root_strategy_checker >= 0).all()
+
+
+def test_mcts_search_exposes_root_diagnostics():
+    scenario = forced_baku_overflow_death()
+    rng = np.random.default_rng(7)
+    result = mcts_search(scenario.game, _config(20), TerminalOnlyEvaluator(), rng, scenario.config)
+
+    shape = (len(result.root_drop_seconds), len(result.root_check_seconds))
+    assert result.root_prior is not None
+    assert result.root_q is not None
+    assert result.root_n_cell is not None
+    assert result.root_prior.shape == shape
+    assert result.root_q.shape == shape
+    assert result.root_n_cell.shape == shape
+    assert result.root_prior.sum() == pytest.approx(1.0)
 
 
 def test_mcts_search_is_deterministic_under_same_rng_seed():

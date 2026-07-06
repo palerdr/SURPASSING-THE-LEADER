@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Deep AlphaZero training with best-checkpoint selection."""
+"""Legacy CanonicalHal deep training with best-checkpoint selection.
+
+Use ``scripts/run_solver_self_play.py`` for new solver-MCTS self-play data.
+"""
 
 import sys
 import os

@@ -214,8 +214,19 @@ already exists is skipped, so a gate failure never re-runs the multi-hour corpus
 stdbuf -oL -eL python scripts/run_ceiling.py 2>&1 | tee checkpoints/ceiling_run.log
 ```
 
+New self-play data should be generated through the solver-MCTS path so policy labels match deployed
+`SolverAgent.policy()` semantics and save as the normal training schema with source `self_play_mcts`:
+
+```bash
+python scripts/run_solver_self_play.py \
+  --hal-checkpoint checkpoints/current/best.pt \
+  --opponent pattern_reader \
+  --games 4 --iterations 30 \
+  --out checkpoints/self_play_mcts_smoke.npz
+```
+
 The legacy self-play value-net loop (the `hal/` tower, scripted-opponent self-play rather than the
-exact oracle) still works for quick experiments:
+exact oracle) is retained only for old experiments:
 
 ```bash
 python scripts/run_alphazero_loop.py --iterations 3 --games 500 --epochs 20 --depth 1
@@ -320,10 +331,12 @@ fine-tuning. A d1-only value-head trust-region run removed certified exploitabil
 passed calibration (`0.05549`), but the promotion event rejected it on live strength (`-14/240`
 ladder delta). Current default remains unchanged.
 
-Promotion is now an explicit three-report event. A candidate must pass calibration, beat the
-deterministic checkpoint ladder, and avoid certified exploitability regressions. The event also
-verifies that the calibration, ladder, and exploitability reports all name the same candidate
-checkpoint, and that the ladder/exploitability reports use the same champion baseline:
+Promotion is now an explicit evidence-bundle event. A candidate must pass calibration, beat the
+deterministic checkpoint ladder, avoid certified exploitability regressions, and supply a
+policy-drift/readability report that stays within configured TV/entropy thresholds. The event also
+verifies that the calibration, ladder, exploitability, policy-drift, and optional trace-policy-gate
+reports all name the same candidate checkpoint, and that the comparison reports use the same
+champion baseline:
 
 ```bash
 python scripts/run_checkpoint_promotion_event.py \
@@ -352,6 +365,10 @@ recurring regression. An unbounded critical-resolve generation attempt ran for f
 producing a target corpus, so `run_gen_iteration.py` now supports
 `--bootstrap-critical-only --bootstrap-max-states N`. The next run should use that bounded
 critical-only path before spending another full overnight job.
+
+When a pattern_reader smoke has been run for a generated candidate, pass it back with
+`--canary-report`. The generation event now treats the report as a gate: by default
+`--canary-min-wins-delta 0` rejects any canary regression even if held-out calibration improved.
 
 ---
 
@@ -459,12 +476,18 @@ For a cheaper explanation of where search behavior changed before paying for a l
 python scripts/compare_checkpoints_policy_drift.py \
   --champion-checkpoint checkpoints/gen_tier_a_aux_50k_w001_ft_lr5e-6_tw001_pw0_iw100_e5/best.pt \
   --candidate-checkpoint checkpoints/gen_tier_a_aux_50k_plus_d1hal8k_ft_lr5e-6_tw001_d1w01_d1pw02_iw100_e5/best.pt \
-  --iterations 30 --seeds 0,1,2
+  --iterations 200 --seeds 0,1,2
 ```
 
-This is diagnostic, not a promotion gate. The rejected d1-Hal append candidate showed broad root
-policy drift versus the current default (mean TV 0.181, max TV 0.282), including opening-dropper
-drift, which explains why a local d1 label update can hurt the live ladder.
+`run_checkpoint_promotion_event.py` requires this report by default as a policy-readability gate:
+severe root-policy TV drift, mean TV drift, entropy collapse, or candidate entropy below the
+champion's own floor rejects the candidate before promotion. Use the deployment-like 200-iteration
+budget for this gate; cheaper 30-iteration probes can miss the policy movement that
+`pattern_reader` exploits. Promotion also requires the ladder report to include the
+`pattern_reader` rung by default; use `--required-ladder-opponent` for any additional mandatory
+canaries. Targeted trace policy gate reports can also be supplied with
+`--trace-policy-gate-report`; add `--require-trace-policy-gate-report` for candidates whose known
+failure modes are trace-local.
 
 Use `--agent legacy` for `CanonicalHal` (the older forward-search baseline). `scripts/play_vs_cfr.py`
 plays against a precomputed equilibrium-strategy table (the legacy bucketed CFR baseline).

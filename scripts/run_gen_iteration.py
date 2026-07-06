@@ -1,5 +1,5 @@
-"""Run one AlphaZero-style generation step: MCTS-bootstrap → anchor merge →
-class-rebalanced training → calibration gate.
+"""Run one AlphaZero-style generation step: MCTS-bootstrap -> anchor merge ->
+class-rebalanced training -> calibration gate.
 
 Usage:
     python scripts/run_gen_iteration.py \
@@ -19,6 +19,7 @@ gate: terminal=30, h2=10, h3=10 source weights, tablebase corpus replication
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -60,6 +61,118 @@ def monotonicity_verdict(new_mse: float, prev_mse: float) -> bool:
     return new_mse < prev_mse
 
 
+def parse_thresholds(items: list[str] | None) -> dict[str, float] | None:
+    if not items:
+        return None
+    parsed: dict[str, float] = {}
+    for item in items:
+        if ":" not in item:
+            raise SystemExit(
+                f"--per-source-mse-threshold expects 'source_name:value', got {item!r}"
+            )
+        name, raw_value = item.rsplit(":", 1)
+        try:
+            parsed[name] = float(raw_value)
+        except ValueError as exc:
+            raise SystemExit(
+                f"--per-source-mse-threshold {item!r}: value is not a float ({exc})"
+            ) from exc
+    return parsed
+
+
+def parse_source_weights(items: list[str] | None) -> tuple[tuple[str, float], ...]:
+    parsed = parse_thresholds(items)
+    if not parsed:
+        return ()
+    return tuple(parsed.items())
+
+
+def load_optional_json(path: str | None):
+    if not path:
+        return None
+    with Path(path).open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def canary_gate_decision(canary_report: dict | None, *, min_wins_delta: int = 0) -> dict | None:
+    """Return a pass/fail decision for an optional ladder-style canary report."""
+    if canary_report is None:
+        return None
+    try:
+        wins_delta = int(canary_report["aggregate"]["delta"]["wins_delta"])
+    except (KeyError, TypeError, ValueError):
+        return {
+            "status": "failed",
+            "reason": "canary report is missing aggregate.delta.wins_delta",
+            "wins_delta": None,
+            "min_wins_delta": int(min_wins_delta),
+        }
+    passed = wins_delta >= int(min_wins_delta)
+    return {
+        "status": "passed" if passed else "failed",
+        "reason": None
+        if passed
+        else f"canary wins_delta {wins_delta} < required {int(min_wins_delta)}",
+        "wins_delta": wins_delta,
+        "min_wins_delta": int(min_wins_delta),
+        "score_rate_delta": canary_report.get("aggregate", {})
+        .get("delta", {})
+        .get("score_rate_delta"),
+    }
+
+
+def write_gate_report(
+    *,
+    args,
+    train_result,
+    report,
+    gate_passed: bool,
+    gate_error: str | None,
+    beats_prev_gen: bool | None,
+    bootstrap_report: dict,
+    training_corpus_report: dict,
+) -> Path:
+    """Write the calibration artifact consumed by promotion events."""
+    out_dir = Path(args.out_dir)
+    canary_result = load_optional_json(args.canary_report)
+    canary_gate = canary_gate_decision(
+        canary_result,
+        min_wins_delta=getattr(args, "canary_min_wins_delta", 0),
+    )
+    summary = {
+        "targets": args.out_targets,
+        "train_targets": args.out_targets,
+        "extra_targets": args.extra_targets or [],
+        "out_dir": str(out_dir),
+        "checkpoint": train_result.checkpoint_path,
+        "config": {
+            **vars(args),
+            "source": "run_gen_iteration",
+        },
+        "train_best_val_mse": train_result.best_val_mse,
+        "train_best_epoch": train_result.best_epoch,
+        "train_selection_metric": args.selection_metric,
+        "train_best_selection_score": train_result.best_selection_score,
+        "train_best_per_source_mse": train_result.best_per_source_mse,
+        "bootstrap": bootstrap_report,
+        "training_corpus": training_corpus_report,
+        "canary_result": canary_result,
+        "canary_gate": canary_gate,
+        "held_out_overall_mse": report.overall_mse,
+        "held_out_mse_per_source": report.mse_per_source,
+        "held_out_mean_unresolved_probability_per_source": (
+            report.mean_unresolved_probability_per_source
+        ),
+        "gate_passed": gate_passed,
+        "gate_error": gate_error,
+        "beats_prev_gen": beats_prev_gen,
+    }
+    report_path = out_dir / "gate_report.json"
+    with report_path.open("w", encoding="utf-8") as fh:
+        json.dump(summary, fh, indent=2)
+    return report_path
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--in-checkpoint", required=True)
@@ -85,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional checkpoint to warm-start the trained generation from. "
         "The --in-checkpoint evaluator is still used to generate MCTS labels.",
     )
+    parser.add_argument(
+        "--reference-checkpoint",
+        default=None,
+        help="Optional checkpoint whose value/policy outputs define distillation penalties.",
+    )
+    parser.add_argument("--value-distill-weight", type=float, default=0.0)
+    parser.add_argument("--policy-distill-weight", type=float, default=0.0)
     parser.add_argument("--tablebase-replicate", type=int, default=100)
     parser.add_argument(
         "--split-interior",
@@ -120,6 +240,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--split-interior). Counters the boundary-pin imbalance.",
     )
     parser.add_argument("--policy-loss-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--selection-metric",
+        choices=("value_mse", "policy_nll", "value_plus_policy"),
+        default="value_mse",
+        help=(
+            "Validation metric used to choose best.pt. Keep value_mse for "
+            "calibration-first runs; use policy_nll only for explicit "
+            "policy-head repair experiments."
+        ),
+    )
     parser.add_argument("--prev-gen-holdout-mse", type=float, default=None)
     parser.add_argument(
         "--enforce-monotonicity",
@@ -166,11 +296,60 @@ def build_parser() -> argparse.ArgumentParser:
         "Anchor/tablebase classes are still merged afterward.",
     )
     parser.add_argument(
+        "--subgame-resolve-horizon",
+        type=int,
+        default=3,
+        help="Selective-solve horizon used with --subgame-resolve-at-critical. "
+        "Default 3 keeps bounded critical-resolve experiments operational; "
+        "use 4 only after horizon-3 canaries pass.",
+    )
+    parser.add_argument(
         "--bootstrap-max-states",
         type=int,
         default=None,
         help="Cap the number of non-anchor MCTS bootstrap states. Useful for bounded "
         "critical-resolve runs that would otherwise take hours without artifacts.",
+    )
+    parser.add_argument(
+        "--source-weight",
+        action="append",
+        default=None,
+        metavar="SOURCE:VALUE",
+        help="Additional/override per-source value-loss weight. Repeatable.",
+    )
+    parser.add_argument(
+        "--policy-source-weight",
+        action="append",
+        default=None,
+        metavar="SOURCE:VALUE",
+        help="Additional/override per-source policy-loss weight. Repeatable.",
+    )
+    parser.add_argument(
+        "--force-train-source",
+        action="append",
+        default=None,
+        metavar="SOURCE",
+        help=(
+            "Move validation feature groups containing this source into the "
+            "training split. Useful for sparse trace-repair rows that must "
+            "actually train."
+        ),
+    )
+    parser.add_argument("--early-stopping-patience", type=int, default=40)
+    parser.add_argument(
+        "--canary-report",
+        default=None,
+        help="Optional JSON diagnostic to embed in gate_report.json, e.g. a "
+        "pattern_reader smoke report run before full promotion.",
+    )
+    parser.add_argument(
+        "--canary-min-wins-delta",
+        type=int,
+        default=0,
+        help=(
+            "Minimum aggregate wins_delta required when --canary-report is supplied. "
+            "Default 0 rejects canary regressions."
+        ),
     )
     return parser
 
@@ -178,21 +357,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
 
-    per_source_mse_thresholds: dict[str, float] | None = None
-    if args.per_source_mse_threshold:
-        per_source_mse_thresholds = {}
-        for item in args.per_source_mse_threshold:
-            if ":" not in item:
-                raise SystemExit(
-                    f"--per-source-mse-threshold expects 'source_name:value', got {item!r}"
-                )
-            name, raw_value = item.rsplit(":", 1)
-            try:
-                per_source_mse_thresholds[name] = float(raw_value)
-            except ValueError as exc:
-                raise SystemExit(
-                    f"--per-source-mse-threshold {item!r}: value is not a float ({exc})"
-                ) from exc
+    per_source_mse_thresholds = parse_thresholds(args.per_source_mse_threshold)
+    extra_source_weights = parse_source_weights(args.source_weight)
+    extra_policy_source_weights = parse_source_weights(args.policy_source_weight)
 
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
 
@@ -217,12 +384,24 @@ def main() -> int:
         iterations_per_state=args.iterations,
         seed=args.seed,
         subgame_resolve_at_critical=args.subgame_resolve_at_critical,
+        subgame_resolve_horizon=args.subgame_resolve_horizon,
         bootstrap_critical_only=args.bootstrap_critical_only,
         bootstrap_max_states=args.bootstrap_max_states,
         split_interior=args.split_interior,
     )
+    bootstrap_runtime = time.time() - t0
+    bootstrap_report = {
+        "runtime_seconds": round(bootstrap_runtime, 3),
+        "rows_generated": len(targets),
+        "source_breakdown": source_breakdown(targets),
+        "critical_only": args.bootstrap_critical_only,
+        "max_states": args.bootstrap_max_states,
+        "subgame_resolve_at_critical": args.subgame_resolve_at_critical,
+        "subgame_resolve_horizon": args.subgame_resolve_horizon,
+        "iterations_per_state": args.iterations,
+    }
     print(
-        f"  Bootstrap done in {time.time() - t0:.1f}s; {len(targets)} records",
+        f"  Bootstrap done in {bootstrap_runtime:.1f}s; {len(targets)} records",
         flush=True,
     )
 
@@ -290,6 +469,10 @@ def main() -> int:
             )
 
     print(f"  Final corpus: {len(targets)} records  breakdown: {source_breakdown(targets)}", flush=True)
+    training_corpus_report = {
+        "rows": len(targets),
+        "source_breakdown": source_breakdown(targets),
+    }
     save_targets(targets, args.out_targets)
     print(f"  Saved: {args.out_targets}", flush=True)
 
@@ -301,6 +484,9 @@ def main() -> int:
         device=args.device,
         hidden_dim=args.hidden_dim,
         init_checkpoint=args.init_checkpoint,
+        reference_checkpoint=args.reference_checkpoint,
+        value_distill_weight=args.value_distill_weight,
+        policy_distill_weight=args.policy_distill_weight,
         weight_decay=args.weight_decay,
         source_weights=(
             (SOURCE_TERMINAL, args.terminal_weight),
@@ -309,10 +495,16 @@ def main() -> int:
             (SOURCE_TABLEBASE, args.tablebase_weight),
             (SOURCE_TABLEBASE_INTERIOR, interior_weight),
             ("tier_a", args.tier_a_weight),
+            *extra_source_weights,
         ),
         policy_loss_weight=args.policy_loss_weight,
-        policy_source_weights=(("tier_a", args.tier_a_policy_weight),),
-        early_stopping_patience=40,
+        policy_source_weights=(
+            ("tier_a", args.tier_a_policy_weight),
+            *extra_policy_source_weights,
+        ),
+        early_stopping_patience=args.early_stopping_patience,
+        selection_metric=args.selection_metric,
+        force_train_sources=tuple(args.force_train_source or ()),
     )
     train_result = train(args.out_targets, args.out_dir, cfg)
     print(
@@ -347,19 +539,54 @@ def main() -> int:
         ),
         per_source_mse_thresholds=per_source_mse_thresholds,
     )
+    beats_prev_gen = (
+        monotonicity_verdict(report.overall_mse, args.prev_gen_holdout_mse)
+        if args.prev_gen_holdout_mse is not None
+        else None
+    )
+    canary_result = load_optional_json(args.canary_report)
+    canary_gate = canary_gate_decision(
+        canary_result,
+        min_wins_delta=args.canary_min_wins_delta,
+    )
     try:
         enforce_calibration_gate(report, gate_cfg)
         print()
         print("CALIBRATION GATE PASSED", flush=True)
+        overall_gate_passed = True
+        overall_gate_error = None
+        if canary_gate is not None and canary_gate["status"] != "passed":
+            overall_gate_passed = False
+            overall_gate_error = str(canary_gate["reason"])
+        report_path = write_gate_report(
+            args=args,
+            train_result=train_result,
+            report=report,
+            gate_passed=overall_gate_passed,
+            gate_error=overall_gate_error,
+            beats_prev_gen=beats_prev_gen,
+            bootstrap_report=bootstrap_report,
+            training_corpus_report=training_corpus_report,
+        )
+        print(f"  Gate report: {report_path}", flush=True)
+        if canary_gate is not None:
+            print(
+                "  Canary gate: "
+                f"{canary_gate['status'].upper()} "
+                f"wins_delta={canary_gate['wins_delta']} "
+                f"required>={canary_gate['min_wins_delta']}",
+                flush=True,
+            )
+            if canary_gate["status"] != "passed":
+                print(f"CANARY GATE FAILED: {canary_gate['reason']}", flush=True)
         if args.prev_gen_holdout_mse is not None:
-            improved = monotonicity_verdict(report.overall_mse, args.prev_gen_holdout_mse)
             delta = (args.prev_gen_holdout_mse - report.overall_mse) / args.prev_gen_holdout_mse * 100
-            verdict = "improvement" if improved else "regression"
+            verdict = "improvement" if beats_prev_gen else "regression"
             print(
                 f"  vs prev-gen baseline {args.prev_gen_holdout_mse:.5f}: {delta:+.1f}% ({verdict})",
                 flush=True,
             )
-            if not improved and args.enforce_monotonicity:
+            if not beats_prev_gen and args.enforce_monotonicity:
                 print(
                     "MONOTONICITY GATE FAILED: held-out MSE "
                     f"{report.overall_mse:.5f} >= prev-gen {args.prev_gen_holdout_mse:.5f} "
@@ -367,10 +594,23 @@ def main() -> int:
                     flush=True,
                 )
                 return 1
+        if not overall_gate_passed:
+            return 1
         return 0
     except CalibrationGateError as e:
+        report_path = write_gate_report(
+            args=args,
+            train_result=train_result,
+            report=report,
+            gate_passed=False,
+            gate_error=str(e),
+            beats_prev_gen=beats_prev_gen,
+            bootstrap_report=bootstrap_report,
+            training_corpus_report=training_corpus_report,
+        )
         print()
         print(f"CALIBRATION GATE FAILED: {e}", flush=True)
+        print(f"  Gate report: {report_path}", flush=True)
         return 1
 
 

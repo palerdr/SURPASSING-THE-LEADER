@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -18,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment.cfr.evaluator import TerminalOnlyEvaluator
 from environment.cfr.mcts import MCTSConfig, mcts_search
+from environment.cfr.selective import selective_solve
 from environment.cfr.subgame_resolve import is_critical, resolve_subgame
 from environment.cfr.tactical_scenarios import (
     forced_baku_overflow_death,
@@ -63,6 +65,14 @@ def test_is_critical_true_for_forced_baku_overflow_death():
 def test_is_critical_false_for_fresh_game_far_from_leap():
     game = _fresh_game_far_from_leap()
     assert is_critical(game) is False
+
+
+def test_is_critical_true_for_active_lsr_hal_checker_state():
+    game = _fresh_game_far_from_leap()
+    game.game_clock = 29 * 60.0
+    game.current_half = 2
+
+    assert is_critical(game) is True
 
 
 # ── 2. resolve_subgame ────────────────────────────────────────────────────
@@ -145,6 +155,25 @@ def test_resolve_subgame_passes_evaluator_through_to_selective():
     assert result.unresolved_probability == pytest.approx(0.0)
 
 
+def test_selective_solve_cache_reuses_same_frontier_state():
+    game = _fresh_game_far_from_leap()
+    calls = 0
+
+    class CountingEvaluator:
+        def __call__(self, game):
+            nonlocal calls
+            calls += 1
+            return 0.25
+
+    cache = {}
+    first = selective_solve(game, 0, evaluator=CountingEvaluator(), _cache=cache)
+    second = selective_solve(game, 0, evaluator=CountingEvaluator(), _cache=cache)
+
+    assert first.value_for_hal == pytest.approx(0.25)
+    assert second.value_for_hal == pytest.approx(0.25)
+    assert calls == 1
+
+
 # ── 3. mcts_search subgame_resolve_at_critical hook ───────────────────────
 
 
@@ -162,6 +191,42 @@ def test_mcts_search_with_resolve_at_critical_state_returns_result():
     assert result.root_value_for_hal == pytest.approx(1.0, abs=0.05)
     assert result.root_strategy_dropper.sum() == pytest.approx(1.0)
     assert result.root_strategy_checker.sum() == pytest.approx(1.0)
+
+
+def test_mcts_search_short_circuits_critical_root_resolve(monkeypatch):
+    import environment.cfr.mcts as mcts_module
+
+    game = _fresh_game_far_from_leap()
+    monkeypatch.setattr(mcts_module, "is_critical", lambda _game: True)
+
+    def fake_resolve_subgame(game, horizon, config, evaluator):
+        return SimpleNamespace(
+            value_for_hal=0.5,
+            drop_seconds=(1, 2),
+            check_seconds=(59, 60),
+            dropper_strategy=np.array([0.25, 0.75]),
+            checker_strategy=np.array([0.0, 1.0]),
+        )
+
+    monkeypatch.setattr(mcts_module, "resolve_subgame", fake_resolve_subgame)
+
+    class RaisingEvaluator:
+        def __call__(self, game):
+            raise AssertionError("MCTS iterations should not run before root resolve")
+
+    result = mcts_search(
+        game,
+        _config(iterations=100),
+        RaisingEvaluator(),
+        np.random.default_rng(0),
+        subgame_resolve_at_critical=True,
+    )
+
+    assert result.root_visits == 0
+    assert result.cells_used == 0
+    assert result.root_value_for_hal == pytest.approx(0.5)
+    np.testing.assert_array_equal(result.root_strategy_dropper_avg, np.array([0.25, 0.75]))
+    np.testing.assert_array_equal(result.root_strategy_checker_avg, np.array([0.0, 1.0]))
 
 
 def test_mcts_search_default_no_resolve_still_succeeds():

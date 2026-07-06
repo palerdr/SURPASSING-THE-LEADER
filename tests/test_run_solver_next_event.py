@@ -93,6 +93,10 @@ def test_next_run_switches_to_mcts_refresh_after_d0_append_rejection():
     assert "--init-checkpoint checkpoints/current/best.pt" in next_run["training_command"]
     assert "--iterations 300" in next_run["training_command"]
     assert "--learning-rate 3e-06" in next_run["training_command"]
+    assert any(
+        "compare_checkpoints_policy_drift.py" in command and "--iterations 200" in command
+        for command in next_run["post_training_commands"]
+    )
 
 
 def test_next_run_requires_pattern_reader_hardening_after_mcts_rejection():
@@ -119,6 +123,10 @@ def test_next_run_requires_pattern_reader_hardening_after_mcts_rejection():
     assert "--bootstrap-max-states 24" in next_run["training_command"]
     assert "--learning-rate 3e-06" in next_run["training_command"]
     assert any("--opponents pattern_reader" in command for command in next_run["post_training_commands"])
+    assert any(
+        "compare_checkpoints_policy_drift.py" in command and "--iterations 200" in command
+        for command in next_run["post_training_commands"]
+    )
 
 
 def test_next_run_blocks_without_accepted_promotion_report():

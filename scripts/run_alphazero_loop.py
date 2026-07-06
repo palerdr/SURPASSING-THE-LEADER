@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""AlphaZero-style training loop: generate → train → reload → repeat."""
+"""Legacy CanonicalHal AlphaZero-style loop.
+
+Use ``scripts/run_solver_self_play.py`` for new solver-MCTS self-play data.
+"""
 
 import sys
 import os

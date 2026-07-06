@@ -42,6 +42,7 @@ from training.value_targets import (
     SOURCE_TABLEBASE,
     SOURCE_TERMINAL,
     ValueTarget,
+    _build_game,
     generate_mcts_bootstrap_targets,
 )
 
@@ -127,6 +128,76 @@ def test_bootstrap_targets_can_cap_mcts_rows_without_dropping_anchors():
     mcts_targets = [t for t in targets if t.source == SOURCE_MCTS_BOOTSTRAP]
     assert len(mcts_targets) == 1
     assert SOURCE_TERMINAL in {t.source for t in targets}
+
+
+def test_bootstrap_policy_targets_use_deployed_average_strategy(monkeypatch):
+    from environment.cfr.evaluator import TerminalOnlyEvaluator
+    from environment.cfr.mcts import MCTSResult
+    from hal.agent import SolverAgent
+
+    drop_seconds = tuple(range(1, 61))
+    check_seconds = tuple(range(1, 61))
+    final_drop = np.zeros(60, dtype=np.float64)
+    final_drop[0] = 1.0
+    final_check = np.zeros(60, dtype=np.float64)
+    final_check[0] = 1.0
+    avg_drop = np.zeros(60, dtype=np.float64)
+    avg_drop[1] = 1.0
+    avg_check = np.zeros(60, dtype=np.float64)
+    avg_check[2] = 1.0
+    result = MCTSResult(
+        root_strategy_dropper=final_drop,
+        root_strategy_checker=final_check,
+        root_value_for_hal=0.25,
+        root_visits=5,
+        principal_line=[],
+        cells_used=5,
+        root_drop_seconds=drop_seconds,
+        root_check_seconds=check_seconds,
+        root_strategy_dropper_avg=avg_drop,
+        root_strategy_checker_avg=avg_check,
+    )
+
+    def fake_mcts_search(*_args, **_kwargs):
+        return result
+
+    monkeypatch.setattr("environment.cfr.mcts.mcts_search", fake_mcts_search)
+    targets = generate_mcts_bootstrap_targets(
+        _stub_predict_fn,
+        iterations_per_state=5,
+        seed=0,
+        include_anchor_classes=False,
+        baku_cylinder_grid=(0.0,),
+        hal_cylinder_grid=(0.0,),
+        clock_grid=(720.0,),
+        half_grid=(1,),
+        deaths_grid=(0,),
+        cpr_grid=(0,),
+    )
+    [target] = [t for t in targets if t.source == SOURCE_MCTS_BOOTSTRAP]
+
+    agent = SolverAgent(
+        "unused",
+        player_name="Hal",
+        iterations=5,
+        evaluator=TerminalOnlyEvaluator(),
+    )
+    monkeypatch.setattr(agent, "search", lambda _game: result)
+    game = _build_game(baku_cylinder=0.0, hal_cylinder=0.0, clock=720.0, current_half=1)
+    drop_seconds_out, drop_probs = agent.policy(game, "dropper")
+    check_seconds_out, check_probs = agent.policy(game, "checker")
+
+    expected_drop = np.zeros(61, dtype=np.float32)
+    expected_check = np.zeros(61, dtype=np.float32)
+    for second, probability in zip(drop_seconds_out, drop_probs):
+        expected_drop[second - 1] = probability
+    for second, probability in zip(check_seconds_out, check_probs):
+        expected_check[second - 1] = probability
+
+    np.testing.assert_array_equal(target.dropper_dist, expected_drop)
+    np.testing.assert_array_equal(target.checker_dist, expected_check)
+    assert target.dropper_dist[0] == 0.0  # final LP pure action was deliberately different
+    assert target.dropper_dist[1] == 1.0
 
 
 def test_bootstrap_targets_are_deterministic_under_same_seed():

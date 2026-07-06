@@ -111,41 +111,86 @@ def _aggregate_reports(seed_reports: list[dict], opponents: list[str]) -> dict:
     }
 
 
-def _make_agent(checkpoint: str, *, iterations: int, seed: int) -> SolverAgent:
+def _make_agent(
+    checkpoint: str,
+    *,
+    iterations: int,
+    seed: int,
+    policy_ensemble_size: int = 1,
+    policy_uniform_mix: float = 0.0,
+    search_prior_uniform_mix: float = 0.0,
+    resolve_at_critical: bool = False,
+    resolve_horizon: int = 3,
+) -> SolverAgent:
     return SolverAgent(
         checkpoint,
         player_name="Hal",
         iterations=iterations,
         seed=seed,
+        policy_ensemble_size=policy_ensemble_size,
+        policy_uniform_mix=policy_uniform_mix,
+        search_prior_uniform_mix=search_prior_uniform_mix,
+        resolve_at_critical=resolve_at_critical,
+        resolve_horizon=resolve_horizon,
     )
+
+
+def _run_checkpoint_report(
+    args,
+    checkpoint: str,
+    opponents: list[str],
+    seed: int,
+    *,
+    search_prior_uniform_mix: float = 0.0,
+) -> dict:
+    # Each opponent rung gets a fresh SolverAgent. Otherwise the stochastic
+    # action stream consumed by earlier rungs changes later-rung results,
+    # making diagnostics depend on opponent order.
+    results = {}
+    for opponent in opponents:
+        agent = _make_agent(
+            checkpoint,
+            iterations=args.agent_iterations,
+            seed=seed,
+            policy_ensemble_size=args.policy_ensemble_size,
+            policy_uniform_mix=args.policy_uniform_mix,
+            search_prior_uniform_mix=search_prior_uniform_mix,
+            resolve_at_critical=args.resolve_at_critical,
+            resolve_horizon=args.resolve_horizon,
+        )
+        results.update(
+            run_ladder(
+                make_choose_action(agent),
+                [opponent],
+                n_games=args.games,
+                seed=seed,
+            )
+        )
+    return gate_report(results)
 
 
 def _run_one_seed(args, opponents: list[str], seed: int) -> dict:
-    champion_agent = _make_agent(
+    champion_report = _run_checkpoint_report(
+        args,
         args.champion_checkpoint,
-        iterations=args.agent_iterations,
-        seed=seed,
+        opponents,
+        seed,
+        search_prior_uniform_mix=(
+            args.search_prior_uniform_mix
+            if args.champion_search_prior_uniform_mix is None
+            else args.champion_search_prior_uniform_mix
+        ),
     )
-    candidate_agent = _make_agent(
+    candidate_report = _run_checkpoint_report(
+        args,
         args.candidate_checkpoint,
-        iterations=args.agent_iterations,
-        seed=seed,
-    )
-    champion_report = gate_report(
-        run_ladder(
-            make_choose_action(champion_agent),
-            opponents,
-            n_games=args.games,
-            seed=seed,
-        )
-    )
-    candidate_report = gate_report(
-        run_ladder(
-            make_choose_action(candidate_agent),
-            opponents,
-            n_games=args.games,
-            seed=seed,
-        )
+        opponents,
+        seed,
+        search_prior_uniform_mix=(
+            args.search_prior_uniform_mix
+            if args.candidate_search_prior_uniform_mix is None
+            else args.candidate_search_prior_uniform_mix
+        ),
     )
     return {
         "seed": seed,
@@ -160,6 +205,33 @@ def main() -> int:
     parser.add_argument("--champion-checkpoint", default=DEFAULT_CHECKPOINT)
     parser.add_argument("--candidate-checkpoint", required=True)
     parser.add_argument("--agent-iterations", type=int, default=50)
+    parser.add_argument(
+        "--policy-ensemble-size",
+        type=int,
+        default=1,
+        help="Average this many independent state-seeded MCTS root policies per policy query.",
+    )
+    parser.add_argument(
+        "--policy-uniform-mix",
+        type=float,
+        default=0.0,
+        help="Blend each deployed root policy with this much uniform mass over its support.",
+    )
+    parser.add_argument("--search-prior-uniform-mix", type=float, default=0.0)
+    parser.add_argument("--champion-search-prior-uniform-mix", type=float, default=None)
+    parser.add_argument("--candidate-search-prior-uniform-mix", type=float, default=None)
+    parser.add_argument(
+        "--resolve-at-critical",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use SolverAgent critical-state subgame resolve during deployed search.",
+    )
+    parser.add_argument(
+        "--resolve-horizon",
+        type=int,
+        default=3,
+        help="Selective-solve horizon for --resolve-at-critical.",
+    )
     parser.add_argument("--games", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
@@ -188,7 +260,16 @@ def main() -> int:
 
     print(
         f"Comparing champion={args.champion_checkpoint} candidate={args.candidate_checkpoint} "
-        f"iterations={args.agent_iterations} games={args.games}/opponent seeds={seeds}"
+        f"iterations={args.agent_iterations} policy_ensemble_size={args.policy_ensemble_size} "
+        f"policy_uniform_mix={args.policy_uniform_mix:g} "
+        f"search_prior_uniform_mix={args.search_prior_uniform_mix:g} "
+        f"champion_search_prior_uniform_mix="
+        f"{args.champion_search_prior_uniform_mix if args.champion_search_prior_uniform_mix is not None else args.search_prior_uniform_mix:g} "
+        f"candidate_search_prior_uniform_mix="
+        f"{args.candidate_search_prior_uniform_mix if args.candidate_search_prior_uniform_mix is not None else args.search_prior_uniform_mix:g} "
+        f"resolve_at_critical={args.resolve_at_critical} "
+        f"resolve_horizon={args.resolve_horizon} "
+        f"games={args.games}/opponent seeds={seeds}"
     )
     print(f"Opponents: {', '.join(opponents)}")
     start = time.time()

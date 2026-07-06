@@ -149,7 +149,7 @@ def _post_training_commands(*, checkpoint: str, candidate: Path, out_name: str) 
     drift_report = (
         Path("checkpoints")
         / "checkpoint_policy_drift"
-        / f"{out_name}_vs_current_seeds012_report.json"
+        / f"{out_name}_vs_current_iter200_seeds012_report.json"
     )
     ladder_report = (
         Path("checkpoints")
@@ -169,7 +169,7 @@ def _post_training_commands(*, checkpoint: str, candidate: Path, out_name: str) 
     return [
         (
             f"python scripts/compare_checkpoints_policy_drift.py --champion-checkpoint {checkpoint} "
-            f"--candidate-checkpoint {candidate} --iterations 30 --seeds 0,1,2 --out {drift_report}"
+            f"--candidate-checkpoint {candidate} --iterations 200 --seeds 0,1,2 --out {drift_report}"
         ),
         (
             f"python scripts/compare_checkpoints_ladder.py --champion-checkpoint {checkpoint} "
@@ -229,6 +229,7 @@ def build_next_run(args, accepted: dict, rejected: list[dict], runtime: dict | N
             f"--weight-decay 1e-4 --tablebase-weight 15 --interior-weight 100 "
             f"--tier-a-weight {args.tier_a_weight:g} --tier-a-policy-weight 0.0 "
             f"--tier-a-replicate 1 --subgame-resolve-at-critical "
+            f"--subgame-resolve-horizon 3 "
             f"--bootstrap-critical-only --bootstrap-max-states {args.critical_bootstrap_max_states} "
             f"--prev-gen-holdout-mse {prev_mse}"
         )
@@ -257,7 +258,8 @@ def build_next_run(args, accepted: dict, rejected: list[dict], runtime: dict | N
             ],
             "acceptance_rule": (
                 "Do not run full promotion unless the 200-iteration pattern_reader diagnostic is non-regressing. "
-                "Then require the usual held-out, deterministic ladder, and certified exploitability gates."
+                "Then require held-out, deterministic ladder, certified exploitability, policy-drift, "
+                "and trace-readability gates."
             ),
         }
 

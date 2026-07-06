@@ -28,8 +28,11 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import torch
@@ -78,10 +81,20 @@ class TrainConfig:
     # conservative calibration tweaks that should leave policy priors and the
     # shared feature trunk intact.
     trainable_parts: str = "all"
-    # Optional trust-region reference. When set with value_distill_weight > 0,
-    # training penalizes value-output drift from this checkpoint on each batch.
+    # Optional trust-region reference. When set with a positive distillation
+    # weight, training penalizes value and/or policy drift from this checkpoint
+    # on each batch.
     reference_checkpoint: str | None = None
     value_distill_weight: float = 0.0
+    policy_distill_weight: float = 0.0
+    # Select which validation metric determines best.pt. Default preserves the
+    # calibration-first contract; policy_nll is for policy-head-only repair
+    # runs where value MSE is intentionally unchanged.
+    selection_metric: str = "value_mse"
+    # Sparse trace-repair rows are often the point of a focused fine-tune. Move
+    # whole feature groups containing these sources into train after the
+    # group-aware split so one-off guards cannot land only in validation.
+    force_train_sources: tuple[str, ...] = ()
 
 
 @dataclass
@@ -95,6 +108,7 @@ class TrainResult:
     final_val_mse: float
     train_history: list[dict] = field(default_factory=list)
     checkpoint_path: str = ""
+    best_selection_score: float = math.inf
 
 
 def _seed_all(seed: int) -> None:
@@ -126,6 +140,38 @@ def _split_indices(X: np.ndarray, val_fraction: float, rng: np.random.Generator)
         bucket = val_idx if rank < n_val_groups else train_idx
         bucket.extend(groups[keys[key_pos]])
     return np.array(train_idx, dtype=np.int64), np.array(val_idx, dtype=np.int64)
+
+
+def _force_sources_into_train(
+    *,
+    X: np.ndarray,
+    sources: np.ndarray,
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
+    force_sources: tuple[str, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Move validation feature groups containing selected sources to train."""
+    if not force_sources or val_idx.size == 0:
+        return train_idx, val_idx
+
+    force_set = {str(source) for source in force_sources}
+    forced_keys = {
+        X[int(idx)].tobytes()
+        for idx in val_idx
+        if str(sources[int(idx)]) in force_set
+    }
+    if not forced_keys:
+        return train_idx, val_idx
+
+    move_mask = np.array(
+        [X[int(idx)].tobytes() in forced_keys for idx in val_idx],
+        dtype=bool,
+    )
+    moved = val_idx[move_mask]
+    kept_val = val_idx[~move_mask]
+    if moved.size == 0:
+        return train_idx, val_idx
+    return np.concatenate([train_idx, moved]).astype(np.int64), kept_val.astype(np.int64)
 
 
 def _per_source_mse(
@@ -236,6 +282,52 @@ def _masked_policy_loss(
     return (per_sample * weight_active).sum() / weight_active.sum().clamp(min=1e-8)
 
 
+def _masked_policy_distillation_loss(
+    logits: torch.Tensor,
+    reference_logits: torch.Tensor,
+    legal_mask: torch.Tensor,
+) -> torch.Tensor:
+    active = legal_mask.sum(dim=1) > 0.5
+    if not bool(active.any()):
+        return logits.sum() * 0.0
+
+    mask_active = legal_mask[active] > 0.5
+    student_logits = logits[active].masked_fill(~mask_active, -1.0e9)
+    teacher_logits = reference_logits[active].masked_fill(~mask_active, -1.0e9)
+    with torch.no_grad():
+        teacher_probs = torch.softmax(teacher_logits, dim=1)
+    student_log_probs = torch.log_softmax(student_logits, dim=1)
+    return -(teacher_probs * student_log_probs).sum(dim=1).mean()
+
+
+def _evaluate_policy_nll(
+    model: nn.Module,
+    X: torch.Tensor,
+    dropper_target: torch.Tensor,
+    checker_target: torch.Tensor,
+    dropper_mask: torch.Tensor,
+    checker_mask: torch.Tensor,
+    policy_weights: torch.Tensor,
+) -> float:
+    """Validation NLL for both policy heads under the same masking contract."""
+    model.eval()
+    with torch.no_grad():
+        _value, dropper_logits, checker_logits = model(X)
+        dropper_loss = _masked_policy_loss(
+            dropper_logits,
+            dropper_target,
+            dropper_mask,
+            policy_weights,
+        )
+        checker_loss = _masked_policy_loss(
+            checker_logits,
+            checker_target,
+            checker_mask,
+            policy_weights,
+        )
+    return float((dropper_loss + checker_loss).item())
+
+
 def train(
     targets_npz_path: str | Path,
     output_dir: str | Path,
@@ -254,6 +346,11 @@ def train(
         best-epoch checkpoint.
     """
     config = config or TrainConfig()
+    if config.selection_metric not in {"value_mse", "policy_nll", "value_plus_policy"}:
+        raise ValueError(
+            "selection_metric must be one of "
+            "'value_mse', 'policy_nll', or 'value_plus_policy'"
+        )
     _seed_all(config.seed)
     rng = np.random.default_rng(config.seed)
 
@@ -270,6 +367,13 @@ def train(
         checker_masks_np,
     ) = _load_targets_npz(targets_npz_path)
     train_idx, val_idx = _split_indices(X_np, config.val_fraction, rng)
+    train_idx, val_idx = _force_sources_into_train(
+        X=X_np,
+        sources=sources_np,
+        train_idx=train_idx,
+        val_idx=val_idx,
+        force_sources=config.force_train_sources,
+    )
 
     device = torch.device(config.device)
     X_train = torch.from_numpy(X_np[train_idx]).to(device)
@@ -280,6 +384,10 @@ def train(
     checker_mask_train = torch.from_numpy(checker_masks_np[train_idx]).to(device)
     X_val = torch.from_numpy(X_np[val_idx]).to(device)
     y_val = torch.from_numpy(y_np[val_idx]).to(device)
+    dropper_val = torch.from_numpy(dropper_dists_np[val_idx]).to(device)
+    checker_val = torch.from_numpy(checker_dists_np[val_idx]).to(device)
+    dropper_mask_val = torch.from_numpy(dropper_masks_np[val_idx]).to(device)
+    checker_mask_val = torch.from_numpy(checker_masks_np[val_idx]).to(device)
     val_sources = sources_np[val_idx]
 
     weight_lookup = dict(config.source_weights)
@@ -293,8 +401,13 @@ def train(
         [policy_weight_lookup.get(str(s), 1.0) for s in train_sources],
         dtype=np.float32,
     )
+    val_policy_weights_np = np.array(
+        [policy_weight_lookup.get(str(s), 1.0) for s in val_sources],
+        dtype=np.float32,
+    )
     weights_train = torch.from_numpy(train_weights_np).to(device)
     policy_weights_train = torch.from_numpy(train_policy_weights_np).to(device)
+    policy_weights_val = torch.from_numpy(val_policy_weights_np).to(device)
 
     train_ds = TensorDataset(
         X_train,
@@ -328,7 +441,9 @@ def train(
     if not trainable_parameters:
         raise ValueError(f"trainable_parts={config.trainable_parts!r} left no trainable parameters")
     reference_model = None
-    if config.reference_checkpoint is not None and config.value_distill_weight > 0.0:
+    if config.reference_checkpoint is not None and (
+        config.value_distill_weight > 0.0 or config.policy_distill_weight > 0.0
+    ):
         reference_model = load_checkpoint(config.reference_checkpoint, device=config.device).to(device)
         reference_model.eval()
     optimizer = torch.optim.Adam(
@@ -340,6 +455,7 @@ def train(
     loss_fn = nn.MSELoss(reduction="none")
 
     best_val = math.inf
+    best_selection_score = math.inf
     best_epoch = 0
     best_per_source: dict[str, float] = {}
     best_path = output_dir / "best.pt"
@@ -355,7 +471,8 @@ def train(
         total_loss = 0.0
         n_seen = 0
         total_policy = 0.0
-        total_distill = 0.0
+        total_value_distill = 0.0
+        total_policy_distill = 0.0
         for (
             x_batch,
             y_batch,
@@ -372,10 +489,21 @@ def train(
             value_loss = (per_sample_se * weight_batch).sum() / weight_batch.sum().clamp(min=1e-8)
             if reference_model is not None:
                 with torch.no_grad():
-                    ref_preds = value_output(reference_model(x_batch)).squeeze(-1)
+                    ref_value, ref_dropper_logits, ref_checker_logits = reference_model(x_batch)
+                    ref_preds = ref_value.squeeze(-1)
                 value_distill_loss = loss_fn(preds.squeeze(-1), ref_preds).mean()
+                policy_distill_loss = _masked_policy_distillation_loss(
+                    dropper_logits,
+                    ref_dropper_logits,
+                    dropper_mask_batch,
+                ) + _masked_policy_distillation_loss(
+                    checker_logits,
+                    ref_checker_logits,
+                    checker_mask_batch,
+                )
             else:
                 value_distill_loss = preds.sum() * 0.0
+                policy_distill_loss = preds.sum() * 0.0
             dropper_loss = _masked_policy_loss(
                 dropper_logits,
                 dropper_batch,
@@ -393,35 +521,57 @@ def train(
                 value_loss
                 + config.policy_loss_weight * policy_loss
                 + config.value_distill_weight * value_distill_loss
+                + config.policy_distill_weight * policy_distill_loss
             )
             loss.backward()
             optimizer.step()
             batch_size = x_batch.shape[0]
             total_loss += float(value_loss.item()) * batch_size
             total_policy += float(policy_loss.item()) * batch_size
-            total_distill += float(value_distill_loss.item()) * batch_size
+            total_value_distill += float(value_distill_loss.item()) * batch_size
+            total_policy_distill += float(policy_distill_loss.item()) * batch_size
             n_seen += batch_size
         scheduler.step()
 
         train_mse = total_loss / max(1, n_seen)
         train_policy_nll = total_policy / max(1, n_seen)
-        train_value_distill_mse = total_distill / max(1, n_seen)
+        train_value_distill_mse = total_value_distill / max(1, n_seen)
+        train_policy_distill_nll = total_policy_distill / max(1, n_seen)
         val_mse, per_source = _evaluate(model, X_val, y_val, val_sources)
+        val_policy_nll = _evaluate_policy_nll(
+            model,
+            X_val,
+            dropper_val,
+            checker_val,
+            dropper_mask_val,
+            checker_mask_val,
+            policy_weights_val,
+        )
+        if config.selection_metric == "policy_nll":
+            selection_score = val_policy_nll
+        elif config.selection_metric == "value_plus_policy":
+            selection_score = val_mse + config.policy_loss_weight * val_policy_nll
+        else:
+            selection_score = val_mse
         history.append(
             {
                 "epoch": epoch,
                 "train_mse": train_mse,
                 "train_policy_nll": train_policy_nll,
                 "train_value_distill_mse": train_value_distill_mse,
+                "train_policy_distill_nll": train_policy_distill_nll,
                 "val_mse": val_mse,
+                "val_policy_nll": val_policy_nll,
+                "selection_score": selection_score,
                 "per_source_val_mse": per_source,
                 "lr": optimizer.param_groups[0]["lr"],
             }
         )
         final_train_mse = train_mse
 
-        if val_mse < best_val:
+        if selection_score < best_selection_score:
             best_val = val_mse
+            best_selection_score = selection_score
             best_epoch = epoch
             best_per_source = per_source
             torch.save(model.state_dict(), best_path)
@@ -438,6 +588,7 @@ def train(
                 "config": asdict(config),
                 "history": history,
                 "best_val_mse": best_val,
+                "best_selection_score": best_selection_score,
                 "best_epoch": best_epoch,
                 "best_per_source_mse": best_per_source,
             },
@@ -453,6 +604,7 @@ def train(
         final_val_mse=val_mse,
         train_history=history,
         checkpoint_path=str(best_path),
+        best_selection_score=best_selection_score,
     )
 
 
@@ -550,6 +702,18 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--selection-metric",
+        choices=("value_mse", "policy_nll", "value_plus_policy"),
+        default="value_mse",
+    )
+    parser.add_argument(
+        "--force-train-source",
+        action="append",
+        default=None,
+        metavar="SOURCE",
+        help="Move validation feature groups containing this source into training.",
+    )
     args = parser.parse_args()
 
     cfg = TrainConfig(
@@ -558,6 +722,8 @@ if __name__ == "__main__":
         learning_rate=args.lr,
         seed=args.seed,
         device=args.device,
+        selection_metric=args.selection_metric,
+        force_train_sources=tuple(args.force_train_source or ()),
     )
     result = train(args.targets, args.out, cfg)
     print(
