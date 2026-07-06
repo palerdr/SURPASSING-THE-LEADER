@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.tactical_scenarios import forced_baku_overflow_death
+from stl.solver.tablebase import forced_baku_overflow_death
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player

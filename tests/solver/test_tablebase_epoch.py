@@ -14,8 +14,8 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.epoch_tablebase import EpochSpec, solve_epoch, survival_table
-from stl.solver.epoch_sweep import CYL, bracket_survive_value
+from stl.solver.tablebase import EpochSpec, solve_epoch, survival_table
+from stl.solver.tablebase import CYL, bracket_survive_value
 
 LIMIT_GAME = os.path.join(
     os.getcwd(),

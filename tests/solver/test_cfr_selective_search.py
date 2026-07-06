@@ -8,9 +8,9 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.selective import generate_candidates
+from stl.solver.search import generate_candidates
 from stl.solver.exact import solve_exact_finite_horizon
-from stl.solver.selective import (
+from stl.solver.search import (
     audit_against_full_width,
     selective_solve,
 )

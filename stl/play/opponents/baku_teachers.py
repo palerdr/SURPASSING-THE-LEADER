@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from stl.engine.game import Game
 
-from stl.solver.timing_features import (
+from stl.solver.exact import (
     current_checker_fail_would_activate_lsr,
     is_active_lsr,
     rounds_until_leap_window,

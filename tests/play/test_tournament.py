@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.tactical_scenarios import forced_baku_overflow_death
+from stl.solver.tablebase import forced_baku_overflow_death
 from stl.engine.actions import IllegalActionError
 from stl.engine.game import TURN_DURATION_NORMAL
 from stl.engine.game import Game

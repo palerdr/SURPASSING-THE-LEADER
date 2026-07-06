@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.backward import (
+from stl.solver.tablebase import (
     MAX_ST,
     analytic_stage_outcomes,
     stage_matrix_from_values,

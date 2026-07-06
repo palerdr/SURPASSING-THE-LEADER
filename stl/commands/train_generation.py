@@ -1,5 +1,5 @@
-"""Run one AlphaZero-style generation step: MCTS-bootstrap → anchor merge →
-class-rebalanced training → calibration gate.
+"""Run one AlphaZero-style generation step: MCTS-bootstrap -> anchor merge ->
+class-rebalanced training -> calibration gate.
 
 Usage:
     python scripts/run_gen_iteration.py \
@@ -53,7 +53,7 @@ from stl.learning.targets import (
 def monotonicity_verdict(new_mse: float, prev_mse: float) -> bool:
     """True iff the new generation strictly improved on the previous one.
 
-    The AlphaZero acceptance rule (charter §2 criterion 5): the new gen's
+    The AlphaZero acceptance rule (charter section 2 criterion 5): the new gen's
     held-out overall MSE must be STRICTLY below the prior gen's. Equal or
     worse is a regression.
     """
@@ -91,8 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Phase I-2 fix: label the F-2 interior pins as their own "
         "SOURCE_TABLEBASE_INTERIOR training class (instead of lumping them into "
-        "SOURCE_TABLEBASE, where 660 boundary ±1 pins drown the 3 interior pins "
-        "and saturate the net toward ±1). Pairs with the interior balancing block.",
+        "SOURCE_TABLEBASE, where 660 boundary +/-1 pins drown the 3 interior pins "
+        "and saturate the net toward +/-1). Pairs with the interior balancing block.",
     )
     parser.add_argument(
         "--weight-decay",
@@ -126,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Fail (exit 1) when --prev-gen-holdout-mse is given and the new "
-        "overall held-out MSE is not strictly below it (charter §2 criterion "
+        "overall held-out MSE is not strictly below it (charter section 2 criterion "
         "5: AlphaZero accept). --no-enforce-monotonicity restores the old "
         "report-only behavior.",
     )
@@ -140,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=64,
         help="ValueNet hidden width (Phase I). Default 64 (13.7K params, "
-        "original). 128 gives 35.5K params (2.6× capacity) for fitting more "
+        "original). 128 gives 35.5K params (2.6x capacity) for fitting more "
         "diverse tablebase pins; 192 gives ~65.4K params (Phase I-2, under the "
         "raised 70K guard).",
     )
@@ -157,7 +157,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--subgame-resolve-at-critical",
         action="store_true",
-        help="Use deeper root subgame re-solving for MCTS bootstrap labels at critical states.",
+        help="Use bounded root subgame re-solving for MCTS bootstrap labels at critical states.",
+    )
+    parser.add_argument(
+        "--subgame-resolve-horizon",
+        type=int,
+        default=1,
+        help="Half-round horizon for critical root resolve. Default 1 bounds the resolve to the current turn.",
+    )
+    parser.add_argument(
+        "--subgame-resolve-cfr-iters",
+        type=int,
+        default=2000,
+        help="CFR+ iterations for the bounded critical root resolve.",
     )
     parser.add_argument(
         "--bootstrap-critical-only",
@@ -217,6 +229,8 @@ def main() -> int:
         iterations_per_state=args.iterations,
         seed=args.seed,
         subgame_resolve_at_critical=args.subgame_resolve_at_critical,
+        subgame_resolve_horizon=args.subgame_resolve_horizon,
+        subgame_resolve_cfr_iters=args.subgame_resolve_cfr_iters,
         bootstrap_critical_only=args.bootstrap_critical_only,
         bootstrap_max_states=args.bootstrap_max_states,
         split_interior=args.split_interior,
@@ -284,7 +298,7 @@ def main() -> int:
             if interior_replicate > 1:
                 targets = targets + interior * (interior_replicate - 1)
             print(
-                f"  Interior anchors: {len(interior)} unique × {interior_replicate} "
+                f"  Interior anchors: {len(interior)} unique x {interior_replicate} "
                 f"(loss weight {interior_weight}) vs {n_boundary} boundary pins",
                 flush=True,
             )

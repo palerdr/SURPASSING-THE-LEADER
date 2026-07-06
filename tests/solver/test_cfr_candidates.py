@@ -5,14 +5,15 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.selective import (
+from stl.solver.search import (
     CRITICAL_SECONDS,
+    PLAYABLE_GRID_SECONDS,
     generate_candidates,
     overflow_st_threshold,
     safe_st_budget,
 )
 from stl.solver.exact import ExactSearchConfig
-from stl.solver.tactical_scenarios import (
+from stl.solver.tablebase import (
     safe_budget_pressure_at_cylinder_240,
     safe_budget_pressure_at_cylinder_241,
 )
@@ -37,6 +38,10 @@ def test_critical_seconds_constant_lists_documented_values():
     assert CRITICAL_SECONDS == (1, 2, 58, 59, 60, 61)
 
 
+def test_playable_grid_includes_interior_seconds():
+    assert {10, 20, 30, 40, 45, 50}.issubset(set(PLAYABLE_GRID_SECONDS))
+
+
 def test_overflow_threshold_at_low_cylinder_uses_full_distance():
     assert overflow_st_threshold(0) == 300
 
@@ -59,6 +64,14 @@ def test_candidates_include_legal_critical_seconds_at_normal_turn():
 
     assert {1, 2, 58, 59, 60}.issubset(set(candidates.drop_seconds))
     assert {1, 2, 58, 59, 60}.issubset(set(candidates.check_seconds))
+
+
+def test_candidates_include_interior_playable_grid_at_normal_turn():
+    game = make_game()
+    candidates = generate_candidates(game, include_playable_grid=True)
+
+    assert {10, 20, 30, 40, 45, 50}.issubset(set(candidates.drop_seconds))
+    assert {10, 20, 30, 40, 45, 50}.issubset(set(candidates.check_seconds))
 
 
 def test_candidates_exclude_61_at_normal_turn():

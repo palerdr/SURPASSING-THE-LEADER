@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from stl.play.agent import DEFAULT_CHECKPOINT
 from stl.commands.exploitability import SCENARIOS, build_policy
 from stl.learning.strength import best_response_interval
-from stl.solver.tier_a import TierALookup, frontier_interval_fn
+from stl.solver.tablebase import TierALookup, frontier_interval_fn
 
 
 DEFAULT_SCENARIOS = "postleap_230,postleap_d1_hal_120_230"

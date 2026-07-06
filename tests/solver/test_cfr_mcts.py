@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
+from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.exact import (
     ExactGameSnapshot,
     ExactJointAction,
@@ -29,7 +29,7 @@ from stl.solver.exact import (
     ExactSearchConfig,
     exact_public_state,
 )
-from stl.solver.mcts import (
+from stl.solver.search import (
     MCTSConfig,
     MCTSNode,
     _backup,
@@ -40,7 +40,7 @@ from stl.solver.mcts import (
     make_node,
     mcts_search,
 )
-from stl.solver.tactical_scenarios import (
+from stl.solver.tablebase import (
     forced_baku_overflow_death,
     forced_hal_overflow_death,
     safe_budget_pressure_at_cylinder_241,

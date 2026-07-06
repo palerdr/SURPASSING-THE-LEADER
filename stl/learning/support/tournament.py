@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from stl.engine.actions import validate_action
-from stl.solver.tactical_scenarios import TacticalScenario
+from stl.solver.tablebase import TacticalScenario
 from stl.engine.game import (
     OPENING_START_CLOCK,
     PHYSICALITY_BAKU,

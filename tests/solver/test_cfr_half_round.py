@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.half_round import regret_match, compute_payoff_matrix, solve_half_round
+from stl.solver.exact import regret_match, compute_payoff_matrix, solve_half_round
 from stl.engine.game import FAILED_CHECK_PENALTY, CYLINDER_MAX
 
 

@@ -17,7 +17,7 @@ import pytest
 sys.path.insert(0, os.getcwd())
 
 from stl.solver.exact import ExactSearchConfig, exact_public_state
-from stl.solver.selective import selective_solve
+from stl.solver.search import selective_solve
 from stl.learning.model import FEATURE_DIM
 from stl.learning.reanalysis import (
     SOURCE_EXACT_HORIZON_4,

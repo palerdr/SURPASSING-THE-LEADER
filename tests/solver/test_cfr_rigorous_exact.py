@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, os.getcwd())
 
 from stl.solver.exact import (
+    CFRPlusConfig,
     clear_solve_cache,
     evaluate_joint_action,
     exact_immediate_checker_payoff_matrix,
@@ -23,10 +24,10 @@ from stl.solver.exact import (
     enumerate_joint_actions,
     expand_joint_action,
 )
-from stl.solver.half_round import compute_payoff_matrix
-from stl.solver.diagnostics import diagnose_exact_strategy
-from stl.solver.exact import solve_minimax
-from stl.solver.tactical_scenarios import forced_baku_overflow_death
+from stl.solver.exact import compute_payoff_matrix
+from stl.solver.search import diagnose_exact_strategy
+from stl.solver.exact import solve_cfr_plus, solve_minimax
+from stl.solver.tablebase import forced_baku_overflow_death
 from stl.solver.exact import terminal_value
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL, TURN_DURATION_NORMAL
 from stl.engine.game import Game
@@ -63,6 +64,34 @@ def test_cfr_owned_minimax_solver_solves_matching_pennies():
 
     np.testing.assert_allclose(strategy, [0.5, 0.5], atol=1e-4)
     assert value == pytest.approx(0.0, abs=1e-4)
+
+
+def test_cfr_plus_solver_solves_matching_pennies():
+    payoff = np.array([[1.0, -1.0], [-1.0, 1.0]])
+
+    strategy, value = solve_cfr_plus(
+        payoff,
+        CFRPlusConfig(iterations=500, average_delay=50),
+    )
+
+    np.testing.assert_allclose(strategy, [0.5, 0.5], atol=1e-3)
+    assert value == pytest.approx(0.0, abs=1e-3)
+
+
+def test_cfr_plus_tracks_lp_on_exact_second_matrices():
+    for turn_duration in (60, 61):
+        payoff = compute_payoff_matrix(0.0, turn_duration=turn_duration) / 60.0
+        _lp_strategy, lp_value = solve_minimax(payoff)
+
+        cfr_strategy, cfr_value = solve_cfr_plus(
+            payoff,
+            CFRPlusConfig(iterations=2000, average_delay=100),
+        )
+
+        assert cfr_strategy.shape == (turn_duration,)
+        assert cfr_strategy.sum() == pytest.approx(1.0)
+        assert np.all(cfr_strategy >= 0.0)
+        assert cfr_value == pytest.approx(lp_value, abs=5e-4)
 
 
 def test_exact_joint_actions_use_actor_aware_leap_legality():
@@ -179,11 +208,8 @@ def test_rigorous_cfr_modules_do_not_import_reward_or_value_heuristics():
     root = pathlib.Path.cwd()
     rigorous_files = [
         root / "stl/solver/exact.py",
-        root / "stl/solver/diagnostics.py",
-        root / "stl/solver/tactical_scenarios.py",
+        root / "stl/solver/search.py",
         root / "stl/solver/tablebase.py",
-        root / "stl/solver/timing_features.py",
-        root / "stl/solver/selective.py",
     ]
     forbidden = (
         "stl.learning.reward",

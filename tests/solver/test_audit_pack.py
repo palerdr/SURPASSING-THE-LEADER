@@ -5,8 +5,8 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
-from stl.solver.mcts import MCTSConfig
+from stl.solver.search import TerminalOnlyEvaluator
+from stl.solver.search import MCTSConfig
 from stl.solver.tablebase import get_scenario
 from stl.learning.audit import (
     AuditGateError,

@@ -16,7 +16,6 @@ No reward shaping, no bucketing, no value-net frontier. Frontier states
 beyond the configured horizon are reported as unresolved mass.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -121,7 +120,24 @@ def exact_public_state(game: Game) -> ExactPublicState:
     )
 
 
-# ── Zero-sum LP minimax ───────────────────────────────────────────────────
+# ── Zero-sum matrix solvers ───────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class CFRPlusConfig:
+    """Configuration for the bounded local CFR+ matrix solver."""
+
+    iterations: int = 2000
+    average_delay: int = 100
+    linear_weighting: bool = True
+
+
+def _regret_plus_strategy(cumulative_regret: np.ndarray) -> np.ndarray:
+    positive = np.maximum(cumulative_regret, 0.0)
+    total = float(np.sum(positive))
+    if total > 1e-12:
+        return positive / total
+    return np.ones(len(cumulative_regret), dtype=np.float64) / len(cumulative_regret)
 
 
 def solve_minimax(payoff: np.ndarray) -> tuple[np.ndarray, float]:
@@ -168,6 +184,63 @@ def solve_minimax(payoff: np.ndarray) -> tuple[np.ndarray, float]:
     else:
         strategy = np.ones(m) / m
     return strategy, float(result.x[m])
+
+
+def solve_cfr_plus(
+    payoff: np.ndarray,
+    config: CFRPlusConfig | None = None,
+) -> tuple[np.ndarray, float]:
+    """Approximate the row player's maximin strategy with CFR+.
+
+    This is for bounded local resolves where a fast iterative matrix solve is
+    useful. The certified exact tower continues to call ``solve_minimax``.
+    """
+    matrix = np.asarray(payoff, dtype=np.float64)
+    if matrix.ndim != 2:
+        raise ValueError(f"payoff must be a 2D matrix, got shape {matrix.shape}")
+    m, n = matrix.shape
+    if m == 0 or n == 0:
+        raise ValueError("payoff matrix must have at least one row and one column")
+    if m == 1 or n == 1:
+        return solve_minimax(matrix)
+
+    config = config or CFRPlusConfig()
+    iterations = int(config.iterations)
+    if iterations <= 0:
+        raise ValueError(f"CFR+ iterations must be positive, got {iterations}")
+    average_delay = max(0, int(config.average_delay))
+
+    row_regret = np.zeros(m, dtype=np.float64)
+    col_regret = np.zeros(n, dtype=np.float64)
+    row_strategy_sum = np.zeros(m, dtype=np.float64)
+
+    for t in range(1, iterations + 1):
+        row_strategy = _regret_plus_strategy(row_regret)
+        col_strategy = _regret_plus_strategy(col_regret)
+
+        row_action_values = matrix @ col_strategy
+        row_value = float(row_strategy @ row_action_values)
+        row_regret = np.maximum(row_regret + row_action_values - row_value, 0.0)
+
+        # Alternating update: the column player responds to the row player's
+        # freshly updated regret-matching strategy.
+        row_strategy = _regret_plus_strategy(row_regret)
+        col_action_values = -(row_strategy @ matrix)
+        col_value = float(col_strategy @ col_action_values)
+        col_regret = np.maximum(col_regret + col_action_values - col_value, 0.0)
+
+        if t > average_delay:
+            weight = float(t) if config.linear_weighting else 1.0
+            row_strategy_sum += weight * row_strategy
+
+    total = float(row_strategy_sum.sum())
+    if total > 1e-12:
+        strategy = row_strategy_sum / total
+    else:
+        strategy = _regret_plus_strategy(row_regret)
+
+    value = float(np.min(strategy @ matrix))
+    return strategy, value
 
 
 # ── Action enumeration, snapshot/restore, transition expansion ────────────
@@ -566,3 +639,404 @@ def solve_exact_finite_horizon(
     if len(_SOLVE_CACHE) > _SOLVE_CACHE_MAXSIZE:
         _SOLVE_CACHE.popitem(last=False)  # evict least-recently-used
     return result
+
+
+# ============================================================================
+# Half-round matrix helpers
+# ============================================================================
+
+"""Single half-round regret-matching CFR baseline.
+
+This module is the original (pre-Phase-1) regret-matching solver over the
+exact 1..60 second matrix. It is *not bucketed* — the action space is
+exact — but the canonical rigorous solver in this namespace is
+``exact_solver.solve_exact_finite_horizon`` (LP minimax + chance-branch
+recursion). Keep this file as a comparison baseline for matrix-equivalence
+tests and as the source of pure helpers like ``survival_probability``;
+new rigorous code should not call ``solve_half_round`` from here.
+"""
+
+
+import numpy as np
+
+from stl.engine.game import (
+    FAILED_CHECK_PENALTY,
+    CYLINDER_MAX,
+    BASE_CURVE_K,
+    CARDIAC_DECAY,
+    REFEREE_DECAY,
+    REFEREE_FLOOR,
+)
+
+
+def regret_match(cumulative_regret: np.ndarray) -> np.ndarray:
+    """Convert cumulative regret vector into a strategy (probability distribution)."""
+    positive = np.maximum(0, cumulative_regret)
+    total = np.sum(positive)
+    if total > 0:
+        return positive / total
+    return np.ones(len(cumulative_regret)) / len(cumulative_regret)
+
+
+def survival_probability(
+    death_duration: float,
+    player_ttd: float,
+    cprs_performed: int,
+    physicality: float,
+) -> float:
+    """Compute survival probability using the engine's exact formula."""
+    if death_duration >= CYLINDER_MAX:
+        return 0.0
+    base = max(0.0, 1.0 - (death_duration / CYLINDER_MAX) ** BASE_CURVE_K)
+    cardiac = CARDIAC_DECAY ** (player_ttd / 60.0)
+    referee = max(REFEREE_FLOOR, REFEREE_DECAY ** cprs_performed)
+    return base * cardiac * referee * physicality
+
+
+def compute_payoff_matrix(
+    checker_cylinder: float,
+    turn_duration: int = 60,
+) -> np.ndarray:
+    """Build the Checker's immediate payoff matrix (no continuation values)."""
+    n = turn_duration
+    payoff = np.zeros((n, n), dtype=np.float64)
+
+    for d in range(n):
+        drop_time = d + 1
+        for c in range(n):
+            check_time = c + 1
+
+            if check_time >= drop_time:
+                st = max(1, check_time - drop_time)
+                if checker_cylinder + st >= CYLINDER_MAX:
+                    payoff[d][c] = -CYLINDER_MAX
+                else:
+                    payoff[d][c] = -st
+            else:
+                injection = min(checker_cylinder + FAILED_CHECK_PENALTY, CYLINDER_MAX)
+                payoff[d][c] = -injection
+
+    return payoff
+
+
+def build_augmented_payoff_matrix(
+    st_to_cont_val: dict[int, float],
+    fail_cont_val: float,
+    fail_surv_prob: float,
+    turn_duration: int = 60,
+    lose_value: float = -1.0,
+) -> np.ndarray:
+    """Build augmented payoff matrix from precomputed continuation values.
+
+    Args:
+        st_to_cont_val: Maps ST (1..59) → checker continuation value for that outcome.
+            For overflow STs, the value already includes survival probability weighting.
+        fail_cont_val: Checker continuation value for failed check (survived).
+        fail_surv_prob: Survival probability for failed check.
+    """
+    n = turn_duration
+    payoff = np.zeros((n, n), dtype=np.float64)
+
+    fail_payoff = fail_surv_prob * fail_cont_val + (1 - fail_surv_prob) * lose_value
+
+    for d in range(n):
+        drop_time = d + 1
+        for c in range(n):
+            check_time = c + 1
+
+            if check_time >= drop_time:
+                st = max(1, check_time - drop_time)
+                payoff[d][c] = st_to_cont_val.get(st, 0.0)
+            else:
+                payoff[d][c] = fail_payoff
+
+    return payoff
+
+
+def solve_half_round(
+    checker_cylinder: float,
+    turn_duration: int = 60,
+    iterations: int = 10_000,
+    payoff_matrix: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Solve a single half-round for Nash equilibrium strategies."""
+    n = turn_duration
+    if payoff_matrix is not None:
+        payoff = payoff_matrix
+    else:
+        payoff = compute_payoff_matrix(checker_cylinder, turn_duration)
+
+    dropper_regret = np.zeros(n)
+    checker_regret = np.zeros(n)
+    dropper_strategy_sum = np.zeros(n)
+    checker_strategy_sum = np.zeros(n)
+
+    for _ in range(iterations):
+        dropper_strat = regret_match(dropper_regret)
+        checker_strat = regret_match(checker_regret)
+
+        dropper_strategy_sum += dropper_strat
+        checker_strategy_sum += checker_strat
+
+        dropper_action_values = -payoff @ checker_strat
+        checker_action_values = payoff.T @ dropper_strat
+
+        dropper_EV = dropper_strat @ dropper_action_values
+        checker_EV = checker_strat @ checker_action_values
+
+        dropper_regret += dropper_action_values - dropper_EV
+        checker_regret += checker_action_values - checker_EV
+
+    avg_dropper = dropper_strategy_sum / dropper_strategy_sum.sum()
+    avg_checker = checker_strategy_sum / checker_strategy_sum.sum()
+    game_value = avg_dropper @ payoff @ avg_checker
+
+    return (avg_dropper, avg_checker, game_value)
+
+
+# ============================================================================
+# Timing and LSR predicates
+# ============================================================================
+
+"""Engine-derived timing and route arithmetic for rigorous CFR.
+
+Pure functions over the engine state: clock geometry, LSR variation,
+projected gaps, and survival-budget math. No reward shaping, no stage
+labels, no curriculum milestones, no "good for Hal" categories. Anything
+that asserts progress without proving it through terminal utility lives
+in ``environment/route_math.py`` or further out.
+"""
+
+
+from dataclasses import dataclass
+
+from stl.engine.game import (
+    CYLINDER_MAX,
+    FAILED_CHECK_PENALTY,
+    LS_WINDOW_END,
+    LS_WINDOW_START,
+    TURN_DURATION_NORMAL,
+)
+
+
+__all__ = [
+    "PlayerBudget",
+    "current_checker_fail_would_activate_lsr",
+    "current_dropper_checker",
+    "current_lsr_variation",
+    "get_named_players",
+    "is_active_lsr",
+    "is_leap_window",
+    "lsr_variation_from_clock",
+    "player_budget",
+    "player_named",
+    "projected_failed_check_death_duration",
+    "projected_post_fail_ttd",
+    "projected_round_gap_for_death_duration",
+    "projected_round_gap_for_two_deaths",
+    "projected_variation_after_current_checker_fail",
+    "projected_variation_after_gap",
+    "role_for_player",
+    "rounds_until_leap_window",
+    "safe_strategy_budget",
+    "strict_next_minute",
+]
+
+
+def strict_next_minute(seconds: float) -> int:
+    whole_seconds = int(seconds)
+    return ((whole_seconds // 60) + 1) * 60
+
+
+def lsr_variation_from_clock(game_clock: float) -> int:
+    minutes_since_start = int(game_clock) // 60
+    return (minutes_since_start % 4) + 1
+
+
+def current_lsr_variation(game) -> int:
+    return lsr_variation_from_clock(game.game_clock)
+
+
+def is_active_lsr(game) -> bool:
+    return current_lsr_variation(game) == 2
+
+
+def is_leap_window(game_clock: float) -> bool:
+    # Inclusive of LS_WINDOW_END to match the authoritative engine rule
+    # (Game.get_turn_duration treats game_clock == LS_WINDOW_END as a leap turn).
+    return LS_WINDOW_START <= game_clock <= LS_WINDOW_END
+
+
+def rounds_until_leap_window(game) -> int:
+    remaining = max(0.0, LS_WINDOW_START - game.game_clock)
+    return int(remaining // (TURN_DURATION_NORMAL * 4))
+
+
+def get_named_players(game):
+    hal = game.player1 if game.player1.name.lower() == "hal" else game.player2
+    baku = game.player1 if game.player1.name.lower() == "baku" else game.player2
+    return hal, baku
+
+
+def player_named(game, name: str):
+    lowered = name.lower()
+    hal, baku = get_named_players(game)
+    if lowered == "hal":
+        return hal
+    if lowered == "baku":
+        return baku
+    raise ValueError(f"Unknown player name: {name}")
+
+
+def current_dropper_checker(game):
+    return game.get_roles_for_half(game.current_half)
+
+
+def role_for_player(game, player) -> str:
+    dropper, checker = current_dropper_checker(game)
+    if player is dropper:
+        return "dropper"
+    if player is checker:
+        return "checker"
+    raise ValueError("player is not part of this game")
+
+
+def projected_failed_check_death_duration(player) -> float:
+    return player.cylinder + FAILED_CHECK_PENALTY
+
+
+def projected_post_fail_ttd(player) -> float:
+    return player.ttd + projected_failed_check_death_duration(player)
+
+
+def safe_strategy_budget(player) -> int:
+    return max(0, int((CYLINDER_MAX - 1 - player.cylinder) // TURN_DURATION_NORMAL))
+
+
+def projected_round_gap_for_death_duration(death_duration: float) -> int:
+    return strict_next_minute(death_duration + 300.0)
+
+
+def projected_round_gap_for_two_deaths(first_death_duration: float, second_death_duration: float) -> int:
+    return strict_next_minute(first_death_duration + second_death_duration + 420.0)
+
+
+def projected_variation_after_gap(round_start_clock: float, gap_seconds: int) -> int:
+    return lsr_variation_from_clock(round_start_clock + gap_seconds)
+
+
+def projected_variation_after_current_checker_fail(game) -> int:
+    round_start_clock = game.game_clock if game.current_half == 1 else game.game_clock - 120.0
+    checker = current_dropper_checker(game)[1]
+    gap_seconds = projected_round_gap_for_death_duration(projected_failed_check_death_duration(checker))
+    return projected_variation_after_gap(round_start_clock, gap_seconds)
+
+
+def current_checker_fail_would_activate_lsr(game) -> bool:
+    return projected_variation_after_current_checker_fail(game) == 2
+
+
+@dataclass(frozen=True)
+class PlayerBudget:
+    cylinder: float
+    ttd: float
+    deaths: int
+    safe_budget: int
+    fail_death_duration: float
+    fail_post_ttd: float
+
+
+def player_budget(player) -> PlayerBudget:
+    fail_death_duration = projected_failed_check_death_duration(player)
+    return PlayerBudget(
+        cylinder=player.cylinder,
+        ttd=player.ttd,
+        deaths=player.deaths,
+        safe_budget=safe_strategy_budget(player),
+        fail_death_duration=fail_death_duration,
+        fail_post_ttd=player.ttd + fail_death_duration,
+    )
+
+
+# ============================================================================
+# Exact strategy diagnostics
+# ============================================================================
+
+"""Exploitability and best-response diagnostics for exact CFR results."""
+
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from stl.engine.game import Game
+
+
+@dataclass(frozen=True)
+class ExactStrategyDiagnostics:
+    """One-state best-response audit for a simultaneous exact matrix game."""
+
+    expected_value: float
+    dropper_best_response_value: float
+    checker_best_response_value: float
+    dropper_exploitability: float
+    checker_exploitability: float
+    nash_gap: float
+    dropper_best_action: int | None
+    checker_best_action: int | None
+
+
+def _require_payoff(result: ExactSolveResult) -> np.ndarray:
+    if result.payoff_for_hal is None:
+        raise ValueError("ExactSolveResult has no payoff matrix; terminal states cannot be diagnosed")
+    return result.payoff_for_hal
+
+
+def diagnose_exact_strategy(
+    game: Game,
+    result: ExactSolveResult,
+    *,
+    perspective_name: str = "Hal",
+) -> ExactStrategyDiagnostics:
+    """Compute one-step exploitability from the exact Hal-perspective payoff matrix.
+
+    The payoff matrix rows are dropper actions and columns are checker actions.
+    If Hal is the dropper, rows maximize the payoff and columns minimize it.
+    If Hal is the checker, rows minimize the payoff and columns maximize it.
+    """
+    payoff = _require_payoff(result)
+    if payoff.shape != (len(result.dropper_strategy), len(result.checker_strategy)):
+        raise ValueError("Strategy lengths do not match payoff matrix shape")
+
+    dropper, _checker = game.get_roles_for_half(game.current_half)
+    hal_is_dropper = dropper.name.lower() == perspective_name.lower()
+
+    dropper_action_values = payoff @ result.checker_strategy
+    checker_action_values = result.dropper_strategy @ payoff
+    expected = float(result.dropper_strategy @ payoff @ result.checker_strategy)
+
+    if hal_is_dropper:
+        drop_idx = int(np.argmax(dropper_action_values))
+        check_idx = int(np.argmin(checker_action_values))
+        dropper_br = float(dropper_action_values[drop_idx])
+        checker_br = float(checker_action_values[check_idx])
+        dropper_exploitability = max(0.0, dropper_br - expected)
+        checker_exploitability = max(0.0, expected - checker_br)
+    else:
+        drop_idx = int(np.argmin(dropper_action_values))
+        check_idx = int(np.argmax(checker_action_values))
+        dropper_br = float(dropper_action_values[drop_idx])
+        checker_br = float(checker_action_values[check_idx])
+        dropper_exploitability = max(0.0, expected - dropper_br)
+        checker_exploitability = max(0.0, checker_br - expected)
+
+    return ExactStrategyDiagnostics(
+        expected_value=expected,
+        dropper_best_response_value=dropper_br,
+        checker_best_response_value=checker_br,
+        dropper_exploitability=dropper_exploitability,
+        checker_exploitability=checker_exploitability,
+        nash_gap=dropper_exploitability + checker_exploitability,
+        dropper_best_action=result.drop_actions[drop_idx] if result.drop_actions else None,
+        checker_best_action=result.check_actions[check_idx] if result.check_actions else None,
+    )

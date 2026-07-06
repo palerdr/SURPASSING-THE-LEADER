@@ -40,7 +40,7 @@ from stl.solver.exact import (
     terminal_value,
 )
 from stl.solver.tablebase import REGISTRY
-from stl.solver.timing_features import (
+from stl.solver.exact import (
     current_checker_fail_would_activate_lsr,
     is_active_lsr,
     rounds_until_leap_window,
@@ -806,6 +806,8 @@ def generate_mcts_bootstrap_targets(
     config: ExactSearchConfig | None = None,
     include_anchor_classes: bool = True,
     subgame_resolve_at_critical: bool = False,
+    subgame_resolve_horizon: int = 1,
+    subgame_resolve_cfr_iters: int = 2000,
     bootstrap_critical_only: bool = False,
     bootstrap_max_states: int | None = None,
     split_interior: bool = False,
@@ -831,9 +833,10 @@ def generate_mcts_bootstrap_targets(
     Imports are deferred to keep this module's import graph tight: MCTS
     machinery is only needed when the bootstrap is actually invoked.
     """
-    from stl.solver.evaluator import ValueNetEvaluator
-    from stl.solver.mcts import MCTSConfig, make_node, mcts_search
-    from stl.solver.subgame_resolve import is_critical
+    from stl.solver.exact import CFRPlusConfig
+    from stl.solver.search import ValueNetEvaluator
+    from stl.solver.search import MCTSConfig, mcts_search
+    from stl.solver.search import is_critical
 
     config = config or ExactSearchConfig()
     pinned_table = _build_pinned_table()
@@ -915,7 +918,6 @@ def generate_mcts_bootstrap_targets(
                                 evaluator=None,
                                 use_tablebase=False,
                             )
-                            root_node = make_node(game, config, evaluator=evaluator)
                             result = mcts_search(
                                 game=game,
                                 config=mcts_config,
@@ -923,10 +925,14 @@ def generate_mcts_bootstrap_targets(
                                 rng=mcts_rng,
                                 exact_config=config,
                                 subgame_resolve_at_critical=subgame_resolve_at_critical,
+                                subgame_resolve_horizon=subgame_resolve_horizon,
+                                subgame_resolve_cfr_plus_config=CFRPlusConfig(
+                                    iterations=subgame_resolve_cfr_iters,
+                                ),
                             )
                             drop_dist, check_dist = _strategy_vectors(
-                                drop_seconds=root_node.drop_seconds,
-                                check_seconds=root_node.check_seconds,
+                                drop_seconds=result.root_drop_seconds,
+                                check_seconds=result.root_check_seconds,
                                 dropper_strategy=result.root_strategy_dropper,
                                 checker_strategy=result.root_strategy_checker,
                             )

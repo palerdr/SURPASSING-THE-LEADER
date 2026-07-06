@@ -117,7 +117,7 @@ def main():
         print(f"  Training {args.epochs} epochs (lr={args.lr})...")
         history = train_value_net(net, replay_buffer, epochs=args.epochs,
                                   batch_size=256, lr=args.lr)
-        print(f"  Loss: {history[0]:.4f} → {history[-1]:.4f}")
+        print(f"  Loss: {history[0]:.4f} -> {history[-1]:.4f}")
 
         path = os.path.join(CHECKPOINT_DIR, f"hal_deep_iter{i}.pt")
         os.makedirs(CHECKPOINT_DIR, exist_ok=True)

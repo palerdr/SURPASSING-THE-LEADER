@@ -13,7 +13,7 @@ from stl.engine.game import (
     CARDIAC_DECAY,
 )
 from stl.engine.game import Game
-from stl.solver.half_round import survival_probability
+from stl.solver.exact import survival_probability
 from stl.learning.route_math import get_named_players, lsr_variation_from_clock, safe_strategy_budget
 
 _nn_model = None

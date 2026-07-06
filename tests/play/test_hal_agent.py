@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
+from stl.solver.search import TerminalOnlyEvaluator
 from stl.engine.actions import legal_max_second
 from stl.play.opponents.factory import SCRIPTED_OPPONENTS, create_scripted_opponent
 from stl.play.agent import DEFAULT_CHECKPOINT, BakuSolverAgent, HalSolverAgent, SolverAgent
@@ -81,7 +81,7 @@ def test_default_checkpoint_constructs_real_agent():
 
 @needs_tier_a
 def test_solver_agent_can_wrap_tier_a_runtime_evaluator():
-    from stl.solver.tier_a import TierAEvaluator
+    from stl.solver.tablebase import TierAEvaluator
 
     agent = terminal_agent("Hal", use_tier_a=True, tier_a_width=0.05)
     assert isinstance(agent.evaluator, TierAEvaluator)
@@ -91,7 +91,7 @@ def test_solver_agent_can_wrap_tier_a_runtime_evaluator():
 
 
 def test_tier_a_agent_with_missing_artifacts_matches_base_policy(tmp_path, monkeypatch):
-    from stl.solver.epoch_tablebase import tier_a
+    from stl.solver.tablebase import tier_a
 
     monkeypatch.setattr(tier_a, "DEFAULT_TIER_A_DIR", tmp_path)
     game = make_game(clock=720.0, half=1)
@@ -103,6 +103,20 @@ def test_tier_a_agent_with_missing_artifacts_matches_base_policy(tmp_path, monke
 
     assert wrapped_seconds == base_seconds
     np.testing.assert_array_equal(wrapped_probs, base_probs)
+
+
+def test_solver_agent_uses_bounded_critical_resolve_by_default():
+    agent = terminal_agent("Hal")
+
+    assert agent.resolve_at_critical is True
+    assert agent.resolve_horizon == 1
+    assert agent.resolve_cfr_iters == 2000
+
+
+def test_solver_agent_can_disable_critical_resolve():
+    agent = terminal_agent("Hal", resolve_at_critical=False)
+
+    assert agent.resolve_at_critical is False
 
 
 # ── Legality ──────────────────────────────────────────────────────────────
@@ -216,11 +230,13 @@ def test_play_cli_solver_path_builds_solver_agent():
 
     hal_ai = play_cli.load_hal_ai(depth=2, checkpoint=None, agent="solver", iterations=8)
     assert isinstance(hal_ai, SolverAgent)
+    assert hal_ai.resolve_at_critical is True
+    assert hal_ai.resolve_horizon == 1
 
 
 @needs_checkpoint
 def test_play_cli_solver_path_can_enable_tier_a():
-    from stl.solver.tier_a import TierAEvaluator
+    from stl.solver.tablebase import TierAEvaluator
 
     from stl.play import cli as play_cli
 

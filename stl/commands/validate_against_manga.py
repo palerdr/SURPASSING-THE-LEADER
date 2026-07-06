@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
+from stl.solver.search import TerminalOnlyEvaluator
 from stl.engine.actions import validate_action
 from stl.play.opponents.baku_teachers import BakuLSREngineeringTeacher
 from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent

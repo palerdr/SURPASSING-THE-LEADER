@@ -115,6 +115,8 @@ def test_next_run_requires_pattern_reader_hardening_after_mcts_rejection():
 
     assert next_run["status"] == "needs_pattern_reader_hardening_generation"
     assert "--subgame-resolve-at-critical" in next_run["training_command"]
+    assert "--subgame-resolve-horizon 1" in next_run["training_command"]
+    assert "--subgame-resolve-cfr-iters 2000" in next_run["training_command"]
     assert "--bootstrap-critical-only" in next_run["training_command"]
     assert "--bootstrap-max-states 24" in next_run["training_command"]
     assert "--learning-rate 3e-06" in next_run["training_command"]

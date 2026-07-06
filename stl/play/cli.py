@@ -219,8 +219,11 @@ def load_hal_ai(
     checkpoint: str | None,
     agent: str = "solver",
     iterations: int = 200,
-    seed: int = 0,
+    seed: int | None = 0,
     use_tier_a: bool = False,
+    resolve_at_critical: bool = True,
+    resolve_horizon: int = 1,
+    resolve_cfr_iters: int = 2000,
 ):
     """Build the Hal opponent.
 
@@ -233,11 +236,26 @@ def load_hal_ai(
         from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent
 
         path = checkpoint or DEFAULT_CHECKPOINT
-        hal_ai = SolverAgent(path, iterations=iterations, seed=seed, use_tier_a=use_tier_a)
+        solver_seed = int(seed if seed is not None else int.from_bytes(os.urandom(4), "little"))
+        hal_ai = SolverAgent(
+            path,
+            iterations=iterations,
+            seed=solver_seed,
+            use_tier_a=use_tier_a,
+            resolve_at_critical=resolve_at_critical,
+            resolve_horizon=resolve_horizon,
+            resolve_cfr_iters=resolve_cfr_iters,
+        )
         tier_a_label = " + Tier A" if use_tier_a else ""
+        resolve_label = (
+            f", critical resolve h={resolve_horizon} cfr={resolve_cfr_iters}"
+            if resolve_at_critical
+            else ", critical resolve off"
+        )
         print(
             f"  Solver Hal: {iterations} MCTS iterations/move, "
-            f"net {os.path.basename(path)}{tier_a_label}"
+            f"net {os.path.basename(path)}{tier_a_label}, seed {solver_seed}"
+            f"{resolve_label}"
         )
         return hal_ai
 
@@ -260,11 +278,29 @@ def main():
                         help="Hal implementation: solver = net+MCTS (default), legacy = CanonicalHal")
     parser.add_argument("--iterations", type=int, default=200,
                         help="Solver MCTS iterations per move (default: 200, ~2s/move)")
-    parser.add_argument("--seed", type=int, default=0, help="Agent RNG seed")
+    parser.add_argument("--seed", type=int, default=None, help="Agent RNG seed; omit for a fresh random seed")
     parser.add_argument("--depth", type=int, default=2, help="Legacy Hal search depth (default: 2)")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to value net checkpoint")
     parser.add_argument("--use-tier-a", action="store_true",
                         help="Enable Tier A runtime tablebase lookup for Solver Hal")
+    parser.add_argument(
+        "--resolve-at-critical",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable bounded CFR+ current-turn resolve at critical solver states",
+    )
+    parser.add_argument(
+        "--resolve-horizon",
+        type=int,
+        default=1,
+        help="Half-round horizon for critical resolve (default: 1)",
+    )
+    parser.add_argument(
+        "--resolve-cfr-iters",
+        type=int,
+        default=2000,
+        help="CFR+ iterations for critical resolve (default: 2000)",
+    )
     args = parser.parse_args()
 
     print_banner()
@@ -282,6 +318,9 @@ def main():
             args.iterations,
             args.seed,
             args.use_tier_a,
+            args.resolve_at_critical,
+            args.resolve_horizon,
+            args.resolve_cfr_iters,
         )
         print()
         p1_name = "Hal"
@@ -322,7 +361,10 @@ def main():
                     drop_t = hal_ai.choose_action(game, "dropper", turn_dur)
                     check_t = get_timed_input(checker.name, "Checker", turn_dur, turn_dur)
                 else:
-                    drop_t = get_timed_input(dropper.name, "Dropper", turn_dur, turn_dur, hidden=True)
+                    # In human-vs-AI mode there is no human checker to hide
+                    # from. Plain input avoids getpass/terminal-control issues
+                    # in PowerShell, Hydra, and embedded terminals.
+                    drop_t = get_timed_input(dropper.name, "Dropper", turn_dur, turn_dur)
                     check_t = hal_ai.choose_action(game, "checker", turn_dur)
             else:
                 drop_t = get_drop_time(dropper.name, turn_dur)

@@ -14,9 +14,9 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stl.solver.evaluator import TablebaseEvaluator, ValueNetEvaluator
+from stl.solver.search import TablebaseEvaluator, ValueNetEvaluator
 from stl.solver.exact import ExactSearchConfig
-from stl.solver.selective import selective_solve
+from stl.solver.search import selective_solve
 from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent, make_choose_action
 from stl.learning.model import extract_features
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
@@ -24,7 +24,7 @@ from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
 from stl.learning.strength import agent_policy, best_response_interval, gate_report, run_ladder
-from stl.solver.tier_a import TierAEvaluator, TierALookup, frontier_interval_fn
+from stl.solver.tablebase import TierAEvaluator, TierALookup, frontier_interval_fn
 from stl.learning.train import load_checkpoint, make_predict_fn
 from stl.learning.targets import ValueTarget, save_targets, source_breakdown
 from stl.commands.compare_ladder import _json_safe

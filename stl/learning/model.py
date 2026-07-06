@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from stl.solver.half_round import survival_probability
+from stl.solver.exact import survival_probability
 from stl.learning.route_math import (
     get_named_players,
     lsr_variation_from_clock,

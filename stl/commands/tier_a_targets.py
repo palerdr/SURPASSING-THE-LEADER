@@ -20,12 +20,12 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
+from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.exact import ExactSearchConfig
-from stl.solver.selective import selective_solve
+from stl.solver.search import selective_solve
 from stl.learning.model import extract_features
 from stl.commands.tier_a_decision import make_game, policy_vectors
-from stl.solver.tier_a import TierAEvaluator, TierALookup
+from stl.solver.tablebase import TierAEvaluator, TierALookup
 from stl.learning.targets import ValueTarget, save_targets, source_breakdown
 
 

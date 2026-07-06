@@ -47,8 +47,8 @@ def epoch_path(dier: str, ttd: int) -> str:
 def solve_one_d1_epoch(args: tuple[str, int]) -> tuple[str, int, float]:
     """Worker: solve one deaths=1 epoch and save it. Returns timing info."""
     dier, ttd = args
-    from stl.solver.epoch_tablebase import EpochSpec, solve_epoch
-    from stl.solver.epoch_sweep import bracket_survive_value
+    from stl.solver.tablebase import EpochSpec, solve_epoch
+    from stl.solver.tablebase import bracket_survive_value
 
     spec = EpochSpec(
         ttd_hal=float(ttd) if dier == "hal" else 0.0,
@@ -110,7 +110,7 @@ def stage1(workers: int, limit: int | None, max_tasks_per_child: int = 8) -> Non
 
 
 def stage2() -> None:
-    from stl.solver.epoch_tablebase import EpochSpec, solve_epoch
+    from stl.solver.tablebase import EpochSpec, solve_epoch
 
     missing = [
         (dier, ttd)

@@ -59,6 +59,11 @@ class TestMonotonicityVerdict:
 
 
 class TestEnforceMonotonicityFlagPlumbing:
+    def test_help_text_is_windows_console_encodable(self):
+        """argparse --help must not crash under the default Windows cp1252
+        console encoding."""
+        build_parser().format_help().encode("cp1252")
+
     def test_default_is_enforced(self):
         args = build_parser().parse_args(REQUIRED_ARGS)
         assert args.enforce_monotonicity is True
@@ -110,8 +115,17 @@ class TestTierAExtraTargetPlumbing:
     def test_bootstrap_can_be_bounded_to_critical_states(self):
         args = build_parser().parse_args(
             REQUIRED_ARGS
-            + ["--bootstrap-critical-only", "--bootstrap-max-states", "12"]
+            + [
+                "--subgame-resolve-at-critical",
+                "--subgame-resolve-horizon", "1",
+                "--subgame-resolve-cfr-iters", "50",
+                "--bootstrap-critical-only",
+                "--bootstrap-max-states", "12",
+            ]
         )
 
+        assert args.subgame_resolve_at_critical is True
+        assert args.subgame_resolve_horizon == 1
+        assert args.subgame_resolve_cfr_iters == 50
         assert args.bootstrap_critical_only is True
         assert args.bootstrap_max_states == 12

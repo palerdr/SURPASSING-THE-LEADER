@@ -11,10 +11,10 @@ from typing import Iterable
 
 import numpy as np
 
-from stl.solver.evaluator import LeafEvaluator
+from stl.solver.search import LeafEvaluator
 from stl.solver.exact import solve_exact_finite_horizon
-from stl.solver.mcts import MCTSConfig, make_node, mcts_search
-from stl.solver.tactical_scenarios import TacticalScenario
+from stl.solver.search import MCTSConfig, make_node, mcts_search
+from stl.solver.tablebase import TacticalScenario
 
 
 class AuditGateError(RuntimeError):
@@ -88,6 +88,8 @@ def _record_for(
         rng,
         scenario.config,
         subgame_resolve_at_critical=scenario.expected_value is not None,
+        subgame_resolve_horizon=scenario.half_round_horizon,
+        subgame_resolve_solver="lp",
     )
 
     return AuditPackRecord(

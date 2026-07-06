@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.evaluator import (
+from stl.solver.search import (
     LeafEvaluator,
     TablebaseEvaluator,
     TerminalOnlyEvaluator,

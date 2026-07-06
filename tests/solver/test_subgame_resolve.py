@@ -1,7 +1,7 @@
 """Tests for Phase 6: subgame re-solve at critical states.
 
-Verifies the ``is_critical`` heuristic, the ``resolve_subgame`` deeper-horizon
-fresh selective solve, and the optional ``subgame_resolve_at_critical`` MCTS
+Verifies the ``is_critical`` heuristic, the bounded ``resolve_subgame`` fresh
+selective solve, and the optional ``subgame_resolve_at_critical`` MCTS
 hook. The hook is opt-in: default behavior must match the existing MCTS
 output exactly when the kwarg is False.
 """
@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.evaluator import TerminalOnlyEvaluator
-from stl.solver.mcts import MCTSConfig, mcts_search
-from stl.solver.subgame_resolve import is_critical, resolve_subgame
-from stl.solver.tactical_scenarios import (
+from stl.solver.search import TerminalOnlyEvaluator
+from stl.solver.search import MCTSConfig, mcts_search
+from stl.solver.search import is_critical, resolve_subgame
+from stl.solver.tablebase import (
     forced_baku_overflow_death,
 )
 from stl.engine.game import (
@@ -70,13 +70,19 @@ def test_is_critical_false_for_fresh_game_far_from_leap():
 
 def test_resolve_subgame_pins_forced_baku_overflow_to_plus_one():
     scenario = forced_baku_overflow_death()
-    result = resolve_subgame(scenario.game, horizon=4, config=scenario.config)
+    result = resolve_subgame(
+        scenario.game,
+        horizon=4,
+        config=scenario.config,
+        solver="lp",
+    )
     assert result.value_for_hal == pytest.approx(1.0, abs=1e-6)
 
 
-def test_resolve_subgame_default_horizon_runs_without_error():
+def test_resolve_subgame_default_is_bounded_current_turn():
     scenario = forced_baku_overflow_death()
     result = resolve_subgame(scenario.game)
+    assert result.half_round_horizon == 1
     assert result.value_for_hal == pytest.approx(1.0, abs=1e-6)
 
 
@@ -85,7 +91,7 @@ def test_anchored_resolve_value_strictly_closer_to_deep_mcts_value_than_unanchor
     a value-net evaluator pulls the local solve closer to deep ground truth
     than letting the boundary return unresolved=0.
 
-    On ``forced_baku_overflow_death``, the deep (horizon=4) selective solve
+    On ``forced_baku_overflow_death``, the deep (horizon=4) LP selective solve
     converges to +1.0 (Baku's cylinder is at threshold; every action injects).
     A horizon=0 unanchored solve returns the unresolved frontier value (~0.0,
     the pessimistic stand-in). A horizon=0 solve anchored to an evaluator that
@@ -95,7 +101,12 @@ def test_anchored_resolve_value_strictly_closer_to_deep_mcts_value_than_unanchor
     """
     scenario = forced_baku_overflow_death()
 
-    deep_result = resolve_subgame(scenario.game, horizon=4, config=scenario.config)
+    deep_result = resolve_subgame(
+        scenario.game,
+        horizon=4,
+        config=scenario.config,
+        solver="lp",
+    )
     deep_value = deep_result.value_for_hal
     assert deep_value == pytest.approx(1.0, abs=1e-6), (
         f"Setup violated: forced overflow should resolve to +1.0 deep, got {deep_value}"

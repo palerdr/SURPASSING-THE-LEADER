@@ -32,9 +32,10 @@ while regressing against `pattern_reader`.
   evaluator from local search, and it has a `subgame_resolve_at_critical` seam.
   The failed unbounded critical-resolve run shows that this idea needs bounded
   target selection and progress visibility before becoming an overnight job.
-- **CFR / CFR+:** the exact tower is consistent with regret/exploitability
-  reasoning, even though it uses finite-horizon LP minimax and selective search
-  rather than a monolithic CFR training run.
+- **CFR / CFR+:** the certified exact tower uses finite-horizon LP minimax and
+  selective search, while critical runtime resolves now have a bounded CFR+
+  matrix-solve option. This keeps exact labels auditable and uses CFR+ where
+  fast local re-solving is the bottleneck.
 - **Simultaneous-move MCTS:** the agent plays average root strategies, which is
   important because final small-budget LP roots can collapse to exploitable pure
   choices.
@@ -51,7 +52,9 @@ while regressing against `pattern_reader`.
 - `pattern_reader` is the current canary for policies that become too readable
   or misvalue repeated timing patterns.
 - Unbounded critical subgame resolve is too expensive: the first attempt ran for
-  four hours without producing a target corpus.
+  four hours without producing a target corpus. Critical resolve should stay
+  bounded to the current half-round and use the value/tablebase evaluator at
+  the boundary.
 - The root package layout is import-stable but not fully packaged; moving code
   under a new package root should be a separate migration after UV is in place.
 
@@ -60,7 +63,7 @@ while regressing against `pattern_reader`.
 The next generation run should use:
 
 ```powershell
-python scripts/run_gen_iteration.py --subgame-resolve-at-critical --bootstrap-critical-only --bootstrap-max-states 24 ...
+python scripts/run_gen_iteration.py --subgame-resolve-at-critical --subgame-resolve-horizon 1 --subgame-resolve-cfr-iters 2000 --bootstrap-critical-only --bootstrap-max-states 24 ...
 ```
 
 Accept it only if:
@@ -72,5 +75,7 @@ Accept it only if:
 - certified exploitability has zero candidate-certified-worse cases.
 
 This is the smallest next experiment that directly tests the DeepStack/Libratus
-claim: deeper local solving at high-stakes states should improve tactical
-robustness without broad policy drift.
+claim: bounded local solving at high-stakes states should improve tactical
+robustness without broad policy drift. Terminal utility remains win/loss from
+Hal's perspective, and leap-second information remains the existing canonical
+Hal-forgets wrapper behavior rather than a new hidden-state belief system.

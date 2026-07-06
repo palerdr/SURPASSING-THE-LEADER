@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AlphaZero-style training loop: generate → train → reload → repeat."""
+"""AlphaZero-style training loop: generate -> train -> reload -> repeat."""
 
 import sys
 import os
@@ -44,7 +44,7 @@ def run_iteration(iteration, net, replay_buffer, games_per_iter, epochs, depth, 
 
     print(f"  Training {epochs} epochs on full buffer...")
     history = train_value_net(net, replay_buffer, epochs=epochs, batch_size=256, lr=1e-3)
-    print(f"  Loss: {history[0]:.4f} → {history[-1]:.4f}")
+    print(f"  Loss: {history[0]:.4f} -> {history[-1]:.4f}")
 
     path = os.path.join(CHECKPOINT_DIR, f"hal_value_net_iter{iteration}.pt")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)

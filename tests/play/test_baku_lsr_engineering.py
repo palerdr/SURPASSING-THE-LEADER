@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.timing_features import (
+from stl.solver.exact import (
     current_checker_fail_would_activate_lsr,
     current_lsr_variation,
     rounds_until_leap_window,
@@ -213,7 +213,7 @@ def test_baku_lsr_engineering_self_play_lands_baku_as_dropper_in_leap_window():
     60 configurations found by exhaustive probe to enter the leap window
     with Baku as dropper after a single engineered checker fail.
     """
-    from stl.solver.timing_features import (
+    from stl.solver.exact import (
         current_dropper_checker,
         is_leap_window,
     )

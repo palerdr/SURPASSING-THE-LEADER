@@ -508,7 +508,7 @@ def make_predict_fn(model: ValueNet, device: str = "cpu"):
             value, dropper_logits, checker_logits = model(x)
             y = value.squeeze().cpu().item()
 
-        from stl.solver.evaluator import normalize_policy_vector
+        from stl.solver.search import normalize_policy_vector
         from stl.solver.exact import ExactSearchConfig, legal_seconds_for_current_role
 
         def masked_softmax(logits, seconds: tuple[int, ...]) -> np.ndarray:

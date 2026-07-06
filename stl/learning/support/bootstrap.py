@@ -31,8 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from stl.solver.evaluator import ValueNetEvaluator
-from stl.solver.mcts import MCTSConfig
+from stl.solver.search import ValueNetEvaluator
+from stl.solver.search import MCTSConfig
 from stl.solver.tablebase import materialize_all, pinned_scenarios
 from stl.learning.audit import audit_gate, run_audit_pack
 from stl.learning.calibration import CalibrationReport, evaluate_value_net
@@ -82,6 +82,8 @@ class BootstrapConfig:
     audit_seeds: tuple[int, ...] = (0,)
     audit_max_drift: float = 0.05
     subgame_resolve_at_critical: bool = False
+    subgame_resolve_horizon: int = 1
+    subgame_resolve_cfr_iters: int = 2000
 
 
 @dataclass
@@ -195,6 +197,8 @@ def bootstrap_one_generation(
         exploration_c=config.exploration_c,
         seed=config.seed,
         subgame_resolve_at_critical=config.subgame_resolve_at_critical,
+        subgame_resolve_horizon=config.subgame_resolve_horizon,
+        subgame_resolve_cfr_iters=config.subgame_resolve_cfr_iters,
         **grid_kwargs,
     )
 

@@ -26,14 +26,14 @@ from pathlib import Path
 
 import numpy as np
 
-from stl.solver.evaluator import (
+from stl.solver.search import (
     LeafEvaluator,
     TablebaseEvaluator,
     TerminalOnlyEvaluator,
     ValueNetEvaluator,
 )
-from stl.solver.exact import ExactSearchConfig, exact_public_state
-from stl.solver.mcts import MCTSConfig, MCTSResult, mcts_search
+from stl.solver.exact import CFRPlusConfig, ExactSearchConfig, exact_public_state
+from stl.solver.search import MCTSConfig, MCTSResult, mcts_search
 from stl.play.opponents.base import Opponent
 from stl.engine.game import Game
 
@@ -80,8 +80,9 @@ class SolverAgent(Opponent):
         iterations: int = 200,
         exploration_c: float = 1.0,
         seed: int = 0,
-        resolve_at_critical: bool = False,
-        resolve_horizon: int = 3,
+        resolve_at_critical: bool = True,
+        resolve_horizon: int = 1,
+        resolve_cfr_iters: int = 2000,
         evaluator: LeafEvaluator | None = None,
         use_tier_a: bool = False,
         tier_a_width: float = 0.0,
@@ -90,9 +91,8 @@ class SolverAgent(Opponent):
         self.iterations = int(iterations)
         self.exploration_c = float(exploration_c)
         self.resolve_at_critical = bool(resolve_at_critical)
-        # Horizon 3 keeps the critical-root resolve ~15s (measured); the
-        # library default of 4 costs ~15min/state and is unplayable.
         self.resolve_horizon = int(resolve_horizon)
+        self.resolve_cfr_iters = int(resolve_cfr_iters)
         self._base_seed = int(seed)
         self._action_rng = np.random.default_rng(seed)
         self._exact_config = ExactSearchConfig()
@@ -100,7 +100,7 @@ class SolverAgent(Opponent):
         self._search_cache: dict = {}
         base_evaluator = evaluator if evaluator is not None else _load_evaluator(checkpoint_path)
         if use_tier_a:
-            from stl.solver.tier_a import TierAEvaluator
+            from stl.solver.tablebase import TierAEvaluator
 
             self.evaluator = TierAEvaluator(base_evaluator, max_width=tier_a_width)
         else:
@@ -124,6 +124,7 @@ class SolverAgent(Opponent):
             exploration_c=self.exploration_c,
             evaluator=None,
             use_tablebase=False,
+            include_playable_grid=True,
         )
         result = mcts_search(
             game,
@@ -133,6 +134,7 @@ class SolverAgent(Opponent):
             self._exact_config,
             subgame_resolve_at_critical=self.resolve_at_critical,
             subgame_resolve_horizon=self.resolve_horizon,
+            subgame_resolve_cfr_plus_config=CFRPlusConfig(iterations=self.resolve_cfr_iters),
         )
         self._search_cache[key] = result
         return result

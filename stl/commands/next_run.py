@@ -229,6 +229,7 @@ def build_next_run(args, accepted: dict, rejected: list[dict], runtime: dict | N
             f"--weight-decay 1e-4 --tablebase-weight 15 --interior-weight 100 "
             f"--tier-a-weight {args.tier_a_weight:g} --tier-a-policy-weight 0.0 "
             f"--tier-a-replicate 1 --subgame-resolve-at-critical "
+            f"--subgame-resolve-horizon 1 --subgame-resolve-cfr-iters 2000 "
             f"--bootstrap-critical-only --bootstrap-max-states {args.critical_bootstrap_max_states} "
             f"--prev-gen-holdout-mse {prev_mse}"
         )

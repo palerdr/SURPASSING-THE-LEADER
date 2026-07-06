@@ -24,7 +24,7 @@ import pytest
 
 sys.path.insert(0, os.getcwd())
 
-from stl.solver.tactical_scenarios import forced_baku_overflow_death
+from stl.solver.tablebase import forced_baku_overflow_death
 from stl.learning.model import FEATURE_DIM
 from stl.learning.targets import (
     SOURCE_EXACT_HORIZON_2,

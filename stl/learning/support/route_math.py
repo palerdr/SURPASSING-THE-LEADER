@@ -9,7 +9,7 @@ module re-exports those symbols and keeps category-label helpers like
 
 from __future__ import annotations
 
-from stl.solver.timing_features import (
+from stl.solver.exact import (
     PlayerBudget,
     current_checker_fail_would_activate_lsr,
     current_dropper_checker,

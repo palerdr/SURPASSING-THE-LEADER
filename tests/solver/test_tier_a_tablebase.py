@@ -11,7 +11,7 @@ from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
 from stl.learning.strength import best_response_interval, uniform_policy
-from stl.solver.tier_a import TierAEvaluator, TierALookup, frontier_interval_fn
+from stl.solver.tablebase import TierAEvaluator, TierALookup, frontier_interval_fn
 
 
 TIER_A_DIR = os.path.join(

@@ -32,11 +32,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from stl.solver.diagnostics import diagnose_exact_strategy
-from stl.solver.evaluator import LeafEvaluator, TerminalOnlyEvaluator
+from stl.solver.search import diagnose_exact_strategy
+from stl.solver.search import LeafEvaluator, TerminalOnlyEvaluator
 from stl.solver.exact import ExactSearchConfig, solve_exact_finite_horizon, terminal_value
-from stl.solver.selective import SelectiveSearchResult, selective_solve
-from stl.solver.subgame_resolve import resolve_subgame
+from stl.solver.search import SelectiveSearchResult, selective_solve
+from stl.solver.search import resolve_subgame
 from stl.learning.model import extract_features
 from stl.engine.game import Game
 
@@ -110,7 +110,7 @@ def reanalyze_state(
     config = config or ExactSearchConfig()
 
     # Tier 1: deeper EXACT solve (selective candidate set, no learned frontier).
-    deep = resolve_subgame(game, horizon=exact_horizon, config=config)
+    deep = resolve_subgame(game, horizon=exact_horizon, config=config, solver="lp")
     if deep.unresolved_probability <= accept_unresolved:
         return ReanalysisOutcome(
             tier=SOURCE_EXACT_HORIZON_4,
@@ -120,7 +120,7 @@ def reanalyze_state(
         )
 
     # Tier 2: high-iter MCTS fallback for states still unresolved at depth.
-    from stl.solver.mcts import MCTSConfig, make_node, mcts_search
+    from stl.solver.search import MCTSConfig, mcts_search
 
     leaf = evaluator or TerminalOnlyEvaluator()
     if rng is None:
@@ -128,7 +128,6 @@ def reanalyze_state(
     mcts_config = MCTSConfig(
         iterations=mcts_iters, exploration_c=1.0, evaluator=None, use_tablebase=False
     )
-    root = make_node(game, config, evaluator=leaf)
     result = mcts_search(
         game=game,
         config=mcts_config,
@@ -138,8 +137,8 @@ def reanalyze_state(
         subgame_resolve_at_critical=True,
     )
     drop_dist, check_dist = _strategy_vectors(
-        drop_seconds=root.drop_seconds,
-        check_seconds=root.check_seconds,
+        drop_seconds=result.root_drop_seconds,
+        check_seconds=result.root_check_seconds,
         dropper_strategy=result.root_strategy_dropper,
         checker_strategy=result.root_strategy_checker,
     )
@@ -243,7 +242,7 @@ def audit_reanalysis(
         game = game_from_public_state(snapshot)
         if terminal_value(game, perspective_name=config.perspective_name) is not None:
             continue
-        selective = resolve_subgame(game, horizon=exact_horizon, config=config)
+        selective = resolve_subgame(game, horizon=exact_horizon, config=config, solver="lp")
         if selective.unresolved_probability > accept_unresolved:
             continue  # not an exact-tier rescue; tier-2 MCTS is judged elsewhere
         exact_total += 1
