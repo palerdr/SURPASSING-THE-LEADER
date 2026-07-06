@@ -1,0 +1,4 @@
+description: Tiny AlphaZero-style self-play smoke run.
+iterations: 1
+games_per_iter: 4
+epochs: 1

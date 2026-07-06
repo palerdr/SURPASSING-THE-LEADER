@@ -1,0 +1,8 @@
+name: self_play
+module: stl.commands.alphazero_loop
+args: null
+iterations: 1
+games_per_iter: 4
+epochs: 1
+depth: 1
+base_seed: 0

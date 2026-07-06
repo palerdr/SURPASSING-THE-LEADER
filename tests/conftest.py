@@ -7,10 +7,10 @@ import pytest
 # Add project root so `src` package resolves
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.Player import Player
-from src.Referee import Referee
-from src.Game import Game
-from src.Constants import PHYSICALITY_HAL, PHYSICALITY_BAKU
+from stl.engine.game import Player
+from stl.engine.game import Referee
+from stl.engine.game import Game
+from stl.engine.game import PHYSICALITY_HAL, PHYSICALITY_BAKU
 
 
 @pytest.fixture

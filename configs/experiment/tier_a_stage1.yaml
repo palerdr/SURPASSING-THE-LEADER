@@ -1,0 +1,3 @@
+description: Tier A stage-1 single-epoch smoke.
+limit: 1
+workers: 1

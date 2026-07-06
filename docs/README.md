@@ -1,18 +1,8 @@
 # Docs Layout
 
-Design notes, canon references, reports, solver literature, and long-form solver
-rationale live here. The root `README.md` is the current orientation document;
-use this directory for background and audit evidence, not executable behavior.
+This directory is deliberately small:
 
-- `papers/` - solver literature PDFs, links, and the current literature assessment.
-- `whitepaper/` - LaTeX whitepaper source and generated build output.
-- `reports/` - generated run reports, matrices, checklists, and JSON summaries.
-- `audits/` - generated audit traces and counterfactual outputs.
-- `canon/` - source PDFs and canon-facing reference material when present locally.
-- `architecture/` - target architecture notes, including older rewrite plans.
+- `whitepaper/` - STL solver whitepaper source and checked-in PDF.
+- `papers/` - reference papers for AlphaZero, CFR/CFR+, DeepStack, ReBeL, and related game-solving work.
 
-Key files:
-
-- `SOLVER_EXTENSION_GOAL.md` - governing solver-extension gate contract and progress log.
-- `papers/literature_assessment.md` - audit of the current approach against solver literature.
-- `phase_g_i1_validation.md` - validation notes from the earlier generation chain.
+Generated run reports, audits, build logs, and experiment outputs belong outside `docs/`.

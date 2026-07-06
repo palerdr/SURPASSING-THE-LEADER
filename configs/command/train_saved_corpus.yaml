@@ -1,0 +1,3 @@
+name: train_saved_corpus
+module: stl.commands.train_saved_corpus
+args: null

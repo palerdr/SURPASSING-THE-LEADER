@@ -1,0 +1,6 @@
+name: eval
+module: stl.commands.strength_gate
+args: null
+checkpoint: checkpoints/gen_phaseG_iter3/best.pt
+games: 8
+seed: 0

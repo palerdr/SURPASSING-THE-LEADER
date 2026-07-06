@@ -1,0 +1,358 @@
+#!/usr/bin/env python3
+"""
+Drop The Handkerchief -- CLI
+
+Two-player terminal game. Both players share a terminal.
+Dropper input is hidden so the checker can't see it.
+
+Run from project root:
+    python scripts/play_cli.py
+"""
+
+import sys
+import os
+import getpass
+import time
+import argparse
+import threading
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from stl.engine.game import Player
+from stl.engine.game import Referee
+from stl.engine.game import Game, HalfRoundResult, HalfRoundRecord
+from stl.engine.game import (
+    PHYSICALITY_HAL, PHYSICALITY_BAKU, CYLINDER_MAX,
+    TURN_DURATION_NORMAL, DEATH_PROCEDURE_OVERHEAD,
+)
+from stl.play.canonical_hal import CanonicalHal
+from stl.learning.evaluate import set_nn_evaluator
+from stl.learning.legacy_train import load_checkpoint
+from stl.engine.actions import validate_action
+
+# -- Display helpers -------------------------------------------------
+
+DIVIDER = "-" * 60
+
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+def pause(msg="Press Enter to continue..."):
+    input(f"\n  {msg}")
+
+def cylinder_bar(cylinder: float) -> str:
+    pct = min(cylinder / CYLINDER_MAX, 1.0)
+    filled = int(pct * 20)
+    return "#" * filled + "." * (20 - filled)
+
+def print_banner():
+    clear()
+    print()
+    print("  ============================================")
+    print("   D R O P   T H E   H A N D K E R C H I E F")
+    print("   Surpassing the Leader  --  Death Game")
+    print("  ============================================")
+    print()
+
+def print_status(game: Game):
+    print(f"  {'':40s} Clock: {game.format_game_clock()}")
+    print(f"  {DIVIDER}")
+    for p in [game.player1, game.player2]:
+        bar = cylinder_bar(p.cylinder)
+        safe = p.safe_strategies_remaining
+        print(f"  {p.name:<12} [{bar}] {p.cylinder:>5.0f}/{CYLINDER_MAX}s"
+              f"   Deaths: {p.deaths}   TTD: {p.ttd:.0f}s"
+              f"   Safe: {safe}")
+    print(f"  Referee CPRs: {game.referee.cprs_performed}")
+    if game.is_leap_second_turn():
+        print(f"  >>> LEAP SECOND WINDOW <<<")
+    print(f"  {DIVIDER}")
+    print()
+
+
+# -- Input -----------------------------------------------------------
+
+def get_drop_time(name: str, max_t: int) -> int:
+    """Hidden input for dropper."""
+    while True:
+        try:
+            raw = getpass.getpass(f"  {name} (Dropper) -- choose second [1-{max_t}]: ")
+            val = int(raw)
+            if 1 <= val <= max_t:
+                return val
+            print(f"    Must be 1-{max_t}.")
+        except ValueError:
+            print("    Enter a number.")
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Game aborted.")
+            sys.exit(0)
+
+def get_check_time(name: str, max_t: int = TURN_DURATION_NORMAL) -> int:
+    while True:
+        try:
+            raw = input(f"  {name} (Checker) -- choose second [1-{max_t}]: ")
+            val = int(raw)
+            if 1 <= val <= max_t:
+                return val
+            print(f"    Must be 1-{max_t}.")
+        except ValueError:
+            print("    Enter a number.")
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Game aborted.")
+            sys.exit(0)
+
+
+def _countdown_tick(turn_dur, stop):
+    start = time.time()
+    while not stop.is_set():
+        elapsed = int(time.time() - start)
+        remaining = max(0, turn_dur - elapsed)
+        sys.stdout.write(f"\033[s\033[A\r  [{remaining:>2}s]\033[K\033[u")
+        sys.stdout.flush()
+        if remaining <= 0:
+            break
+        stop.wait(1.0)
+
+
+def get_timed_input(name: str, role: str, max_t: int, turn_dur: int, hidden: bool = False) -> int:
+    print(f"  [{turn_dur:>2}s]")
+    stop = threading.Event()
+    timer = threading.Thread(target=_countdown_tick, args=(turn_dur, stop), daemon=True)
+    timer.start()
+
+    prompt = f"  {name} ({role}) -- choose second [1-{max_t}]: "
+    while True:
+        try:
+            raw = getpass.getpass(prompt) if hidden else input(prompt)
+            val = int(raw)
+            if 1 <= val <= max_t:
+                stop.set()
+                timer.join(timeout=2)
+                sys.stdout.write("\033[A\r\033[K")
+                sys.stdout.flush()
+                return val
+            print(f"    Must be 1-{max_t}.")
+        except ValueError:
+            print("    Enter a number.")
+        except (EOFError, KeyboardInterrupt):
+            stop.set()
+            print("\n  Game aborted.")
+            sys.exit(0)
+
+
+# -- Result display --------------------------------------------------
+
+def print_half_result(rec: HalfRoundRecord):
+    print()
+    print(f"  D ({rec.dropper}) dropped at second {rec.drop_time}")
+    print(f"  C ({rec.checker}) checked at second {rec.check_time}")
+    print()
+
+    if rec.result == HalfRoundResult.CHECK_SUCCESS:
+        if rec.st_gained == 0:
+            print(f"  FOUND IT -- {rec.checker} checked at the exact drop moment.")
+            print(f"  No squandered time.")
+        else:
+            print(f"  FOUND IT -- the handkerchief was on the ground.")
+            print(f"  Squandered Time: {rec.st_gained:.0f}s added to {rec.checker}'s cylinder.")
+
+    elif rec.result in (HalfRoundResult.CHECK_FAIL_SURVIVED,
+                        HalfRoundResult.CHECK_FAIL_DIED):
+        print(f"  MISSED -- {rec.checker} turned around too early!")
+        print(f"  The handkerchief wasn't on the ground yet.")
+        print(f"  +60s penalty. Entire cylinder injected.")
+        print()
+        print_death(rec)
+
+    elif rec.result in (HalfRoundResult.CYLINDER_OVERFLOW_SURVIVED,
+                        HalfRoundResult.CYLINDER_OVERFLOW_DIED):
+        print(f"  FOUND IT -- but {rec.checker}'s cylinder overflowed!")
+        print(f"  ST pushed cylinder to {rec.death_duration:.0f}s (>= {CYLINDER_MAX}). Injection.")
+        print()
+        print_death(rec)
+
+    print()
+
+def print_death(rec: HalfRoundRecord):
+    W = 45  # inner width of the box
+
+    def box(text: str):
+        print(f"  | {text:<{W}}|")
+
+    print(f"  +{'-' * (W + 1)}+")
+    print(f"  | {'DEATH SEQUENCE':^{W}}|")
+    print(f"  +{'-' * (W + 1)}+")
+    box(f"{rec.checker}'s heart stops.")
+    box(f"Dead for {rec.death_duration:.0f} seconds.")
+    box(f"Survival probability: {rec.survival_probability:.1%}")
+    box("")
+
+    time.sleep(0.8)
+
+    box("...revival drug administered...")
+    time.sleep(0.4)
+    box(f"...CPR & recovery ({DEATH_PROCEDURE_OVERHEAD}s)...")
+    time.sleep(0.4)
+
+    if rec.survived:
+        box(f">>> {rec.checker} SURVIVES. Cylinder reset. <<<")
+    else:
+        box(f">>> {rec.checker} IS DEAD. Revival failed. <<<")
+
+    print(f"  +{'-' * (W + 1)}+")
+
+
+def print_history(game: Game):
+    print(f"  {'Half':<10} {'Dropper':>8}  drop  {'Checker':>8}  chk   Result")
+    print(f"  {DIVIDER}")
+    for rec in game.history:
+        label = f"R{rec.round_num + 1}.{rec.half}"
+        outcome = rec.result.value.replace("_", " ")
+        print(f"  {label:<10} {rec.dropper:>8}  @{rec.drop_time:<4}"
+              f"  {rec.checker:>8}  @{rec.check_time:<4}  {outcome}")
+
+
+# -- Main game loop --------------------------------------------------
+
+def load_hal_ai(
+    depth: int,
+    checkpoint: str | None,
+    agent: str = "solver",
+    iterations: int = 200,
+    seed: int = 0,
+    use_tier_a: bool = False,
+):
+    """Build the Hal opponent.
+
+    ``solver`` (default): trained value net + matrix-game MCTS via
+    hal.agent.SolverAgent. Fails LOUDLY if the checkpoint is missing —
+    no silent fallback to the legacy handcrafted eval.
+    ``legacy``: the bucketed CanonicalHal forward search.
+    """
+    if agent == "solver":
+        from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent
+
+        path = checkpoint or DEFAULT_CHECKPOINT
+        hal_ai = SolverAgent(path, iterations=iterations, seed=seed, use_tier_a=use_tier_a)
+        tier_a_label = " + Tier A" if use_tier_a else ""
+        print(
+            f"  Solver Hal: {iterations} MCTS iterations/move, "
+            f"net {os.path.basename(path)}{tier_a_label}"
+        )
+        return hal_ai
+
+    if agent != "legacy":
+        raise ValueError(f"Unknown --agent {agent!r}; expected 'solver' or 'legacy'")
+
+    if checkpoint:
+        net = load_checkpoint(checkpoint)
+        set_nn_evaluator(net)
+        print(f"  Loaded value net: {checkpoint}")
+    else:
+        print("  Legacy Hal: handcrafted eval (no net).")
+    return CanonicalHal(depth=depth)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Drop The Handkerchief -- CLI")
+    parser.add_argument("--pvp", action="store_true", help="Two human players (no AI)")
+    parser.add_argument("--agent", choices=("solver", "legacy"), default="solver",
+                        help="Hal implementation: solver = net+MCTS (default), legacy = CanonicalHal")
+    parser.add_argument("--iterations", type=int, default=200,
+                        help="Solver MCTS iterations per move (default: 200, ~2s/move)")
+    parser.add_argument("--seed", type=int, default=0, help="Agent RNG seed")
+    parser.add_argument("--depth", type=int, default=2, help="Legacy Hal search depth (default: 2)")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to value net checkpoint")
+    parser.add_argument("--use-tier-a", action="store_true",
+                        help="Enable Tier A runtime tablebase lookup for Solver Hal")
+    args = parser.parse_args()
+
+    print_banner()
+
+    if args.pvp:
+        hal_ai = None
+        p1_name = input("  Player 1 name [Hal]: ").strip() or "Hal"
+        p2_name = input("  Player 2 name [Baku]: ").strip() or "Baku"
+    else:
+        print("  Loading Hal AI...")
+        hal_ai = load_hal_ai(
+            args.depth,
+            args.checkpoint,
+            args.agent,
+            args.iterations,
+            args.seed,
+            args.use_tier_a,
+        )
+        print()
+        p1_name = "Hal"
+        p2_name = input("  Your name [Baku]: ").strip() or "Baku"
+
+    hal = Player(name=p1_name, physicality=PHYSICALITY_HAL)
+    baku = Player(name=p2_name, physicality=PHYSICALITY_BAKU)
+    ref = Referee()
+    game = Game(player1=hal, player2=baku, referee=ref)
+    game.game_clock = 720.0
+
+    print()
+    print(f"  Coin flip... {game.first_dropper.name} drops first!")
+    pause("Press Enter to begin the game...")
+
+    while not game.game_over:
+        clear()
+        round_display = game.round_num + 1
+        print()
+        print(f"  ==========  ROUND {round_display}  ==========")
+        print()
+        print_status(game)
+
+        for half_num in (1, 2):
+            if game.game_over:
+                break
+
+            dropper, checker = game.get_roles_for_half(game.current_half)
+            turn_dur = game.get_turn_duration()
+
+            print(f"  -- Half {half_num} --  (Turn: {turn_dur}s)")
+            print(f"  Dropper: {dropper.name}    Checker: {checker.name}")
+            print()
+
+            if hal_ai is not None:
+                hal_player = hal
+                if dropper is hal_player:
+                    drop_t = hal_ai.choose_action(game, "dropper", turn_dur)
+                    check_t = get_timed_input(checker.name, "Checker", turn_dur, turn_dur)
+                else:
+                    drop_t = get_timed_input(dropper.name, "Dropper", turn_dur, turn_dur, hidden=True)
+                    check_t = hal_ai.choose_action(game, "checker", turn_dur)
+            else:
+                drop_t = get_drop_time(dropper.name, turn_dur)
+                check_t = get_check_time(checker.name, turn_dur)
+
+            validate_action(drop_t, actor=dropper.name, role="dropper", turn_duration=turn_dur)
+            validate_action(check_t, actor=checker.name, role="checker", turn_duration=turn_dur)
+            record = game.play_half_round(drop_t, check_t)
+            print_half_result(record)
+
+            if not game.game_over and half_num == 1:
+                pause("Press Enter for Half 2...")
+                print()
+
+        if not game.game_over:
+            pause("Press Enter for next round...")
+
+    print()
+    print(f"  ========================================")
+    print(f"  GAME OVER")
+    print(f"  Winner: {game.winner.name}")
+    print(f"  Loser:  {game.loser.name}")
+    print(f"  Clock:  {game.format_game_clock()}")
+    print(f"  Rounds: {game.round_num + 1}")
+    print(f"  ========================================")
+    print()
+
+    print_history(game)
+    print()
+
+
+if __name__ == "__main__":
+    main()
