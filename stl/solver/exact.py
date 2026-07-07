@@ -243,6 +243,49 @@ def solve_cfr_plus(
     return strategy, value
 
 
+def solve_cfr_plus_rust(
+    payoff: np.ndarray,
+    config: CFRPlusConfig | None = None,
+) -> tuple[np.ndarray, float]:
+    """Approximate the row player's maximin strategy with the Rust CFR+ kernel.
+
+    This is an opt-in compatibility wrapper. It preserves the Python solver's
+    input checks and single-row/column exact fallback, then delegates only the
+    dense iterative matrix loop to ``stl_solver_rs``.
+    """
+    matrix = np.asarray(payoff, dtype=np.float64)
+    if matrix.ndim != 2:
+        raise ValueError(f"payoff must be a 2D matrix, got shape {matrix.shape}")
+    m, n = matrix.shape
+    if m == 0 or n == 0:
+        raise ValueError("payoff matrix must have at least one row and one column")
+    if m == 1 or n == 1:
+        return solve_minimax(matrix)
+
+    config = config or CFRPlusConfig()
+    iterations = int(config.iterations)
+    if iterations <= 0:
+        raise ValueError(f"CFR+ iterations must be positive, got {iterations}")
+    average_delay = max(0, int(config.average_delay))
+
+    try:
+        import stl_solver_rs
+    except ImportError as exc:
+        raise ImportError(
+            "stl_solver_rs is not installed; run "
+            "`uv run --project ..\\.. maturin develop --release` from "
+            "`crates/stl_solver` to enable the Rust CFR+ kernel"
+        ) from exc
+
+    strategy, value = stl_solver_rs.solve_cfr_plus_rs(
+        np.ascontiguousarray(matrix, dtype=np.float64),
+        iterations=iterations,
+        average_delay=average_delay,
+        linear_weighting=bool(config.linear_weighting),
+    )
+    return np.asarray(strategy, dtype=np.float64), float(value)
+
+
 # ── Action enumeration, snapshot/restore, transition expansion ────────────
 
 

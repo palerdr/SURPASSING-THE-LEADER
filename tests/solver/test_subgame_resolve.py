@@ -19,6 +19,7 @@ sys.path.insert(0, os.getcwd())
 from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.search import MCTSConfig, mcts_search
 from stl.solver.search import is_critical, resolve_subgame
+from stl.solver.exact import CFRPlusConfig
 from stl.solver.tablebase import (
     forced_baku_overflow_death,
 )
@@ -84,6 +85,21 @@ def test_resolve_subgame_default_is_bounded_current_turn():
     result = resolve_subgame(scenario.game)
     assert result.half_round_horizon == 1
     assert result.value_for_hal == pytest.approx(1.0, abs=1e-6)
+
+
+def test_resolve_subgame_accepts_rust_cfr_plus_solver():
+    scenario = forced_baku_overflow_death()
+    result = resolve_subgame(
+        scenario.game,
+        horizon=1,
+        config=scenario.config,
+        solver="rust_cfr_plus",
+        cfr_plus_config=CFRPlusConfig(iterations=200, average_delay=20),
+    )
+
+    assert result.value_for_hal == pytest.approx(1.0, abs=1e-6)
+    assert result.dropper_strategy.sum() == pytest.approx(1.0)
+    assert result.checker_strategy.sum() == pytest.approx(1.0)
 
 
 def test_anchored_resolve_value_strictly_closer_to_deep_mcts_value_than_unanchored():
@@ -169,6 +185,24 @@ def test_mcts_search_with_resolve_at_critical_state_returns_result():
         rng,
         scenario.config,
         subgame_resolve_at_critical=True,
+    )
+    assert result.root_value_for_hal == pytest.approx(1.0, abs=0.05)
+    assert result.root_strategy_dropper.sum() == pytest.approx(1.0)
+    assert result.root_strategy_checker.sum() == pytest.approx(1.0)
+
+
+def test_mcts_search_with_rust_resolve_at_critical_state_returns_result():
+    scenario = forced_baku_overflow_death()
+    rng = np.random.default_rng(0)
+    result = mcts_search(
+        scenario.game,
+        _config(iterations=50),
+        TerminalOnlyEvaluator(),
+        rng,
+        scenario.config,
+        subgame_resolve_at_critical=True,
+        subgame_resolve_solver="rust_cfr_plus",
+        subgame_resolve_cfr_plus_config=CFRPlusConfig(iterations=200, average_delay=20),
     )
     assert result.root_value_for_hal == pytest.approx(1.0, abs=0.05)
     assert result.root_strategy_dropper.sum() == pytest.approx(1.0)

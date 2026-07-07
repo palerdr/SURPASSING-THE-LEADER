@@ -163,6 +163,7 @@ from stl.solver.exact import (
     UtilityBreakdown,
     legal_seconds_for_current_role,
     solve_cfr_plus,
+    solve_cfr_plus_rust,
     solve_exact_finite_horizon,
     solve_minimax,
     terminal_value,
@@ -296,7 +297,7 @@ def _weighted_breakdown(parts: list[tuple[float, UtilityBreakdown]]) -> UtilityB
     return UtilityBreakdown(value, hal, baku, unresolved)
 
 
-MatrixSolver = Literal["lp", "cfr_plus"]
+MatrixSolver = Literal["lp", "cfr_plus", "rust_cfr_plus"]
 
 
 def _solve_role_strategies(
@@ -310,8 +311,12 @@ def _solve_role_strategies(
         solve = solve_minimax
     elif solver == "cfr_plus":
         solve = lambda matrix: solve_cfr_plus(matrix, cfr_plus_config)
+    elif solver == "rust_cfr_plus":
+        solve = lambda matrix: solve_cfr_plus_rust(matrix, cfr_plus_config)
     else:
-        raise ValueError(f"unknown matrix solver {solver!r}; expected 'lp' or 'cfr_plus'")
+        raise ValueError(
+            f"unknown matrix solver {solver!r}; expected 'lp', 'cfr_plus', or 'rust_cfr_plus'"
+        )
 
     if hal_is_dropper:
         dropper_strategy, value_for_hal = solve(hal_payoff)
@@ -320,7 +325,7 @@ def _solve_role_strategies(
         checker_strategy, value_for_hal = solve(hal_payoff.T)
         dropper_strategy, _ = solve(-hal_payoff)
 
-    if solver == "cfr_plus":
+    if solver in ("cfr_plus", "rust_cfr_plus"):
         value_for_hal = float(dropper_strategy @ hal_payoff @ checker_strategy)
 
     return dropper_strategy, checker_strategy, float(value_for_hal)
