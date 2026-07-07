@@ -12,6 +12,7 @@ from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.engine.actions import ACTION_SIZE
 from stl.learning.train import make_predict_fn
 
 
@@ -31,8 +32,8 @@ def test_value_net_returns_value_dropper_policy_checker_policy_triple():
     value, dropper_logits, checker_logits = model(x)
 
     assert value.shape == (4, 1)
-    assert dropper_logits.shape == (4, 61)
-    assert checker_logits.shape == (4, 61)
+    assert dropper_logits.shape == (4, ACTION_SIZE)
+    assert checker_logits.shape == (4, ACTION_SIZE)
     assert torch.all(value <= 1.0)
     assert torch.all(value >= -1.0)
 
@@ -43,7 +44,8 @@ def test_legality_mask_zeroes_hal_checker_second_61():
     value, dropper_dist, checker_dist = predict(_game_at_leap_with_baku_dropper())
 
     assert isinstance(value, float)
-    assert checker_dist[60] == pytest.approx(0.0)
+    assert checker_dist[0] == pytest.approx(0.0)
+    assert checker_dist[61] == pytest.approx(0.0)
     assert checker_dist.sum() == pytest.approx(1.0)
 
 
@@ -53,7 +55,7 @@ def test_baku_dropper_in_leap_window_keeps_second_61_mass():
         _game_at_leap_with_baku_dropper()
     )
 
-    assert dropper_dist[60] > 0.0
+    assert dropper_dist[61] > 0.0
     assert np.count_nonzero(dropper_dist) == 61
     assert dropper_dist.sum() == pytest.approx(1.0)
 
@@ -102,8 +104,8 @@ def test_value_net_hidden_dim_128_has_expected_param_count_and_shapes():
     x = torch.zeros(2, FEATURE_DIM)
     value, dropper_logits, checker_logits = model(x)
     assert value.shape == (2, 1)
-    assert dropper_logits.shape == (2, 61)
-    assert checker_logits.shape == (2, 61)
+    assert dropper_logits.shape == (2, ACTION_SIZE)
+    assert checker_logits.shape == (2, ACTION_SIZE)
 
 
 def test_value_net_hidden_dim_192_under_raised_guard():
@@ -123,8 +125,8 @@ def test_value_net_hidden_dim_192_under_raised_guard():
     x = torch.zeros(2, FEATURE_DIM)
     value, dropper_logits, checker_logits = model(x)
     assert value.shape == (2, 1)
-    assert dropper_logits.shape == (2, 61)
-    assert checker_logits.shape == (2, 61)
+    assert dropper_logits.shape == (2, ACTION_SIZE)
+    assert checker_logits.shape == (2, ACTION_SIZE)
 
 
 def test_value_net_checkpoint_round_trip_at_hidden_128(tmp_path):

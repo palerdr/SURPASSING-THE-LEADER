@@ -50,6 +50,7 @@ from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.engine.actions import ACTION_SIZE
 
 
 # ── Source labels ─────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ REJECTED_UNRESOLVED_THRESHOLD = 0.5
 
 
 def _zero_policy() -> np.ndarray:
-    return np.zeros(61, dtype=np.float32)
+    return np.zeros(ACTION_SIZE, dtype=np.float32)
 
 
 @dataclass(frozen=True)
@@ -205,7 +206,7 @@ def _build_terminal_game(
 
 
 def _empty_policy_pair() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    zero = np.zeros(61, dtype=np.float32)
+    zero = np.zeros(ACTION_SIZE, dtype=np.float32)
     return zero.copy(), zero.copy(), zero.copy(), zero.copy()
 
 
@@ -219,16 +220,16 @@ def _legal_policy_vectors(
     dropper, checker = game.get_roles_for_half(game.current_half)
     drop_seconds = tuple(legal_seconds_for_current_role(game, dropper.name, "dropper", config))
     check_seconds = tuple(legal_seconds_for_current_role(game, checker.name, "checker", config))
-    dropper_dist = np.zeros(61, dtype=np.float32)
-    checker_dist = np.zeros(61, dtype=np.float32)
-    dropper_mask = np.zeros(61, dtype=np.float32)
-    checker_mask = np.zeros(61, dtype=np.float32)
+    dropper_dist = np.zeros(ACTION_SIZE, dtype=np.float32)
+    checker_dist = np.zeros(ACTION_SIZE, dtype=np.float32)
+    dropper_mask = np.zeros(ACTION_SIZE, dtype=np.float32)
+    checker_mask = np.zeros(ACTION_SIZE, dtype=np.float32)
     for second in drop_seconds:
-        dropper_mask[second - 1] = 1.0
-        dropper_dist[second - 1] = 1.0 / max(1, len(drop_seconds))
+        dropper_mask[second] = 1.0
+        dropper_dist[second] = 1.0 / max(1, len(drop_seconds))
     for second in check_seconds:
-        checker_mask[second - 1] = 1.0
-        checker_dist[second - 1] = 1.0 / max(1, len(check_seconds))
+        checker_mask[second] = 1.0
+        checker_dist[second] = 1.0 / max(1, len(check_seconds))
     return dropper_dist, checker_dist, dropper_mask, checker_mask
 
 
@@ -239,12 +240,12 @@ def _strategy_vectors(
     dropper_strategy: np.ndarray,
     checker_strategy: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    dropper_dist = np.zeros(61, dtype=np.float32)
-    checker_dist = np.zeros(61, dtype=np.float32)
+    dropper_dist = np.zeros(ACTION_SIZE, dtype=np.float32)
+    checker_dist = np.zeros(ACTION_SIZE, dtype=np.float32)
     for second, probability in zip(drop_seconds, dropper_strategy):
-        dropper_dist[second - 1] = float(probability)
+        dropper_dist[second] = float(probability)
     for second, probability in zip(check_seconds, checker_strategy):
-        checker_dist[second - 1] = float(probability)
+        checker_dist[second] = float(probability)
     return dropper_dist, checker_dist
 
 
@@ -972,10 +973,10 @@ def save_targets(targets: list[ValueTarget], path: str | Path) -> None:
         checker_masks = np.stack([t.checker_legal_mask for t in targets]).astype(np.float32)
     else:
         X = np.zeros((0, FEATURE_DIM), dtype=np.float32)
-        dropper_dists = np.zeros((0, 61), dtype=np.float32)
-        checker_dists = np.zeros((0, 61), dtype=np.float32)
-        dropper_masks = np.zeros((0, 61), dtype=np.float32)
-        checker_masks = np.zeros((0, 61), dtype=np.float32)
+        dropper_dists = np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        checker_dists = np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        dropper_masks = np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        checker_masks = np.zeros((0, ACTION_SIZE), dtype=np.float32)
     y = np.array([t.value for t in targets], dtype=np.float32)
     sources = np.array([t.source for t in targets])
     horizons = np.array([t.horizon for t in targets], dtype=np.int32)
@@ -1013,11 +1014,19 @@ def load_targets_as_records(path: str | Path) -> list[ValueTarget]:
     sources = np.array(data["sources"]).astype(str)
     horizons = data["horizons"].astype(np.int32) if "horizons" in data else np.zeros(len(X), dtype=np.int32)
     n = len(X)
-    dropper_dists = data["dropper_dists"].astype(np.float32) if "dropper_dists" in data else np.zeros((n, 61), dtype=np.float32)
-    checker_dists = data["checker_dists"].astype(np.float32) if "checker_dists" in data else np.zeros((n, 61), dtype=np.float32)
-    dropper_masks = data["dropper_legal_masks"].astype(np.float32) if "dropper_legal_masks" in data else np.zeros((n, 61), dtype=np.float32)
-    checker_masks = data["checker_legal_masks"].astype(np.float32) if "checker_legal_masks" in data else np.zeros((n, 61), dtype=np.float32)
+    dropper_dists = data["dropper_dists"].astype(np.float32) if "dropper_dists" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    checker_dists = data["checker_dists"].astype(np.float32) if "checker_dists" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    dropper_masks = data["dropper_legal_masks"].astype(np.float32) if "dropper_legal_masks" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    checker_masks = data["checker_legal_masks"].astype(np.float32) if "checker_legal_masks" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
     unresolved = data["unresolved_probabilities"].astype(np.float32) if "unresolved_probabilities" in data else np.zeros(n, dtype=np.float32)
+    for name, arr in (
+        ("dropper_dists", dropper_dists),
+        ("checker_dists", checker_dists),
+        ("dropper_legal_masks", dropper_masks),
+        ("checker_legal_masks", checker_masks),
+    ):
+        if arr.shape != (n, ACTION_SIZE):
+            raise ValueError(f"Expected {name} shape {(n, ACTION_SIZE)}, got {arr.shape}")
     records = [
         ValueTarget(
             features=X[i],

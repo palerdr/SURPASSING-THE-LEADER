@@ -49,6 +49,7 @@ from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.engine.actions import ACTION_SIZE
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────
@@ -143,10 +144,10 @@ def test_make_node_uses_evaluator_policy_for_prior():
     class BiasedEvaluator:
         def __call__(self, game):
             del game
-            drop = np.zeros(61)
-            check = np.zeros(61)
-            drop[0] = 1.0
-            check[59] = 1.0
+            drop = np.zeros(ACTION_SIZE)
+            check = np.zeros(ACTION_SIZE)
+            drop[1] = 1.0
+            check[60] = 1.0
             return 0.0, drop, check
 
     node = make_node(scenario.game, scenario.config, evaluator=BiasedEvaluator())

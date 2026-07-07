@@ -57,7 +57,7 @@ def _stub_predict_fn(_game) -> float:
 def _tiny_grids() -> dict:
     """Minimal grid: forces one tablebase hit and one MCTS-bootstrap call."""
     return dict(
-        baku_cylinder_grid=(0.0, 299.0),
+        baku_cylinder_grid=(0.0, 300.0),
         hal_cylinder_grid=(0.0,),
         clock_grid=(720.0,),
         half_grid=(1,),
@@ -74,7 +74,7 @@ def test_bootstrap_targets_emit_correct_sources_for_tiny_grid():
         **_tiny_grids(),
     )
     sources = {t.source for t in targets}
-    assert SOURCE_TABLEBASE in sources       # cyl=299 -> forced_baku_overflow_death
+    assert SOURCE_TABLEBASE in sources       # cyl=300 -> forced_baku_overflow_death
     assert SOURCE_MCTS_BOOTSTRAP in sources  # cyl=0   -> non-terminal, non-tablebase
 
 
@@ -145,7 +145,7 @@ def test_bootstrap_targets_are_deterministic_under_same_seed():
 def test_bootstrap_terminal_source_pinned_to_known_value():
     """A game-over terminal returns value=1.0 (Hal wins) directly without MCTS."""
     grids = dict(
-        baku_cylinder_grid=(299.0,),  # tablebase entry +1.0
+        baku_cylinder_grid=(300.0,),  # tablebase entry +1.0
         hal_cylinder_grid=(0.0,),
         clock_grid=(720.0,),
         half_grid=(1,),

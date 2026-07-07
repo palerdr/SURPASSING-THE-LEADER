@@ -18,6 +18,7 @@ from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.engine.actions import ACTION_SIZE
 
 
 def _scalar(result) -> float:
@@ -26,8 +27,8 @@ def _scalar(result) -> float:
 
 def _assert_policy_pair(result) -> None:
     _, dropper_policy, checker_policy = result
-    assert dropper_policy.shape == (61,)
-    assert checker_policy.shape == (61,)
+    assert dropper_policy.shape == (ACTION_SIZE,)
+    assert checker_policy.shape == (ACTION_SIZE,)
     assert np.isclose(dropper_policy.sum(), 1.0) or np.isclose(dropper_policy.sum(), 0.0)
     assert np.isclose(checker_policy.sum(), 1.0) or np.isclose(checker_policy.sum(), 0.0)
 

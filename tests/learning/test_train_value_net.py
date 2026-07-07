@@ -19,6 +19,7 @@ import pytest
 sys.path.insert(0, os.getcwd())
 
 from stl.learning.model import FEATURE_DIM, ValueNet
+from stl.engine.actions import ACTION_SIZE
 from stl.learning.train import (
     TrainConfig,
     TrainResult,
@@ -271,8 +272,8 @@ def test_load_checkpoint_restores_a_usable_model():
         value, dropper_logits, checker_logits = model(x)
         out = value.squeeze().item()
     assert -1.0 <= out <= 1.0
-    assert dropper_logits.shape == (1, 61)
-    assert checker_logits.shape == (1, 61)
+    assert dropper_logits.shape == (1, ACTION_SIZE)
+    assert checker_logits.shape == (1, ACTION_SIZE)
 
 
 def test_make_predict_fn_returns_value_in_unit_interval():
@@ -298,8 +299,8 @@ def test_make_predict_fn_returns_value_in_unit_interval():
     value, dropper_dist, checker_dist = predict(game)
     assert isinstance(value, float)
     assert -1.0 <= value <= 1.0
-    assert dropper_dist.shape == (61,)
-    assert checker_dist.shape == (61,)
+    assert dropper_dist.shape == (ACTION_SIZE,)
+    assert checker_dist.shape == (ACTION_SIZE,)
     assert dropper_dist.sum() == pytest.approx(1.0)
     assert checker_dist.sum() == pytest.approx(1.0)
 
@@ -318,13 +319,13 @@ def _write_synthetic_targets_with_policy(path: Path, n: int = 128, seed: int = 0
     sources = np.array(["terminal"] * n)
     horizons = np.zeros(n, dtype=np.int32)
 
-    dropper_dists = np.zeros((n, 61), dtype=np.float32)
-    dropper_dists[:, 29] = 1.0  # second 30 (1-indexed)
-    checker_dists = np.zeros((n, 61), dtype=np.float32)
-    checker_dists[:, 59] = 1.0  # second 60
+    dropper_dists = np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    dropper_dists[:, 30] = 1.0  # second 30
+    checker_dists = np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    checker_dists[:, 60] = 1.0  # second 60
 
-    legal_masks = np.zeros((n, 61), dtype=np.float32)
-    legal_masks[:, :60] = 1.0  # seconds 1..60 legal; second 61 illegal
+    legal_masks = np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    legal_masks[:, 1:61] = 1.0  # seconds 1..60 legal; second 61 illegal
 
     np.savez(
         path,

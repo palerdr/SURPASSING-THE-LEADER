@@ -10,3 +10,5 @@ Compact playable surface.
 - `opponents/` - scripted opponents, teacher policies, pattern reader, model opponent, and league helpers.
 
 This layer may use the engine, solver, and learning model. Engine and rigorous solver code must not depend on play code.
+
+The Gym-style wrapper exposes `Discrete(62)` so action index equals literal second; action `0` is illegal padding. The bucket baseline files are legacy playable references only and must not define solver-core legality.

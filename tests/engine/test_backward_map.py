@@ -20,6 +20,7 @@ sys.path.insert(0, os.getcwd())
 
 from stl.solver.tablebase import (
     MAX_ST,
+    ST_COUNT,
     analytic_stage_outcomes,
     stage_matrix_from_values,
     verify_stage_outcomes_against_engine,
@@ -85,7 +86,7 @@ def test_engine_equivalence_handpicked_edges():
         make_game(clock=3601.0, half=1),                                 # first post-leap
         make_game(clock=720.0, half=1, baku_cyl=239.0),                  # last survivable fail
         make_game(clock=720.0, half=1, baku_cyl=240.0),                  # fail always fatal
-        make_game(clock=720.0, half=1, baku_cyl=299.0),                  # every ST overflows
+        make_game(clock=720.0, half=1, baku_cyl=299.0),                  # positive ST overflows
         make_game(clock=2100.0, half=2, hal_cyl=250.0, hal_deaths=2,
                   baku_deaths=1, hal_ttd=200.0, baku_ttd=90.0),          # deep epoch
     ]
@@ -114,9 +115,9 @@ def test_stage_matrix_assembly_semantics():
     game = make_game(clock=720.0, half=1, baku_cyl=297.0)  # ST >= 3 overflows
     outcomes = analytic_stage_outcomes(game)
 
-    success_values = np.zeros(MAX_ST)
+    success_values = np.zeros(ST_COUNT)
     for s in outcomes.successes:
-        success_values[s.st - 1] = -1.0 if s.overflow else 0.5  # checker=Baku dies => +1? see below
+        success_values[s.st] = -1.0 if s.overflow else 0.5  # checker=Baku dies => +1? see below
     # Baku is checker: overflow means Baku dies => Hal wins => +1.
     success_values = np.where(success_values == -1.0, 1.0, success_values)
     fail_value = 1.0  # fail at cyl 297 is fatal for Baku
@@ -126,7 +127,7 @@ def test_stage_matrix_assembly_semantics():
     assert matrix.shape == (len(outcomes.drop_seconds), len(outcomes.check_seconds))
     # fail triangle: check < drop
     assert matrix[5, 0] == 1.0
-    # tie cell (drop 1, check 1): ST = 1 -> 297+1 = 298 < 300 -> continuation
+    # tie cell (drop 1, check 1): ST = 0 -> 297 remains below 300 -> continuation
     assert matrix[0, 0] == 0.5
     # ST=2 continuation (297+2=299), ST=3 overflow (300)
     assert matrix[0, 2] == 0.5
@@ -136,4 +137,6 @@ def test_stage_matrix_assembly_semantics():
 def test_st_never_exceeds_59_even_in_leap_turn():
     game = make_game(clock=float(LS_WINDOW_START), half=2)
     outcomes = analytic_stage_outcomes(game)
-    assert len(outcomes.successes) == MAX_ST == 59
+    assert len(outcomes.successes) == ST_COUNT == 60
+    assert outcomes.successes[0].st == 0
+    assert outcomes.successes[-1].st == MAX_ST == 59

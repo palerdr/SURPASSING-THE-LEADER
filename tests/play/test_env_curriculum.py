@@ -27,7 +27,7 @@ def test_hal_unaware_checker_cannot_use_61_on_leap():
         }
     })
 
-    assert env.action_masks()[60] == False
+    assert env.action_masks()[61] == False
 
 
 def test_hal_checker_can_never_use_61_on_leap():
@@ -43,7 +43,7 @@ def test_hal_checker_can_never_use_61_on_leap():
         }
     })
 
-    assert env.action_masks()[60] == False
+    assert env.action_masks()[61] == False
 
 
 def test_baku_checker_cannot_use_61_on_leap_even_if_deduced():
@@ -57,7 +57,7 @@ def test_baku_checker_cannot_use_61_on_leap_even_if_deduced():
         }
     })
 
-    assert env.action_masks()[60] == False
+    assert env.action_masks()[61] == False
 
 
 def test_hal_dropper_cannot_use_61_on_leap():
@@ -71,7 +71,7 @@ def test_hal_dropper_cannot_use_61_on_leap():
         }
     })
 
-    assert env.action_masks()[60] == False
+    assert env.action_masks()[61] == False
 
 
 def test_baku_dropper_can_use_61_on_leap_even_if_unaware():
@@ -85,7 +85,7 @@ def test_baku_dropper_can_use_61_on_leap_even_if_unaware():
         }
     })
 
-    assert env.action_masks()[60] == True
+    assert env.action_masks()[61] == True
 
 
 def test_reset_applies_scenario_overrides():
@@ -183,7 +183,7 @@ def test_hal_awareness_updates_after_death_evidence():
     })
 
     assert env.awareness.value == "unaware"
-    _obs, _reward, _terminated, _truncated, info = env.step(0)
+    _obs, _reward, _terminated, _truncated, info = env.step(60)
     assert info["awareness"] == "deduced"
 
 
@@ -236,15 +236,15 @@ class _FixedSecondOpponent(Opponent):
 def test_step_rejects_illegal_agent_action_outside_mask():
     """Agent passing an illegal action_index raises rather than slipping through.
 
-    Hal-as-dropper outside leap window: action=60 (second=61) is illegal for
-    Hal-dropper at any time. ``step(60)`` must raise ValueError.
+    Hal-as-dropper outside leap window: action=61 (second=61) is illegal for
+    Hal-dropper at any time. ``step(61)`` must raise ValueError.
     """
     env = DTHEnv(opponent=_FixedSecondOpponent(30), agent_role="hal", seed=0)
     env.reset(seed=0)
     # First half-round of the canonical opening: Hal is dropper, no leap window.
-    assert env.action_masks()[60] == False
-    with pytest.raises(ValueError, match="action=60.*illegal"):
-        env.step(60)
+    assert env.action_masks()[61] == False
+    with pytest.raises(ValueError, match="action=61.*illegal"):
+        env.step(61)
 
 
 def test_step_rejects_illegal_hal_dropper_61_when_opponent_controls_hal():
@@ -266,7 +266,7 @@ def test_step_rejects_illegal_hal_dropper_61_when_opponent_controls_hal():
 
     # Agent (Baku) plays a legal checker action; opponent (Hal) returns 61, illegal.
     with pytest.raises(ValueError, match="actor='hal'.*role='dropper'"):
-        env.step(0)
+        env.step(60)
 
 
 def test_step_rejects_illegal_hal_checker_61_when_opponent_controls_hal():
@@ -287,7 +287,7 @@ def test_step_rejects_illegal_hal_checker_61_when_opponent_controls_hal():
     assert D.name == "Baku" and C.name == "Hal"
 
     with pytest.raises(ValueError, match="actor='hal'.*role='checker'"):
-        env.step(0)
+        env.step(60)
 
 
 def test_step_accepts_legal_baku_dropper_61_in_leap_window():
@@ -306,6 +306,6 @@ def test_step_accepts_legal_baku_dropper_61_in_leap_window():
     # current_half=2 with first_dropper=hal: Baku=dropper, Hal=checker.
     D, C = env.game.get_roles_for_half(env.game.current_half)
     assert D.name == "Baku" and C.name == "Hal"
-    # Hal-checker plays second 30 (action=29). Opponent Baku-dropper returns 61 (legal).
-    obs, rew, term, trunc, info = env.step(29)
+    # Hal-checker plays second 30 (action=30). Opponent Baku-dropper returns 61 (legal).
+    obs, rew, term, trunc, info = env.step(30)
     assert isinstance(obs, type(obs))  # no exception, environment advanced

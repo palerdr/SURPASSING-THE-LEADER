@@ -37,6 +37,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from stl.learning.model import FEATURE_DIM, HIDDEN_DIM, ValueNet, value_output
+from stl.engine.actions import ACTION_SIZE
 
 
 @dataclass(frozen=True)
@@ -167,8 +168,8 @@ def _load_targets_npz(
     y = data["y"].astype(np.float32)
     sources = np.array(data["sources"]).astype(str)
     n = len(X)
-    dropper_dists = data["dropper_dists"].astype(np.float32) if "dropper_dists" in data else np.zeros((n, 61), dtype=np.float32)
-    checker_dists = data["checker_dists"].astype(np.float32) if "checker_dists" in data else np.zeros((n, 61), dtype=np.float32)
+    dropper_dists = data["dropper_dists"].astype(np.float32) if "dropper_dists" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    checker_dists = data["checker_dists"].astype(np.float32) if "checker_dists" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
     dropper_masks = data["dropper_legal_masks"].astype(np.float32) if "dropper_legal_masks" in data else (dropper_dists > 0.0).astype(np.float32)
     checker_masks = data["checker_legal_masks"].astype(np.float32) if "checker_legal_masks" in data else (checker_dists > 0.0).astype(np.float32)
     if X.shape[1] != FEATURE_DIM:
@@ -181,8 +182,8 @@ def _load_targets_npz(
         ("dropper_legal_masks", dropper_masks),
         ("checker_legal_masks", checker_masks),
     ):
-        if arr.shape != (n, 61):
-            raise ValueError(f"Expected {name} shape {(n, 61)}, got {arr.shape}")
+        if arr.shape != (n, ACTION_SIZE):
+            raise ValueError(f"Expected {name} shape {(n, ACTION_SIZE)}, got {arr.shape}")
     return X, y, sources, dropper_dists, checker_dists, dropper_masks, checker_masks
 
 
@@ -512,22 +513,22 @@ def make_predict_fn(model: ValueNet, device: str = "cpu"):
         from stl.solver.exact import ExactSearchConfig, legal_seconds_for_current_role
 
         def masked_softmax(logits, seconds: tuple[int, ...]) -> np.ndarray:
-            dist = np.zeros(61, dtype=np.float64)
+            dist = np.zeros(ACTION_SIZE, dtype=np.float64)
             if not seconds:
                 return dist
             raw = logits.squeeze(0).detach().cpu().numpy().astype(np.float64)
-            legal = np.array([raw[second - 1] for second in seconds], dtype=np.float64)
+            legal = np.array([raw[second] for second in seconds], dtype=np.float64)
             legal -= float(legal.max())
             probs = np.exp(legal)
             probs /= probs.sum()
             for second, probability in zip(seconds, probs):
-                dist[second - 1] = float(probability)
+                dist[second] = float(probability)
             return normalize_policy_vector(dist)
 
         cfg = ExactSearchConfig()
         if game.game_over:
-            dropper_dist = np.zeros(61, dtype=np.float64)
-            checker_dist = np.zeros(61, dtype=np.float64)
+            dropper_dist = np.zeros(ACTION_SIZE, dtype=np.float64)
+            checker_dist = np.zeros(ACTION_SIZE, dtype=np.float64)
         else:
             dropper, checker = game.get_roles_for_half(game.current_half)
             drop_seconds = tuple(legal_seconds_for_current_role(game, dropper.name, "dropper", cfg))

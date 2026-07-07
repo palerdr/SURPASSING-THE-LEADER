@@ -131,13 +131,7 @@ pub(crate) fn average_strategy(strategy_sum: &[f64], regret: &[f64]) -> Vec<f64>
     }
 }
 
-fn expected_payoff(
-      payoff: &[f64],
-      p: &[f64],
-      q: &[f64],
-      rows: usize,
-      cols: usize,
-  ) -> f64 {
+fn expected_payoff(payoff: &[f64], p: &[f64], q: &[f64], rows: usize, cols: usize) -> f64 {
     let mut value: f64 = 0.0;
     for row_idx in 0..rows {
         for col_idx in 0..cols {
@@ -145,7 +139,7 @@ fn expected_payoff(
         }
     }
     value
-  }
+}
 
 pub(crate) fn solve_cfr_plus_dense(
     payoff: &[f64],
@@ -161,7 +155,8 @@ pub(crate) fn solve_cfr_plus_dense(
     let mut col_strategy_sum: Vec<f64> = vec![0.0; cols];
     for t in 1..(iterations + 1) {
         //updates row and col strategy
-        let (p_prime, q_prime) = cfr_iteration(payoff, &mut row_regret, &mut col_regret, rows, cols);
+        let (p_prime, q_prime) =
+            cfr_iteration(payoff, &mut row_regret, &mut col_regret, rows, cols);
         if t > avg_delay {
             let weight = if linear_weighting { t as f64 } else { 1.0 };
             //accumulate the broadcasted strategy
@@ -172,11 +167,11 @@ pub(crate) fn solve_cfr_plus_dense(
                     *sum_val += weight * p_val;
                 });
             col_strategy_sum
-            .iter_mut()
-            .zip(q_prime.iter())
-            .for_each(|(sum_val, &q_val)| {
-                *sum_val += weight * q_val;
-            });
+                .iter_mut()
+                .zip(q_prime.iter())
+                .for_each(|(sum_val, &q_val)| {
+                    *sum_val += weight * q_val;
+                });
         }
     }
     let p = average_strategy(&row_strategy_sum, &row_regret);
@@ -184,7 +179,6 @@ pub(crate) fn solve_cfr_plus_dense(
     let value = expected_payoff(payoff, &p, &q, rows, cols);
     (p, q, value)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -283,12 +277,16 @@ mod tests {
     fn solve_cfr_plus_dense_solves_matching_pennies() {
         let payoff = vec![1.0, -1.0, -1.0, 1.0];
 
-        let (strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 500, 50, true);
+        let (strategy, col_strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 500, 50, true);
 
         assert_eq!(strategy.len(), 2);
+        assert_eq!(col_strategy.len(), 2);
         assert!((strategy.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!((col_strategy.iter().sum::<f64>() - 1.0).abs() < 1e-12);
         assert!((strategy[0] - 0.5).abs() < 1e-3);
         assert!((strategy[1] - 0.5).abs() < 1e-3);
+        assert!((col_strategy[0] - 0.5).abs() < 1e-3);
+        assert!((col_strategy[1] - 0.5).abs() < 1e-3);
         assert!(value.abs() < 1e-3);
     }
 
@@ -296,10 +294,12 @@ mod tests {
     fn solve_cfr_plus_dense_prefers_dominating_row() {
         let payoff = vec![1.0, 1.0, 0.0, 0.0];
 
-        let (strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 100, 0, true);
+        let (strategy, col_strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 100, 0, true);
 
         assert!(strategy[0] > 0.99);
         assert!(strategy[1] < 0.01);
+        assert_eq!(col_strategy.len(), 2);
+        assert!((col_strategy.iter().sum::<f64>() - 1.0).abs() < 1e-12);
         assert!(value > 0.99);
     }
 
@@ -307,10 +307,12 @@ mod tests {
     fn solve_cfr_plus_dense_delay_past_iterations_returns_finite_strategy() {
         let payoff = vec![1.0, -1.0, -1.0, 1.0];
 
-        let (strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 2, 10, true);
+        let (strategy, col_strategy, value) = solve_cfr_plus_dense(&payoff, 2, 2, 2, 10, true);
 
         assert!(strategy.iter().all(|p| p.is_finite()));
+        assert!(col_strategy.iter().all(|p| p.is_finite()));
         assert!(value.is_finite());
         assert!((strategy.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!((col_strategy.iter().sum::<f64>() - 1.0).abs() < 1e-12);
     }
 }

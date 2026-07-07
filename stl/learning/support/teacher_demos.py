@@ -84,7 +84,7 @@ def rollout_teacher_episode(
         dropper, checker = env.game.get_roles_for_half(env.game.current_half)
         role = "dropper" if env.agent is dropper else "checker"
         second = teacher.choose_action(env.game, role, turn_duration)
-        action_index = second - 1
+        action_index = int(second)
         if action_index < 0 or action_index >= len(mask) or not mask[action_index]:
             raise ValueError(
                 f"Teacher {teacher_name} produced illegal action second={second} role={role} "

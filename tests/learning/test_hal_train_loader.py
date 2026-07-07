@@ -42,10 +42,9 @@ def test_modern_trunk_checkpoint_loads_with_inferred_hidden_dim(tmp_path):
 @pytest.mark.skipif(
     not os.path.exists(REAL_CHECKPOINT), reason="headline checkpoint not pulled"
 )
-def test_real_headline_checkpoint_loads_exactly():
-    net = load_checkpoint(REAL_CHECKPOINT)
-    assert net.trunk[0].out_features == 192
-    assert sum(p.numel() for p in net.parameters()) == 65403
+def test_real_headline_checkpoint_is_stale_under_action_core_reset():
+    with pytest.raises(RuntimeError, match="policy_head"):
+        load_checkpoint(REAL_CHECKPOINT)
 
 
 def test_legacy_layers_checkpoint_migrates_cleanly(tmp_path):

@@ -20,3 +20,7 @@ uv run pytest tests/play -q
 
 `uv run pytest --collect-only -q` is a cheap sanity check after structural
 changes.
+
+Action-core tests should cover legal seconds `1`, `60`, Baku-only leap `61`,
+same-second success with `ST=0`, strict fail triangle `check < drop`, dense
+length-62 policy vectors, and the always-illegal padding index `0`.

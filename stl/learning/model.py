@@ -13,6 +13,7 @@ from stl.learning.route_math import (
 )
 from stl.engine.game import CYLINDER_MAX, FAILED_CHECK_PENALTY, LS_WINDOW_START, OPENING_START_CLOCK
 from stl.engine.game import Game
+from stl.engine.actions import ACTION_SIZE
 
 HIDDEN_DIM = 64
 FEATURE_DIM = 23
@@ -86,14 +87,14 @@ class ValueNet(nn.Module):
             nn.Linear(hidden_dim, 1),
             nn.Tanh(),
         )
-        self.policy_head = nn.Linear(hidden_dim, 122)
+        self.policy_head = nn.Linear(hidden_dim, 2 * ACTION_SIZE)
 
     def forward(self, x):
         hidden = self.trunk(x)
         value = self.value_head(hidden)
         policy_logits = self.policy_head(hidden)
-        dropper_logits = policy_logits[..., :61]
-        checker_logits = policy_logits[..., 61:]
+        dropper_logits = policy_logits[..., :ACTION_SIZE]
+        checker_logits = policy_logits[..., ACTION_SIZE:]
         return value, dropper_logits, checker_logits
 
 

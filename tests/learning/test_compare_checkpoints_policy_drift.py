@@ -6,14 +6,16 @@ import numpy as np
 sys.path.insert(0, os.getcwd())
 
 from stl.commands.compare_policy_drift import _policy_vector, policy_delta, summarize
+from stl.engine.actions import ACTION_SIZE
 
 
-def test_policy_vector_projects_seconds_to_length_61_distribution():
+def test_policy_vector_projects_seconds_to_length_62_distribution():
     vec = _policy_vector((1, 3), np.array([0.25, 0.75]))
 
-    assert vec.shape == (61,)
-    assert vec[0] == 0.25
-    assert vec[2] == 0.75
+    assert vec.shape == (ACTION_SIZE,)
+    assert vec[0] == 0.0
+    assert vec[1] == 0.25
+    assert vec[3] == 0.75
     assert vec.sum() == 1.0
 
 

@@ -23,6 +23,7 @@ from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.engine.actions import ACTION_SIZE
 from stl.learning.strength import agent_policy, best_response_interval, gate_report, run_ladder
 from stl.solver.tablebase import TierAEvaluator, TierALookup, frontier_interval_fn
 from stl.learning.train import load_checkpoint, make_predict_fn
@@ -62,16 +63,16 @@ def make_game(
 
 
 def policy_vectors(game: Game, result) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    drop = np.zeros(61, dtype=np.float32)
-    check = np.zeros(61, dtype=np.float32)
-    drop_mask = np.zeros(61, dtype=np.float32)
-    check_mask = np.zeros(61, dtype=np.float32)
+    drop = np.zeros(ACTION_SIZE, dtype=np.float32)
+    check = np.zeros(ACTION_SIZE, dtype=np.float32)
+    drop_mask = np.zeros(ACTION_SIZE, dtype=np.float32)
+    check_mask = np.zeros(ACTION_SIZE, dtype=np.float32)
     for second, prob in zip(result.drop_seconds, result.dropper_strategy):
-        drop[second - 1] = float(prob)
-        drop_mask[second - 1] = 1.0
+        drop[second] = float(prob)
+        drop_mask[second] = 1.0
     for second, prob in zip(result.check_seconds, result.checker_strategy):
-        check[second - 1] = float(prob)
-        check_mask[second - 1] = 1.0
+        check[second] = float(prob)
+        check_mask[second] = 1.0
     return drop, check, drop_mask, check_mask
 
 

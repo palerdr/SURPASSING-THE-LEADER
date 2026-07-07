@@ -6,10 +6,10 @@ SB3's PPO calls env.reset() and env.step(action) in a loop.
 One step = one half-round. The agent always controls one player (Hal or Baku),
 and the opponent is controlled by a bot. Roles alternate each half-round.
 
-Action space: Discrete(61)
-    action 0  → second 1
-    action 59 → second 60
-    action 60 → second 61 (only legal for dropper during leap turn)
+Action space: Discrete(62)
+    action N  → second N
+    action 0  → illegal padding
+    action 61 → second 61 (only legal for Baku dropper during leap turn)
 
 Observation space: Box(0, 1, shape=(20,)) — see observation.py
 
@@ -42,6 +42,7 @@ from stl.learning.awareness import (
     update_awareness,
 )
 from stl.engine.actions import IllegalActionError, validate_action
+from stl.engine.actions import ACTION_SIZE
 from stl.learning.observation import OBS_SIZE, OBS_V2_SIZE, build_observation, build_observation_v2
 from stl.learning.reward import compute_route_shaping_bonus, shaped_reward, sparse_reward
 from stl.learning.route_stages import current_route_stage_flags
@@ -86,7 +87,7 @@ class DTHEnv(gym.Env):
         self.obs_version = obs_version
 
         obs_dim = OBS_V2_SIZE if obs_version == 2 else OBS_SIZE
-        self.action_space = spaces.Discrete(61)
+        self.action_space = spaces.Discrete(ACTION_SIZE)
         self.observation_space = spaces.Box(
             low = 0.0, high = 1.0, shape = (obs_dim,), dtype = np.float32
         )
@@ -179,7 +180,7 @@ class DTHEnv(gym.Env):
     def action_masks(self) -> np.ndarray:
         """
         Returns:
-            np.ndarray of shape (61,), dtype bool.
+            np.ndarray of shape (62,), dtype bool.
         """
         assert self.game is not None
         assert self.agent is not None
@@ -198,7 +199,8 @@ class DTHEnv(gym.Env):
         """
 
         Args:
-            action: Integer in [0, 60]. Maps to game second (action + 1).
+            action: Integer in [0, 61]. The action index is the game second;
+                action 0 is always illegal padding.
 
         Returns:
             Tuple of (obs, reward, terminated, truncated, info).
@@ -211,15 +213,15 @@ class DTHEnv(gym.Env):
         mask = self.action_masks()
         if not (0 <= action < mask.shape[0]):
             raise ValueError(
-                f"action={action} is outside the Discrete(61) range."
+                f"action={action} is outside the Discrete({ACTION_SIZE}) range."
             )
         if not bool(mask[action]):
             raise ValueError(
-                f"action={action} (second={action + 1}) is illegal at this state. "
+                f"action={action} (second={action}) is illegal at this state. "
                 f"action_masks()[{action}] is False; the env enforces legality at step()."
             )
 
-        agent_second = action + 1
+        agent_second = int(action)
 
         D, C = self.game.get_roles_for_half(self.game.current_half)
         turn_duration = self.game.get_turn_duration()

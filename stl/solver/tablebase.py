@@ -51,14 +51,14 @@ def _base_game(*, clock: float = 720.0, current_half: int = 1) -> Game:
 
 
 def forced_baku_overflow_death() -> TacticalScenario:
-    """Hal drops, Baku checks with cylinder already at 299.
+    """Hal drops, Baku checks with cylinder already at 300.
 
-    Every legal exact action either succeeds with at least ST=1 or fails and
-    injects the full cylinder. Both paths are terminal for Baku because
+    Every legal exact action either succeeds into an already-full cylinder or
+    fails and injects the full cylinder. Both paths are terminal for Baku because
     death_duration reaches 300 seconds.
     """
     game = _base_game()
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_death",
         game=game,
@@ -71,14 +71,14 @@ def forced_baku_overflow_death() -> TacticalScenario:
 
 
 def forced_hal_overflow_death() -> TacticalScenario:
-    """Baku drops on half 2, Hal checks with cylinder at 299.
+    """Baku drops on half 2, Hal checks with cylinder at 300.
 
     Symmetric of ``forced_baku_overflow_death``: every joint action is
     terminal Baku-win because Hal's death_duration hits 300 regardless of
     success/fail.
     """
     game = _base_game(current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     return TacticalScenario(
         name="forced_hal_overflow_death",
         game=game,
@@ -274,7 +274,7 @@ def role_alignment_variation4_post_engineering() -> TacticalScenario:
 
 # ── Phase F: pinned-tablebase expansion ───────────────────────────────────
 # All scenarios below are forced-terminal extensions of the
-# ``forced_*_overflow_death`` template: cylinder=299 on the checker side
+# ``forced_*_overflow_death`` template: cylinder=300 on the checker side
 # means every joint action drives the LP to a Hal-win (half=1, baku
 # checker) or Baku-win (half=2, hal checker) within one half-round.
 # Each variant changes one or more axes (clock, ttd, deaths, fatigue,
@@ -289,7 +289,7 @@ def role_alignment_variation4_post_engineering() -> TacticalScenario:
 def forced_baku_overflow_mid_clock() -> TacticalScenario:
     """Forced Baku overflow at mid-game clock — value-invariant w.r.t. clock."""
     game = _base_game(clock=1800.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_mid_clock",
         game=game,
@@ -304,7 +304,7 @@ def forced_baku_overflow_mid_clock() -> TacticalScenario:
 def forced_hal_overflow_mid_clock() -> TacticalScenario:
     """Forced Hal overflow at mid-game clock."""
     game = _base_game(clock=1800.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     return TacticalScenario(
         name="forced_hal_overflow_mid_clock",
         game=game,
@@ -319,7 +319,7 @@ def forced_hal_overflow_mid_clock() -> TacticalScenario:
 def forced_baku_overflow_pre_leap() -> TacticalScenario:
     """Forced Baku overflow just before the leap-second window."""
     game = _base_game(clock=3450.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_pre_leap",
         game=game,
@@ -334,7 +334,7 @@ def forced_baku_overflow_pre_leap() -> TacticalScenario:
 def forced_hal_overflow_pre_leap() -> TacticalScenario:
     """Forced Hal overflow just before the leap-second window."""
     game = _base_game(clock=3450.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     return TacticalScenario(
         name="forced_hal_overflow_pre_leap",
         game=game,
@@ -352,7 +352,7 @@ def forced_hal_overflow_pre_leap() -> TacticalScenario:
 def forced_baku_overflow_leap_window_open() -> TacticalScenario:
     """Forced Baku overflow at the leap-window opening (clock=3540)."""
     game = _base_game(clock=3540.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_leap_window_open",
         game=game,
@@ -367,7 +367,7 @@ def forced_baku_overflow_leap_window_open() -> TacticalScenario:
 def forced_hal_overflow_leap_window_open() -> TacticalScenario:
     """Forced Hal overflow at the leap-window opening, half=2."""
     game = _base_game(clock=3540.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     return TacticalScenario(
         name="forced_hal_overflow_leap_window_open",
         game=game,
@@ -382,7 +382,7 @@ def forced_hal_overflow_leap_window_open() -> TacticalScenario:
 def forced_baku_overflow_leap_window_late() -> TacticalScenario:
     """Forced Baku overflow inside the leap-second window (clock=3580)."""
     game = _base_game(clock=3580.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_leap_window_late",
         game=game,
@@ -397,7 +397,7 @@ def forced_baku_overflow_leap_window_late() -> TacticalScenario:
 def forced_baku_overflow_post_leap() -> TacticalScenario:
     """Forced Baku overflow just after the leap-second window."""
     game = _base_game(clock=3600.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="forced_baku_overflow_post_leap",
         game=game,
@@ -415,7 +415,7 @@ def forced_baku_overflow_post_leap() -> TacticalScenario:
 def forced_baku_overflow_fatigued_referee() -> TacticalScenario:
     """Forced Baku overflow with a fatigued referee (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
         name="forced_baku_overflow_fatigued_referee",
@@ -431,7 +431,7 @@ def forced_baku_overflow_fatigued_referee() -> TacticalScenario:
 def forced_hal_overflow_fatigued_referee() -> TacticalScenario:
     """Forced Hal overflow with a fatigued referee (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
         name="forced_hal_overflow_fatigued_referee",
@@ -447,7 +447,7 @@ def forced_hal_overflow_fatigued_referee() -> TacticalScenario:
 def forced_baku_overflow_high_ttd() -> TacticalScenario:
     """Forced Baku overflow with elevated baku_ttd=240."""
     game = _base_game(clock=720.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     game.player2.ttd = 240.0
     return TacticalScenario(
         name="forced_baku_overflow_high_ttd",
@@ -466,7 +466,7 @@ def forced_baku_overflow_high_ttd() -> TacticalScenario:
 def forced_baku_overflow_with_baku_deaths() -> TacticalScenario:
     """Forced Baku overflow when Baku already carries a prior death."""
     game = _base_game(clock=720.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     game.player2.deaths = 1
     return TacticalScenario(
         name="forced_baku_overflow_with_baku_deaths",
@@ -482,7 +482,7 @@ def forced_baku_overflow_with_baku_deaths() -> TacticalScenario:
 def forced_hal_overflow_with_hal_deaths() -> TacticalScenario:
     """Forced Hal overflow when Hal already carries a prior death."""
     game = _base_game(clock=720.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     game.player1.deaths = 1
     return TacticalScenario(
         name="forced_hal_overflow_with_hal_deaths",
@@ -502,7 +502,7 @@ def forced_baku_overflow_with_hal_deaths() -> TacticalScenario:
     Baku is the one about to die, regardless of Hal's death history.
     """
     game = _base_game(clock=720.0, current_half=1)
-    game.player2.cylinder = 299.0
+    game.player2.cylinder = 300.0
     game.player1.deaths = 1
     return TacticalScenario(
         name="forced_baku_overflow_with_hal_deaths",
@@ -518,7 +518,7 @@ def forced_baku_overflow_with_hal_deaths() -> TacticalScenario:
 def forced_hal_overflow_with_baku_deaths() -> TacticalScenario:
     """Forced Hal overflow when Baku (not Hal) carries a prior death."""
     game = _base_game(clock=720.0, current_half=2)
-    game.player1.cylinder = 299.0
+    game.player1.cylinder = 300.0
     game.player2.deaths = 1
     return TacticalScenario(
         name="forced_hal_overflow_with_baku_deaths",
@@ -535,10 +535,10 @@ def forced_hal_overflow_with_baku_deaths() -> TacticalScenario:
 
 
 def both_overflow_baku_dies_first() -> TacticalScenario:
-    """Both players at cylinder=299, half=1 — Baku (checker) dies first."""
+    """Both players at cylinder=300, half=1 — Baku (checker) dies first."""
     game = _base_game(clock=720.0, current_half=1)
-    game.player1.cylinder = 299.0
-    game.player2.cylinder = 299.0
+    game.player1.cylinder = 300.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="both_overflow_baku_dies_first",
         game=game,
@@ -551,10 +551,10 @@ def both_overflow_baku_dies_first() -> TacticalScenario:
 
 
 def both_overflow_hal_dies_first() -> TacticalScenario:
-    """Both players at cylinder=299, half=2 — Hal (checker) dies first."""
+    """Both players at cylinder=300, half=2 — Hal (checker) dies first."""
     game = _base_game(clock=720.0, current_half=2)
-    game.player1.cylinder = 299.0
-    game.player2.cylinder = 299.0
+    game.player1.cylinder = 300.0
+    game.player2.cylinder = 300.0
     return TacticalScenario(
         name="both_overflow_hal_dies_first",
         game=game,
@@ -578,7 +578,7 @@ def both_overflow_hal_dies_first() -> TacticalScenario:
 #   duration hal_cylinder + FAILED_CHECK_PENALTY. Chosen < CYLINDER_MAX so the
 #   referee roll is survivable (0 < p < 1):
 #       die  (prob 1-p): Hal permanently dies                      → Baku win (-1)
-#       live (prob p)  : Hal revived → next round Baku is the checker at cyl=299,
+#       live (prob p)  : Hal revived -> next round Baku is the checker at cyl=300,
 #                        a forced overflow → Baku permanent death → Hal win (+1)
 #   Both branches terminate within 2 half-rounds (drop=61 is strictly dominant
 #   for Baku, since any drop ≤ 60 lets Hal check safely and reach the +1
@@ -623,7 +623,7 @@ def _interior_fail_game(hal_cylinder: float, cprs_performed: int) -> Game:
     """Leap-window half-2 state: Baku dropper (may use 61), Hal checker (capped 60)."""
     game = _base_game(clock=3540.0, current_half=2)
     game.player1.cylinder = hal_cylinder   # Hal is the checker this half-round
-    game.player2.cylinder = 299.0          # Baku is the checker NEXT round → forced overflow
+    game.player2.cylinder = 300.0          # Baku is the checker NEXT round -> forced overflow
     game.referee.cprs_performed = cprs_performed
     return game
 
@@ -638,7 +638,7 @@ def forced_hal_fail_survivable_fresh() -> TacticalScenario:
         half_round_horizon=2,
         expected_note=(
             "Leap-window Baku drop=61 forces Hal to fail every check (death_duration "
-            "180, survivable). Survive → Baku@299 overflow next round (Hal win); die → "
+            "180, survivable). Survive -> Baku@300 overflow next round (Hal win); die -> "
             "Baku win. Exact interior value 2p-1 at fresh referee (p=0.784 → +0.568)."
         ),
         expected_value=_survivable_fail_value(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=0),
@@ -828,9 +828,9 @@ def verify_pinned_value(name: str, *, abs_tol: float = 1e-9) -> ExactSolveResult
 """Analytic stage-transition map for backward induction (tablebase pilot).
 
 At a half-round decision state, the 60x60 (61x60 in the leap turn) joint
-action space collapses to at most 60 distinct outcomes:
+action space collapses to at most 61 distinct outcomes:
 
-- success cells (check >= drop) depend ONLY on ST = max(1, check - drop):
+- success cells (check >= drop) depend ONLY on ST = check - drop:
   the checker's cylinder grows by ST; at >= CYLINDER_MAX the injection is
   immediate and always fatal (death_duration = 300 => survival probability
   is exactly 0 in src/Referee.py).
@@ -866,7 +866,8 @@ from stl.engine.game import Game
 
 from stl.solver.exact import ExactGameSnapshot, exact_public_state
 
-MAX_ST = TURN_DURATION_NORMAL - 1  # check <= 60, drop >= 1 => ST in 1..59 always
+MAX_ST = TURN_DURATION_NORMAL - 1  # check <= 60, drop >= 1 => successful ST in 0..59
+ST_COUNT = MAX_ST + 1
 
 
 @dataclass(frozen=True)
@@ -892,7 +893,7 @@ class StageOutcomes:
     turn_duration: int
     drop_seconds: tuple[int, ...]
     check_seconds: tuple[int, ...]
-    successes: tuple[StageSuccess, ...]  # indexed by st - 1
+    successes: tuple[StageSuccess, ...]  # indexed by st
     fail: StageFail
 
 
@@ -906,7 +907,7 @@ def analytic_stage_outcomes(game: Game) -> StageOutcomes:
     check_max = legal_max_second(checker.name, "checker", turn_duration)
 
     successes = []
-    for st in range(1, MAX_ST + 1):
+    for st in range(0, MAX_ST + 1):
         cyl_after = checker.cylinder + st
         successes.append(
             StageSuccess(
@@ -987,10 +988,10 @@ def verify_stage_outcomes_against_engine(game: Game) -> None:
     ttd_field = "p1_ttd" if checker_is_p1 else "p2_ttd"
     deaths_field = "p1_deaths" if checker_is_p1 else "p2_deaths"
 
-    # Success classes: one probe per ST, plus the tie cell for ST=1.
+    # Success classes: one probe per ST, plus an extra diagonal cell for ST=0.
     for success in outcomes.successes:
         st = success.st
-        cells = [(1, 1 + st)] if st > 1 else [(1, 1), (1, 2)]
+        cells = [(1, 1 + st)] if st > 0 else [(1, 1), (2, 2)]
         for drop, check in cells:
             if check > max(outcomes.check_seconds):
                 continue
@@ -1052,8 +1053,8 @@ def _st_index_matrix(n_drop: int, n_check: int) -> tuple[np.ndarray, np.ndarray]
         drops = np.arange(1, n_drop + 1)[:, None]
         checks = np.arange(1, n_check + 1)[None, :]
         fail_mask = checks < drops
-        st = np.maximum(1, checks - drops)  # only meaningful where not fail
-        _ST_INDEX_CACHE[key] = (fail_mask, st - 1)
+        st = checks - drops  # only meaningful where not fail
+        _ST_INDEX_CACHE[key] = (fail_mask, st)
     return _ST_INDEX_CACHE[key]
 
 
@@ -1065,7 +1066,7 @@ def assemble_payoff_matrix(
 ) -> np.ndarray:
     """Payoff matrix over 1-based (drop, check) grids from outcome values.
 
-    ``success_values``: length-MAX_ST array, success_values[st-1] = value
+    ``success_values``: length-ST_COUNT array, success_values[st] = value
     after a successful check with that ST (already +-1 for overflow
     terminals). ``fail_value``: the chance-weighted value of the shared
     fail cell (p * V_survive + (1-p) * terminal).
@@ -1211,6 +1212,9 @@ def solve_epoch(
         ch_hi = min(CYL - 1, cyl_sum - min_cyl)
         for ch in range(ch_lo, ch_hi + 1):
             cb = cyl_sum - ch
+            succ_by_bit: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+            fail_by_bit: dict[int, tuple[float, float]] = {}
+
             for bit in (0, 1):
                 checker_is_hal = bit == 1
                 checker_cyl = ch if checker_is_hal else cb
@@ -1218,18 +1222,19 @@ def solve_epoch(
                 terminal = -1.0 if checker_is_hal else 1.0  # checker dies
                 next_bit = 1 - bit
 
-                # Success outcome values per ST (same epoch; overflow terminal).
-                succ_lo = np.full(MAX_ST, terminal)
-                succ_hi = np.full(MAX_ST, terminal)
+                # Success outcome values per ST. ST=0 is a same-cylinder
+                # role swap and is filled by the local fixed-point solve below.
+                succ_lo = np.full(ST_COUNT, terminal)
+                succ_hi = np.full(ST_COUNT, terminal)
                 room = (CYL - 1) - checker_cyl
-                if room > 0:
+                if room >= 1:
                     take = min(MAX_ST, room)
                     if checker_is_hal:
-                        succ_lo[:take] = V_lo[next_bit, ch + 1 : ch + 1 + take, cb]
-                        succ_hi[:take] = V_hi[next_bit, ch + 1 : ch + 1 + take, cb]
+                        succ_lo[1 : take + 1] = V_lo[next_bit, ch + 1 : ch + take + 1, cb]
+                        succ_hi[1 : take + 1] = V_hi[next_bit, ch + 1 : ch + take + 1, cb]
                     else:
-                        succ_lo[:take] = V_lo[next_bit, ch, cb + 1 : cb + 1 + take]
-                        succ_hi[:take] = V_hi[next_bit, ch, cb + 1 : cb + 1 + take]
+                        succ_lo[1 : take + 1] = V_lo[next_bit, ch, cb + 1 : cb + take + 1]
+                        succ_hi[1 : take + 1] = V_hi[next_bit, ch, cb + 1 : cb + take + 1]
 
                 # Shared fail outcome.
                 p = (p_hal if checker_is_hal else p_baku)[checker_cyl]
@@ -1243,18 +1248,33 @@ def solve_epoch(
                     fail_lo = p * s_lo + (1.0 - p) * terminal
                     fail_hi = p * s_hi + (1.0 - p) * terminal
 
-                for table, succ, fail in (
-                    (V_lo, succ_lo, fail_lo),
-                    (V_hi, succ_hi, fail_hi),
-                ):
-                    matrix = assemble_payoff_matrix(60, 60, succ, fail)
-                    if bit == 0:
-                        _, value = solve_minimax(matrix)       # Hal (dropper) maximizes
-                    else:
-                        _, neg = solve_minimax(-matrix)        # Baku (dropper) minimizes
-                        value = -neg
-                    table[bit, ch, cb] = value
-                states += 1
+                succ_by_bit[bit] = (succ_lo, succ_hi)
+                fail_by_bit[bit] = (fail_lo, fail_hi)
+
+            def solve_local(upper: bool) -> np.ndarray:
+                values = np.zeros(2, dtype=np.float64)
+                idx = 1 if upper else 0
+                for _ in range(200):
+                    updated = np.empty(2, dtype=np.float64)
+                    for bit in (0, 1):
+                        succ = succ_by_bit[bit][idx].copy()
+                        succ[0] = values[1 - bit]
+                        fail = fail_by_bit[bit][idx]
+                        matrix = assemble_payoff_matrix(60, 60, succ, fail)
+                        if bit == 0:
+                            _, value = solve_minimax(matrix)       # Hal (dropper) maximizes
+                        else:
+                            _, neg = solve_minimax(-matrix)        # Baku (dropper) minimizes
+                            value = -neg
+                        updated[bit] = value
+                    if float(np.max(np.abs(updated - values))) <= 1e-10:
+                        return updated
+                    values = updated
+                return values
+
+            V_lo[:, ch, cb] = solve_local(upper=False)
+            V_hi[:, ch, cb] = solve_local(upper=True)
+            states += 2
 
         if progress is not None and cyl_sum % 100 == 0:
             elapsed = time.perf_counter() - start
@@ -1290,7 +1310,7 @@ import numpy as np
 
 from stl.solver.search import LeafEvaluation, normalize_leaf_evaluation
 from stl.solver.exact import terminal_value
-from stl.engine.actions import legal_max_second
+from stl.engine.actions import ACTION_SIZE, legal_max_second
 from stl.engine.game import LS_WINDOW_END
 from stl.engine.game import Game
 
@@ -1468,17 +1488,17 @@ class TierALookup:
 
 def uniform_policy_for_game(game: Game) -> tuple[np.ndarray, np.ndarray]:
     if game.game_over:
-        return np.zeros(61, dtype=np.float64), np.zeros(61, dtype=np.float64)
+        return np.zeros(ACTION_SIZE, dtype=np.float64), np.zeros(ACTION_SIZE, dtype=np.float64)
     dropper, checker = game.get_roles_for_half(game.current_half)
     turn_duration = game.get_turn_duration()
     drop_max = legal_max_second(dropper.name, "dropper", turn_duration)
     check_max = legal_max_second(checker.name, "checker", turn_duration)
-    drop = np.zeros(61, dtype=np.float64)
-    check = np.zeros(61, dtype=np.float64)
+    drop = np.zeros(ACTION_SIZE, dtype=np.float64)
+    check = np.zeros(ACTION_SIZE, dtype=np.float64)
     if drop_max > 0:
-        drop[:drop_max] = 1.0 / drop_max
+        drop[1 : drop_max + 1] = 1.0 / drop_max
     if check_max > 0:
-        check[:check_max] = 1.0 / check_max
+        check[1 : check_max + 1] = 1.0 / check_max
     return drop, check
 
 

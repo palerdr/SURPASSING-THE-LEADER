@@ -57,7 +57,7 @@ fn solve_cfr_plus_rs<'py>(
         ));
     }
 
-    let (strategy, value) = cfr::solve_cfr_plus_dense(
+    let (strategy, _col_strategy, value) = cfr::solve_cfr_plus_dense(
         payoff.as_slice()?,
         rows,
         cols,

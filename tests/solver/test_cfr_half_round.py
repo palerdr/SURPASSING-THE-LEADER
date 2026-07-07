@@ -55,10 +55,10 @@ class TestPayoffMatrix:
         m = compute_payoff_matrix(0.0, turn_duration=61)
         assert m.shape == (61, 61)
 
-    def test_same_second_min_st(self):
-        """drop=30, check=30 → successful check, ST=1 (Yakou minimum)."""
+    def test_same_second_zero_st(self):
+        """drop=30, check=30 -> successful check, ST=0."""
         m = compute_payoff_matrix(0.0)
-        assert m[29][29] == -1.0  # 0-indexed: second 30
+        assert m[29][29] == 0.0  # 0-indexed: second 30
 
     def test_successful_check_st(self):
         """drop=10, check=45 → ST=35, payoff=-35."""
@@ -80,11 +80,11 @@ class TestPayoffMatrix:
         m = compute_payoff_matrix(0.0)
         assert m[59][0] == -60.0  # drop=60, check=1 → failed
 
-    def test_diagonal_is_min_st(self):
-        """When drop_time == check_time, ST=1 (Yakou minimum), payoff=-1."""
+    def test_diagonal_is_zero_st(self):
+        """When drop_time == check_time, ST=0 and payoff is zero."""
         m = compute_payoff_matrix(0.0)
         for i in range(60):
-            assert m[i][i] == -1.0
+            assert m[i][i] == 0.0
 
     def test_upper_triangle_is_successful(self):
         """check > drop → successful check, payoffs are -ST (<=0)."""

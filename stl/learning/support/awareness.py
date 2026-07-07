@@ -12,7 +12,7 @@ from enum import Enum
 import numpy as np
 
 from stl.engine.game import Game, HalfRoundRecord
-from stl.engine.game import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
+from stl.engine.game import TURN_DURATION_LEAP
 
 
 class LeapAwareness(str, Enum):
@@ -43,19 +43,12 @@ def build_action_mask(
     awareness: LeapAwareness,
     actor: str = "baku",
 ) -> np.ndarray:
-    from stl.engine.actions import legal_max_second
+    from stl.engine.actions import legal_mask
+    from stl.engine.game import TURN_DURATION_NORMAL
 
-    mask = np.zeros(61, dtype=bool)
-    mask[:TURN_DURATION_NORMAL] = True
-
-    if not is_leap_turn:
-        return mask
-
-    max_sec = legal_max_second(actor, role, TURN_DURATION_LEAP)
-    if max_sec >= TURN_DURATION_LEAP:
-        mask[TURN_DURATION_NORMAL] = True  # action index 60 -> second 61
-
-    return mask
+    del awareness  # Leap knowledge affects features; structural legality is actor-aware.
+    turn_duration = TURN_DURATION_LEAP if is_leap_turn else TURN_DURATION_NORMAL
+    return legal_mask(actor, role, turn_duration)
 
 
 def is_structural_evidence_event(game: Game, record: HalfRoundRecord) -> bool | None:

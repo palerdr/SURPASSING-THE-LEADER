@@ -20,7 +20,7 @@ from typing import Callable, Literal, Protocol
 
 import numpy as np
 
-from stl.engine.actions import legal_max_second
+from stl.engine.actions import ACTION_SIZE, legal_max_second
 
 from stl.solver.exact import ExactPublicState, exact_public_state, terminal_value
 from stl.engine.game import Game
@@ -30,17 +30,17 @@ LeafEvaluation = tuple[float, np.ndarray, np.ndarray]
 
 
 def _uniform_over_legal(max_second: int) -> np.ndarray:
-    dist = np.zeros(61, dtype=np.float64)
-    if max_second <= 0:
+    dist = np.zeros(ACTION_SIZE, dtype=np.float64)
+    if max_second < 1:
         return dist
-    dist[:max_second] = 1.0 / max_second
+    dist[1 : max_second + 1] = 1.0 / max_second
     return dist
 
 
 def uniform_policy_for_current_roles(game: Game) -> tuple[np.ndarray, np.ndarray]:
-    """Return length-61 uniform distributions over legal root seconds."""
+    """Return length-62 uniform distributions over legal root seconds."""
     if game.game_over:
-        return np.zeros(61, dtype=np.float64), np.zeros(61, dtype=np.float64)
+        return np.zeros(ACTION_SIZE, dtype=np.float64), np.zeros(ACTION_SIZE, dtype=np.float64)
 
     dropper, checker = game.get_roles_for_half(game.current_half)
     turn_duration = game.get_turn_duration()
@@ -51,8 +51,8 @@ def uniform_policy_for_current_roles(game: Game) -> tuple[np.ndarray, np.ndarray
 
 def normalize_policy_vector(policy: np.ndarray | list[float] | tuple[float, ...]) -> np.ndarray:
     arr = np.asarray(policy, dtype=np.float64).reshape(-1)
-    if arr.shape[0] != 61:
-        raise ValueError(f"policy vector must have length 61, got {arr.shape[0]}")
+    if arr.shape[0] != ACTION_SIZE:
+        raise ValueError(f"policy vector must have length {ACTION_SIZE}, got {arr.shape[0]}")
     arr = np.maximum(arr, 0.0)
     total = float(arr.sum())
     if total > 1e-12:
@@ -189,7 +189,7 @@ class CandidateActions:
 
 def overflow_st_threshold(checker_cylinder: float) -> int:
     """Smallest ST that drives the cylinder to CYLINDER_MAX or above."""
-    return max(1, int(CYLINDER_MAX) - int(checker_cylinder))
+    return max(0, int(CYLINDER_MAX) - int(checker_cylinder))
 
 
 def safe_st_budget(checker_cylinder: float) -> int:
@@ -746,7 +746,7 @@ class MCTSResult:
 def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
     if not candidates:
         return np.zeros(0, dtype=np.float64)
-    projected = np.array([policy[second - 1] for second in candidates], dtype=np.float64)
+    projected = np.array([policy[second] for second in candidates], dtype=np.float64)
     projected = np.maximum(projected, 0.0)
     total = float(projected.sum())
     if total <= 1e-12:

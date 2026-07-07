@@ -14,18 +14,13 @@ referee fatigue accumulates exactly as in live play.
 
 KNOWN CANON-VS-ENGINE DISCREPANCIES (deliberate, documented):
 
-1. Insta-drop 1-second drift. The engine floors actions at second 1
-   (drop_time in [1, turn_duration]) and scores ST = max(1, check - drop);
-   the tie rule "ST cannot be 0" is confirmed canon. The doc's narrative,
-   however, treats an instant drop as second ~0, so when Hal insta-drops and
-   Baku checks at second N the doc credits Baku ST = N while the engine
-   produces ST = N - 1. This makes engine STs 1s lower than the doc narrative
-   for every insta-drop half-round (R7H1: doc 60 vs engine 59; R8H1: doc 55
-   vs engine 54; R9H1: doc 60 vs engine 59). The drift accumulates in Baku's
-   cylinder: doc round-start values R8 B-1m(60) / R9 B-1m55s(115) correspond
-   to engine values 59 / 113, and Baku's cylinder after R9H1 is 172 (doc-
-   narrative arithmetic would give 175). The assertions below pin the ENGINE
-   values.
+1. Replay action arithmetic. The engine uses literal seconds 1..60, with the
+   Baku-only leap drop at 61. A same-second check succeeds with ST = 0. The
+   doc narrative sometimes describes an "instant" drop as effectively second
+   zero and sometimes credits tied timing as one second; the reset rule pins
+   all rows to literal engine seconds instead. R5H1 is therefore ST=0, and
+   later Baku death/TTD values are one second lower than the old max(1, ST)
+   replay.
 
 2. R9H2 survival probability. hal/HAL.md derives ~0.28 for Hal's R9H2 death;
    that derivation is stale. With the engine's actual state at the R9H2
@@ -85,16 +80,16 @@ CANONICAL_LINE = [
     Row("R3H2", 1680.0,  "Baku",  24,  60,  None,      36,   0,    36,     29,     84,     60,     2),  # 8:28 pin
     Row("R4H1", 1800.0,  "Hal",    7,  10,  None,       3,   0,    36,     32,     84,     60,     2),  # 8:30 pin
     Row("R4H2", 1920.0,  "Baku",  26,  60,  None,      34,   0,    70,     32,     84,     60,     2),  # 8:32 pin
-    Row("R5H1", 2040.0,  "Hal",    1,   1,  None,       1,   0,    70,     33,     84,     60,     2),  # 8:34 pin — tie, ST floors to 1
-    Row("R5H2", 2160.0,  "Baku",   1,  16,  None,      15,   0,    85,     33,     84,     60,     2),  # 8:36 pin — doc: "waits 15s", ST=15
-    Row("R6H1", 2280.0,  "Hal",   60,   1,  True,       0,  93,    85,      0,     84,    153,     3),  # 8:38 pin — Baku fails, dies 93s (33+60)
-    Row("R6H2", 2613.0,  "Baku",   2,  10,  None,       8,   0,    93,      0,     84,    153,     3),  # engine: 2280+60+(93+120)+60
-    Row("R7H1", 2700.0,  "Hal",    1,  60,  None,      59,   0,    93,     59,     84,    153,     3),  # 8:45 pin — insta-drop: doc ST 60, engine 59
-    Row("R7H2", 2820.0,  "Baku",   1,   2,  None,       1,   0,    94,     59,     84,    153,     3),  # engine: 2700+60+60
-    Row("R8H1", 2940.0,  "Hal",    1,  55,  None,      54,   0,    94,    113,     84,    153,     3),  # 8:49 pin — insta-drop: doc ST 55, engine 54
-    Row("R8H2", 3060.0,  "Baku",  60,   1,  True,       0, 154,     0,    113,    238,    153,     4),  # engine: 2940+60+60 — Hal dies 154s (94+60)
-    Row("R9H1", 3420.0,  "Hal",    1,  60,  None,      59,   0,     0,    172,    238,    153,     4),  # 8:57 pin — insta-drop: doc ST 60, engine 59
-    Row("R9H2", 3540.0,  "Baku",  61,  60,  True,       0,  60,     0,    172,    298,    153,     5),  # 8:59 pin — THE LEAP TURN: Baku drops 61,
+    Row("R5H1", 2040.0,  "Hal",    1,   1,  None,       0,   0,    70,     32,     84,     60,     2),  # 8:34 pin — tie succeeds with ST=0
+    Row("R5H2", 2160.0,  "Baku",   1,  16,  None,      15,   0,    85,     32,     84,     60,     2),  # 8:36 pin — doc: "waits 15s", ST=15
+    Row("R6H1", 2280.0,  "Hal",   60,   1,  True,       0,  92,    85,      0,     84,    152,     3),  # 8:38 pin — Baku fails, dies 92s (32+60)
+    Row("R6H2", 2612.0,  "Baku",   2,  10,  None,       8,   0,    93,      0,     84,    152,     3),  # engine: 2280+60+(92+120)+60
+    Row("R7H1", 2700.0,  "Hal",    1,  60,  None,      59,   0,    93,     59,     84,    152,     3),  # 8:45 pin
+    Row("R7H2", 2820.0,  "Baku",   1,   2,  None,       1,   0,    94,     59,     84,    152,     3),  # engine: 2700+60+60
+    Row("R8H1", 2940.0,  "Hal",    1,  55,  None,      54,   0,    94,    113,     84,    152,     3),  # 8:49 pin
+    Row("R8H2", 3060.0,  "Baku",  60,   1,  True,       0, 154,     0,    113,    238,    152,     4),  # engine: 2940+60+60 — Hal dies 154s (94+60)
+    Row("R9H1", 3420.0,  "Hal",    1,  60,  None,      59,   0,     0,    172,    238,    152,     4),  # 8:57 pin
+    Row("R9H2", 3540.0,  "Baku",  61,  60,  True,       0,  60,     0,    172,    298,    152,     5),  # 8:59 pin — THE LEAP TURN: Baku drops 61,
     #                                                                                                     Hal capped at 60 → fail, dies 60s (0+60).
     #                                                                                                     hal.ttd = 298 (4m58s): the 2-Second
     #                                                                                                     Deviation payoff vs a 300s overflow death.

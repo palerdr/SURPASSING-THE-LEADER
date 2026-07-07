@@ -88,8 +88,8 @@ class TestBucketPairPayoff:
     def test_same_bucket_no_cylinder(self):
         b = Bucket(30, 30, "single")
         pay = bucket_pair_payoff(b, b, checker_cylinder=0.0)
-        # check == drop → ST = max(1, 0) = 1
-        assert pay == pytest.approx(-1.0)
+        # check == drop -> ST = 0
+        assert pay == pytest.approx(0.0)
 
     def test_overflow_triggers(self):
         d = Bucket(1, 1, "instant")
@@ -109,7 +109,7 @@ class TestBucketPairPayoff:
         for drop in range(2, 11):
             for check in range(41, 53):
                 if check >= drop:
-                    st = max(1, check - drop)
+                    st = check - drop
                     if cyl + st >= CYLINDER_MAX:
                         total += -CYLINDER_MAX
                     else:

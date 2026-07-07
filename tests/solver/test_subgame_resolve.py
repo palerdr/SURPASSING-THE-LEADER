@@ -18,6 +18,7 @@ sys.path.insert(0, os.getcwd())
 
 from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.search import MCTSConfig, mcts_search
+from stl.engine.actions import ACTION_SIZE
 from stl.solver.search import is_critical, resolve_subgame
 from stl.solver.exact import CFRPlusConfig
 from stl.solver.tablebase import (
@@ -138,7 +139,7 @@ def test_anchored_resolve_value_strictly_closer_to_deep_mcts_value_than_unanchor
     class NearTruthEvaluator:
         def __call__(self, game):
             del game
-            return 0.9, np.zeros(61), np.zeros(61)
+            return 0.9, np.zeros(ACTION_SIZE), np.zeros(ACTION_SIZE)
 
     anchored = resolve_subgame(
         scenario.game,
@@ -164,7 +165,7 @@ def test_resolve_subgame_passes_evaluator_through_to_selective():
     class FixedEvaluator:
         def __call__(self, state):
             del state
-            return 0.33, np.zeros(61), np.zeros(61)
+            return 0.33, np.zeros(ACTION_SIZE), np.zeros(ACTION_SIZE)
 
     result = resolve_subgame(game, horizon=0, evaluator=FixedEvaluator())
 

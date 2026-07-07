@@ -15,6 +15,7 @@ from stl.solver.search import (
     selective_solve,
 )
 from stl.solver.tablebase import get_scenario
+from stl.engine.actions import ACTION_SIZE
 
 
 def _audit(name: str):
@@ -42,7 +43,7 @@ def test_selective_solve_with_evaluator_returns_value_at_horizon_0():
     class FixedEvaluator:
         def __call__(self, game):
             del game
-            return 0.7, np.zeros(61), np.zeros(61)
+            return 0.7, np.zeros(ACTION_SIZE), np.zeros(ACTION_SIZE)
 
     result = selective_solve(scenario.game, 0, scenario.config, evaluator=FixedEvaluator())
 

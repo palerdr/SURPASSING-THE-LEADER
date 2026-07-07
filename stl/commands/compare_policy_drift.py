@@ -24,15 +24,16 @@ from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent
 from stl.commands.compare_ladder import _json_safe
 from stl.commands.exploitability import SCENARIOS
 from stl.commands.tier_a_frontier import _split_csv
+from stl.engine.actions import ACTION_SIZE
 
 
 DEFAULT_SCENARIOS = "opening,postleap_230,postleap_d1_hal_120_230"
 
 
 def _policy_vector(seconds: tuple[int, ...], probs: np.ndarray) -> np.ndarray:
-    out = np.zeros(61, dtype=np.float64)
+    out = np.zeros(ACTION_SIZE, dtype=np.float64)
     for second, probability in zip(seconds, probs):
-        out[int(second) - 1] = float(probability)
+        out[int(second)] = float(probability)
     total = float(out.sum())
     if total > 0.0:
         out /= total
@@ -59,7 +60,7 @@ def _top_seconds(policy: np.ndarray, limit: int = 5) -> list[dict]:
         probability = float(policy[idx])
         if probability <= 0.0:
             continue
-        rows.append({"second": int(idx) + 1, "probability": probability})
+        rows.append({"second": int(idx), "probability": probability})
     return rows
 
 

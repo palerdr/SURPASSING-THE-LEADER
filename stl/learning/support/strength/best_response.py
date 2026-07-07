@@ -10,9 +10,9 @@ the adversary minimizing when the adversary is Baku.
 
 Two structural facts keep this affordable (both verified in src/Game.py):
 
-- Within one half-round, all 60x60 joint actions collapse to at most ~61
+- Within one half-round, all 61x61 normal joint actions collapse to at most ~62
   distinct successors: a successful check's child depends only on
-  ST = max(1, check - drop), and every failed-check cell shares ONE death
+  ST = check - drop, and every failed-check cell shares ONE death
   event (duration min(cylinder + 60, 300)). Children are therefore probed
   once per outcome class, not per joint cell.
 - The game graph ratchets (cylinders strictly grow between deaths), so the
@@ -178,8 +178,8 @@ class _BRSolver:
 
         def cell(drop: int, check: int) -> tuple[float, float]:
             nonlocal fail_cache
-            if check >= drop:  # success (ties succeed, ST = max(1, c-d))
-                st = max(1, check - drop)
+            if check >= drop:  # success; ties succeed with ST=0
+                st = check - drop
                 if st not in success_cache:
                     success_cache[st] = self._child_interval(game, snap, drop, check, depth_to_go)
                 return success_cache[st]

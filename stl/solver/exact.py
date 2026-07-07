@@ -25,7 +25,7 @@ from scipy.optimize import linprog
 from stl.engine.game import CYLINDER_MAX, FAILED_CHECK_PENALTY, TURN_DURATION_NORMAL
 from stl.engine.game import Game, HalfRoundRecord
 
-from stl.engine.actions import legal_max_second
+from stl.engine.actions import legal_seconds
 
 
 # ── Terminal utility ──────────────────────────────────────────────────────
@@ -367,13 +367,10 @@ class ExactGameSnapshot:
         del game.history[self.hist_len:]
 
 
-def legal_seconds_for_current_role(game: Game, actor_name: str, role: str, config: ExactSearchConfig) -> range:
+def legal_seconds_for_current_role(game: Game, actor_name: str, role: str, config: ExactSearchConfig) -> tuple[int, ...]:
     del config  # ExactSearchConfig no longer carries legality switches.
     turn_duration = game.get_turn_duration()
-    max_second = legal_max_second(actor_name, role, turn_duration)
-    if role == "checker":
-        max_second = min(max_second, max(turn_duration, TURN_DURATION_NORMAL))
-    return range(1, max_second + 1)
+    return legal_seconds(actor_name, role, turn_duration)
 
 
 def enumerate_joint_actions(game: Game, config: ExactSearchConfig | None = None) -> list[ExactJointAction]:
@@ -467,7 +464,7 @@ def exact_immediate_checker_payoff_matrix(game: Game, config: ExactSearchConfig 
 
     for action in actions:
         if action.check_time >= action.drop_time:
-            st = max(1, action.check_time - action.drop_time)
+            st = action.check_time - action.drop_time
             payoff[d_index[action.drop_time], c_index[action.check_time]] = (
                 -CYLINDER_MAX if checker.cylinder + st >= CYLINDER_MAX else -st
             )
@@ -690,8 +687,8 @@ def solve_exact_finite_horizon(
 
 """Single half-round regret-matching CFR baseline.
 
-This module is the original (pre-Phase-1) regret-matching solver over the
-exact 1..60 second matrix. It is *not bucketed* — the action space is
+This module is the original regret-matching solver over the exact second
+matrix. It is *not bucketed* — the action space is
 exact — but the canonical rigorous solver in this namespace is
 ``exact_solver.solve_exact_finite_horizon`` (LP minimax + chance-branch
 recursion). Keep this file as a comparison baseline for matrix-equivalence
@@ -750,7 +747,7 @@ def compute_payoff_matrix(
             check_time = c + 1
 
             if check_time >= drop_time:
-                st = max(1, check_time - drop_time)
+                st = check_time - drop_time
                 if checker_cylinder + st >= CYLINDER_MAX:
                     payoff[d][c] = -CYLINDER_MAX
                 else:
@@ -772,7 +769,7 @@ def build_augmented_payoff_matrix(
     """Build augmented payoff matrix from precomputed continuation values.
 
     Args:
-        st_to_cont_val: Maps ST (1..59) → checker continuation value for that outcome.
+        st_to_cont_val: Maps ST (0..59 normally) to checker continuation value for that outcome.
             For overflow STs, the value already includes survival probability weighting.
         fail_cont_val: Checker continuation value for failed check (survived).
         fail_surv_prob: Survival probability for failed check.
@@ -788,7 +785,7 @@ def build_augmented_payoff_matrix(
             check_time = c + 1
 
             if check_time >= drop_time:
-                st = max(1, check_time - drop_time)
+                st = check_time - drop_time
                 payoff[d][c] = st_to_cont_val.get(st, 0.0)
             else:
                 payoff[d][c] = fail_payoff

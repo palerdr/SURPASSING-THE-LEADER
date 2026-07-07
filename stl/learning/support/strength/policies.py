@@ -63,7 +63,7 @@ def net_policy(checkpoint_path: str):
         dist = dropper_dist if role == "dropper" else checker_dist
         dist = np.maximum(np.asarray(dist, dtype=np.float64), 0.0)
         support = np.nonzero(dist > 1e-12)[0]
-        seconds = tuple(int(i) + 1 for i in support)
+        seconds = tuple(int(i) for i in support)
         probs = dist[support]
         probs = probs / probs.sum()
         cache[key] = (seconds, probs)

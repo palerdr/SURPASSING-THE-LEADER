@@ -1,23 +1,25 @@
 """Single source of truth for actor-aware action legality.
 
-Engine stays objective. Per the Stockfish-style design (see HAL.md /
-plan), Hal can never play check=61. This module hard-codes that:
+Action index equals action second throughout the active codebase.
 
-  - Hal may NEVER CHECK 61.
-  - Hal may NEVER DROP 61.
-  - Baku may DROP 61 (always allowed when turn_duration == 61).
-  - Baku may NEVER CHECK 61.
-
-The asymmetry — Baku-dropper at second 61 inside the leap window vs.
-Hal-checker capped at 60 — is the structural constraint that forces
-Hal to play around the leap second via deviation rather than through
-it. All teacher helpers, env action masks, and the rigorous CFR layer
-read legality from here so they can never disagree.
+Normal action seconds are 1..60. During a leap-window half-round only a
+non-Hal dropper (Baku in canonical play) may also use second 61. Checkers
+are capped at 60, Hal can never use 61 in either role, and index/second 0
+is permanently illegal padding in dense policy vectors.
 """
 
 from __future__ import annotations
 
+import numpy as np
+
 from stl.engine.game import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
+
+
+NORMAL_MAX_SECOND = TURN_DURATION_NORMAL
+LEAP_MAX_SECOND = TURN_DURATION_LEAP
+ACTION_SIZE = LEAP_MAX_SECOND + 1
+NORMAL_SECONDS = tuple(range(1, NORMAL_MAX_SECOND + 1))
+LEAP_SECONDS = tuple(range(1, LEAP_MAX_SECOND + 1))
 
 
 class IllegalActionError(ValueError):
@@ -29,9 +31,7 @@ def legal_max_second(actor: str, role: str, turn_duration: int) -> int:
     role_l = role.lower()
 
     if turn_duration < TURN_DURATION_LEAP:
-        if role_l == "dropper":
-            return turn_duration
-        return min(turn_duration, TURN_DURATION_NORMAL)
+        return min(int(turn_duration), TURN_DURATION_NORMAL)
 
     if role_l == "dropper":
         if actor_l == "hal":
@@ -51,13 +51,27 @@ def can_use_leap_second(actor: str, role: str) -> bool:
     return role_l == "dropper"
 
 
+def legal_seconds(actor: str, role: str, turn_duration: int) -> tuple[int, ...]:
+    """Return literal legal action seconds for the actor and role."""
+    return tuple(range(1, legal_max_second(actor, role, turn_duration) + 1))
+
+
+def legal_mask(actor: str, role: str, turn_duration: int) -> np.ndarray:
+    """Return a length-62 boolean mask indexed by action second."""
+    mask = np.zeros(ACTION_SIZE, dtype=bool)
+    max_sec = legal_max_second(actor, role, turn_duration)
+    if max_sec >= 1:
+        mask[1 : max_sec + 1] = True
+    return mask
+
+
 def clamp_action(second: int, *, actor: str, role: str, turn_duration: int) -> int:
     max_sec = legal_max_second(actor, role, turn_duration)
     return max(1, min(int(second), max_sec))
 
 
 def validate_action(second: int, *, actor: str, role: str, turn_duration: int) -> None:
-    """Validate a one-indexed second against the actor-aware legality rule."""
+    """Validate a literal second against the actor-aware legality rule."""
     max_sec = legal_max_second(actor, role, turn_duration)
     try:
         value = int(second)

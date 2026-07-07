@@ -19,6 +19,7 @@ sys.path.insert(0, os.getcwd())
 from stl.solver.exact import ExactSearchConfig, exact_public_state
 from stl.solver.search import selective_solve
 from stl.learning.model import FEATURE_DIM
+from stl.engine.actions import ACTION_SIZE
 from stl.learning.reanalysis import (
     SOURCE_EXACT_HORIZON_4,
     SOURCE_REANALYSIS_MCTS,
@@ -32,12 +33,12 @@ CFG = ExactSearchConfig()
 
 
 def _forced_overflow_game():
-    # Baku checker at cyl=299: EVERY joint action drives an overflow/fail death of
+    # Baku checker at cyl=300: EVERY joint action drives an overflow/fail death of
     # duration 300 (p=0 → permanent), so every cell is terminal at depth 1. The
     # exact tier resolves it to +1 with no survive-line recursion, keeping the
     # full-width audit fast. (Near-but-not-fully-forced cylinders have surviving
     # ST<=2 lines that recurse deeply at full width — the heavy production path.)
-    return _build_game(baku_cylinder=299.0, hal_cylinder=0.0, clock=720.0, current_half=1)
+    return _build_game(baku_cylinder=300.0, hal_cylinder=0.0, clock=720.0, current_half=1)
 
 
 def test_reanalysis_sources_are_registered():
@@ -81,10 +82,10 @@ def test_reanalyze_state_emits_valid_additive_target():
     t = out.target
     assert t.source == out.tier
     assert t.features.shape == (FEATURE_DIM,)
-    assert t.dropper_dist.shape == (61,)
-    assert t.checker_dist.shape == (61,)
-    assert t.dropper_legal_mask.shape == (61,)
-    assert t.checker_legal_mask.shape == (61,)
+    assert t.dropper_dist.shape == (ACTION_SIZE,)
+    assert t.checker_dist.shape == (ACTION_SIZE,)
+    assert t.dropper_legal_mask.shape == (ACTION_SIZE,)
+    assert t.checker_legal_mask.shape == (ACTION_SIZE,)
 
 
 def test_exact_tier_rescue_audits_clean_against_full_width():

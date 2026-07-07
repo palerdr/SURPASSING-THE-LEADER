@@ -236,7 +236,7 @@ def _search_depth1_batched(
             _, chk = game.get_roles_for_half(game.current_half)
             success = check_time >= drop_time
             if success:
-                st = max(1, check_time - drop_time)
+                st = check_time - drop_time
                 causes_death = chk.cylinder + st >= CYLINDER_MAX
             else:
                 causes_death = True
@@ -253,7 +253,7 @@ def _search_depth1_batched(
                 snap.restore(game)
             else:
                 sp = game.referee.compute_survival_probability(chk, death_duration=min(
-                    chk.cylinder + (max(1, check_time - drop_time) if success else FAILED_CHECK_PENALTY),
+                    chk.cylinder + ((check_time - drop_time) if success else FAILED_CHECK_PENALTY),
                     CYLINDER_MAX,
                 ))
 
@@ -362,7 +362,7 @@ def _simulate_and_recurse(
     success = check_time >= drop_time
 
     if success:
-        st = max(1, check_time - drop_time)
+        st = check_time - drop_time
         causes_death = checker.cylinder + st >= CYLINDER_MAX
     else:
         causes_death = True
@@ -377,7 +377,7 @@ def _simulate_and_recurse(
         return cont_val
 
     sp = game.referee.compute_survival_probability(checker, death_duration=min(
-        checker.cylinder + (max(1, check_time - drop_time) if success else FAILED_CHECK_PENALTY),
+        checker.cylinder + ((check_time - drop_time) if success else FAILED_CHECK_PENALTY),
         CYLINDER_MAX,
     ))
 

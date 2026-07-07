@@ -31,6 +31,20 @@ Generated corpora, checkpoints, logs, demos, `outputs/`, `multirun/`, and
 `target/` should stay out of source review unless the artifact itself is under
 discussion.
 
+## Current Action Core
+
+Normal action seconds are `1..60`. During the leap window, only Baku as dropper
+may use second `61`; Hal never uses `61`, and checkers are always capped at
+`60`. Dense policy/action tensors have length `62`: index `0` is always-illegal
+padding, and index `s` is literal second `s`.
+
+Checks succeed iff `check_time >= drop_time`. Successful ST is exactly
+`check_time - drop_time`, so same-second checks succeed with `ST=0`; failed
+checks remain `check_time < drop_time` with the flat `+60` penalty.
+
+Artifacts generated under the old action semantics are stale. See
+`docs/REGEN2RL.md` for the reset and regeneration order.
+
 ## Setup
 
 Use Python 3.12+ with `uv`:
@@ -41,10 +55,10 @@ uv run pytest --collect-only -q
 uv run pytest -q
 ```
 
-The latest verified full suite after the solver/play consolidation was:
+The latest verified full suite after the action-core reset was:
 
 ```text
-629 passed
+641 passed
 ```
 
 ## Playing A Match
@@ -159,7 +173,7 @@ checks when the policy head is involved.
 - `stl.engine` must not depend on solver, learning, reward shaping, or play.
 - Exact/search solver work belongs in `stl.solver`.
 - `stl.solver` must preserve exact integer-second action spaces, including the
-  61-second leap-window case.
+  Baku-only 61-second leap-window drop.
 - `stl.solver` must not import reward shaping, observations, route-stage labels,
   or bucketed abstractions.
 - Learning and self-play bridge code belongs in `stl.learning`.

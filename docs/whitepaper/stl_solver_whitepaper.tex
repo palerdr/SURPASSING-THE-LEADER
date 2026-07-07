@@ -121,8 +121,9 @@ drop or check on second 61.
 For action \(a=(d,c)\), the checker succeeds iff \(c \ge d\). On success,
 squandered time is
 \[
-  \Delta x_C=\max(1,c-d).
+  \Delta x_C=c-d.
 \]
+The diagonal case \(c=d\) is a successful check with \(\Delta x_C=0\).
 On failure, the checker receives the fixed failed-check penalty
 \[
   \Delta x_C=60.
@@ -284,7 +285,8 @@ available. Its build and runtime lookup code live in \path{stl/solver/tablebase.
 \end{itemize}
 
 The current network consumes a 23-dimensional feature vector and emits one
-scalar value plus 122 policy logits: 61 dropper seconds and 61 checker seconds.
+scalar value plus 124 policy logits: length-62 dropper and checker vectors.
+Index 0 is always-illegal padding; index \(s\) is literal second \(s\).
 Illegal actions are masked before policy use.
 
 The intended AlphaZero-style loop is:

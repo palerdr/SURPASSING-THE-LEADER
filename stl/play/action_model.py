@@ -2,7 +2,7 @@
 
 This module owns the intentionally non-rigorous bucket/action model used by
 the playable CanonicalHal prototype. Rigorous exact-second CFR lives under
-``environment.cfr`` and should not import this module.
+``stl.solver`` and should not import this module.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def bucket_pair_payoff(drop_bucket: Bucket, check_bucket: Bucket, checker_cylind
     c_range = np.arange(check_bucket.lo, check_bucket.hi + 1)
     drops, checks = np.meshgrid(d_range, c_range, indexing="ij")
     success = checks >= drops
-    st = np.maximum(1, checks - drops)
+    st = checks - drops
     overflow = (checker_cylinder + st) >= CYLINDER_MAX
     injection = min(checker_cylinder + FAILED_CHECK_PENALTY, CYLINDER_MAX)
 

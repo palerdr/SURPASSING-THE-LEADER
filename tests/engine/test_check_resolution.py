@@ -4,22 +4,22 @@ from stl.engine.game import HalfRoundResult
 
 
 class TestCheckSuccess:
-    """check_time > drop_time = handkerchief is on the ground. ST >= 1 always."""
+    """check_time >= drop_time = handkerchief is on the ground."""
 
     def test_check_after_drop(self, game):
         rec = game.play_half_round(drop_time=20, check_time=40)
         assert rec.result == HalfRoundResult.CHECK_SUCCESS
         assert rec.st_gained == 20
 
-    def test_check_same_second_as_drop_succeeds_with_min_st(self, game):
+    def test_check_same_second_as_drop_succeeds_with_zero_st(self, game):
         """D drops at 30, C checks at 30. C sees the handkerchief mid-drop.
-        Successful check, but ST is forced to 1 (Yakou: ST cannot be 0)."""
+        Successful check, with no squandered time."""
         rec = game.play_half_round(drop_time=30, check_time=30)
         assert rec.result == HalfRoundResult.CHECK_SUCCESS
-        assert rec.st_gained == 1
+        assert rec.st_gained == 0
 
     def test_check_one_second_after_drop(self, game):
-        """Minimum successful ST is 1."""
+        """Minimum positive successful ST is 1."""
         rec = game.play_half_round(drop_time=30, check_time=31)
         assert rec.result == HalfRoundResult.CHECK_SUCCESS
         assert rec.st_gained == 1

@@ -46,10 +46,10 @@ def test_overflow_threshold_at_low_cylinder_uses_full_distance():
     assert overflow_st_threshold(0) == 300
 
 
-def test_overflow_threshold_at_or_past_overflow_clamps_to_one():
+def test_overflow_threshold_at_cap_allows_diagonal_zero():
     assert overflow_st_threshold(299) == 1
-    assert overflow_st_threshold(300) == 1
-    assert overflow_st_threshold(310) == 1
+    assert overflow_st_threshold(300) == 0
+    assert overflow_st_threshold(310) == 0
 
 
 def test_safe_st_budget_at_threshold_boundaries():

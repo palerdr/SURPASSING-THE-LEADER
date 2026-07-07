@@ -132,8 +132,9 @@ class TestTurnDuration:
 
 class TestLeapSecondGameplay:
     def test_drop_at_61_during_leap(self):
-        """Dropper can drop at second 61 during a leap second turn."""
+        """Baku as dropper can drop at second 61 during a leap second turn."""
         g = make_game(LS_WINDOW_START)  # in LS window
+        g.current_half = 2
         rec = g.play_half_round(drop_time=61, check_time=60)
         # C checks at 60, D drops at 61. check_time < drop_time -> FAIL
         assert rec.result in ("check_fail_survived", "check_fail_died",
@@ -143,6 +144,7 @@ class TestLeapSecondGameplay:
     def test_safe_strategy_fails_during_leap(self):
         """The whole point: checking at 60 fails if D drops at 61."""
         g = make_game(LS_WINDOW_START)
+        g.current_half = 2
         rec = g.play_half_round(drop_time=61, check_time=60)
         # check_time (60) < drop_time (61) -> failure
         from stl.engine.game import HalfRoundResult
@@ -150,23 +152,19 @@ class TestLeapSecondGameplay:
                                HalfRoundResult.CHECK_FAIL_DIED)
 
     def test_same_second_drop_and_check_succeeds_min_st(self):
-        """Drop at 60, check at 60 during leap — success with ST=1 (minimum)."""
+        """Drop at 60, check at 60 during leap succeeds with ST=0."""
         g = make_game(LS_WINDOW_START)
         rec = g.play_half_round(drop_time=60, check_time=60)
         from stl.engine.game import HalfRoundResult
         assert rec.result == HalfRoundResult.CHECK_SUCCESS
-        assert rec.st_gained == 1
+        assert rec.st_gained == 0
 
-    def test_checker_can_check_at_61_during_leap(self):
-        """Checker CAN check at 61 during a leap turn (defense against the kill shot).
-        The action mask enforces knowledge restrictions, not the engine."""
+    def test_checker_cannot_check_at_61_during_leap(self):
+        """Checkers remain capped at 60 during a leap turn."""
         g = make_game(LS_WINDOW_START)
-        rec = g.play_half_round(drop_time=60, check_time=61)
-        from stl.engine.game import HalfRoundResult
-        # check_time (61) > drop_time (60) -> success, ST = 1
-        assert rec.result == HalfRoundResult.CHECK_SUCCESS
-        assert rec.st_gained == 1
-        assert rec.check_time == 61
+        import pytest
+        with pytest.raises(ValueError):
+            g.play_half_round(drop_time=60, check_time=61)
 
 
 class TestClockAdvancement:

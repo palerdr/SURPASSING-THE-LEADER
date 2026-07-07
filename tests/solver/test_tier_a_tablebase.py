@@ -12,6 +12,7 @@ from stl.engine.game import Player
 from stl.engine.game import Referee
 from stl.learning.strength import best_response_interval, uniform_policy
 from stl.solver.tablebase import TierAEvaluator, TierALookup, frontier_interval_fn
+from stl.engine.actions import ACTION_SIZE
 
 
 TIER_A_DIR = os.path.join(
@@ -92,10 +93,10 @@ def test_tier_a_lookup_hits_one_death_epochs():
 def test_tier_a_evaluator_uses_low_width_and_falls_back_on_wide_interval():
     lookup = require_tier_a()
     calls = {"count": 0}
-    drop = np.zeros(61, dtype=np.float64)
-    check = np.zeros(61, dtype=np.float64)
-    drop[0] = 1.0
-    check[1] = 1.0
+    drop = np.zeros(ACTION_SIZE, dtype=np.float64)
+    check = np.zeros(ACTION_SIZE, dtype=np.float64)
+    drop[1] = 1.0
+    check[2] = 1.0
 
     def fallback(game):
         calls["count"] += 1
@@ -105,8 +106,8 @@ def test_tier_a_evaluator_uses_low_width_and_falls_back_on_wide_interval():
 
     exact_value, exact_drop, exact_check = evaluator(make_game(hal_cyl=240, baku_cyl=240))
     assert exact_value != pytest.approx(0.25)
-    assert exact_drop[0] == pytest.approx(1.0)
-    assert exact_check[1] == pytest.approx(1.0)
+    assert exact_drop[1] == pytest.approx(1.0)
+    assert exact_check[2] == pytest.approx(1.0)
     assert calls["count"] == 1
 
     wide_value, _, _ = evaluator(make_game())
@@ -132,12 +133,12 @@ def test_tier_a_evaluator_falls_back_when_artifacts_are_absent(tmp_path):
 
 def test_tier_a_miss_matches_structured_fallback_exactly():
     lookup = require_tier_a()
-    drop = np.zeros(61, dtype=np.float64)
-    check = np.zeros(61, dtype=np.float64)
-    drop[2] = 0.25
-    drop[59] = 0.75
-    check[0] = 0.4
-    check[10] = 0.6
+    drop = np.zeros(ACTION_SIZE, dtype=np.float64)
+    check = np.zeros(ACTION_SIZE, dtype=np.float64)
+    drop[3] = 0.25
+    drop[60] = 0.75
+    check[1] = 0.4
+    check[11] = 0.6
 
     def fallback(game):
         return 0.125, drop, check

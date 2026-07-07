@@ -257,8 +257,8 @@ A Game consists of Rounds. Each Round has two HalfRounds.
 Each HalfRound has a Dropper and a Checker.
 Flow per HalfRound:
     1. Determine turn_duration (60 normally, 61 if leap second window).
-    2. D chooses drop_time ∈ [1, turn_duration].
-    3. C chooses check_time ∈ [1, turn_duration].  (but C doesn't know about 61)
+    2. D chooses a literal drop second, normally in [1, 60].
+    3. C chooses a literal check second, capped at [1, 60].
     4. Resolve: successful check or failed check.
     5. On success: add ST to C's cylinder. Check for overflow.
     6. On failure: add penalty to C's cylinder. Inject. Death sequence.
@@ -433,8 +433,8 @@ class Game:
         Hal's search forward simulator (which branches on survived_outcome=True
         and survived_outcome=False) call this method.
         Args:
-            drop_time: Second at which D drops. Must be in [1, turn_duration].
-            check_time: Second at which C checks. Must be in [1, turn_duration].
+            drop_time: literal second at which D drops.
+            check_time: literal second at which C checks.
             survived_outcome: If a death occurs, this is the survival outcome to
                 use. None means "roll the RNG" (live play). True/False means
                 "force this outcome" (search forward simulation).
@@ -446,8 +446,8 @@ class Game:
         clock_at_start = self.game_clock
         dropper, checker = self.get_roles_for_half(self.current_half)
         turn_duration = self.get_turn_duration()
-        self.validate_drop_time(drop_time, turn_duration)
-        self.validate_check_time(check_time, turn_duration)
+        self.validate_drop_time(drop_time, turn_duration, actor=dropper.name)
+        self.validate_check_time(check_time, turn_duration, actor=checker.name)
         success = check_time >= drop_time
         death_occurred = False
         death_duration = 0.0
@@ -455,7 +455,7 @@ class Game:
         survival_probability: Optional[float] = None
         ST = 0.0
         if success:
-            ST = max(1, check_time - drop_time)
+            ST = check_time - drop_time
             overflow = checker.add_to_cylinder(ST)
             if overflow:
                 death_occurred = True
@@ -535,29 +535,44 @@ class Game:
             records.append(record2)
         return records
     # VALIDATION
-    def validate_drop_time(self, drop_time: int, turn_duration: int) -> None:
+    def validate_drop_time(self, drop_time: int, turn_duration: int, actor: str | None = None) -> None:
         """
-        Validate that drop_time is in [1, turn_duration].
+        Validate that drop_time is a legal literal second.
         Raise ValueError with descriptive message if not.
-        Note: drop_time can be 61 during a leap second turn.
-        This is the WHOLE POINT of the leap second — D gets
-        an extra second that C doesn't know about.
+        Note: only Baku/non-Hal dropper can use second 61 during a leap turn.
         """
-        if not (1 <= drop_time <= turn_duration):
-            raise ValueError(
-                f"drop_time must be in [1, {turn_duration}], got {drop_time}"
-            )
-    def validate_check_time(self, check_time: int, turn_duration: int) -> None:
+        if actor is None:
+            max_second = turn_duration
+            if not (1 <= drop_time <= max_second):
+                raise ValueError(
+                    f"drop_time must be in [1, {max_second}], got {drop_time}"
+                )
+            return
+        from stl.engine.actions import IllegalActionError, validate_action
+
+        try:
+            validate_action(drop_time, actor=actor, role="dropper", turn_duration=turn_duration)
+        except IllegalActionError as exc:
+            raise ValueError(str(exc)) from exc
+
+    def validate_check_time(self, check_time: int, turn_duration: int, actor: str | None = None) -> None:
         """
-        Validate that check_time is in [1, turn_duration].
-        The engine allows check up to turn_duration (61 during leap turns).
-        Knowledge-based restrictions (checker doesn't know about LS) are
-        enforced by the environment's action mask, not here.
+        Validate that check_time is a legal literal second.
+        Checkers are capped at 60, including leap-window half-rounds.
         """
-        if not (1 <= check_time <= turn_duration):
-            raise ValueError(
-                f"check_time must be in [1, {turn_duration}], got {check_time}"
-            )
+        if actor is None:
+            max_second = min(turn_duration, TURN_DURATION_NORMAL)
+            if not (1 <= check_time <= max_second):
+                raise ValueError(
+                    f"check_time must be in [1, {max_second}], got {check_time}"
+                )
+            return
+        from stl.engine.actions import IllegalActionError, validate_action
+
+        try:
+            validate_action(check_time, actor=actor, role="checker", turn_duration=turn_duration)
+        except IllegalActionError as exc:
+            raise ValueError(str(exc)) from exc
     # GAME STATE QUERIES
     def is_leap_second_turn(self) -> bool:
         """Is the current game clock in the leap second window?"""
