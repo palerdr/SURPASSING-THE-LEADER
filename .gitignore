@@ -19,6 +19,7 @@ htmlcov/
 
 # Generated reports and experiment outputs
 outputs/
+graphify-out/
 multirun/
 logs/
 demos/
