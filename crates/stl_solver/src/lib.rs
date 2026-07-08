@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 
 mod cfr;
 mod payoff;
+mod game;
 
 #[pyfunction]
 fn solve_minimax_rs<'py>(

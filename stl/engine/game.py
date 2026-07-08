@@ -208,13 +208,15 @@ class Referee:
             - Multiply all four. Clamp to [0.0, 1.0].
             - At death_duration >= 300: always return 0.0 regardless of other factors.
         """
-        def death_curve(t):
-            return max(0, 1- (t/300)**BASE_CURVE_K)
-        def cardiac_modifier(ttd):
-            return CARDIAC_DECAY**(ttd/60)
-        def referee_modifier(n):
-            return max(REFEREE_FLOOR, REFEREE_DECAY**n)
-        death_pr = death_curve(death_duration) * cardiac_modifier(player.ttd) * referee_modifier(self.cprs_performed) * player.physicality
+        death_curve = lambda t: max(0.0, 1 - (t / CYLINDER_MAX) ** BASE_CURVE_K)
+        cardiac_modifier = lambda ttd: CARDIAC_DECAY ** (ttd / 60)
+        referee_modifier = lambda n: max(REFEREE_FLOOR, REFEREE_DECAY ** n)
+        death_pr = (
+            death_curve(death_duration)
+            * cardiac_modifier(player.ttd)
+            * referee_modifier(self.cprs_performed)
+            * player.physicality
+        )
 
         return 0.0 if death_duration >= 300 else death_pr
 

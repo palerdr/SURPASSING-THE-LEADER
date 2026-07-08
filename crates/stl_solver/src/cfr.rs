@@ -15,6 +15,8 @@ struct MatrixSolveResult {
     value: f64,
 }
 
+//if the action value was better than my current strategy I feel regret for not having played it
+//The goal of CFR+ is to clip -regret and minimize the regret over our strategy
 fn regret(strategy_value: f64, action_value: f64) -> f64 {
     action_value - strategy_value
 }
@@ -117,7 +119,8 @@ pub(crate) fn cfr_iteration(
     let villain_ev = strategy_ev(&vq, &q);
     update_regret_plus(col_regret, &vq, villain_ev);
     let q_prime = regret_plus_strategy(col_regret);
-    //return the updated hero strategy
+
+    //return the updated hero strategy, villain strategy
     (p_prime, q_prime)
 }
 
