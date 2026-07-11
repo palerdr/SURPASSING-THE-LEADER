@@ -39,6 +39,9 @@ class AuditPackRecord:
     legal_dropper_count: int
     legal_checker_count: int
     seed: int
+    action_mode: str = "candidate"
+    root_unique_cells_visited: int = 0
+    result_class: str = "approximate_mcts"
 
 
 def _primary_category(scenario: TacticalScenario) -> str:
@@ -79,7 +82,12 @@ def _record_for(
         unresolved_probability = float(exact_result.unresolved_probability)
 
     game = deepcopy(scenario.game)
-    node = make_node(game, scenario.config, evaluator=evaluator)
+    node = make_node(
+        game,
+        scenario.config,
+        evaluator=evaluator,
+        action_mode=mcts_config.action_mode,
+    )
     rng = np.random.default_rng(seed)
     result = mcts_search(
         game,
@@ -100,10 +108,10 @@ def _record_for(
             float(scenario.expected_value) if scenario.expected_value is not None else None
         ),
         mcts_value=float(result.root_value_for_hal),
-        mcts_strategy_dropper=[float(x) for x in result.root_strategy_dropper],
-        mcts_strategy_checker=[float(x) for x in result.root_strategy_checker],
-        mcts_strategy_entropy_dropper=_normalized_entropy(result.root_strategy_dropper),
-        mcts_strategy_entropy_checker=_normalized_entropy(result.root_strategy_checker),
+        mcts_strategy_dropper=[float(x) for x in result.improved_dropper_policy],
+        mcts_strategy_checker=[float(x) for x in result.improved_checker_policy],
+        mcts_strategy_entropy_dropper=_normalized_entropy(result.improved_dropper_policy),
+        mcts_strategy_entropy_checker=_normalized_entropy(result.improved_checker_policy),
         principal_line=[(int(a.drop_time), int(a.check_time)) for a in result.principal_line],
         root_visits=int(result.root_visits),
         cells_used=int(result.cells_used),
@@ -111,6 +119,9 @@ def _record_for(
         legal_dropper_count=len(node.drop_seconds),
         legal_checker_count=len(node.check_seconds),
         seed=int(seed),
+        action_mode=result.action_mode,
+        root_unique_cells_visited=int(result.root_unique_cells_visited),
+        result_class="approximate_mcts",
     )
 
 

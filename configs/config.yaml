@@ -1,6 +1,7 @@
 defaults:
   - command: tier_a
   - experiment: smoke
+  - rl: baseline_v1
   - _self_
 
 hydra:

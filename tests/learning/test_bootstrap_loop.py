@@ -36,7 +36,7 @@ from stl.learning.bootstrap import (
     calibration_check,
     enforce_calibration_gate,
 )
-from stl.learning.train import TrainConfig, train
+from stl.learning.train import TrainConfig as _StrictTrainConfig, train
 from stl.learning.targets import (
     SOURCE_MCTS_BOOTSTRAP,
     SOURCE_TABLEBASE,
@@ -44,6 +44,11 @@ from stl.learning.targets import (
     ValueTarget,
     generate_mcts_bootstrap_targets,
 )
+
+
+def TrainConfig(*args, **kwargs):
+    kwargs.setdefault("allow_legacy_targets", True)
+    return _StrictTrainConfig(*args, **kwargs)
 
 
 # ── generate_mcts_bootstrap_targets ─────────────────────────────────────

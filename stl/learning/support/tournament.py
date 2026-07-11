@@ -31,12 +31,10 @@ from stl.engine.game import (
 from stl.engine.game import Game, HalfRoundResult
 from stl.engine.game import Player
 from stl.engine.game import Referee
+from stl.learning.contracts import EVAL_MAX_HALF_ROUNDS
 
 
 ChooseAction = Callable[[Game, str, int], int]
-
-
-_HALF_ROUND_SAFETY_LIMIT = 200
 
 
 @dataclass(frozen=True)
@@ -126,6 +124,7 @@ def play_match(
     n_games: int,
     seed: int,
     starting_scenario: TacticalScenario | None = None,
+    max_half_rounds: int = EVAL_MAX_HALF_ROUNDS,
 ) -> MatchResult:
     """Play ``n_games`` matches between two action-choosing callables.
 
@@ -141,6 +140,8 @@ def play_match(
     paths (mirroring the rigorous-core convention), so the lookup is
     name-based rather than role-based.
     """
+    if max_half_rounds <= 0:
+        raise ValueError("max_half_rounds must be positive")
     if n_games <= 0:
         return MatchResult(
             games_played=0,
@@ -168,7 +169,7 @@ def play_match(
 
         safety_counter = 0
         while not game.game_over:
-            if safety_counter >= _HALF_ROUND_SAFETY_LIMIT:
+            if safety_counter >= max_half_rounds:
                 break
             safety_counter += 1
 
@@ -218,7 +219,7 @@ def play_match(
         else:
             draws += 1
 
-        cause = _classify_termination(game)
+        cause = "truncated" if not game.game_over else _classify_termination(game)
         cause_counts[cause] = cause_counts.get(cause, 0) + 1
         total_half_rounds += _half_round_count_for(game)
 

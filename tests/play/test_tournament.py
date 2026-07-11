@@ -181,3 +181,16 @@ def test_tournament_rejects_illegal_hal_dropper_second_61():
             n_games=1,
             seed=0,
         )
+
+
+def test_tournament_cap_is_a_tagged_draw_not_engine_termination():
+    result = play_match(
+        _always_one,
+        _always_one,
+        n_games=1,
+        seed=0,
+        max_half_rounds=4,
+    )
+    assert result.draws == 1
+    assert result.avg_game_length_half_rounds == 4
+    assert result.cause_of_termination == {"truncated": 1}

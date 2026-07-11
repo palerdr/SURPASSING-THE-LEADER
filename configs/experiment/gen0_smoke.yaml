@@ -1,0 +1,8 @@
+# @package _global_
+experiment:
+  description: Tiny reconstructable Generation-Zero corpus smoke run.
+command:
+  smoke: true
+  train_out: outputs/regen2rl/gen0_train_smoke_v2.npz
+  ruler_out: outputs/regen2rl/gen0_ruler_smoke_v2.npz
+  workers: 1

@@ -5,8 +5,8 @@ Regression tests for the compact `stl/` package.
 Subdirectories:
 
 - `engine/` - game clock, half-round resolution, death/revival, leap behavior.
-- `solver/` - exact minimax, selective search, MCTS, tablebase, firewall.
-- `learning/` - targets, value/policy net training, calibration, gates.
+- `solver/` - exact minimax, selective search, MCTS, frozen conformance packs, tablebase, firewall.
+- `learning/` - episode contracts, replay V2, targets, value/policy training, calibration, gates.
 - `play/` - playable adapters, teachers, self-play, route/play glue.
 
 Useful focused checks:
@@ -24,3 +24,8 @@ changes.
 Action-core tests should cover legal seconds `1`, `60`, Baku-only leap `61`,
 same-second success with `ST=0`, strict fail triangle `check < drop`, dense
 length-62 policy vectors, and the always-illegal padding index `0`.
+
+P1/P3 certification checks live in `test_solver_conformance.py` and
+`test_mcts_conformance.py`. Replay/checkpoint boundary checks live in
+`test_replay_v2.py`, while `test_gen0_corpus.py` exercises the short
+Generation-Zero shard-to-checkpoint path.

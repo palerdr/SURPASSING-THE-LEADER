@@ -15,7 +15,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stl.solver.search import TablebaseEvaluator, ValueNetEvaluator
-from stl.solver.exact import ExactSearchConfig
+from stl.solver.exact import ExactSearchConfig, exact_public_state
 from stl.solver.search import selective_solve
 from stl.play.agent import DEFAULT_CHECKPOINT, SolverAgent, make_choose_action
 from stl.learning.model import extract_features
@@ -244,6 +244,8 @@ def generate_target_pilot(args, tier_eval, lookup: TierALookup, out_dir: Path) -
                 dropper_legal_mask=drop_mask,
                 checker_legal_mask=check_mask,
                 unresolved_probability=float(hit.width),
+                exact_state=exact_public_state(game),
+                target_kind="tablebase_value",
             )
         )
 

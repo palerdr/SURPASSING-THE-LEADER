@@ -53,7 +53,7 @@ class TestPayoffMatrix:
 
     def test_shape_leap(self):
         m = compute_payoff_matrix(0.0, turn_duration=61)
-        assert m.shape == (61, 61)
+        assert m.shape == (61, 60)
 
     def test_same_second_zero_st(self):
         """drop=30, check=30 -> successful check, ST=0."""
@@ -144,10 +144,10 @@ class TestSolveHalfRound:
         assert d_strat.max() < 0.5  # no single action dominates
 
     def test_leap_turn_61_actions(self):
-        """During leap second, both players have 61 actions."""
+        """During leap second, only the dropper has 61 actions."""
         d_strat, c_strat, _ = solve_half_round(0.0, turn_duration=61, iterations=1000)
         assert d_strat.shape == (61,)
-        assert c_strat.shape == (61,)
+        assert c_strat.shape == (60,)
         np.testing.assert_almost_equal(d_strat.sum(), 1.0)
 
     def test_nash_condition_dropper_cannot_improve(self):

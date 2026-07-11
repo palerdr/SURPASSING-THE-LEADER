@@ -34,7 +34,12 @@ import numpy as np
 
 from stl.solver.search import diagnose_exact_strategy
 from stl.solver.search import LeafEvaluator, TerminalOnlyEvaluator
-from stl.solver.exact import ExactSearchConfig, solve_exact_finite_horizon, terminal_value
+from stl.solver.exact import (
+    ExactSearchConfig,
+    exact_public_state,
+    solve_exact_finite_horizon,
+    terminal_value,
+)
 from stl.solver.search import SelectiveSearchResult, selective_solve
 from stl.solver.search import resolve_subgame
 from stl.learning.model import extract_features
@@ -88,6 +93,8 @@ def _exact_target(game: Game, result: SelectiveSearchResult, config: ExactSearch
         dropper_legal_mask=drop_mask,
         checker_legal_mask=check_mask,
         unresolved_probability=float(result.unresolved_probability),
+        exact_state=exact_public_state(game),
+        target_kind="exact_value",
     )
 
 
@@ -125,9 +132,7 @@ def reanalyze_state(
     leaf = evaluator or TerminalOnlyEvaluator()
     if rng is None:
         rng = np.random.default_rng(0)
-    mcts_config = MCTSConfig(
-        iterations=mcts_iters, exploration_c=1.0, evaluator=None, use_tablebase=False
-    )
+    mcts_config = MCTSConfig(iterations=mcts_iters, exploration_c=1.0)
     result = mcts_search(
         game=game,
         config=mcts_config,
@@ -139,8 +144,8 @@ def reanalyze_state(
     drop_dist, check_dist = _strategy_vectors(
         drop_seconds=result.root_drop_seconds,
         check_seconds=result.root_check_seconds,
-        dropper_strategy=result.root_strategy_dropper,
-        checker_strategy=result.root_strategy_checker,
+        dropper_strategy=result.improved_dropper_policy,
+        checker_strategy=result.improved_checker_policy,
     )
     _, _, drop_mask, check_mask = _legal_policy_vectors(game, config)
     target = ValueTarget(
@@ -153,6 +158,8 @@ def reanalyze_state(
         dropper_legal_mask=drop_mask,
         checker_legal_mask=check_mask,
         unresolved_probability=float(deep.unresolved_probability),
+        exact_state=exact_public_state(game),
+        target_kind="search_bootstrap_value",
     )
     return ReanalysisOutcome(
         tier=SOURCE_REANALYSIS_MCTS,

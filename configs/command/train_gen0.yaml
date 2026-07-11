@@ -1,0 +1,11 @@
+name: train_gen0
+module: stl.learning.train
+args: null
+targets: outputs/regen2rl/gen0_train_v2.npz
+out: outputs/regen2rl/gen0_checkpoint_v2
+epochs: 100
+batch_size: 64
+lr: 0.001
+seed: 4
+device: cpu
+allow_legacy_targets: false

@@ -309,6 +309,7 @@ def main() -> int:
 
     print(f"[4/5] Training on rebalanced corpus (hidden_dim={args.hidden_dim})", flush=True)
     cfg = TrainConfig(
+        allow_legacy_targets=True,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
         seed=args.seed,

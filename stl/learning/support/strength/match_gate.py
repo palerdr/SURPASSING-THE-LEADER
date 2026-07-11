@@ -8,11 +8,9 @@ simplified-GSPRT verdicts (see ``training.strength.sprt``).
 Two facts about ``play_match`` this module compensates for (verified in
 ``training/tournament.py``):
 
-  1. **Game length is already bounded.** The half-round loop carries
-     ``_HALF_ROUND_SAFETY_LIMIT = 200``; a game that reaches it is
-     abandoned, scored as a draw, and classified ``"unfinished"`` in
-     ``cause_of_termination``. No extra wrapping is needed for runaway
-     games.
+  1. **Game length is explicitly bounded.** The requested learning-layer cap
+     is passed to ``play_match``; capped games are draws classified as
+     ``"truncated"`` without changing engine termination state.
   2. **It never calls ``Opponent.reset()``.** It only sees bare
      callables, so a stateful opponent would leak per-game state across
      the ``n_games`` of a match. :func:`reset_per_game` wraps an
@@ -41,12 +39,6 @@ __all__ = [
     "wilson_interval",
     "gate_report",
 ]
-
-
-# Mirrors training.tournament._HALF_ROUND_SAFETY_LIMIT (private there;
-# duplicated rather than imported so this module never reaches into a
-# private name — keep in sync if tournament.py ever changes it).
-_ENGINE_HALF_ROUND_CAP = 200
 
 
 def _opponent_seed(base_seed: int, name: str) -> int:
@@ -94,19 +86,10 @@ def run_ladder_entries(
 ) -> dict[str, MatchResult]:
     """Play ``hal_choose_action`` against every ladder entry.
 
-    ``max_half_rounds`` cannot be set tighter than the engine's built-in
-    200-half-round safety cap without modifying ``tournament.py`` (which
-    this module deliberately does not); passing a smaller value raises.
-    ``None`` (or any value >= 200) defers to the engine cap, under which
-    over-long games are scored as draws with cause ``"unfinished"``.
+    ``max_half_rounds`` is a learning/evaluation wrapper cap. ``None`` uses
+    the P0 evaluation default; tighter caps such as 64 are supported for the
+    mandatory horizon-sensitivity comparison.
     """
-    if max_half_rounds is not None and max_half_rounds < _ENGINE_HALF_ROUND_CAP:
-        raise ValueError(
-            f"max_half_rounds={max_half_rounds} is tighter than play_match's "
-            f"built-in safety cap ({_ENGINE_HALF_ROUND_CAP}); the cap cannot "
-            "be lowered without modifying training/tournament.py."
-        )
-
     results: dict[str, MatchResult] = {}
     for entry in entries:
         opponent = entry.opponent_factory()
@@ -115,6 +98,11 @@ def run_ladder_entries(
             baku_choose_action=reset_per_game(opponent),
             n_games=n_games,
             seed=seed,
+            **(
+                {"max_half_rounds": max_half_rounds}
+                if max_half_rounds is not None
+                else {}
+            ),
         )
     return results
 

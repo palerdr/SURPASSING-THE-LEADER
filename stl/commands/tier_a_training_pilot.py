@@ -84,6 +84,7 @@ def main() -> int:
     save_targets(merged, merged_path)
 
     cfg = TrainConfig(
+        allow_legacy_targets=True,
         epochs=args.epochs,
         batch_size=args.batch_size,
         seed=args.seed,

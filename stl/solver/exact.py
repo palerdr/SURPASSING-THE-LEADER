@@ -324,6 +324,7 @@ class ExactGameSnapshot:
         "p2_cylinder", "p2_ttd", "p2_deaths", "p2_alive", "p2_dh_len",
         "cprs", "clock", "current_half", "round_num", "game_over",
         "winner", "loser", "hist_len",
+        "rng_state",
     )
 
     def __init__(self, game: Game):
@@ -345,6 +346,7 @@ class ExactGameSnapshot:
         self.winner = game.winner
         self.loser = game.loser
         self.hist_len = len(game.history)
+        self.rng_state = game.rng.getstate()
 
     def restore(self, game: Game) -> None:
         game.player1.cylinder = self.p1_cylinder
@@ -365,6 +367,7 @@ class ExactGameSnapshot:
         game.winner = self.winner
         game.loser = self.loser
         del game.history[self.hist_len:]
+        game.rng.setstate(self.rng_state)
 
 
 def legal_seconds_for_current_role(game: Game, actor_name: str, role: str, config: ExactSearchConfig) -> tuple[int, ...]:
@@ -736,14 +739,21 @@ def survival_probability(
 def compute_payoff_matrix(
     checker_cylinder: float,
     turn_duration: int = 60,
+    checker_max_second: int = 60,
 ) -> np.ndarray:
-    """Build the Checker's immediate payoff matrix (no continuation values)."""
-    n = turn_duration
-    payoff = np.zeros((n, n), dtype=np.float64)
+    """Build a literal-second immediate payoff matrix.
 
-    for d in range(n):
+    ``turn_duration`` is the dropper's action count.  The checker remains
+    capped at 60 during the leap window, so the canonical leap shape is
+    ``61 x 60`` rather than the obsolete symmetric ``61 x 61`` grid.
+    """
+    n_drop = int(turn_duration)
+    n_check = min(int(checker_max_second), 60)
+    payoff = np.zeros((n_drop, n_check), dtype=np.float64)
+
+    for d in range(n_drop):
         drop_time = d + 1
-        for c in range(n):
+        for c in range(n_check):
             check_time = c + 1
 
             if check_time >= drop_time:
@@ -764,6 +774,7 @@ def build_augmented_payoff_matrix(
     fail_cont_val: float,
     fail_surv_prob: float,
     turn_duration: int = 60,
+    checker_max_second: int = 60,
     lose_value: float = -1.0,
 ) -> np.ndarray:
     """Build augmented payoff matrix from precomputed continuation values.
@@ -774,14 +785,15 @@ def build_augmented_payoff_matrix(
         fail_cont_val: Checker continuation value for failed check (survived).
         fail_surv_prob: Survival probability for failed check.
     """
-    n = turn_duration
-    payoff = np.zeros((n, n), dtype=np.float64)
+    n_drop = int(turn_duration)
+    n_check = min(int(checker_max_second), 60)
+    payoff = np.zeros((n_drop, n_check), dtype=np.float64)
 
     fail_payoff = fail_surv_prob * fail_cont_val + (1 - fail_surv_prob) * lose_value
 
-    for d in range(n):
+    for d in range(n_drop):
         drop_time = d + 1
-        for c in range(n):
+        for c in range(n_check):
             check_time = c + 1
 
             if check_time >= drop_time:
@@ -800,16 +812,18 @@ def solve_half_round(
     payoff_matrix: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Solve a single half-round for Nash equilibrium strategies."""
-    n = turn_duration
     if payoff_matrix is not None:
-        payoff = payoff_matrix
+        payoff = np.asarray(payoff_matrix, dtype=np.float64)
     else:
         payoff = compute_payoff_matrix(checker_cylinder, turn_duration)
+    if payoff.ndim != 2 or 0 in payoff.shape:
+        raise ValueError("payoff_matrix must be a non-empty 2D matrix")
+    n_drop, n_check = payoff.shape
 
-    dropper_regret = np.zeros(n)
-    checker_regret = np.zeros(n)
-    dropper_strategy_sum = np.zeros(n)
-    checker_strategy_sum = np.zeros(n)
+    dropper_regret = np.zeros(n_drop)
+    checker_regret = np.zeros(n_check)
+    dropper_strategy_sum = np.zeros(n_drop)
+    checker_strategy_sum = np.zeros(n_check)
 
     for _ in range(iterations):
         dropper_strat = regret_match(dropper_regret)

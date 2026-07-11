@@ -1,0 +1,7 @@
+name: gen0_targets
+module: stl.commands.gen0_corpus
+args: null
+train_out: outputs/regen2rl/gen0_train_v2.npz
+ruler_out: outputs/regen2rl/gen0_external_ruler_v2.npz
+workers: 1
+smoke: false

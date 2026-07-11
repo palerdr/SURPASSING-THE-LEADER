@@ -389,7 +389,14 @@ def test_generate_targets_explicit_death_axes_include_asymmetric_states(monkeypa
     )
 
     assert len(targets) == 4
-    death_feature_pairs = {(float(t.features[5]), float(t.features[4])) for t in targets}
+    from stl.learning.model import FEATURE_INDEX
+    death_feature_pairs = {
+        (
+            float(t.features[FEATURE_INDEX["derived_baku_deaths"]]),
+            float(t.features[FEATURE_INDEX["derived_hal_deaths"]]),
+        )
+        for t in targets
+    }
     assert death_feature_pairs == {
         (0.0, 0.0),
         (0.25, 0.0),
@@ -424,7 +431,14 @@ def test_generate_targets_legacy_deaths_grid_remains_symmetric(monkeypatch):
     )
 
     assert len(targets) == 2
-    death_feature_pairs = {(float(t.features[5]), float(t.features[4])) for t in targets}
+    from stl.learning.model import FEATURE_INDEX
+    death_feature_pairs = {
+        (
+            float(t.features[FEATURE_INDEX["derived_baku_deaths"]]),
+            float(t.features[FEATURE_INDEX["derived_hal_deaths"]]),
+        )
+        for t in targets
+    }
     assert death_feature_pairs == {(0.0, 0.0), (0.25, 0.25)}
 
 

@@ -27,8 +27,23 @@ from stl.engine.game import Game
 from stl.engine.game import Player
 from stl.engine.game import Referee
 
-HAS_CHECKPOINT = os.path.exists(DEFAULT_CHECKPOINT)
-needs_checkpoint = pytest.mark.skipif(not HAS_CHECKPOINT, reason="headline checkpoint not pulled")
+def _has_compatible_checkpoint() -> bool:
+    if not os.path.exists(DEFAULT_CHECKPOINT):
+        return False
+    from stl.learning.train import CheckpointFormatError, load_checkpoint_bundle
+
+    try:
+        load_checkpoint_bundle(DEFAULT_CHECKPOINT)
+    except (CheckpointFormatError, RuntimeError, ValueError):
+        return False
+    return True
+
+
+HAS_CHECKPOINT = _has_compatible_checkpoint()
+needs_checkpoint = pytest.mark.skipif(
+    not HAS_CHECKPOINT,
+    reason="compatible V2 headline checkpoint not pulled",
+)
 HAS_TIER_A = os.path.exists(
     os.path.join(
         os.getcwd(),

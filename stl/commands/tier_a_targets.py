@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.exact import ExactSearchConfig
+from stl.solver.exact import exact_public_state
 from stl.solver.search import selective_solve
 from stl.learning.model import extract_features
 from stl.commands.tier_a_decision import make_game, policy_vectors
@@ -140,6 +141,8 @@ def generate_targets(args) -> tuple[list[ValueTarget], dict]:
                 dropper_legal_mask=drop_mask,
                 checker_legal_mask=check_mask,
                 unresolved_probability=float(interval.width),
+                exact_state=exact_public_state(game),
+                target_kind="tablebase_value",
             )
         )
         stats["accepted"] += 1

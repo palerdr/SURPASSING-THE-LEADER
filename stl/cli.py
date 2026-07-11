@@ -63,6 +63,11 @@ def _patched_argv(module_name: str, args: list[str]):
 def main(cfg: DictConfig) -> None:
     if "command" not in cfg or "module" not in cfg.command:
         raise ValueError("Hydra config must select a command with a module")
+    if "rl" not in cfg:
+        raise ValueError("Hydra config must select a versioned rl contract")
+    from stl.learning.contracts import validate_rl_config
+
+    validate_rl_config(cfg.rl)
     module_name = str(cfg.command.module)
     args = _argv_from_command(cfg.command)
     module = importlib.import_module(module_name)

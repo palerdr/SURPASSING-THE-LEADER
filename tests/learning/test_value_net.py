@@ -7,7 +7,14 @@ import torch
 
 sys.path.insert(0, os.getcwd())
 
-from stl.learning.model import FEATURE_DIM, REFEREE_CPR_FEATURE_SCALE, ValueNet, extract_features
+from stl.learning.model import (
+    FEATURE_DIM,
+    FEATURE_INDEX,
+    FEATURE_SCHEMA_VERSION,
+    REFEREE_CPR_FEATURE_SCALE,
+    ValueNet,
+    extract_features,
+)
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
 from stl.engine.game import Player
@@ -66,11 +73,11 @@ def test_cpr_feature_distinguishes_fatigue_values_above_six():
     game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
 
     game.referee.cprs_performed = 8
-    cpr_at_8 = extract_features(game)[20]
+    cpr_at_8 = extract_features(game)[FEATURE_INDEX["derived_referee_cprs"]]
     game.referee.cprs_performed = 10
-    cpr_at_10 = extract_features(game)[20]
+    cpr_at_10 = extract_features(game)[FEATURE_INDEX["derived_referee_cprs"]]
     game.referee.cprs_performed = int(REFEREE_CPR_FEATURE_SCALE)
-    cpr_at_scale = extract_features(game)[20]
+    cpr_at_scale = extract_features(game)[FEATURE_INDEX["derived_referee_cprs"]]
 
     assert cpr_at_8 < cpr_at_10 < cpr_at_scale
     assert cpr_at_scale == pytest.approx(1.0)
@@ -85,7 +92,7 @@ def test_value_net_default_hidden_dim_unchanged():
     """
     model = ValueNet()
     total = sum(p.numel() for p in model.parameters())
-    assert 13_000 < total < 14_500, f"default arch param count regressed: {total}"
+    assert 15_000 < total < 17_000, f"default arch param count regressed: {total}"
 
 
 def test_value_net_hidden_dim_128_has_expected_param_count_and_shapes():
@@ -97,8 +104,8 @@ def test_value_net_hidden_dim_128_has_expected_param_count_and_shapes():
     """
     model = ValueNet(hidden_dim=128)
     total = sum(p.numel() for p in model.parameters())
-    assert 30_000 < total < 50_000, (
-        f"hidden=128 should give ~35.5K params (well under 50K guard); got {total}"
+    assert 35_000 < total < 45_000, (
+        f"hidden=128 should give ~39K params; got {total}"
     )
 
     x = torch.zeros(2, FEATURE_DIM)
@@ -118,8 +125,8 @@ def test_value_net_hidden_dim_192_under_raised_guard():
     """
     model = ValueNet(hidden_dim=192)
     total = sum(p.numel() for p in model.parameters())
-    assert 60_000 < total < 70_000, (
-        f"hidden=192 should give ~65.4K params (under the raised 70K guard); got {total}"
+    assert 68_000 < total < 76_000, (
+        f"hidden=192 should give ~71K params; got {total}"
     )
 
     x = torch.zeros(2, FEATURE_DIM)
@@ -129,17 +136,39 @@ def test_value_net_hidden_dim_192_under_raised_guard():
     assert checker_logits.shape == (2, ACTION_SIZE)
 
 
+def test_feature_schema_v2_distinguishes_exact_public_state_fields():
+    game = _game_at_leap_with_baku_dropper()
+    baseline = extract_features(game)
+    assert FEATURE_SCHEMA_VERSION == "stl.features.v2"
+    assert baseline.shape == (FEATURE_DIM,)
+
+    mutations = (
+        ("p1_alive", lambda g: setattr(g.player1, "alive", False)),
+        ("p1_physicality", lambda g: setattr(g.player1, "physicality", 0.5)),
+        ("first_dropper_p2", lambda g: setattr(g, "first_dropper", g.player2)),
+        ("game_over", lambda g: setattr(g, "game_over", True)),
+    )
+    import copy
+
+    for feature_name, mutate in mutations:
+        changed = copy.deepcopy(game)
+        mutate(changed)
+        assert extract_features(changed)[FEATURE_INDEX[feature_name]] != baseline[
+            FEATURE_INDEX[feature_name]
+        ]
+
+
 def test_value_net_checkpoint_round_trip_at_hidden_128(tmp_path):
     """Saving + loading a hidden=128 checkpoint must round-trip via
     ``load_checkpoint``'s auto-inferred hidden_dim. Guards the inference
     logic that reads the state_dict's trunk.0.weight shape — if it
     misreads, the load either fails or produces wrong-capacity weights.
     """
-    from stl.learning.train import load_checkpoint
+    from stl.learning.train import load_checkpoint, save_checkpoint_bundle
 
     model = ValueNet(hidden_dim=128)
     ckpt_path = tmp_path / "phase_i_test.pt"
-    torch.save(model.state_dict(), ckpt_path)
+    save_checkpoint_bundle(ckpt_path, model)
 
     loaded = load_checkpoint(str(ckpt_path), device="cpu")
     assert sum(p.numel() for p in loaded.parameters()) == sum(
@@ -152,3 +181,12 @@ def test_value_net_checkpoint_round_trip_at_hidden_128(tmp_path):
         out_loaded = loaded(x)
     for a, b in zip(out_orig, out_loaded):
         assert torch.allclose(a, b)
+
+
+def test_default_loader_rejects_bare_state_dict_without_explicit_migration(tmp_path):
+    from stl.learning.train import CheckpointFormatError, load_checkpoint
+
+    path = tmp_path / "bare.pt"
+    torch.save(ValueNet().state_dict(), path)
+    with pytest.raises(CheckpointFormatError, match="bare or legacy"):
+        load_checkpoint(path)

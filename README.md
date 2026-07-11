@@ -1,6 +1,7 @@
 # Surpassing The Leader
 
 Compact Python research implementation of the *Usogui* Drop the Handkerchief
+game as a fully observed, two-player, simultaneous-move stochastic zero-sum
 game. The project is organized around one current path:
 
 ```text
@@ -17,7 +18,7 @@ surface in `stl/`. Obsolete pre-consolidation packages are kept only under
 | Path | Role |
 |---|---|
 | `stl/engine/` | Rule authority: constants, players/referee, game clock, half-round resolution, death/revival, leap-second legality. |
-| `stl/solver/` | Three-file solver core: `exact.py`, `search.py`, `tablebase.py`. |
+| `stl/solver/` | Exact/search/tablebase core plus conformance and MCTS audit packs. |
 | `stl/learning/` | Target generation, value/policy model, training, gates, and RL/self-play support. |
 | `stl/play/` | Actual playable surface: `SolverAgent`, `CanonicalHal`, opponents, teachers, environment wrapper, terminal CLI. |
 | `stl/commands/` | Importable command implementations used by Hydra. |
@@ -43,7 +44,8 @@ Checks succeed iff `check_time >= drop_time`. Successful ST is exactly
 checks remain `check_time < drop_time` with the flat `+60` penalty.
 
 Artifacts generated under the old action semantics are stale. See
-`docs/REGEN2RL.md` for the reset and regeneration order.
+`docs/REGEN2RL.md` for the audited Python-first plan from exact regeneration
+through genuine simultaneous-move MCTS self-play and gated promotion.
 
 ## Setup
 
@@ -55,37 +57,35 @@ uv run pytest --collect-only -q
 uv run pytest -q
 ```
 
-The latest verified full suite after the action-core reset was:
+The latest verified full suite after executing REGEN2RL through P3 and the P4
+pipeline smoke was:
 
 ```text
-641 passed
+703 passed, 4 skipped
 ```
 
 ## Playing A Match
 
-Play against the current solver-backed Hal:
+The checked-in headline checkpoint predates the V2 feature/action contract and
+is intentionally rejected by the strict loader. Until P4 produces a reviewed
+V2 checkpoint, the immediately runnable local match uses the quarantined legacy
+agent:
 
 ```bash
-uv run python -m stl.cli command=play 'command.args=["--use-tier-a"]'
+uv run python -m stl.cli command=play 'command.args=["--agent","legacy"]'
 ```
 
-Useful variants:
+After a V2 checkpoint exists, run the solver-backed Hal explicitly:
 
 ```bash
-# Faster, weaker
-uv run python -m stl.cli command=play 'command.args=["--iterations","50","--use-tier-a"]'
-
-# Slower, stronger
-uv run python -m stl.cli command=play 'command.args=["--iterations","800","--use-tier-a"]'
-
-# Reproducible sampling
-uv run python -m stl.cli command=play 'command.args=["--use-tier-a","--seed","123"]'
+uv run python -m stl.cli command=play 'command.args=["--checkpoint","outputs/regen2rl/gen0_checkpoint_v2/best.pt","--use-tier-a","--seed","123"]'
 ```
 
-By default the CLI uses `stl.play.agent.SolverAgent`: value/policy checkpoint
-plus matrix-game MCTS. `--use-tier-a` enables certified Tier A tablebase lookup
-where available. If `--seed` is omitted, the CLI picks a fresh random seed so
-human games are not replaying the same sampled line.
+The default `solver` agent fails loudly on a missing or incompatible checkpoint;
+it never silently falls back to handcrafted evaluation. `--use-tier-a` enables
+certified Tier A tablebase lookup where available. If `--seed` is omitted, the
+CLI picks a fresh random seed so human games do not replay the same sampled
+line.
 
 ## Hydra Commands
 
@@ -94,7 +94,8 @@ Hydra is the public command surface:
 ```bash
 uv run python -m stl.cli --help
 uv run python -m stl.cli command=tier_a --cfg job
-uv run python -m stl.cli command=self_play --cfg job
+uv run python -m stl.cli command=gen0_targets --cfg job
+uv run python -m stl.cli command=train_gen0 --cfg job
 ```
 
 Use `--cfg job` to inspect a config without starting a long run.
@@ -109,13 +110,28 @@ uv run pytest tests/solver -q
 # Build a small Tier A smoke slice
 uv run python -m stl.cli command=tier_a command.stage=1 command.limit=1 command.workers=1
 
-# AlphaZero-style bridge commands
-uv run python -m stl.cli command=targets experiment=smoke
-uv run python -m stl.cli command=train experiment=alphazero_smoke
-uv run python -m stl.cli command=self_play experiment=alphazero_smoke
+# Reconstructable Generation-Zero pipeline smoke (short)
+uv run python -m stl.cli command=gen0_targets experiment=gen0_smoke
+uv run python -m stl.cli command=train_gen0 experiment=gen0_train_smoke
+
+# Inspect the first long generation and training jobs without running them
+uv run python -m stl.cli command=gen0_targets --cfg job
+uv run python -m stl.cli command=train_gen0 --cfg job
+
+# Evaluation and promotion surfaces
 uv run python -m stl.cli command=eval
 uv run python -m stl.cli command=promote
 ```
+
+The next unchecked REGEN2RL action is the full Generation-Zero anchor corpus:
+`uv run python -m stl.cli command=gen0_targets`. It is intentionally a long
+generation boundary; inspect its resolved config and output scope before
+starting it, then review both manifests before `command=train_gen0`.
+
+`command=self_play` is not yet a supported AlphaZero entry point. The current
+command targets the legacy bucketed outcome loop and its Hydra arguments do not
+match its parser. Phase P5 of `docs/REGEN2RL.md` replaces that path with
+matrix-game MCTS self-play before it is advertised here.
 
 ## Solver Shape
 
@@ -126,6 +142,8 @@ stl/solver/
   exact.py       # public state, LP minimax, half-round helpers, timing, diagnostics
   search.py      # leaf evaluators, selective solve, subgame resolve, matrix-game MCTS
   tablebase.py   # tactical fixtures, pinned registry, backward map, Tier A lookup/build
+  conformance.py # exact/search conformance audit helpers
+  mcts_conformance.py # frozen simultaneous-MCTS convergence pack
 ```
 
 The exact tower solves finite-horizon stochastic zero-sum public states by
@@ -137,25 +155,36 @@ route-stage labels, or bucketed abstractions.
 
 The search tower adds selective candidate sets, matrix-game MCTS, optional
 learned leaf evaluation, bounded critical-state subgame resolve, and Tier A
-lookup. Critical resolve defaults to the current half-round and uses the
-leaf evaluator at the boundary. The live playable agent uses a broader
-candidate grid at the root than the tight selective solver so human-facing play
-is less pattern-readable, while training/exact audits keep the smaller candidate
-set by default.
+lookup. MCTS exposes candidate, playable-candidate, and full-width modes. Its
+canonical improvement object is a pair of legal role marginals formed from a
+linearly weighted average of empirical mean-Q equilibria; optimistic policies
+select exploratory samples but are not mislabeled as training targets. Root
+priors and optional Dirichlet noise remain role-factorized. Critical resolve
+defaults to the current half-round and uses the leaf evaluator at the boundary.
 
 ## Learning And Self-Play
 
-`stl/learning/` contains the exact-to-self-play bridge:
+`stl/learning/` contains the pieces of the exact-to-self-play bridge:
 
 ```text
+contracts.py    # finite episode, role, config, and horizon-sensitivity contracts
+replay.py       # reconstructable TrainingRecordV2 shards and grouped splits
 targets.py      # feature extraction, exact labels, corpus IO, bootstrap target sources
-model.py        # value/policy net and checkpoint-compatible model pieces
-train.py        # supervised value/policy training and checkpoint loading
+model.py        # 52-field V2 feature encoder and value/two-role-policy network
+train.py        # grouped supervised training and strict V2 checkpoint bundles
 gates.py        # calibration, audit, ladder, strength and promotion gate surface
 support/        # route features, reanalysis, bootstrap, self-play, tournaments, strength internals
 ```
 
-The accepted promotion path is:
+V2 replay stores the exact public state, feature and action schema versions,
+target semantics, legal masks, both role policies, truncation state, provenance
+digests, and RNG seeds. Shards are pickle-free and hash-verified. The default
+trainer accepts these manifests and writes restorable bundles containing model,
+optimizer, scheduler, schemas, provenance, resolved config, history, and RNG
+state. Bare legacy checkpoints and stale length-61/122-logit artifacts require
+an explicit legacy path and are rejected by default.
+
+The current supervised/expert-iteration promotion path is:
 
 ```text
 exact/tablebase anchors -> value/policy training -> MCTS/self-play targets
@@ -166,6 +195,13 @@ A checkpoint should not be promoted just because held-out MSE improves.
 Promotion evidence should include calibration, deterministic ladder results,
 exploitability or best-response evidence where available, and policy drift
 checks when the policy head is involved.
+
+This is not yet a closed AlphaZero reinforcement-learning loop. P0--P3 of the
+audited bridge are implemented, and the short P4 Generation-Zero corpus/trainer
+smoke passes. The full anchor corpus and first training run remain deliberately
+unexecuted. The module named self-play still runs legacy `CanonicalHal` against
+scripted opponents; genuine two-role MCTS self-play begins in P5. The phase
+gates and current stopping point are in `docs/REGEN2RL.md`.
 
 ## Architecture Rules
 

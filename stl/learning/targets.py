@@ -114,6 +114,8 @@ class ValueTarget:
     dropper_legal_mask: np.ndarray = field(default_factory=_zero_policy)
     checker_legal_mask: np.ndarray = field(default_factory=_zero_policy)
     unresolved_probability: float = 0.0
+    exact_state: ExactPublicState | None = None
+    target_kind: str = ""
 
 
 @dataclass(frozen=True)
@@ -233,6 +235,28 @@ def _legal_policy_vectors(
     return dropper_dist, checker_dist, dropper_mask, checker_mask
 
 
+def _inactive_policy_vectors(
+    game: Game,
+    config: ExactSearchConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Legal masks with zero targets for rows lacking a certified policy."""
+
+    _drop, _check, drop_mask, check_mask = _legal_policy_vectors(game, config)
+    return _zero_policy(), _zero_policy(), drop_mask, check_mask
+
+
+def _target_kind_for_source(source: str) -> str:
+    from stl.learning.replay import TargetKind
+
+    if source == SOURCE_TERMINAL:
+        return TargetKind.TERMINAL_OUTCOME.value
+    if source in (SOURCE_TABLEBASE, SOURCE_TABLEBASE_INTERIOR) or source.startswith("tier_a"):
+        return TargetKind.TABLEBASE_VALUE.value
+    if source in (SOURCE_MCTS_BOOTSTRAP, SOURCE_REANALYSIS_MCTS):
+        return TargetKind.SEARCH_BOOTSTRAP_VALUE.value
+    return TargetKind.EXACT_VALUE.value
+
+
 def _strategy_vectors(
     *,
     drop_seconds: tuple[int, ...],
@@ -260,6 +284,8 @@ def _target_from_label(game: Game, label: LabelResult) -> ValueTarget:
         dropper_legal_mask=label.dropper_legal_mask.astype(np.float32),
         checker_legal_mask=label.checker_legal_mask.astype(np.float32),
         unresolved_probability=float(label.unresolved_probability),
+        exact_state=exact_public_state(game),
+        target_kind=_target_kind_for_source(label.source),
     )
 
 
@@ -379,7 +405,7 @@ def label_state(
 
     state = exact_public_state(game)
     if state in pinned_table:
-        drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
+        drop_dist, check_dist, drop_mask, check_mask = _inactive_policy_vectors(game, config)
         return LabelResult(
             value=pinned_table[state],
             source=SOURCE_TABLEBASE,
@@ -691,6 +717,8 @@ def _generate_terminal_targets(
                 dropper_legal_mask=drop_mask,
                 checker_legal_mask=check_mask,
                 unresolved_probability=0.0,
+                exact_state=exact_public_state(game),
+                target_kind=_target_kind_for_source(SOURCE_TERMINAL),
             )
         )
     return targets
@@ -728,7 +756,7 @@ def _generate_tablebase_targets(
         if scenario.expected_value is None:
             continue
         game = scenario.game
-        drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
+        drop_dist, check_dist, drop_mask, check_mask = _inactive_policy_vectors(game, config)
         is_interior = split_interior and INTERIOR_PIN_TAG in scenario.tags
         targets.append(
             ValueTarget(
@@ -741,6 +769,10 @@ def _generate_tablebase_targets(
                 dropper_legal_mask=drop_mask,
                 checker_legal_mask=check_mask,
                 unresolved_probability=0.0,
+                exact_state=exact_public_state(game),
+                target_kind=_target_kind_for_source(
+                    SOURCE_TABLEBASE_INTERIOR if is_interior else SOURCE_TABLEBASE
+                ),
             )
         )
     return targets
@@ -881,13 +913,15 @@ def generate_mcts_bootstrap_targets(
                                         dropper_legal_mask=drop_mask,
                                         checker_legal_mask=check_mask,
                                         unresolved_probability=0.0,
+                                        exact_state=exact_public_state(game),
+                                        target_kind=_target_kind_for_source(SOURCE_TERMINAL),
                                     )
                                 )
                                 continue
 
                             state = exact_public_state(game)
                             if state in pinned_table:
-                                drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
+                                drop_dist, check_dist, drop_mask, check_mask = _inactive_policy_vectors(game, config)
                                 targets.append(
                                     ValueTarget(
                                         features=extract_features(game),
@@ -899,6 +933,8 @@ def generate_mcts_bootstrap_targets(
                                         dropper_legal_mask=drop_mask,
                                         checker_legal_mask=check_mask,
                                         unresolved_probability=0.0,
+                                        exact_state=exact_public_state(game),
+                                        target_kind=_target_kind_for_source(SOURCE_TABLEBASE),
                                     )
                                 )
                                 continue
@@ -916,8 +952,6 @@ def generate_mcts_bootstrap_targets(
                             mcts_config = MCTSConfig(
                                 iterations=iterations_per_state,
                                 exploration_c=exploration_c,
-                                evaluator=None,
-                                use_tablebase=False,
                             )
                             result = mcts_search(
                                 game=game,
@@ -934,8 +968,8 @@ def generate_mcts_bootstrap_targets(
                             drop_dist, check_dist = _strategy_vectors(
                                 drop_seconds=result.root_drop_seconds,
                                 check_seconds=result.root_check_seconds,
-                                dropper_strategy=result.root_strategy_dropper,
-                                checker_strategy=result.root_strategy_checker,
+                                dropper_strategy=result.improved_dropper_policy,
+                                checker_strategy=result.improved_checker_policy,
                             )
                             _, _, drop_mask, check_mask = _legal_policy_vectors(game, config)
                             targets.append(
@@ -949,6 +983,8 @@ def generate_mcts_bootstrap_targets(
                                     dropper_legal_mask=drop_mask,
                                     checker_legal_mask=check_mask,
                                     unresolved_probability=0.0,
+                                    exact_state=exact_public_state(game),
+                                    target_kind=_target_kind_for_source(SOURCE_MCTS_BOOTSTRAP),
                                 )
                             )
                             bootstrap_count += 1
@@ -961,6 +997,43 @@ def generate_mcts_bootstrap_targets(
 
 
 # ── I/O ───────────────────────────────────────────────────────────────────
+
+
+def to_training_record_v2(
+    target: ValueTarget,
+    *,
+    search_config_digest: str = "",
+    parent_checkpoint_digest: str = "",
+    rng_seeds: dict[str, int] | tuple[tuple[str, int], ...] = (),
+):
+    """Convert a reconstructable anchor target into the strict replay schema."""
+
+    from stl.learning.replay import (
+        TargetKind,
+        TrainingRecordV2,
+        exact_state_hash,
+    )
+
+    if target.exact_state is None:
+        raise ValueError("ValueTarget has no ExactPublicState; regenerate it under V2")
+    kind = TargetKind(target.target_kind or _target_kind_for_source(target.source))
+    return TrainingRecordV2(
+        features=target.features,
+        exact_state=target.exact_state,
+        value=target.value,
+        target_kind=kind,
+        source=target.source,
+        dropper_dist=target.dropper_dist,
+        checker_dist=target.checker_dist,
+        dropper_legal_mask=target.dropper_legal_mask.astype(bool),
+        checker_legal_mask=target.checker_legal_mask.astype(bool),
+        episode_id=f"anchor-{exact_state_hash(target.exact_state)}",
+        half_round_index=0,
+        truncated=False,
+        parent_checkpoint_digest=parent_checkpoint_digest,
+        search_config_digest=search_config_digest,
+        rng_seeds=rng_seeds,
+    )
 
 
 def save_targets(targets: list[ValueTarget], path: str | Path) -> None:
@@ -981,6 +1054,19 @@ def save_targets(targets: list[ValueTarget], path: str | Path) -> None:
     sources = np.array([t.source for t in targets])
     horizons = np.array([t.horizon for t in targets], dtype=np.int32)
     unresolved = np.array([t.unresolved_probability for t in targets], dtype=np.float32)
+    exact_states_json = np.asarray(
+        [
+            json.dumps(asdict(t.exact_state), sort_keys=True, separators=(",", ":"))
+            if t.exact_state is not None
+            else ""
+            for t in targets
+        ],
+        dtype=np.str_,
+    )
+    target_kinds = np.asarray(
+        [t.target_kind or _target_kind_for_source(t.source) for t in targets],
+        dtype=np.str_,
+    )
     np.savez(
         path,
         X=X,
@@ -992,12 +1078,14 @@ def save_targets(targets: list[ValueTarget], path: str | Path) -> None:
         dropper_legal_masks=dropper_masks,
         checker_legal_masks=checker_masks,
         unresolved_probabilities=unresolved,
+        exact_states_json=exact_states_json,
+        target_kinds=target_kinds,
     )
 
 
 def load_targets(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
     """Load (X, y) arrays from a saved .npz file."""
-    data = np.load(path, allow_pickle=True)
+    data = np.load(path, allow_pickle=False)
     return data["X"], data["y"]
 
 
@@ -1008,7 +1096,7 @@ def load_targets_as_records(path: str | Path) -> list[ValueTarget]:
     masks, and unresolved_probability when present (older corpora without
     those fields default to zero arrays / 0.0).
     """
-    data = np.load(path, allow_pickle=True)
+    data = np.load(path, allow_pickle=False)
     X = data["X"].astype(np.float32)
     y = data["y"].astype(np.float32)
     sources = np.array(data["sources"]).astype(str)
@@ -1019,6 +1107,8 @@ def load_targets_as_records(path: str | Path) -> list[ValueTarget]:
     dropper_masks = data["dropper_legal_masks"].astype(np.float32) if "dropper_legal_masks" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
     checker_masks = data["checker_legal_masks"].astype(np.float32) if "checker_legal_masks" in data else np.zeros((n, ACTION_SIZE), dtype=np.float32)
     unresolved = data["unresolved_probabilities"].astype(np.float32) if "unresolved_probabilities" in data else np.zeros(n, dtype=np.float32)
+    exact_states_json = np.asarray(data["exact_states_json"]).astype(str) if "exact_states_json" in data else np.full(n, "", dtype=np.str_)
+    target_kinds = np.asarray(data["target_kinds"]).astype(str) if "target_kinds" in data else np.asarray([_target_kind_for_source(str(source)) for source in sources], dtype=np.str_)
     for name, arr in (
         ("dropper_dists", dropper_dists),
         ("checker_dists", checker_dists),
@@ -1038,6 +1128,12 @@ def load_targets_as_records(path: str | Path) -> list[ValueTarget]:
             dropper_legal_mask=dropper_masks[i],
             checker_legal_mask=checker_masks[i],
             unresolved_probability=float(unresolved[i]),
+            exact_state=(
+                ExactPublicState(**json.loads(str(exact_states_json[i])))
+                if str(exact_states_json[i])
+                else None
+            ),
+            target_kind=str(target_kinds[i]),
         )
         for i in range(n)
     ]

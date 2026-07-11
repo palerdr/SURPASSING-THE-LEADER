@@ -21,12 +21,24 @@ sys.path.insert(0, os.getcwd())
 from stl.learning.model import FEATURE_DIM, ValueNet
 from stl.engine.actions import ACTION_SIZE
 from stl.learning.train import (
-    TrainConfig,
+    ACTION_SCHEMA_VERSION,
+    CHECKPOINT_FORMAT_VERSION,
+    CheckpointFormatError,
+    TrainConfig as _StrictTrainConfig,
     TrainResult,
+    checkpoint_digest,
     load_checkpoint,
+    load_checkpoint_bundle,
     make_predict_fn,
     train,
 )
+
+
+def TrainConfig(*args, **kwargs):
+    """Explicit legacy-corpus adapter for pre-V2 synthetic fixtures."""
+
+    kwargs.setdefault("allow_legacy_targets", True)
+    return _StrictTrainConfig(*args, **kwargs)
 
 
 def _write_synthetic_targets(path: Path, n: int = 64, seed: int = 0) -> None:
@@ -55,6 +67,64 @@ def test_train_runs_and_returns_train_result():
     assert len(result.train_history) == 3
 
 
+def test_checkpoint_bundle_carries_optimizer_schema_and_provenance(tmp_path):
+    targets = tmp_path / "targets.npz"
+    _write_synthetic_targets(targets, n=64)
+    result = train(
+        targets,
+        tmp_path / "out",
+        TrainConfig(epochs=1, batch_size=16, seed=17),
+    )
+
+    bundle = load_checkpoint_bundle(result.checkpoint_path)
+    assert bundle["format_version"] == CHECKPOINT_FORMAT_VERSION
+    assert bundle["optimizer_state_dict"] is not None
+    assert bundle["scheduler_state_dict"] is not None
+    assert bundle["model_schema"]["action_schema"] == ACTION_SCHEMA_VERSION
+    assert bundle["model_schema"]["action_size"] == ACTION_SIZE
+    assert bundle["provenance"]["corpus_digests"] == [checkpoint_digest(targets)]
+    assert bundle["provenance"]["seed"] == 17
+
+
+def test_checkpoint_bundle_rejects_wrong_parent_and_policy_shape(tmp_path):
+    import torch
+
+    targets = tmp_path / "targets.npz"
+    _write_synthetic_targets(targets, n=64)
+    result = train(targets, tmp_path / "out", TrainConfig(epochs=1, batch_size=16))
+
+    with pytest.raises(CheckpointFormatError, match="parent digest"):
+        load_checkpoint_bundle(result.checkpoint_path, expected_parent_digest="0" * 64)
+
+    payload = torch.load(result.checkpoint_path, weights_only=False)
+    hidden = payload["model_schema"]["hidden_dim"]
+    payload["model_state_dict"]["policy_head.weight"] = torch.zeros(122, hidden)
+    broken = tmp_path / "broken.pt"
+    torch.save(payload, broken)
+    with pytest.raises(CheckpointFormatError, match="policy head"):
+        load_checkpoint(broken)
+
+
+def test_empty_checkpoint_is_rejected_instead_of_loading_random_weights(tmp_path):
+    import torch
+
+    path = tmp_path / "empty.pt"
+    torch.save({}, path)
+    with pytest.raises(CheckpointFormatError, match="bare or legacy"):
+        load_checkpoint(path)
+
+
+def test_manifestless_targets_require_explicit_legacy_opt_in(tmp_path):
+    targets = tmp_path / "legacy.npz"
+    _write_synthetic_targets(targets, n=32)
+    with pytest.raises(ValueError, match="manifestless target corpus"):
+        train(
+            targets,
+            tmp_path / "out",
+            _StrictTrainConfig(epochs=1, batch_size=8),
+        )
+
+
 def test_train_hidden_dim_192_runs_end_to_end():
     """Phase I-2: the widened net (hidden_dim=192, ~65.4K params) must train
     through the real loop and produce a checkpoint that ``load_checkpoint``
@@ -72,7 +142,7 @@ def test_train_hidden_dim_192_runs_end_to_end():
         assert result.checkpoint_path.endswith("best.pt")
         model = load_checkpoint(result.checkpoint_path)
         total = sum(p.numel() for p in model.parameters())
-        assert 60_000 < total < 70_000, f"checkpoint did not preserve hidden=192; got {total}"
+        assert 68_000 < total < 76_000, f"checkpoint did not preserve hidden=192; got {total}"
 
 
 def test_train_can_warm_start_from_checkpoint():

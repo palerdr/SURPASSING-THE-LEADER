@@ -53,7 +53,10 @@ def normalize_policy_vector(policy: np.ndarray | list[float] | tuple[float, ...]
     arr = np.asarray(policy, dtype=np.float64).reshape(-1)
     if arr.shape[0] != ACTION_SIZE:
         raise ValueError(f"policy vector must have length {ACTION_SIZE}, got {arr.shape[0]}")
-    arr = np.maximum(arr, 0.0)
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("policy vector must contain only finite values")
+    if np.any(arr < 0.0):
+        raise ValueError("policy vector must be nonnegative")
     total = float(arr.sum())
     if total > 1e-12:
         arr = arr / total
@@ -175,6 +178,7 @@ from stl.solver.exact import (
 
 CRITICAL_SECONDS: tuple[int, ...] = (1, 2, 58, 59, 60, 61)
 PLAYABLE_GRID_SECONDS: tuple[int, ...] = (5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55)
+FULL_WIDTH_SAFE_ST_BAND = 30
 
 
 @dataclass(frozen=True)
@@ -222,23 +226,46 @@ def generate_candidates(
     overflow_st = overflow_st_threshold(checker.cylinder)
     safe_st = safe_st_budget(checker.cylinder)
 
-    for d in tuple(drop_seconds):
-        for c in (
-            d - 1, d, d + 1,
-            d + safe_st, d + safe_st + 1,
-            d + overflow_st - 1, d + overflow_st,
-        ):
-            if c in check_legal:
-                check_seconds.add(c)
+    # The near-overflow marginal band has a long cyclic best-response chain:
+    # each newly added boundary induces another +/-1 response.  The frozen P1
+    # omitted-action audit found profitable deviations when this band was
+    # truncated, so use literal full width instead of pretending the candidate
+    # subset is reliable.  At safe_st=0 every successful check is already an
+    # overflow and the compact terminal candidate set remains sufficient.
+    if 0 < safe_st <= FULL_WIDTH_SAFE_ST_BAND:
+        return CandidateActions(
+            drop_seconds=tuple(drop_legal),
+            check_seconds=tuple(check_legal),
+        )
 
-    for c in tuple(check_seconds):
-        for d in (
-            c - 1, c, c + 1,
-            c - safe_st - 1, c - safe_st,
-            c - overflow_st, c - overflow_st + 1,
-        ):
-            if d in drop_legal:
-                drop_seconds.add(d)
+    def add_checker_responses() -> None:
+        for d in tuple(drop_seconds):
+            for c in (
+                d - 1, d, d + 1,
+                d + safe_st, d + safe_st + 1,
+                d + overflow_st - 1, d + overflow_st,
+            ):
+                if c in check_legal:
+                    check_seconds.add(c)
+
+    def add_dropper_responses() -> None:
+        for c in tuple(check_seconds):
+            for d in (
+                c - 1, c, c + 1,
+                c - safe_st - 1, c - safe_st,
+                c - overflow_st, c - overflow_st + 1,
+            ):
+                if d in drop_legal:
+                    drop_seconds.add(d)
+
+    # Two checker passes bracket one dropper pass.  The final checker pass is
+    # necessary because the middle pass can introduce a boundary such as
+    # drop=9 whose matching check=9 was not in the original seed set.  Taking
+    # this to an unrestricted fixed point would let the +/-1 relation flood
+    # the entire 60x60 grid and defeat selective search.
+    add_checker_responses()
+    add_dropper_responses()
+    add_checker_responses()
 
     return CandidateActions(
         drop_seconds=tuple(sorted(drop_seconds)),
@@ -270,6 +297,9 @@ class SelectiveAuditResult:
     value_gap: float
     candidate_joint_count: int
     full_width_joint_count: int
+    dropper_omitted_action_gain: float
+    checker_omitted_action_gain: float
+    max_omitted_action_gain: float
 
 
 def _terminal_breakdown(value: float | None) -> UtilityBreakdown:
@@ -489,16 +519,73 @@ def audit_against_full_width(
     half_round_horizon: int,
     config: ExactSearchConfig | None = None,
 ) -> SelectiveAuditResult:
-    """Run selective and full-width on the same state; report the value gap."""
+    """Compare candidate search with the full-width one-step best responses.
+
+    Value agreement alone can hide an exploitable candidate policy.  The
+    omitted-action gains embed both candidate marginals in the full literal-
+    second matrix and ask how much either role could gain by deviating to an
+    action that candidate generation left out.
+    """
     config = config or ExactSearchConfig()
     selective = selective_solve(game, half_round_horizon, config)
     full = solve_exact_finite_horizon(game, half_round_horizon, config)
+    if full.payoff_for_hal is None:
+        raise ValueError("full-width audit requires a non-terminal payoff matrix")
+
+    full_drop_index = {second: i for i, second in enumerate(full.drop_actions)}
+    full_check_index = {second: i for i, second in enumerate(full.check_actions)}
+    drop_policy = np.zeros(len(full.drop_actions), dtype=np.float64)
+    check_policy = np.zeros(len(full.check_actions), dtype=np.float64)
+    for second, probability in zip(selective.drop_seconds, selective.dropper_strategy):
+        drop_policy[full_drop_index[second]] = float(probability)
+    for second, probability in zip(selective.check_seconds, selective.checker_strategy):
+        check_policy[full_check_index[second]] = float(probability)
+
+    payoff = np.asarray(full.payoff_for_hal, dtype=np.float64)
+    expected = float(drop_policy @ payoff @ check_policy)
+    drop_values = payoff @ check_policy
+    check_values = drop_policy @ payoff
+    omitted_drop = [
+        i for i, second in enumerate(full.drop_actions)
+        if second not in set(selective.drop_seconds)
+    ]
+    omitted_check = [
+        i for i, second in enumerate(full.check_actions)
+        if second not in set(selective.check_seconds)
+    ]
+
+    dropper, _checker = game.get_roles_for_half(game.current_half)
+    hal_is_dropper = dropper.name.lower() == config.perspective_name.lower()
+    if omitted_drop:
+        omitted_values = drop_values[omitted_drop]
+        drop_gain = (
+            float(np.max(omitted_values)) - expected
+            if hal_is_dropper
+            else expected - float(np.min(omitted_values))
+        )
+    else:
+        drop_gain = 0.0
+    if omitted_check:
+        omitted_values = check_values[omitted_check]
+        check_gain = (
+            expected - float(np.min(omitted_values))
+            if hal_is_dropper
+            else float(np.max(omitted_values)) - expected
+        )
+    else:
+        check_gain = 0.0
+    drop_gain = max(0.0, drop_gain)
+    check_gain = max(0.0, check_gain)
+
     return SelectiveAuditResult(
         selective=selective,
         full_width_value=full.value_for_hal,
         value_gap=abs(selective.value_for_hal - full.value_for_hal),
         candidate_joint_count=selective.candidate_count,
         full_width_joint_count=len(full.drop_actions) * len(full.check_actions),
+        dropper_omitted_action_gain=drop_gain,
+        checker_omitted_action_gain=check_gain,
+        max_omitted_action_gain=max(drop_gain, check_gain),
     )
 
 
@@ -706,41 +793,89 @@ class MCTSNode:
     N_cell: np.ndarray
     N_node: int
     is_expanded: bool
+    dropper_prior: np.ndarray
+    checker_prior: np.ndarray
     prior: np.ndarray
     terminal_value: float | None
     children: dict[tuple[int, int, bool | None], "MCTSNode"]
     hal_is_dropper: bool
 
 
-@dataclass
+MCTSActionMode = Literal["candidate", "candidate_playable", "full_width"]
+
+
+@dataclass(frozen=True)
 class MCTSConfig:
     iterations: int
     exploration_c: float
-    evaluator: None
-    use_tablebase: bool
-    include_playable_grid: bool = False
+    action_mode: MCTSActionMode = "candidate"
+    root_noise_epsilon: float = 0.0
+    root_dirichlet_alpha_scale: float = 10.0
+    max_depth: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.iterations <= 0:
+            raise ValueError("MCTS iterations must be positive")
+        if not np.isfinite(self.exploration_c) or self.exploration_c < 0.0:
+            raise ValueError("MCTS exploration_c must be finite and nonnegative")
+        if self.action_mode not in ("candidate", "candidate_playable", "full_width"):
+            raise ValueError(f"unknown MCTS action_mode {self.action_mode!r}")
+        if not 0.0 <= self.root_noise_epsilon <= 1.0:
+            raise ValueError("root_noise_epsilon must be in [0, 1]")
+        if (
+            not np.isfinite(self.root_dirichlet_alpha_scale)
+            or self.root_dirichlet_alpha_scale <= 0.0
+        ):
+            raise ValueError("root_dirichlet_alpha_scale must be finite and positive")
+        if self.max_depth is not None and self.max_depth <= 0:
+            raise ValueError("max_depth must be positive when provided")
 
 
 @dataclass
 class MCTSResult:
-    root_strategy_dropper: np.ndarray
-    root_strategy_checker: np.ndarray
+    improved_dropper_policy: np.ndarray
+    improved_checker_policy: np.ndarray
     root_value_for_hal: float
+    mean_q_dropper_policy: np.ndarray
+    mean_q_checker_policy: np.ndarray
+    mean_q_value_for_hal: float
     root_visits: int
     principal_line: list[ExactJointAction]
     cells_used: int
+    root_unique_cells_visited: int
+    action_mode: str
     # The seconds each strategy index refers to. When a critical-root
     # subgame resolve replaces the MCTS output these reflect the resolve's
     # action sets, so (seconds, strategy) always pair up.
     root_drop_seconds: tuple[int, ...] = ()
     root_check_seconds: tuple[int, ...] = ()
-    # Average of the per-iteration root selection strategies — the object
-    # SM-MCTS theory proves convergent (Lisy et al. 2013), and smoother
-    # than a single LP vertex over mean-Q at small budgets where flat
-    # matrices make the final LP degenerate (and arbitrarily PURE — an
-    # exploitable tell). Empty when no root selections occurred.
-    root_strategy_dropper_avg: np.ndarray = None  # type: ignore[assignment]
-    root_strategy_checker_avg: np.ndarray = None  # type: ignore[assignment]
+    # Linearly weighted average of per-iteration empirical mean-Q equilibria.
+    # This is the canonical improvement target; optimistic policies are used
+    # only to choose exploratory samples.
+
+    @property
+    def root_strategy_dropper(self) -> np.ndarray:
+        """Deprecated alias for the final mean-Q diagnostic policy."""
+
+        return self.mean_q_dropper_policy
+
+    @property
+    def root_strategy_checker(self) -> np.ndarray:
+        """Deprecated alias for the final mean-Q diagnostic policy."""
+
+        return self.mean_q_checker_policy
+
+    @property
+    def root_strategy_dropper_avg(self) -> np.ndarray:
+        """Deprecated alias for the canonical improved dropper policy."""
+
+        return self.improved_dropper_policy
+
+    @property
+    def root_strategy_checker_avg(self) -> np.ndarray:
+        """Deprecated alias for the canonical improved checker policy."""
+
+        return self.improved_checker_policy
 
 
 def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...]) -> np.ndarray:
@@ -754,13 +889,48 @@ def _project_policy_to_candidates(policy: np.ndarray, candidates: tuple[int, ...
     return projected / total
 
 
+def _validate_legal_role_policy(
+    policy: np.ndarray,
+    legal_seconds: tuple[int, ...],
+    *,
+    role: str,
+) -> None:
+    legal = np.zeros(ACTION_SIZE, dtype=bool)
+    legal[list(legal_seconds)] = True
+    if not np.all(np.isfinite(policy)):
+        raise ValueError(f"{role} prior contains non-finite values")
+    if np.any(policy < 0.0):
+        raise ValueError(f"{role} prior contains negative values")
+    if float(policy[~legal].sum()) > 1e-10:
+        raise ValueError(f"{role} prior assigns mass to illegal seconds")
+    if not np.isclose(float(policy.sum()), 1.0, atol=1e-8):
+        raise ValueError(f"{role} prior must sum to one")
+
+
+def _validate_distribution(policy: np.ndarray, size: int, *, name: str) -> np.ndarray:
+    result = np.asarray(policy, dtype=np.float64).reshape(-1)
+    if result.shape != (size,):
+        raise ValueError(f"{name} shape {result.shape} does not match {(size,)}")
+    if not np.all(np.isfinite(result)) or np.any(result < 0.0):
+        raise ValueError(f"{name} must be finite and nonnegative")
+    total = float(result.sum())
+    if total <= 1e-12:
+        raise ValueError(f"{name} has zero mass")
+    result = result / total
+    if not np.isclose(float(result.sum()), 1.0, atol=1e-8):
+        raise ValueError(f"{name} failed normalization")
+    return result
+
+
 def _prior_from_evaluator(
     game: Game,
     drop_seconds: tuple[int, ...],
     check_seconds: tuple[int, ...],
     evaluator: LeafEvaluator | None,
 ) -> np.ndarray:
-    prior, _ = _prior_and_value_from_evaluator(game, drop_seconds, check_seconds, evaluator)
+    _drop, _check, prior, _value = _prior_and_value_from_evaluator(
+        game, drop_seconds, check_seconds, evaluator
+    )
     return prior
 
 
@@ -769,7 +939,7 @@ def _prior_and_value_from_evaluator(
     drop_seconds: tuple[int, ...],
     check_seconds: tuple[int, ...],
     evaluator: LeafEvaluator | None,
-) -> tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     """Single evaluator call yielding both the joint prior and the leaf value.
 
     The value seeds Q for never-visited cells so they enter the selection
@@ -780,14 +950,51 @@ def _prior_and_value_from_evaluator(
     D = len(drop_seconds)
     C = len(check_seconds)
     if D == 0 or C == 0:
-        return np.zeros((0, 0), dtype=np.float64), 0.0
+        return (
+            np.zeros(0, dtype=np.float64),
+            np.zeros(0, dtype=np.float64),
+            np.zeros((0, 0), dtype=np.float64),
+            0.0,
+        )
     if evaluator is None:
-        return np.full((D, C), 1.0 / (D * C), dtype=np.float64), 0.0
+        drop_prior = np.full(D, 1.0 / D, dtype=np.float64)
+        check_prior = np.full(C, 1.0 / C, dtype=np.float64)
+        return drop_prior, check_prior, np.outer(drop_prior, check_prior), 0.0
 
     value, dropper_policy, checker_policy = normalize_leaf_evaluation(evaluator(game), game)
+    dropper, checker = game.get_roles_for_half(game.current_half)
+    exact_config = ExactSearchConfig()
+    legal_drop = legal_seconds_for_current_role(game, dropper.name, "dropper", exact_config)
+    legal_check = legal_seconds_for_current_role(game, checker.name, "checker", exact_config)
+    _validate_legal_role_policy(dropper_policy, legal_drop, role="dropper")
+    _validate_legal_role_policy(checker_policy, legal_check, role="checker")
     drop_prior = _project_policy_to_candidates(dropper_policy, drop_seconds)
     check_prior = _project_policy_to_candidates(checker_policy, check_seconds)
-    return np.outer(drop_prior, check_prior).astype(np.float64), float(value)
+    drop_prior = _validate_distribution(drop_prior, D, name="dropper prior")
+    check_prior = _validate_distribution(check_prior, C, name="checker prior")
+    return drop_prior, check_prior, np.outer(drop_prior, check_prior), float(value)
+
+
+def _seconds_for_action_mode(
+    game: Game,
+    exact_config: ExactSearchConfig,
+    action_mode: MCTSActionMode,
+) -> CandidateActions:
+    if action_mode == "full_width":
+        dropper, checker = game.get_roles_for_half(game.current_half)
+        return CandidateActions(
+            drop_seconds=legal_seconds_for_current_role(
+                game, dropper.name, "dropper", exact_config
+            ),
+            check_seconds=legal_seconds_for_current_role(
+                game, checker.name, "checker", exact_config
+            ),
+        )
+    return generate_candidates(
+        game,
+        exact_config,
+        include_playable_grid=action_mode == "candidate_playable",
+    )
 
 
 def make_node(
@@ -795,7 +1002,7 @@ def make_node(
     config: ExactSearchConfig | None = None,
     evaluator: LeafEvaluator | None = None,
     *,
-    include_playable_grid: bool = False,
+    action_mode: MCTSActionMode = "candidate",
 ) -> MCTSNode:
     """Build an MCTSNode at the current game state.
 
@@ -814,6 +1021,8 @@ def make_node(
             N_cell=np.zeros((0, 0), dtype=np.int64),
             N_node=0,
             is_expanded=False,
+            dropper_prior=np.zeros(0, dtype=np.float64),
+            checker_prior=np.zeros(0, dtype=np.float64),
             prior=np.zeros((0, 0), dtype=np.float64),
             terminal_value=tval,
             children={},
@@ -822,11 +1031,11 @@ def make_node(
 
     dropper, _ = game.get_roles_for_half(game.current_half)
     hdrop = dropper.name.lower() == config.perspective_name.lower()
-    cands = generate_candidates(game, config, include_playable_grid=include_playable_grid)
+    cands = _seconds_for_action_mode(game, config, action_mode)
     D = len(cands.drop_seconds)
     C = len(cands.check_seconds)
 
-    prior, leaf_value = _prior_and_value_from_evaluator(
+    dropper_prior, checker_prior, prior, leaf_value = _prior_and_value_from_evaluator(
         game, cands.drop_seconds, cands.check_seconds, evaluator
     )
 
@@ -838,6 +1047,8 @@ def make_node(
         N_cell=np.zeros((D, C), dtype=np.int64),
         N_node=0,
         is_expanded=False,
+        dropper_prior=dropper_prior,
+        checker_prior=checker_prior,
         prior=prior,
         terminal_value=tval,
         children={},
@@ -867,6 +1078,23 @@ def _selection_strategies(
     else:
         dropper_strategy, _ = solve_minimax(Q_min_optimistic)
         checker_strategy, _ = solve_minimax(Q_max_optimistic.T)
+    return dropper_strategy, checker_strategy
+
+
+def _mean_q_strategies(node: MCTSNode) -> tuple[np.ndarray, np.ndarray]:
+    """Current simultaneous equilibrium of empirical mean-Q.
+
+    This is accumulated for the policy-improvement target.  Optimistic
+    strategies remain responsible for selecting samples, but their exploration
+    bonuses are not mislabeled as policy probability.
+    """
+
+    if node.hal_is_dropper:
+        dropper_strategy, _ = solve_minimax(node.Q)
+        checker_strategy, _ = solve_minimax((-node.Q).T)
+    else:
+        dropper_strategy, _ = solve_minimax(-node.Q)
+        checker_strategy, _ = solve_minimax(node.Q.T)
     return dropper_strategy, checker_strategy
 
 
@@ -903,6 +1131,7 @@ def _step_into_child(
     config: ExactSearchConfig,
     transposition: dict[ExactPublicState, MCTSNode] | None = None,
     evaluator: LeafEvaluator | None = None,
+    action_mode: MCTSActionMode = "candidate",
 ) -> tuple["MCTSNode", bool | None]:
     """Apply the joint action at (d_idx, c_idx) to the engine, sample the
     chance outcome if a death is possible, and return the child node along
@@ -931,7 +1160,7 @@ def _step_into_child(
         if cached:
             node.children[key] = transposition[state_key]
         else:
-            child = make_node(game, config, evaluator=evaluator, include_playable_grid=False)
+            child = make_node(game, config, evaluator=evaluator, action_mode=action_mode)
             node.children[key] = child
             if transposition is not None:
                 transposition[state_key] = child
@@ -961,6 +1190,7 @@ def mcts_search(
     subgame_resolve_horizon: int = 1,
     subgame_resolve_solver: MatrixSolver = "cfr_plus",
     subgame_resolve_cfr_plus_config: CFRPlusConfig | None = None,
+    root_noise_rng: np.random.Generator | None = None,
 ) -> MCTSResult:
     """Run MCTS for config.iterations iterations from the current game state.
 
@@ -978,9 +1208,38 @@ def mcts_search(
         game,
         exact_config,
         evaluator=evaluator,
-        include_playable_grid=config.include_playable_grid,
+        action_mode=config.action_mode,
     )
     c = config.exploration_c
+
+    if config.root_noise_epsilon > 0.0:
+        if root_noise_rng is None:
+            raise ValueError("root_noise_rng is required when root noise is enabled")
+        if root.dropper_prior.size and root.checker_prior.size:
+            drop_noise = root_noise_rng.dirichlet(
+                np.full(
+                    root.dropper_prior.size,
+                    config.root_dirichlet_alpha_scale / root.dropper_prior.size,
+                )
+            )
+            check_noise = root_noise_rng.dirichlet(
+                np.full(
+                    root.checker_prior.size,
+                    config.root_dirichlet_alpha_scale / root.checker_prior.size,
+                )
+            )
+            epsilon = config.root_noise_epsilon
+            root.dropper_prior = _validate_distribution(
+                (1.0 - epsilon) * root.dropper_prior + epsilon * drop_noise,
+                root.dropper_prior.size,
+                name="noisy root dropper prior",
+            )
+            root.checker_prior = _validate_distribution(
+                (1.0 - epsilon) * root.checker_prior + epsilon * check_noise,
+                root.checker_prior.size,
+                name="noisy root checker prior",
+            )
+            root.prior = np.outer(root.dropper_prior, root.checker_prior)
 
     transposition : dict[ExactPublicState, MCTSNode] = {}
     transposition[exact_public_state(game)] = root
@@ -988,10 +1247,12 @@ def mcts_search(
     root_drop_sum = np.zeros(len(root.drop_seconds), dtype=np.float64)
     root_check_sum = np.zeros(len(root.check_seconds), dtype=np.float64)
     root_strat_count = 0
+    root_strat_weight = 0.0
 
     for _ in range(config.iterations):
         root.game_snapshot.restore(game=game)
         node = root
+        depth = 0
         path: list[tuple[MCTSNode, int, int]] = []
         while True:
             if node.terminal_value is not None:
@@ -1001,13 +1262,19 @@ def mcts_search(
                 leaf_value, _, _ = normalize_leaf_evaluation(evaluator(game), game)
                 node.is_expanded = True
                 break
+            if config.max_depth is not None and depth >= config.max_depth:
+                leaf_value, _, _ = normalize_leaf_evaluation(evaluator(game), game)
+                break
             if node is root:
-                drop_strat, check_strat = _selection_strategies(node, c)
-                root_drop_sum += drop_strat
-                root_check_sum += check_strat
+                improved_drop, improved_check = _mean_q_strategies(node)
+                weight = float(root_strat_count + 1)
+                root_drop_sum += weight * improved_drop
+                root_check_sum += weight * improved_check
+                root_strat_weight += weight
                 root_strat_count += 1
-                d_idx = int(rng.choice(len(node.drop_seconds), p=drop_strat))
-                c_idx = int(rng.choice(len(node.check_seconds), p=check_strat))
+                selection_drop, selection_check = _selection_strategies(node, c)
+                d_idx = int(rng.choice(len(node.drop_seconds), p=selection_drop))
+                c_idx = int(rng.choice(len(node.check_seconds), p=selection_check))
             else:
                 d_idx, c_idx = _select_joint_action(node, c, rng)
             path.append((node, d_idx, c_idx))
@@ -1020,7 +1287,9 @@ def mcts_search(
                 exact_config,
                 transposition=transposition,
                 evaluator=evaluator,
+                action_mode=config.action_mode,
             )
+            depth += 1
         _backup(path, leaf_value)
 
     Q = root.Q
@@ -1031,17 +1300,26 @@ def mcts_search(
         dropper_strat, _ = solve_minimax(-Q)
         checker_strat, _ = solve_minimax(Q.T)
 
-    value_for_hal = float(dropper_strat @ Q @ checker_strat)
+    mean_q_value_for_hal = float(dropper_strat @ Q @ checker_strat)
 
     principal_line = _principal_line(root)
     root_drop_seconds = root.drop_seconds
     root_check_seconds = root.check_seconds
     if root_strat_count > 0:
-        dropper_avg = root_drop_sum / root_strat_count
-        checker_avg = root_check_sum / root_strat_count
+        dropper_avg = _validate_distribution(
+            root_drop_sum / root_strat_weight,
+            len(root.drop_seconds),
+            name="improved dropper policy",
+        )
+        checker_avg = _validate_distribution(
+            root_check_sum / root_strat_weight,
+            len(root.check_seconds),
+            name="improved checker policy",
+        )
     else:
         dropper_avg = np.asarray(dropper_strat, dtype=np.float64).copy()
         checker_avg = np.asarray(checker_strat, dtype=np.float64).copy()
+    value_for_hal = float(dropper_avg @ Q @ checker_avg)
 
     if subgame_resolve_at_critical:
         root.game_snapshot.restore(game=game)
@@ -1057,6 +1335,7 @@ def mcts_search(
             dropper_strat = resolve_result.dropper_strategy
             checker_strat = resolve_result.checker_strategy
             value_for_hal = float(resolve_result.value_for_hal)
+            mean_q_value_for_hal = value_for_hal
             root_drop_seconds = tuple(resolve_result.drop_seconds)
             root_check_seconds = tuple(resolve_result.check_seconds)
             dropper_avg = np.asarray(dropper_strat, dtype=np.float64).copy()
@@ -1082,16 +1361,19 @@ def mcts_search(
     root.game_snapshot.restore(game=game)
 
     return MCTSResult(
-        root_strategy_dropper=dropper_strat,
-        root_strategy_checker=checker_strat,
+        improved_dropper_policy=dropper_avg,
+        improved_checker_policy=checker_avg,
         root_value_for_hal=value_for_hal,
+        mean_q_dropper_policy=np.asarray(dropper_strat, dtype=np.float64),
+        mean_q_checker_policy=np.asarray(checker_strat, dtype=np.float64),
+        mean_q_value_for_hal=mean_q_value_for_hal,
         root_visits=root.N_node,
         principal_line=principal_line,
         cells_used=int(root.N_cell.sum()),
+        root_unique_cells_visited=int(np.count_nonzero(root.N_cell)),
+        action_mode=config.action_mode,
         root_drop_seconds=root_drop_seconds,
         root_check_seconds=root_check_seconds,
-        root_strategy_dropper_avg=dropper_avg,
-        root_strategy_checker_avg=checker_avg,
     )
 
 

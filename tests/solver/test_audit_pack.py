@@ -18,7 +18,7 @@ from stl.learning.audit import (
 
 
 def _config() -> MCTSConfig:
-    return MCTSConfig(iterations=5, exploration_c=1.0, evaluator=None, use_tablebase=False)
+    return MCTSConfig(iterations=5, exploration_c=1.0)
 
 
 def test_audit_pack_record_carries_all_fields(tmp_path):

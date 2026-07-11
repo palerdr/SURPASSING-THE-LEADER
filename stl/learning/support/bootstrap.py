@@ -248,8 +248,6 @@ def bootstrap_one_generation(
             MCTSConfig(
                 iterations=config.iterations_per_state,
                 exploration_c=config.exploration_c,
-                evaluator=None,
-                use_tablebase=False,
             ),
             audit_evaluator,
             config.audit_seeds,
@@ -409,7 +407,10 @@ if __name__ == "__main__":
         iterations_per_state=args.iterations,
         seed=args.seed,
         train_config=TrainConfig(
-            epochs=args.epochs, seed=args.seed, device=args.device
+            epochs=args.epochs,
+            seed=args.seed,
+            device=args.device,
+            allow_legacy_targets=True,
         ),
         required_sources=required_sources,
         tablebase_mse_threshold=args.tablebase_mse_threshold,

@@ -155,6 +155,7 @@ def main() -> int:
         train_targets = Path(args.targets)
     print(f"Corpus: {train_targets}  records={len(records)}  breakdown={source_breakdown(records)}")
     cfg = TrainConfig(
+        allow_legacy_targets=True,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,

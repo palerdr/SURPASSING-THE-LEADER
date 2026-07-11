@@ -1,0 +1,54 @@
+schema_version: stl.rl-config.v1
+
+objective:
+  perspective: Hal
+  terminal_hal_win: 1.0
+  terminal_baku_win: -1.0
+  truncated_draw: 0.0
+
+episode:
+  train_max_half_rounds: 64
+  eval_max_half_rounds: 128
+  max_paired_score_delta: 0.02
+  max_shared_state_policy_tv: 0.10
+
+seeds:
+  episode: 0
+  root_noise: 1
+  action_sampling: 2
+  engine_chance: 3
+  training: 4
+
+mcts:
+  matrix_solver: lp
+  iterations: 256
+  exploration_c: 1.0
+  action_mode: candidate
+  root_noise_epsilon: 0.25
+  root_dirichlet_alpha_scale: 10.0
+  leaf_evaluator: tablebase_then_network
+  critical_subgame_resolve: true
+  critical_resolve_horizon: 1
+  critical_resolve_solver: cfr_plus
+  critical_resolve_iterations: 2000
+
+model:
+  feature_schema: stl.features.v2
+  action_schema: stl.literal-seconds.v1
+  action_size: 62
+  hidden_dim: 64
+
+replay:
+  schema: stl.training-record.v2
+  exact_anchor_fraction: 0.25
+  self_play_fraction: 0.75
+  accepted_generations: 5
+  max_positions: 1000000
+
+promotion:
+  arena_h0_elo: 0.0
+  arena_h1_elo: 20.0
+  alpha: 0.05
+  beta: 0.05
+  max_paired_games: 800
+  max_exact_saddle_gap: 0.05

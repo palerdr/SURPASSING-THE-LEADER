@@ -38,8 +38,6 @@ def _config(iterations: int = 100, exploration_c: float = 1.0) -> MCTSConfig:
     return MCTSConfig(
         iterations=iterations,
         exploration_c=exploration_c,
-        evaluator=None,
-        use_tablebase=False,
     )
 
 

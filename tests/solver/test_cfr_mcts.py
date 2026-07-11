@@ -39,6 +39,7 @@ from stl.solver.search import (
     _step_into_child,
     make_node,
     mcts_search,
+    normalize_policy_vector,
 )
 from stl.solver.tablebase import (
     forced_baku_overflow_death,
@@ -89,8 +90,6 @@ def _config(iterations: int, exploration_c: float = 1.0) -> MCTSConfig:
     return MCTSConfig(
         iterations=iterations,
         exploration_c=exploration_c,
-        evaluator=None,
-        use_tablebase=False,
     )
 
 
@@ -840,3 +839,146 @@ def test_root_value_not_dragged_to_zero_by_unvisited_cells():
     assert result.root_value_for_hal > 0.5, (
         f"root value {result.root_value_for_hal} collapsed toward 0"
     )
+
+
+# ── 9. P3 canonical improvement contract ─────────────────────────────────
+
+
+def test_mcts_config_rejects_inert_or_invalid_settings():
+    with pytest.raises(TypeError):
+        MCTSConfig(  # type: ignore[call-arg]
+            iterations=8,
+            exploration_c=1.0,
+            evaluator=None,
+        )
+    with pytest.raises(ValueError, match="iterations"):
+        MCTSConfig(iterations=0, exploration_c=1.0)
+    with pytest.raises(ValueError, match="action_mode"):
+        MCTSConfig(iterations=8, exploration_c=1.0, action_mode="bucketed")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="root_noise_epsilon"):
+        MCTSConfig(iterations=8, exploration_c=1.0, root_noise_epsilon=1.1)
+
+
+def test_policy_normalization_rejects_nan_and_negative_mass():
+    bad_nan = np.zeros(ACTION_SIZE)
+    bad_nan[1] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        normalize_policy_vector(bad_nan)
+
+    bad_negative = np.zeros(ACTION_SIZE)
+    bad_negative[1] = -0.1
+    with pytest.raises(ValueError, match="nonnegative"):
+        normalize_policy_vector(bad_negative)
+
+
+def test_role_priors_are_legal_normalized_and_factorized():
+    game = _baku_checker_at_cylinder(0.0)
+    node = make_node(game, ExactSearchConfig(), evaluator=TerminalOnlyEvaluator())
+
+    assert node.dropper_prior.sum() == pytest.approx(1.0)
+    assert node.checker_prior.sum() == pytest.approx(1.0)
+    assert np.all(node.dropper_prior >= 0.0)
+    assert np.all(node.checker_prior >= 0.0)
+    np.testing.assert_allclose(
+        node.prior,
+        np.outer(node.dropper_prior, node.checker_prior),
+    )
+
+
+def test_full_width_mode_propagates_to_root_and_descendant():
+    game = _baku_checker_at_cylinder(0.0)
+    root = make_node(game, ExactSearchConfig(), action_mode="full_width")
+    assert len(root.drop_seconds) == 60
+    assert len(root.check_seconds) == 60
+
+    child, outcome = _step_into_child(
+        root,
+        game,
+        0,
+        0,
+        np.random.default_rng(0),
+        ExactSearchConfig(),
+        action_mode="full_width",
+    )
+    assert outcome is None
+    assert len(child.drop_seconds) == 60
+    assert len(child.check_seconds) == 60
+    root.game_snapshot.restore(game)
+
+
+def test_full_width_mode_preserves_leap_role_asymmetry():
+    game = _baku_checker_at_cylinder(0.0)
+    game.game_clock = 3540.0
+    game.current_half = 2
+    node = make_node(game, ExactSearchConfig(), action_mode="full_width")
+    assert len(node.drop_seconds) == 61
+    assert len(node.check_seconds) == 60
+    assert node.drop_seconds[-1] == 61
+    assert node.check_seconds[-1] == 60
+
+
+def test_canonical_improved_policies_are_separate_from_mean_q_diagnostics():
+    scenario = safe_budget_pressure_at_cylinder_241()
+    result = mcts_search(
+        scenario.game,
+        MCTSConfig(iterations=64, exploration_c=1.0),
+        TerminalOnlyEvaluator(),
+        np.random.default_rng(4),
+        scenario.config,
+    )
+    assert result.improved_dropper_policy.sum() == pytest.approx(1.0)
+    assert result.improved_checker_policy.sum() == pytest.approx(1.0)
+    assert result.mean_q_dropper_policy.sum() == pytest.approx(1.0)
+    assert result.mean_q_checker_policy.sum() == pytest.approx(1.0)
+    assert result.root_strategy_dropper_avg is result.improved_dropper_policy
+    assert result.root_strategy_checker_avg is result.improved_checker_policy
+    assert result.root_strategy_dropper is result.mean_q_dropper_policy
+    assert result.root_strategy_checker is result.mean_q_checker_policy
+    assert result.action_mode == "candidate"
+    assert 0 <= result.root_unique_cells_visited <= result.cells_used
+
+
+def test_root_noise_is_separate_seeded_and_disabled_for_evaluation():
+    def run(noise_seed: int):
+        scenario = safe_budget_pressure_at_cylinder_241()
+        return mcts_search(
+            scenario.game,
+            MCTSConfig(
+                iterations=64,
+                exploration_c=1.0,
+                root_noise_epsilon=0.25,
+                root_dirichlet_alpha_scale=10.0,
+            ),
+            TerminalOnlyEvaluator(),
+            np.random.default_rng(9),
+            scenario.config,
+            root_noise_rng=np.random.default_rng(noise_seed),
+        )
+
+    first = run(3)
+    repeated = run(3)
+    changed = run(4)
+    np.testing.assert_array_equal(
+        first.improved_dropper_policy, repeated.improved_dropper_policy
+    )
+    np.testing.assert_array_equal(
+        first.improved_checker_policy, repeated.improved_checker_policy
+    )
+    assert not (
+        np.array_equal(first.improved_dropper_policy, changed.improved_dropper_policy)
+        and np.array_equal(first.improved_checker_policy, changed.improved_checker_policy)
+    )
+
+    scenario = safe_budget_pressure_at_cylinder_241()
+    with pytest.raises(ValueError, match="root_noise_rng"):
+        mcts_search(
+            scenario.game,
+            MCTSConfig(
+                iterations=8,
+                exploration_c=1.0,
+                root_noise_epsilon=0.25,
+            ),
+            TerminalOnlyEvaluator(),
+            np.random.default_rng(0),
+            scenario.config,
+        )

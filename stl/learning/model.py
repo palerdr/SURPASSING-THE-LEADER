@@ -16,9 +16,73 @@ from stl.engine.game import Game
 from stl.engine.actions import ACTION_SIZE
 
 HIDDEN_DIM = 64
-FEATURE_DIM = 23
+LEGACY_FEATURE_SCHEMA_VERSION = "stl.features.v1"
+FEATURE_SCHEMA_VERSION = "stl.features.v2"
+LEGACY_FEATURE_DIM = 23
 REFEREE_CPR_FEATURE_SCALE = 12.0
 DEVICE = torch.device("cpu")
+
+EXACT_FEATURE_NAMES = (
+    "p1_is_hal",
+    "p1_is_baku",
+    "p1_physicality",
+    "p1_cylinder",
+    "p1_ttd",
+    "p1_deaths",
+    "p1_alive",
+    "p2_is_hal",
+    "p2_is_baku",
+    "p2_physicality",
+    "p2_cylinder",
+    "p2_ttd",
+    "p2_deaths",
+    "p2_alive",
+    "referee_cprs",
+    "game_clock",
+    "current_half_1",
+    "current_half_2",
+    "round_num",
+    "first_dropper_p1",
+    "first_dropper_p2",
+    "first_dropper_none",
+    "game_over",
+    "winner_p1",
+    "winner_p2",
+    "winner_none",
+    "loser_p1",
+    "loser_p2",
+    "loser_none",
+)
+
+DERIVED_FEATURE_NAMES = (
+    "derived_hal_cylinder",
+    "derived_baku_cylinder",
+    "derived_hal_ttd",
+    "derived_baku_ttd",
+    "derived_hal_deaths",
+    "derived_baku_deaths",
+    "derived_hal_safe_budget",
+    "derived_baku_safe_budget",
+    "derived_hal_fail_survival",
+    "derived_baku_fail_survival",
+    "derived_hal_is_dropper",
+    "derived_game_clock",
+    "derived_round_num",
+    "derived_half_2",
+    "derived_lsr_variation_1",
+    "derived_lsr_variation_2",
+    "derived_lsr_variation_3",
+    "derived_lsr_variation_4",
+    "derived_is_leap_turn",
+    "derived_rounds_until_leap",
+    "derived_referee_cprs",
+    "derived_lsr_variation_2_repeat",
+    "derived_proximity_to_leap",
+)
+
+FEATURE_NAMES = EXACT_FEATURE_NAMES + DERIVED_FEATURE_NAMES
+FEATURE_INDEX = {name: index for index, name in enumerate(FEATURE_NAMES)}
+FEATURE_DIM = len(FEATURE_NAMES)
 
 
 def _clip01(value: float) -> float:
@@ -35,7 +99,13 @@ def _projected_fail_survival(game: Game, player) -> float:
     )
 
 
-def extract_features(game: Game) -> np.ndarray:
+def extract_features_v1(game: Game) -> np.ndarray:
+    """Return the legacy lossy 23-float feature vector.
+
+    V1 remains available only as an explicitly named adapter for artifact
+    inspection.  New targets and checkpoints use :func:`extract_features`.
+    """
+
     hal, baku = get_named_players(game)
     dropper, _ = game.get_roles_for_half(game.current_half)
     hal_is_dropper = dropper.name.lower() == "hal"
@@ -70,8 +140,81 @@ def extract_features(game: Game) -> np.ndarray:
         _clip01(proximity_to_leap),
     ]
 
-    assert len(features) == FEATURE_DIM
+    assert len(features) == LEGACY_FEATURE_DIM
     return np.asarray(features, dtype=np.float32)
+
+
+def _identity_one_hot(name: str) -> tuple[float, float]:
+    lowered = name.lower()
+    if lowered == "hal":
+        return 1.0, 0.0
+    if lowered == "baku":
+        return 0.0, 1.0
+    raise ValueError(f"feature schema V2 requires canonical Hal/Baku names, got {name!r}")
+
+
+def _player_reference_one_hot(game: Game, player) -> tuple[float, float, float]:
+    if player is None:
+        return 0.0, 0.0, 1.0
+    if player is game.player1 or player.name == game.player1.name:
+        return 1.0, 0.0, 0.0
+    if player is game.player2 or player.name == game.player2.name:
+        return 0.0, 1.0, 0.0
+    raise ValueError(f"player reference {player.name!r} is not part of this game")
+
+
+def extract_features_v2(game: Game) -> np.ndarray:
+    """Encode exact public state fields followed by documented derivatives.
+
+    The exact prefix avoids the clipping collisions in V1.  Scale factors are
+    linear and deliberately unclipped; they improve numerical conditioning
+    without identifying distinct reachable values.
+    """
+
+    p1_hal, p1_baku = _identity_one_hot(game.player1.name)
+    p2_hal, p2_baku = _identity_one_hot(game.player2.name)
+    first = _player_reference_one_hot(game, game.first_dropper)
+    winner = _player_reference_one_hot(game, game.winner)
+    loser = _player_reference_one_hot(game, game.loser)
+    exact = [
+        p1_hal,
+        p1_baku,
+        float(game.player1.physicality),
+        float(game.player1.cylinder) / CYLINDER_MAX,
+        float(game.player1.ttd) / CYLINDER_MAX,
+        float(game.player1.deaths) / 4.0,
+        float(game.player1.alive),
+        p2_hal,
+        p2_baku,
+        float(game.player2.physicality),
+        float(game.player2.cylinder) / CYLINDER_MAX,
+        float(game.player2.ttd) / CYLINDER_MAX,
+        float(game.player2.deaths) / 4.0,
+        float(game.player2.alive),
+        float(game.referee.cprs_performed) / REFEREE_CPR_FEATURE_SCALE,
+        float(game.game_clock) / 3600.0,
+        float(game.current_half == 1),
+        float(game.current_half == 2),
+        float(game.round_num) / 10.0,
+        *first,
+        float(game.game_over),
+        *winner,
+        *loser,
+    ]
+    features = np.concatenate(
+        (
+            np.asarray(exact, dtype=np.float32),
+            extract_features_v1(game),
+        )
+    )
+    assert features.shape == (FEATURE_DIM,)
+    return features
+
+
+def extract_features(game: Game) -> np.ndarray:
+    """Return the active, versioned V2 feature vector."""
+
+    return extract_features_v2(game)
 
 
 class ValueNet(nn.Module):

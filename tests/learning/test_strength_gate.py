@@ -283,9 +283,15 @@ def test_run_ladder_random_rung_is_reproducible_for_same_seed():
     assert first == second
 
 
-def test_run_ladder_rejects_subengine_half_round_cap():
-    with pytest.raises(ValueError):
-        run_ladder(_hal_stub, ["random"], n_games=1, seed=0, max_half_rounds=50)
+def test_run_ladder_accepts_explicit_learning_half_round_cap():
+    results = run_ladder(
+        _hal_stub,
+        ["random"],
+        n_games=1,
+        seed=0,
+        max_half_rounds=50,
+    )
+    assert results["random"].games_played == 1
 
 
 def test_reset_per_game_fires_once_per_game():

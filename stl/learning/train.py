@@ -1,33 +1,26 @@
-"""Phase 4: supervised training pipeline for the value net.
+"""Supervised policy/value training for the exact-to-self-play bridge.
 
-Trains ``hal.value_net.ValueNet`` against labeled targets produced by
-``training.value_targets``. MSE regression with a cosine learning-rate
-schedule, a held-out validation split, per-source MSE callbacks, and
-model checkpointing on best held-out MSE. No reward shaping, no
-imitation; targets are exact equilibrium values or MCTS-bootstrap
-values.
+The default path consumes a validated ``TrainingRecordV2`` shard, performs a
+grouped train/validation split, optimizes Hal-perspective value MSE plus masked
+dropper/checker cross entropy, and selects the best epoch by grouped validation
+MSE. Manifestless corpora require an explicit legacy opt-in.
 
-Usage (script):
-
-    python training/train_value_net.py --targets gen0.npz --out checkpoints/
-
-API (importable):
-
-    from stl.learning.train import train, TrainConfig
-    result = train("gen0.npz", "checkpoints/", TrainConfig(epochs=50))
-
-Outputs:
-    - ``<out>/best.pt`` — model state_dict snapshot at best val epoch.
-    - ``<out>/last.pt`` — model state_dict snapshot at final epoch.
-    - ``<out>/log.json`` — per-epoch metrics including train/val MSE
-      and per-source val MSE.
-    - ``TrainResult`` carrying the same metrics in memory.
+``train()`` writes ``best.pt`` and ``last.pt`` as strict
+``stl.checkpoint.v2`` bundles containing model, optimizer, scheduler, schemas,
+provenance, resolved config, training history, and RNG state. ``log.json``
+contains the per-epoch metrics, and ``TrainResult`` exposes the summary in
+memory.
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import math
+import os
+import subprocess
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -36,8 +29,23 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from stl.learning.model import FEATURE_DIM, HIDDEN_DIM, ValueNet, value_output
+from stl.learning.contracts import canonical_config_json, config_digest
+from stl.learning.model import (
+    FEATURE_DIM,
+    FEATURE_SCHEMA_VERSION,
+    HIDDEN_DIM,
+    ValueNet,
+    value_output,
+)
 from stl.engine.actions import ACTION_SIZE
+
+
+CHECKPOINT_FORMAT_VERSION = "stl.checkpoint.v2"
+ACTION_SCHEMA_VERSION = "stl.literal-seconds.v1"
+
+
+class CheckpointFormatError(ValueError):
+    """Raised when checkpoint semantics do not match the active model."""
 
 
 @dataclass(frozen=True)
@@ -83,6 +91,12 @@ class TrainConfig:
     # training penalizes value-output drift from this checkpoint on each batch.
     reference_checkpoint: str | None = None
     value_distill_weight: float = 0.0
+    # Optional integrity assertion for warm starts.  When set, the digest of
+    # ``init_checkpoint`` must match before any optimizer work begins.
+    required_parent_digest: str | None = None
+    # Manifestless ValueTarget NPZ files are legacy.  New training requires a
+    # validated TrainingRecordV2 shard unless a caller opts into migration.
+    allow_legacy_targets: bool = False
 
 
 @dataclass
@@ -161,9 +175,61 @@ def _evaluate(
 
 def _load_targets_npz(
     path: str | Path,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    list | None,
+]:
     """Load value and policy targets from a saved .npz file."""
-    data = np.load(path, allow_pickle=True)
+    from stl.learning.replay import load_replay_shard, manifest_path_for
+
+    if manifest_path_for(path).exists():
+        records = load_replay_shard(path, for_training=True)
+        n = len(records)
+        X = (
+            np.stack([record.features for record in records]).astype(np.float32)
+            if records
+            else np.zeros((0, FEATURE_DIM), dtype=np.float32)
+        )
+        y = np.asarray([record.value for record in records], dtype=np.float32)
+        sources = np.asarray([record.source for record in records], dtype=np.str_)
+        dropper_dists = (
+            np.stack([record.dropper_dist for record in records]).astype(np.float32)
+            if records
+            else np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        )
+        checker_dists = (
+            np.stack([record.checker_dist for record in records]).astype(np.float32)
+            if records
+            else np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        )
+        dropper_masks = (
+            np.stack([record.dropper_legal_mask for record in records]).astype(np.float32)
+            if records
+            else np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        )
+        checker_masks = (
+            np.stack([record.checker_legal_mask for record in records]).astype(np.float32)
+            if records
+            else np.zeros((0, ACTION_SIZE), dtype=np.float32)
+        )
+        return (
+            X,
+            y,
+            sources,
+            dropper_dists,
+            checker_dists,
+            dropper_masks,
+            checker_masks,
+            records,
+        )
+
+    data = np.load(path, allow_pickle=False)
     X = data["X"].astype(np.float32)
     y = data["y"].astype(np.float32)
     sources = np.array(data["sources"]).astype(str)
@@ -184,7 +250,7 @@ def _load_targets_npz(
     ):
         if arr.shape != (n, ACTION_SIZE):
             raise ValueError(f"Expected {name} shape {(n, ACTION_SIZE)}, got {arr.shape}")
-    return X, y, sources, dropper_dists, checker_dists, dropper_masks, checker_masks
+    return X, y, sources, dropper_dists, checker_dists, dropper_masks, checker_masks, None
 
 
 def _configure_trainable_parts(model: ValueNet, mode: str) -> None:
@@ -269,8 +335,23 @@ def train(
         checker_dists_np,
         dropper_masks_np,
         checker_masks_np,
+        replay_records,
     ) = _load_targets_npz(targets_npz_path)
-    train_idx, val_idx = _split_indices(X_np, config.val_fraction, rng)
+    if replay_records is None:
+        if not config.allow_legacy_targets:
+            raise ValueError(
+                "manifestless target corpus rejected; set allow_legacy_targets=True "
+                "only for an explicit V1 migration"
+            )
+        train_idx, val_idx = _split_indices(X_np, config.val_fraction, rng)
+    else:
+        from stl.learning.replay import grouped_split_indices
+
+        train_idx, val_idx = grouped_split_indices(
+            replay_records,
+            validation_fraction=config.val_fraction,
+            seed=config.seed,
+        )
 
     device = torch.device(config.device)
     X_train = torch.from_numpy(X_np[train_idx]).to(device)
@@ -314,7 +395,16 @@ def train(
         generator=torch.Generator().manual_seed(config.seed),
     )
 
+    parent_digest = None
     if config.init_checkpoint is not None:
+        parent_digest = checkpoint_digest(config.init_checkpoint)
+        if (
+            config.required_parent_digest is not None
+            and parent_digest != config.required_parent_digest
+        ):
+            raise CheckpointFormatError(
+                "init_checkpoint digest does not match required_parent_digest"
+            )
         model = load_checkpoint(config.init_checkpoint, device=config.device).to(device)
         loaded_hidden = int(model.trunk[0].out_features)
         if loaded_hidden != config.hidden_dim:
@@ -425,14 +515,34 @@ def train(
             best_val = val_mse
             best_epoch = epoch
             best_per_source = per_source
-            torch.save(model.state_dict(), best_path)
+            save_checkpoint_bundle(
+                best_path,
+                model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                train_config=config,
+                parent_digest=parent_digest,
+                corpus_digests=(checkpoint_digest(targets_npz_path),),
+                history=history,
+                epoch=epoch,
+            )
             epochs_since_improvement = 0
         else:
             epochs_since_improvement += 1
             if epochs_since_improvement >= config.early_stopping_patience:
                 break
 
-    torch.save(model.state_dict(), last_path)
+    save_checkpoint_bundle(
+        last_path,
+        model,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        train_config=config,
+        parent_digest=parent_digest,
+        corpus_digests=(checkpoint_digest(targets_npz_path),),
+        history=history,
+        epoch=len(history) - 1,
+    )
     with open(log_path, "w") as f:
         json.dump(
             {
@@ -457,34 +567,167 @@ def train(
     )
 
 
-def load_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> ValueNet:
-    """Restore a ValueNet from a saved state_dict.
+def checkpoint_digest(path: str | Path) -> str:
+    """SHA-256 digest for a checkpoint, corpus, or other immutable artifact."""
 
-    Infers ``hidden_dim`` from the checkpoint's ``trunk.0.weight`` shape so
-    Phase I (hidden=128) and pre-Phase-I (hidden=64) checkpoints both load
-    transparently. Falls back to legacy 'layers.*' key migration for very
-    early checkpoints written before the trunk/heads split.
-    """
-    state = torch.load(checkpoint_path, map_location=device)
-    # Infer hidden_dim from the first linear layer's output dimension.
-    inferred_hidden_dim = HIDDEN_DIM
-    for key in ("trunk.0.weight", "layers.0.weight"):
-        if key in state:
-            inferred_hidden_dim = int(state[key].shape[0])
-            break
-    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=inferred_hidden_dim)
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_commit() -> str:
     try:
-        model.load_state_dict(state)
-    except RuntimeError:
-        migrated = {}
-        for key, value in state.items():
-            if key.startswith("layers.0."):
-                migrated[key.replace("layers.0.", "trunk.0.")] = value
-            elif key.startswith("layers.2."):
-                migrated[key.replace("layers.2.", "trunk.2.")] = value
-            elif key.startswith("layers.4."):
-                migrated[key.replace("layers.4.", "value_head.0.")] = value
-        model.load_state_dict(migrated, strict=False)
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def _atomic_torch_save(payload: dict, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    os.close(fd)
+    temporary = Path(temporary_name)
+    try:
+        torch.save(payload, temporary)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def save_checkpoint_bundle(
+    path: str | Path,
+    model: ValueNet,
+    *,
+    optimizer=None,
+    scheduler=None,
+    train_config: TrainConfig | None = None,
+    parent_digest: str | None = None,
+    corpus_digests: tuple[str, ...] = (),
+    history: list[dict] | None = None,
+    epoch: int | None = None,
+) -> None:
+    """Atomically write a self-describing V2 checkpoint bundle."""
+
+    hidden_dim = int(model.trunk[0].out_features)
+    resolved_config = asdict(train_config) if train_config is not None else {}
+    payload = {
+        "format_version": CHECKPOINT_FORMAT_VERSION,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict() if optimizer is not None else None,
+        "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+        "model_schema": {
+            "feature_schema": FEATURE_SCHEMA_VERSION,
+            "feature_dim": FEATURE_DIM,
+            "action_schema": ACTION_SCHEMA_VERSION,
+            "action_size": ACTION_SIZE,
+            "hidden_dim": hidden_dim,
+        },
+        "provenance": {
+            "parent_digest": parent_digest,
+            "corpus_digests": list(corpus_digests),
+            "resolved_config": resolved_config,
+            "resolved_config_json": canonical_config_json(resolved_config),
+            "resolved_config_digest": config_digest(resolved_config),
+            "git_commit": _git_commit(),
+            "seed": train_config.seed if train_config is not None else None,
+        },
+        "training": {
+            "epoch": epoch,
+            "history": list(history or ()),
+            "numpy_rng_state": np.random.get_state(),
+            "torch_rng_state": torch.get_rng_state(),
+        },
+    }
+    _atomic_torch_save(payload, Path(path))
+
+
+def load_checkpoint_bundle(
+    checkpoint_path: str | Path,
+    *,
+    device: str = "cpu",
+    expected_parent_digest: str | None = None,
+) -> dict:
+    """Load and validate checkpoint metadata before constructing a model."""
+
+    payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if not isinstance(payload, dict) or payload.get("format_version") != CHECKPOINT_FORMAT_VERSION:
+        raise CheckpointFormatError(
+            "bare or legacy checkpoint rejected; use load_legacy_checkpoint() "
+            "only for an explicit migration"
+        )
+    required = {"model_state_dict", "model_schema", "provenance", "training"}
+    missing = required - set(payload)
+    if missing:
+        raise CheckpointFormatError(f"checkpoint bundle missing fields: {sorted(missing)}")
+
+    schema = payload["model_schema"]
+    expected_schema = {
+        "feature_schema": FEATURE_SCHEMA_VERSION,
+        "feature_dim": FEATURE_DIM,
+        "action_schema": ACTION_SCHEMA_VERSION,
+        "action_size": ACTION_SIZE,
+    }
+    for key, expected in expected_schema.items():
+        if schema.get(key) != expected:
+            raise CheckpointFormatError(
+                f"checkpoint {key}={schema.get(key)!r}, expected {expected!r}"
+            )
+    parent_digest = payload["provenance"].get("parent_digest")
+    if expected_parent_digest is not None and parent_digest != expected_parent_digest:
+        raise CheckpointFormatError("checkpoint parent digest mismatch")
+
+    state = payload["model_state_dict"]
+    if not isinstance(state, dict) or "trunk.0.weight" not in state:
+        raise CheckpointFormatError("checkpoint has no modern trunk.0.weight")
+    hidden_dim = int(schema.get("hidden_dim", 0))
+    if hidden_dim <= 0:
+        raise CheckpointFormatError("checkpoint hidden_dim must be positive")
+    first_weight = state["trunk.0.weight"]
+    policy_weight = state.get("policy_head.weight")
+    if tuple(first_weight.shape) != (hidden_dim, FEATURE_DIM):
+        raise CheckpointFormatError("checkpoint input layer does not match feature schema")
+    if policy_weight is None or tuple(policy_weight.shape) != (2 * ACTION_SIZE, hidden_dim):
+        raise CheckpointFormatError("checkpoint policy head does not match action schema")
+    return payload
+
+
+def load_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> ValueNet:
+    """Restore a strictly validated V2 ValueNet checkpoint bundle."""
+
+    payload = load_checkpoint_bundle(checkpoint_path, device=device)
+    hidden_dim = int(payload["model_schema"]["hidden_dim"])
+    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=hidden_dim)
+    try:
+        model.load_state_dict(payload["model_state_dict"], strict=True)
+    except RuntimeError as exc:
+        raise CheckpointFormatError(f"checkpoint state_dict is incompatible: {exc}") from exc
+    model.to(device)
+    model.eval()
+    return model
+
+
+def load_legacy_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> ValueNet:
+    """Explicit V1/bare-state adapter for inspection and one-time migration."""
+
+    state = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    if not isinstance(state, dict) or "trunk.0.weight" not in state:
+        raise CheckpointFormatError("unrecognized legacy checkpoint")
+    input_dim = int(state["trunk.0.weight"].shape[1])
+    if input_dim != FEATURE_DIM:
+        raise CheckpointFormatError(
+            f"legacy checkpoint input_dim={input_dim}; active V2 requires {FEATURE_DIM}"
+        )
+    hidden_dim = int(state["trunk.0.weight"].shape[0])
+    model = ValueNet(input_dim=FEATURE_DIM, hidden_dim=hidden_dim)
+    model.load_state_dict(state, strict=True)
     model.to(device)
     model.eval()
     return model
@@ -540,8 +783,8 @@ def make_predict_fn(model: ValueNet, device: str = "cpu"):
     return predict
 
 
-if __name__ == "__main__":
-    import argparse
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser used directly and by the Hydra dispatcher."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--targets", required=True, help="Path to .npz from value_targets")
@@ -551,7 +794,18 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cpu")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--allow-legacy-targets",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    return parser
+
+
+def main() -> int:
+    """Train from command-line arguments and return a process exit code."""
+
+    args = build_parser().parse_args()
 
     cfg = TrainConfig(
         epochs=args.epochs,
@@ -559,6 +813,7 @@ if __name__ == "__main__":
         learning_rate=args.lr,
         seed=args.seed,
         device=args.device,
+        allow_legacy_targets=args.allow_legacy_targets,
     )
     result = train(args.targets, args.out, cfg)
     print(
@@ -569,3 +824,8 @@ if __name__ == "__main__":
         print("Per-source val MSE:")
         for source, mse in sorted(result.best_per_source_mse.items()):
             print(f"  {source}: {mse:.5f}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
