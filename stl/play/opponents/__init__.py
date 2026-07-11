@@ -1,7 +1,7 @@
 """Opponent implementations used by the environment layer.
 
-This package contains simple baselines, scripted teachers, model-backed
-opponents, and weighted leagues that mix them together.
+This package contains simple baselines, scripted teachers, and weighted
+scripted leagues.
 """
 
 from .base import Opponent

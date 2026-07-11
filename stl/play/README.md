@@ -7,7 +7,7 @@ Compact playable surface.
 - `canonical_hal.py` - canonical Hal adapter for the older bucketed playable baseline.
 - `env.py` - Gym-style environment wrapper used by RL/self-play tests.
 - `action_model.py`, `search.py`, `state.py` - bucket baseline mechanics for playable Hal.
-- `opponents/` - scripted opponents, teacher policies, pattern reader, model opponent, and league helpers.
+- `opponents/` - scripted opponents, teacher policies, pattern reader, and weighted scripted leagues.
 
 This layer may use the engine, solver, and learning model. Engine and rigorous solver code must not depend on play code.
 

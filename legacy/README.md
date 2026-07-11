@@ -1,13 +1,19 @@
 # `legacy/`
 
-This is not a second source tree. It only holds the obsolete pre-consolidation layout under `old_layout/` for audit/reference.
+There is no second source tree. The obsolete `legacy/old_layout/` mirror was
+deleted during the Python distillation audit after commit `a4b03db` was pushed.
+Use that commit for exact historical contents.
 
-Active AlphaZero/RL/game functionality lives in `stl/`:
+Old-to-live ownership is:
 
-- engine truth in `stl.engine`
-- exact/search/tablebase work in `stl.solver`
-- target generation, model training, self-play support, and gates in `stl.learning`
-- playable Hal, solver agents, opponents, and the CLI in `stl.play`
-- Hydra commands in `stl.commands`
+| Old path | Live owner |
+|---|---|
+| `src/` | `stl/engine/` |
+| `environment/cfr/` | `stl/solver/` |
+| `training/` | `stl/learning/` |
+| `hal/` and non-rigorous environment code | `stl/play/` |
+| `scripts/` | `stl/commands/` plus Hydra `configs/` |
 
-Do not add new runtime code here. If an old file becomes useful again, promote it into the appropriate `stl/` package.
+Do not restore runtime code under `legacy/`. Recover a historical file from
+Git, then deliberately migrate only the still-needed behavior to its live
+owner with tests.

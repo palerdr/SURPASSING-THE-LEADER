@@ -1,3 +1,5 @@
 name: compare_ladder
 module: stl.commands.compare_ladder
 args: null
+champion_checkpoint: ???
+candidate_checkpoint: ???

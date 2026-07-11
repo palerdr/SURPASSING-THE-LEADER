@@ -1,8 +1,6 @@
 name: promote
 module: stl.commands.promote
 args: null
-candidate: checkpoints/candidate/best.pt
-champion: checkpoints/champion/best.pt
-calibration_report: checkpoints/candidate/calibration.json
-ladder_report: checkpoints/candidate/ladder.json
-exploitability_report: checkpoints/candidate/exploitability.json
+calibration_report: ???
+ladder_report: ???
+exploitability_report: ???

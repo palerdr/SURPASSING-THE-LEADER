@@ -10,8 +10,9 @@ engine rules -> exact/search anchors -> value/policy learning -> gated self-play
 
 The goal is not to preserve every historical script. The live tree keeps the
 engine, exact solver, playable agents, training bridge, and Hydra command
-surface in `stl/`. Obsolete pre-consolidation packages are kept only under
-`legacy/old_layout/` for reference.
+surface in `stl/`. The disconnected pre-consolidation mirror was removed after
+the pushed `a4b03db` archival baseline; `legacy/README.md` maps old paths to
+their live owners.
 
 ## Current Layout
 
@@ -26,7 +27,7 @@ surface in `stl/`. Obsolete pre-consolidation packages are kept only under
 | `tests/{engine,solver,learning,play}/` | Regression tests grouped by subsystem. |
 | `docs/whitepaper/` | Current solver whitepaper source/PDF. |
 | `docs/papers/` | Reference papers. |
-| `legacy/old_layout/` | Obsolete old layout only. Do not add new runtime code here. |
+| `legacy/README.md` | Archive commit and old-to-live path map; no runtime code. |
 
 Generated corpora, checkpoints, logs, demos, `outputs/`, `multirun/`, and
 `target/` should stay out of source review unless the artifact itself is under
@@ -57,11 +58,11 @@ uv run pytest --collect-only -q
 uv run pytest -q
 ```
 
-The latest verified full suite after executing REGEN2RL through P3 and the P4
-pipeline smoke was:
+The latest verified full suite after executing REGEN2RL through P3, the P4
+pipeline smoke, and distillation D1 was:
 
 ```text
-703 passed, 4 skipped
+719 passed, 4 skipped
 ```
 
 ## Playing A Match
@@ -119,19 +120,23 @@ uv run python -m stl.cli command=gen0_targets --cfg job
 uv run python -m stl.cli command=train_gen0 --cfg job
 
 # Evaluation and promotion surfaces
-uv run python -m stl.cli command=eval
-uv run python -m stl.cli command=promote
+uv run python -m stl.cli command=eval command.checkpoint=/path/to/candidate.pt
+uv run python -m stl.cli command=promote \
+  command.calibration_report=/path/to/calibration.json \
+  command.ladder_report=/path/to/ladder.json \
+  command.exploitability_report=/path/to/exploitability.json
 ```
 
-The next unchecked REGEN2RL action is the full Generation-Zero anchor corpus:
+The current unchecked REGEN2RL action is the full Generation-Zero anchor corpus:
 `uv run python -m stl.cli command=gen0_targets`. It is intentionally a long
 generation boundary; inspect its resolved config and output scope before
 starting it, then review both manifests before `command=train_gen0`.
 
-`command=self_play` is not yet a supported AlphaZero entry point. The current
-command targets the legacy bucketed outcome loop and its Hydra arguments do not
-match its parser. Phase P5 of `docs/REGEN2RL.md` replaces that path with
-matrix-game MCTS self-play before it is advertised here.
+There is intentionally no public `command=self_play` before P5. The old broken
+Hydra wrapper was removed; the tested compatibility module still runs the
+legacy bucketed actor against scripted opponents. Phase P5 of
+`docs/REGEN2RL.md` replaces that module with matrix-game MCTS self-play before
+adding a command again.
 
 ## Solver Shape
 
@@ -198,10 +203,11 @@ checks when the policy head is involved.
 
 This is not yet a closed AlphaZero reinforcement-learning loop. P0--P3 of the
 audited bridge are implemented, and the short P4 Generation-Zero corpus/trainer
-smoke passes. The full anchor corpus and first training run remain deliberately
-unexecuted. The module named self-play still runs legacy `CanonicalHal` against
-scripted opponents; genuine two-role MCTS self-play begins in P5. The phase
-gates and current stopping point are in `docs/REGEN2RL.md`.
+smoke passes. Full anchor generation is in progress; the first full training
+run has not started. The compatibility self-play module still runs legacy
+`CanonicalHal` against scripted opponents; genuine two-role MCTS self-play
+begins in P5. The phase gates and current stopping point are in
+`docs/REGEN2RL.md`.
 
 ## Architecture Rules
 
@@ -221,6 +227,7 @@ gates and current stopping point are in `docs/REGEN2RL.md`.
 
 - `docs/whitepaper/stl_solver_whitepaper.tex`
 - `docs/whitepaper/stl_solver_whitepaper.pdf`
+- `docs/DISTILLATION_AUDIT.md`
 - `docs/papers/`
 
 The whitepaper is the current long-form architecture and rigor statement. The

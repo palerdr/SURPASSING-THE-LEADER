@@ -82,10 +82,11 @@ utility, action space, or promotion rule.
 
 ### Why the current tree is not yet full AlphaZero reinforcement learning
 
-1. `configs/command/self_play.yaml` dispatches to
-   `stl.commands.alphazero_loop`, but the config emits
-   `--games-per-iter` and `--base-seed`; that parser accepts neither. The
-   documented smoke command currently exits in argument parsing.
+1. The audit found that the former `configs/command/self_play.yaml` dispatched
+   to `stl.commands.alphazero_loop` with two parser-invalid flags. Both the
+   misleading command and its legacy wrapper were removed in distillation D1.
+   There is intentionally no public self-play command until P5 implements the
+   joint MCTS actor and passes the command-contract test.
 2. `stl/learning/support/self_play.py` runs bucketed `CanonicalHal` against a
    rotating scripted opponent list. It records only `(features, outcome)` and
    never calls matrix-game MCTS. This is useful legacy/league data, not
@@ -469,8 +470,8 @@ outcomes.
 ### Python scope
 
 - replace or explicitly rename `stl/learning/support/self_play.py`
-- `stl/commands/alphazero_loop.py` or a replacement command
-- `configs/command/self_play.yaml` and experiment configs
+- a new joint-MCTS command; do not restore the removed legacy wrapper
+- new `self_play` command and experiment configs only after the parser contract exists
 - self-play tests
 
 ### Work packages

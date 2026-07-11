@@ -1,3 +1,7 @@
-description: Tier A stage-1 single-epoch smoke.
-limit: 1
-workers: 1
+# @package _global_
+experiment:
+  description: Tier A stage-1 single-epoch smoke.
+command:
+  stage: 1
+  limit: 1
+  workers: 1

@@ -106,17 +106,6 @@ def apply_half_round(game: Game, drop_time: int, check_time: int, survived: bool
     return record.survival_probability or 0.0
 
 
-def _hal_immediate_view(
-    hal_buckets: tuple[Bucket, ...],
-    baku_buckets: tuple[Bucket, ...],
-    checker_cylinder: float,
-    hal_is_dropper: bool,
-) -> np.ndarray:
-    """Return a payoff matrix from Hal's perspective (high = good for Hal)."""
-    raw = build_payoff_matrix(hal_buckets, baku_buckets, checker_cylinder, hal_is_dropper)
-    return -raw if hal_is_dropper else raw
-
-
 def _prune_dominated(
     hal_buckets: tuple[Bucket, ...],
     baku_buckets: tuple[Bucket, ...],

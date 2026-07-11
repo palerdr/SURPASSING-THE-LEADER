@@ -47,8 +47,9 @@ kernel work.
 
 ## Gaps and Risks
 
-- The documented Hydra self-play command currently emits flags its parser does
-  not accept.
+- The audit found that the former Hydra self-play command emitted flags its
+  parser did not accept; distillation D1 removed that misleading surface until
+  P5 supplies the real joint-MCTS actor.
 - The module named self-play does not call matrix-game MCTS and only improves
   Hal against scripted opponents.
 - Static MCTS bootstrap values are not AlphaZero terminal outcomes.

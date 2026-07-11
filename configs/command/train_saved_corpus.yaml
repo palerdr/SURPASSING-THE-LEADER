@@ -1,3 +1,6 @@
 name: train_saved_corpus
 module: stl.commands.train_saved_corpus
 args: null
+targets: ???
+out_dir: ???
+held_out_targets: ???

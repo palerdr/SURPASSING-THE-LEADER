@@ -30,15 +30,6 @@ def _counts_summary(counts: dict) -> dict:
     }
 
 
-def _copy_counts(stats: dict) -> dict:
-    return {
-        "games": int(stats["games"]),
-        "wins": int(stats["wins"]),
-        "draws": int(stats["draws"]),
-        "losses": int(stats["losses"]),
-    }
-
-
 def _add_counts(total: dict, stats: dict) -> None:
     total["games"] += int(stats["games"])
     total["wins"] += int(stats["wins"])

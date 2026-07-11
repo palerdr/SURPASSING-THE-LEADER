@@ -58,8 +58,8 @@ The repository does not yet implement a complete AlphaZero loop. Phases P0--P3
 of the Python bridge now provide a finite episode contract, exact/search
 conformance, reconstructable replay and checkpoints, and a tested
 simultaneous-MCTS improvement object; a short Generation-Zero pipeline smoke
-also passes. The full anchor generation and training runs remain unexecuted,
-and the module named self-play still uses a legacy bucketed agent against
+also passes. Full anchor generation is in progress and full training remains
+unexecuted. The compatibility self-play module still uses a legacy bucketed agent against
 scripted opponents. This distinction matters: AlphaZero-style reinforcement
 learning requires search policies at states actually visited by MCTS self-play
 and terminal episode outcomes as value targets. Rust is deferred until the
@@ -71,10 +71,12 @@ or global exploitability of the learned agent.
 
 \section{Scope, Status, and Claims}
 
-The live runtime tree is under \path{stl/}. The old package layout under
-\path{legacy/old_layout/} is reference material only. The implementation plan
-is \path{docs/REGEN2RL.md}; this paper supplies its mathematical rationale and
-claim boundary.
+The live runtime tree is under \path{stl/}. The disconnected old package mirror
+was removed after pushed archival commit \texttt{a4b03db}; Git, rather than a
+second source tree, retains that history. The implementation plan is
+\path{docs/REGEN2RL.md}, and the granular removal ledger is
+\path{docs/DISTILLATION_AUDIT.md}. This paper supplies the mathematical
+rationale and claim boundary.
 
 \begin{center}
 \begin{tabularx}{\textwidth}{@{}lX@{}}
@@ -451,10 +453,10 @@ closed RL loop.
 \subsection{Blocking Integration Gaps}
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Broken command surface.}
-        \path{command=self_play} emits parser flags not accepted by
-        \path{stl.commands.alphazero_loop}, so the documented Hydra smoke
-        command fails before generation.
+  \item \textbf{No premature command surface.}
+        The broken legacy \path{command=self_play} wrapper has been removed.
+        A public command is added only when P5 supplies the joint MCTS actor,
+        reconstructable replay, and command-contract tests.
   \item \textbf{Legacy actor.}
         \path{stl/learning/support/self_play.py} uses bucketed
         \path{CanonicalHal} against scripted opponents. It is curriculum or
