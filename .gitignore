@@ -39,3 +39,5 @@ Thumbs.db
 # Local AI/tooling metadata
 /.codex
 /AGENTS.md
+/foundations.md
+/.agents

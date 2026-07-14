@@ -1,6 +1,7 @@
 # REGEN2RL: Python-First Bridge to Simultaneous-Move AlphaZero
 
-Status: canonical implementation checklist, executed through P3 on 2026-07-10.
+Status: canonical implementation checklist, executed through P3; corrected P4
+generation code is implemented but no corrected dataset has been generated.
 
 Checklist legend:
 
@@ -17,19 +18,22 @@ Checklist legend:
 - [x] **P1 Python oracle/search conformance.** Actor-aware `60 x 60` and
   `61 x 60` legality, RNG-safe state restoration, LP/CFR+ parity,
   omitted-action audits, and chance-frequency tests are implemented.
-- [x] **P2 reconstructable schemas.** `TrainingRecordV2`, V2 features, safe
-  shards, grouped splits, strict checkpoint bundles, and stale-artifact
-  rejection are implemented.
+- [x] **P2 reconstructable schemas.** `TrainingRecordV3`, V2 features, safe
+  shards, grouped state/episode/feature splits, strict checkpoint bundles, and
+  stale-artifact rejection are implemented. V3 supersedes the rejected Gen-0
+  V2 rows without changing the V2 feature encoder or V2 checkpoint format.
 - [x] **P3 MCTS improvement operator.** Canonical linearly weighted mean-Q
   policies, factorized priors/noise, full-width mode, and the frozen
   convergence gate pass. Report:
   `outputs/regen2rl/p3_mcts_conformance.json`, canonical report-payload SHA-256
   `245037e1bb11d8d2bef0e30a7ae10f78751fe541d24a5c938b6aaa4bae432eb1`.
-- [x] **P4 preparation smoke.** The V2 Gen-0 Hydra smoke generated 26 training
-  and 26 external-ruler records, and a one-epoch trainer smoke reloaded its
-  checkpoint successfully.
-- [ ] **STOP: P4.1 full anchor generation.** This is the first long generation
-  run. Execute the command in P4 only after reviewing compute/storage scope.
+- [x] **P4 generation repair.** Legal-engine trajectories, real terminal deaths,
+  coordinated pre-label splitting, disjoint tactical pins, training-only Tier A
+  intervals, V3 provenance, and immutable resumable chunks are implemented and
+  structurally tested.
+- [ ] **STOP: corrected tiny generation.** The command is prepared but was not
+  executed. Do not train or start the full anchor run before its manifests and
+  isolation report pass review.
 
 This document replaces the action-core reset memo. The reset remains a
 non-negotiable input, but it is no longer the roadmap. The roadmap is now to
@@ -76,8 +80,8 @@ utility, action space, or promotion rule.
 | Search | `stl/solver/search.py`, `conformance.py`, and `mcts_conformance.py` | P1/P3 conformance complete; candidate mode remains approximate and audited. |
 | Exact anchors | `stl/solver/tablebase.py` and `stl/learning/targets.py` | Retain as immutable replay strata. |
 | Policy/value model | `stl/learning/model.py` emits one Hal value and two length-62 role heads from 52 named V2 features | P2 schema complete; empirical fit remains a P4 gate. |
-| Replay/checkpoints | `stl/learning/replay.py` and `train.py` provide reconstructable V2 shards, grouped splits, and strict bundles | P2 integrity boundary complete. |
-| Supervised learner | `stl/learning/train.py` has masked role-policy losses, weighted value loss, grouped selection, and V2 loading | P4 smoke complete; full anchor generation/training pending. |
+| Replay/checkpoints | `stl/learning/replay.py` and `train.py` provide reconstructable V3 shards, grouped splits, and strict V2 checkpoint bundles | P2 integrity boundary complete; rejected V2 Gen-0 shards are not migrated. |
+| Supervised learner | `stl/learning/train.py` has masked role-policy losses, weighted value loss, grouped selection, and V3 replay loading | Corrected smoke and full anchor generation/training remain pending. |
 | Evaluation pieces | calibration, audit, ladder, best-response intervals, SPRT, and promotion modules | Integrate into one mandatory gate with precise claim labels. |
 
 ### Why the current tree is not yet full AlphaZero reinforcement learning
@@ -294,7 +298,7 @@ semantics do not match the current engine/model.
 
 ### Work packages
 
-- [x] **P2.1 `TrainingRecordV2`.** Store feature vector, serialized
+- [x] **P2.1 `TrainingRecordV3`.** Store feature vector, serialized
   `ExactPublicState`, Hal value target, target kind, both role distributions,
   both legal masks, source, episode ID, half-round index, truncation flag,
   parent checkpoint digest, search-config digest, engine/action/feature schema
@@ -318,6 +322,12 @@ semantics do not match the current engine/model.
   parent digest, corpus digests, resolved config, git commit, seed, and training
   history. Loading a bare incompatible `state_dict` must fail loudly unless an
   explicit migration is selected.
+- [x] **P2.8 Gen-0 V3 provenance repair.** Preserve exact value horizon and
+  cutoff probability separately from Tier A lower/upper value bounds. Record
+  state origin, source artifact and digest, and a replayable legal action trace
+  for engine-derived rows. Bind shards to a canonical generation plan, the
+  actual Python/config source-tree digest, runtime versions, split rule, Tier A
+  manifest digest, and ordered parent chunks. V2 Gen-0 shards fail schema load.
 
 ### Exit gate
 
@@ -327,11 +337,14 @@ semantics do not match the current engine/model.
 - [x] Corrupt shard, mismatched action size, feature schema, or checkpoint parent
   digest fails before training begins.
 - [x] Train and validation exact-state hash sets have empty intersection.
-- [x] V2 collision audit reports zero divergent-value collisions on the full
+- [x] V3 collision audit reports zero divergent-value collisions on the full
   pinned/tablebase corpus. Any remaining collision class is documented and
   routed away from bare-net evaluation.
 - [x] Old length-61 or 122-logit artifacts are rejected, as required by
   `stl/learning/README.md`.
+- [x] Engine-trajectory rows replay to the stored exact state; impossible forced
+  chance outcomes, inconsistent CPR/death/TTD counters, active uncertified Tier
+  A policies, and malformed Tier A inventories/arrays fail before publication.
 
 ## P3 - Make Matrix-Game MCTS the Tested Improvement Operator [x]
 
@@ -413,12 +426,17 @@ MCTS without claiming reinforcement learning has begun.
 
 ### Work packages
 
-- [x] **P4.0 Pipeline smoke.** `command=gen0_targets experiment=gen0_smoke`
-  writes reconstructable V2 train/ruler shards, and a one-epoch CPU trainer
-  smoke reloads the resulting checkpoint bundle.
+- [x] **P4.0 Rejected-pipeline diagnosis and repair.** The original V2 smoke and
+  long run proved that the command path executed, but their data failed the
+  reachability, terminal-mechanics, split-isolation, Tier A, and provenance
+  audit. Obsolete artifacts were removed. The replacement V3 path is
+  implemented and tested without publishing a corrected dataset.
 - [ ] **P4.1 Fixed anchor corpus.** Regenerate terminal, full-width finite-horizon,
-  tactical tablebase, and certified Tier A rows under V2 schemas. Store corpus
-  and holdout digests.
+  tactical tablebase, and certified Tier A rows under V3 replay schemas. Exact
+  and terminal rows must replay from the canonical opening; tactical fixtures
+  must pass counter invariants; Tier A rows retain interval bounds and have no
+  active policy label. Store corpus, ruler, source-tree, plan, and parent-chunk
+  digests.
 - [ ] **P4.2 Policy labels.** Use LP equilibrium role marginals on exact rows. Rows
   without a certified policy carry an inactive policy-loss mask rather than a
   fabricated uniform target.
@@ -432,14 +450,19 @@ MCTS without claiming reinforcement learning has begun.
 
 ### Execution checklist
 
-- [x] Structural generation smoke:
+- [x] Retire the failed V2 smoke/full shards, dated traces, and non-authoritative
+  checkpoints while preserving raw Tier A and the canonical P3 report.
+- [x] Structural code tests: replayable trajectories, non-zero-probability chance
+  branches, physical terminal counters, V3 round trip, source/episode/feature
+  split isolation, strict Tier A preflight, and chunk resume mismatch refusal.
+- [ ] **Corrected tiny generation -- current stopping point, not executed:**
   `uv run python -m stl.cli command=gen0_targets experiment=gen0_smoke`.
-- [x] One-epoch V2 trainer/reload smoke:
+- [ ] Strict-load both V3 outputs; review plan/source/Tier A/parent-chunk digests,
+  exact-state and feature isolation, source coverage, interval widths, inactive
+  Tier A policies, and collision report.
+- [ ] One-epoch V3-replay/V2-checkpoint trainer/reload smoke:
   `uv run python -m stl.cli command=train_gen0 experiment=gen0_train_smoke`.
-- [ ] **First long run -- current stopping point:**
-  `uv run python -m stl.cli command=gen0_targets`.
-- [ ] Review both V2 manifests, source coverage, collision report, and external
-  ruler isolation before training.
+- [ ] **First full anchor run:** `uv run python -m stl.cli command=gen0_targets`.
 - [ ] First full training run:
   `uv run python -m stl.cli command=train_gen0`.
 
@@ -458,6 +481,12 @@ MCTS without claiming reinforcement learning has begun.
   `0.05` across seeds `0..9`.
 - [ ] The checkpoint bundle reloads and reproduces predictions within `1e-7` on
   CPU.
+- [ ] Train/ruler exact-state hashes, episode IDs, and feature hashes are pairwise
+  disjoint; every engine-derived row replays exactly; every terminal loser has a
+  fatal death, positive TTD, and matching CPR count.
+- [ ] An interrupted run reuses valid committed chunks, refuses a changed plan or
+  corrupt committed chunk, and yields the same ordered per-array digests as an
+  uninterrupted run.
 
 ## P5 - Build Genuine MCTS Self-Play [ ]
 
@@ -495,7 +524,7 @@ outcomes.
 
 ### Exit gate
 
-- [ ] A four-game CPU smoke run completes through Hydra and writes valid V2 shards
+- [ ] A four-game CPU smoke run completes through Hydra and writes valid V3 shards
   without a checkpoint or parser error.
 - [ ] Re-running the same smoke manifest produces identical state/action/outcome
   hashes; changing only the root-noise seed changes at least one trajectory.

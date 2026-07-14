@@ -194,6 +194,9 @@ def validate_rl_config(config: Any) -> dict[str, Any]:
         raise ValueError("baseline must use feature schema V2")
     if model.get("action_size") != 62:
         raise ValueError("baseline action size must be 62")
+    replay = plain.get("replay", {})
+    if replay.get("schema") != "stl.training-record.v3":
+        raise ValueError("baseline must use reconstructable training-record V3")
     mcts = plain.get("mcts", {})
     if mcts.get("matrix_solver") not in {"lp", "cfr_plus"}:
         raise ValueError("default matrix solver must be Python LP or CFR+")

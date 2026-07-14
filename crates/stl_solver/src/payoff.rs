@@ -63,14 +63,14 @@ pub(crate) fn compute_immediate_payoff_matrix(
 
 //gives dropper probs, checker probs, and the E[payoff] given they adopt those strategies
 pub(crate) fn solve_half_round_matrix_continuation(
-      drop_times: &[usize],
-      check_times: &[usize],
-      success_values: &[f64],
-      fail_value: f64,
-      iterations: usize,
-      avg_delay: usize,
-      linear_weighting: bool,
-  ) -> (Vec<f64>, Vec<f64>, f64) {
+    drop_times: &[usize],
+    check_times: &[usize],
+    success_values: &[f64],
+    fail_value: f64,
+    iterations: usize,
+    avg_delay: usize,
+    linear_weighting: bool,
+) -> (Vec<f64>, Vec<f64>, f64) {
     let n_drop = drop_times.len();
     let n_check = check_times.len();
     let payoff = compute_augmented_payoff_matrix(n_drop, n_check, success_values, fail_value);
@@ -113,24 +113,6 @@ pub(crate) fn solve_half_round_matrix(
     );
     (p, q, v)
 }
-
-
-pub struct  ExactJointAction {
-    dt: u8,
-    ct: u8,
-}
-
-pub struct UtilityBreakdown {
-    value: f64,
-    hal_win_probability: f64,
-    baku_win_probability: f64,
-    unresolved_probability: f64,
-}
-
-pub(crate) fn evaluate_joint_action(game: Game, action : ExactJointAction, horizon: u8) -> UtilityBreakdown {
-
-}
-
 
 #[cfg(test)]
 mod tests {

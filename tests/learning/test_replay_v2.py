@@ -13,11 +13,12 @@ from stl.engine.game import Game, PHYSICALITY_BAKU, PHYSICALITY_HAL, Player, Ref
 from stl.learning.model import FEATURE_DIM, extract_features
 from stl.learning.replay import (
     DEFAULT_FEATURE_SCHEMA,
-    REPLAY_MANIFEST_SCHEMA_V2,
+    REPLAY_MANIFEST_SCHEMA_V3,
     ReplayValidationError,
     ShardRole,
+    StateOrigin,
     TargetKind,
-    TrainingRecordV2,
+    TrainingRecordV3,
     audit_feature_collisions,
     canonical_exact_state_json,
     exact_state_from_json,
@@ -47,8 +48,8 @@ def _game(index: int) -> Game:
     game.round_num = index // 2
     hal.cylinder = float(index % 200)
     baku.cylinder = float((index * 3) % 200)
-    hal.ttd = float(index % 60)
-    baku.ttd = float((index * 2) % 60)
+    hal.ttd = 0.0
+    baku.ttd = 0.0
     return game
 
 
@@ -67,11 +68,11 @@ def _record(
     *,
     target_kind: TargetKind = TargetKind.EXACT_VALUE,
     episode_id: str | None = None,
-) -> TrainingRecordV2:
+) -> TrainingRecordV3:
     game = _game(index)
     dropper_dist, dropper_mask = _policy_and_mask(game, "dropper")
     checker_dist, checker_mask = _policy_and_mask(game, "checker")
-    return TrainingRecordV2(
+    return TrainingRecordV3(
         features=extract_features(game),
         exact_state=exact_public_state(game),
         value=((index % 11) - 5) / 5.0,
@@ -81,6 +82,11 @@ def _record(
         checker_dist=checker_dist,
         dropper_legal_mask=dropper_mask,
         checker_legal_mask=checker_mask,
+        value_horizon_half_rounds=2,
+        cutoff_probability=0.125,
+        state_origin=StateOrigin.TACTICAL_TABLEBASE,
+        source_artifact="tests/learning/test_replay_v2.py::fixture",
+        source_artifact_digest=_digest("fixture-artifact"),
         episode_id=episode_id if episode_id is not None else f"episode-{index // 5}",
         half_round_index=index % 5,
         truncated=index % 13 == 0,
@@ -95,7 +101,7 @@ def test_mixed_source_shard_round_trips_100_reconstructable_records(tmp_path: Pa
     records = [
         _record(index, target_kind=kinds[index % len(kinds)]) for index in range(100)
     ]
-    path = tmp_path / "mixed-v2.npz"
+    path = tmp_path / "mixed-v3.npz"
 
     saved_manifest = save_replay_shard(records, path)
     loaded_manifest = load_replay_manifest(path)
@@ -105,7 +111,7 @@ def test_mixed_source_shard_round_trips_100_reconstructable_records(tmp_path: Pa
     )
 
     assert saved_manifest == loaded_manifest
-    assert loaded_manifest["schema"] == REPLAY_MANIFEST_SCHEMA_V2
+    assert loaded_manifest["schema"] == REPLAY_MANIFEST_SCHEMA_V3
     assert loaded_manifest["record_count"] == 100
     assert loaded_manifest["feature_schema"] == DEFAULT_FEATURE_SCHEMA
     assert loaded_manifest["feature_dim"] == FEATURE_DIM
@@ -120,6 +126,16 @@ def test_mixed_source_shard_round_trips_100_reconstructable_records(tmp_path: Pa
         assert copy.target_kind is original.target_kind
         assert copy.source == original.source
         assert copy.value == pytest.approx(original.value, abs=1e-7)
+        assert copy.value_horizon_half_rounds == original.value_horizon_half_rounds
+        assert copy.cutoff_probability == pytest.approx(
+            original.cutoff_probability, abs=1e-7
+        )
+        assert copy.value_lower_bound == pytest.approx(original.value_lower_bound)
+        assert copy.value_upper_bound == pytest.approx(original.value_upper_bound)
+        assert copy.state_origin is original.state_origin
+        assert copy.source_artifact == original.source_artifact
+        assert copy.source_artifact_digest == original.source_artifact_digest
+        assert copy.trajectory_actions == original.trajectory_actions
         assert copy.episode_id == original.episode_id
         assert copy.half_round_index == original.half_round_index
         assert copy.truncated is original.truncated
@@ -152,6 +168,13 @@ def test_payload_corruption_fails_before_arrays_are_loaded(tmp_path: Path):
         load_replay_shard(path)
 
 
+def test_committed_shard_is_immutable(tmp_path: Path):
+    path = tmp_path / "immutable.npz"
+    save_replay_shard([_record(1)], path)
+    with pytest.raises(ReplayValidationError, match="refusing to overwrite"):
+        save_replay_shard([_record(2)], path)
+
+
 def test_manifest_with_old_61_action_size_is_rejected(tmp_path: Path):
     path = tmp_path / "old-actions.npz"
     save_replay_shard([_record(2)], path)
@@ -165,6 +188,20 @@ def test_manifest_with_old_61_action_size_is_rejected(tmp_path: Path):
     )
 
     with pytest.raises(ReplayValidationError, match="action size mismatch: 61"):
+        load_replay_shard(path)
+
+
+def test_rejected_v2_manifest_is_not_silently_migrated(tmp_path: Path):
+    path = tmp_path / "old-v2.npz"
+    save_replay_shard([_record(2)], path)
+    manifest_path = manifest_path_for(path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["schema"] = "stl.replay-shard.v2"
+    manifest["record_schema"] = "stl.training-record.v2"
+    manifest_path.write_bytes(
+        (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    with pytest.raises(ReplayValidationError, match="schema mismatch"):
         load_replay_shard(path)
 
 
@@ -232,6 +269,17 @@ def test_grouped_split_uses_transitive_state_or_episode_components():
     assert train_episodes.isdisjoint(validation_episodes)
 
 
+def test_grouped_split_keeps_identical_features_in_one_component():
+    first = _record(14, episode_id="feature-a")
+    second = replace(_record(15, episode_id="feature-b"), features=first.features)
+    records = [first, second, _record(16), _record(17)]
+
+    train, validation = grouped_split_indices(records, validation_fraction=0.5, seed=5)
+    train_set = set(train.tolist())
+    validation_set = set(validation.tolist())
+    assert {0, 1}.issubset(train_set) or {0, 1}.issubset(validation_set)
+
+
 def test_external_ruler_loads_for_evaluation_but_not_training(tmp_path: Path):
     path = tmp_path / "external-ruler.npz"
     save_replay_shard([_record(20)], path, shard_role=ShardRole.EXTERNAL_RULER)
@@ -270,14 +318,75 @@ def test_wrong_parent_digest_fails_before_training(tmp_path: Path):
         )
 
 
-def test_v2_has_no_divergent_feature_collisions_on_pinned_tablebase():
+def test_generation_provenance_tamper_is_rejected(tmp_path: Path):
+    path = tmp_path / "provenance.npz"
+    save_replay_shard(
+        [_record(41)],
+        path,
+        generation_provenance={"schema": "fixture", "plan_digest": _digest("plan")},
+    )
+    manifest_path = manifest_path_for(path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["generation_provenance"]["plan_digest"] = _digest("tampered")
+    manifest_path.write_bytes(
+        (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+
+    with pytest.raises(ReplayValidationError, match="provenance digest"):
+        load_replay_shard(path)
+
+
+def test_tier_a_midpoint_requires_bounds_inactive_policy_and_zero_cutoff(tmp_path: Path):
+    base = _record(42)
+    zero = np.zeros(ACTION_SIZE, dtype=np.float32)
+    valid = replace(
+        base,
+        value=0.25,
+        target_kind=TargetKind.INTERVAL_MIDPOINT,
+        state_origin=StateOrigin.TIER_A,
+        source_artifact="d0.npz",
+        source_artifact_digest=_digest("d0"),
+        value_horizon_half_rounds=0,
+        cutoff_probability=0.0,
+        value_lower_bound=0.2,
+        value_upper_bound=0.3,
+        dropper_dist=zero,
+        checker_dist=zero,
+    )
+    save_replay_shard([valid], tmp_path / "tier-a.npz")
+
+    with pytest.raises(ReplayValidationError, match="no exact horizon or cutoff"):
+        save_replay_shard(
+            [replace(valid, cutoff_probability=0.1)], tmp_path / "bad-cutoff.npz"
+        )
+    with pytest.raises(ReplayValidationError, match="policies are inactive"):
+        save_replay_shard(
+            [replace(valid, dropper_dist=base.dropper_dist)],
+            tmp_path / "bad-policy.npz",
+        )
+
+
+def test_inconsistent_death_counters_are_rejected(tmp_path: Path):
+    base = _record(43)
+    game = reconstruct_game(base.exact_state)
+    game.player1.deaths = 1
+    invalid = replace(
+        base,
+        exact_state=exact_public_state(game),
+        features=extract_features(game),
+    )
+    with pytest.raises(ReplayValidationError, match="CPR count|TTD"):
+        save_replay_shard([invalid], tmp_path / "invalid-death.npz")
+
+
+def test_v3_has_no_divergent_feature_collisions_on_pinned_tablebase():
     records = []
     for index, scenario in enumerate(pinned_scenarios()):
         game = scenario.game
         dropper_dist, dropper_mask = _policy_and_mask(game, "dropper")
         checker_dist, checker_mask = _policy_and_mask(game, "checker")
         records.append(
-            TrainingRecordV2(
+            TrainingRecordV3(
                 features=extract_features(game),
                 exact_state=exact_public_state(game),
                 value=float(scenario.expected_value),
@@ -287,6 +396,9 @@ def test_v2_has_no_divergent_feature_collisions_on_pinned_tablebase():
                 checker_dist=checker_dist,
                 dropper_legal_mask=dropper_mask,
                 checker_legal_mask=checker_mask,
+                state_origin=StateOrigin.TACTICAL_TABLEBASE,
+                source_artifact=f"stl/solver/tablebase.py::{scenario.name}",
+                source_artifact_digest=_digest("pinned-tablebase-source"),
                 episode_id=f"pin-{index}",
             )
         )

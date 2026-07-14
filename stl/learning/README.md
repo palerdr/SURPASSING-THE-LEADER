@@ -5,8 +5,9 @@ Compact learning kernel for the exact-to-self-play bridge.
 Live files:
 
 - `contracts.py` - versioned episode caps, outcome/perspective mapping, canonical config hashes, and horizon-sensitivity reports.
-- `replay.py` - reconstructable `TrainingRecordV2` rows, pickle-free hash-verified shards, collision audits, and grouped splits.
-- `targets.py` - exact label generation, legacy corpus IO, and conversion into V2 replay records.
+- `replay.py` - reconstructable `TrainingRecordV3` rows, pickle-free hash-verified shards, collision audits, and grouped splits.
+- `reachable.py` - legal-engine Generation-Zero trajectories and pre-label episode isolation.
+- `targets.py` - exact label generation, legacy corpus IO, and conversion into V3 replay records.
 - `model.py` - value/two-role-policy network plus explicit legacy V1 and active V2 feature contracts.
 - `train.py` - grouped supervised value/policy training, strict V2 checkpoint bundles, and prediction helpers.
 - `gates.py` - promotion-facing gate surface: calibration, audit, ladder, strength checks.
@@ -21,7 +22,7 @@ encoding of every value-relevant `ExactPublicState` field followed by documented
 relative and safe-budget features. Replay rows also retain the serialized exact
 state, so collision audits and reanalysis never depend on features alone.
 
-Default training requires a validated V2 replay manifest and writes
+Default training requires a validated V3 replay manifest and writes
 `stl.checkpoint.v2` bundles containing model, optimizer, scheduler, schemas,
 provenance, resolved config, training history, and RNG state. Bare state dicts
 and manifestless corpora are legacy inputs and require explicit opt-in.

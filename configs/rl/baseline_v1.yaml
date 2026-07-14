@@ -39,7 +39,7 @@ model:
   hidden_dim: 64
 
 replay:
-  schema: stl.training-record.v2
+  schema: stl.training-record.v3
   exact_anchor_fraction: 0.25
   self_play_fraction: 0.75
   accepted_generations: 5

@@ -3,6 +3,7 @@
 import os
 import pathlib
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ sys.path.insert(0, os.getcwd())
 
 from stl.solver.exact import (
     CFRPlusConfig,
+    UtilityBreakdown,
     clear_solve_cache,
     evaluate_joint_action,
     exact_immediate_checker_payoff_matrix,
@@ -64,6 +66,31 @@ def test_cfr_owned_minimax_solver_solves_matching_pennies():
 
     np.testing.assert_allclose(strategy, [0.5, 0.5], atol=1e-4)
     assert value == pytest.approx(0.0, abs=1e-4)
+
+
+def test_minimax_rejects_invalid_or_nonfinite_matrices():
+    with pytest.raises(ValueError, match="non-empty 2D"):
+        solve_minimax(np.zeros((0, 2)))
+    with pytest.raises(ValueError, match="finite"):
+        solve_minimax(np.array([[0.0, np.nan], [1.0, -1.0]]))
+
+
+def test_minimax_fails_closed_when_lp_optimizer_fails(monkeypatch):
+    import stl.solver.exact as exact_mod
+
+    monkeypatch.setattr(
+        exact_mod,
+        "linprog",
+        lambda *args, **kwargs: SimpleNamespace(
+            success=False,
+            x=None,
+            status=2,
+            message="forced optimizer failure",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="refusing to substitute"):
+        solve_minimax(np.array([[1.0, -1.0], [-1.0, 1.0]]))
 
 
 def test_cfr_plus_solver_solves_matching_pennies():
@@ -120,6 +147,25 @@ def test_expand_joint_action_branches_death_chance_and_restores_game():
     assert any(t.terminal_value == 1.0 for t in transitions)
 
 
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        (ExactJointAction(1, 2), ExactJointAction(2, 3)),
+        (ExactJointAction(2, 1), ExactJointAction(60, 1)),
+    ],
+)
+def test_equal_outcome_signatures_have_equal_public_transition_distributions(first, second):
+    game = make_game()
+
+    def public_distribution(action):
+        return tuple(
+            (branch.probability, branch.state, branch.terminal_value)
+            for branch in expand_joint_action(game, action)
+        )
+
+    assert public_distribution(first) == public_distribution(second)
+
+
 def test_exact_state_distinguishes_values_legacy_buckets_collapse():
     a = make_game(baku_cyl=59.0)
     b = make_game(baku_cyl=60.0)
@@ -170,6 +216,68 @@ def test_finite_horizon_solver_returns_exact_seconds_and_unresolved_mass():
     assert result.checker_strategy.sum() == pytest.approx(1.0)
     assert result.unresolved_probability >= 0.0
     assert result.breakdown.hal_win_probability + result.breakdown.baku_win_probability + result.breakdown.unresolved_probability == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    ("clock", "current_half", "expected_shape"),
+    [
+        (720.0, 1, (60, 60)),
+        (3540.0, 2, (61, 60)),
+    ],
+)
+def test_exact_matrix_assembly_evaluates_one_representative_per_outcome_class(
+    monkeypatch,
+    clock,
+    current_half,
+    expected_shape,
+):
+    import stl.solver.exact as exact_mod
+
+    calls: list[ExactJointAction] = []
+
+    def fake_evaluate(game, action, half_round_horizon, config):
+        del game, half_round_horizon, config
+        calls.append(action)
+        value = (
+            float(action.check_time - action.drop_time) / 100.0
+            if action.check_time >= action.drop_time
+            else -0.75
+        )
+        return UtilityBreakdown(value, 0.0, 0.0, 1.0)
+
+    clear_solve_cache()
+    monkeypatch.setattr(exact_mod, "evaluate_joint_action", fake_evaluate)
+    result = solve_exact_finite_horizon(
+        make_game(clock=clock, current_half=current_half),
+        half_round_horizon=1,
+    )
+
+    assert result.payoff_for_hal is not None
+    assert result.payoff_for_hal.shape == expected_shape
+    assert len(calls) == 61  # success deltas 0..59, plus one failure class
+    assert len({exact_mod._joint_outcome_signature(action) for action in calls}) == 61
+    assert result.payoff_for_hal[0, 0] == 0.0
+    assert result.payoff_for_hal[1, 0] == -0.75
+    assert result.payoff_for_hal[0, 1] == 0.01
+    clear_solve_cache()
+
+
+def test_cached_exact_arrays_are_read_only():
+    clear_solve_cache()
+    scenario = forced_baku_overflow_death()
+    result = solve_exact_finite_horizon(
+        scenario.game,
+        half_round_horizon=scenario.half_round_horizon,
+        config=scenario.config,
+    )
+
+    with pytest.raises(ValueError, match="read-only"):
+        result.dropper_strategy[0] = 0.0
+    with pytest.raises(ValueError, match="read-only"):
+        result.checker_strategy[0] = 0.0
+    assert result.payoff_for_hal is not None
+    with pytest.raises(ValueError, match="read-only"):
+        result.payoff_for_hal[0, 0] = 0.0
 
 
 def test_diagnostics_report_zero_gap_for_exact_minimax_solution():

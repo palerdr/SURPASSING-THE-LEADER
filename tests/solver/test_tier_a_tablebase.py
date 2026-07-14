@@ -1,5 +1,7 @@
 import os
 import sys
+import hashlib
+import json
 
 import numpy as np
 import pytest
@@ -21,6 +23,22 @@ TIER_A_DIR = os.path.join(
     "tablebase",
     "tier_a",
 )
+
+
+def _expected_artifact_names():
+    return [
+        "d0.npz",
+        *(f"d1_hal_{ttd}.npz" for ttd in range(60, 300)),
+        *(f"d1_baku_{ttd}.npz" for ttd in range(60, 300)),
+    ]
+
+
+def _write_d0_manifest(tmp_path, **arrays):
+    artifact = tmp_path / "d0.npz"
+    np.savez(artifact, **arrays)
+    manifest = {name: "0" * 64 for name in _expected_artifact_names()}
+    manifest["d0.npz"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
 
 
 def make_game(
@@ -63,6 +81,60 @@ def test_tier_a_manifest_verifies():
     assert "d0.npz" in manifest
     assert "d1_hal_120.npz" in manifest
     assert "d1_baku_120.npz" in manifest
+
+
+def test_tier_a_manifest_rejects_missing_epoch(tmp_path):
+    (tmp_path / "manifest.json").write_text(json.dumps({"d0.npz": "0" * 64}))
+    with pytest.raises(ValueError, match="inventory mismatch"):
+        TierALookup(tmp_path).verify_manifest()
+
+
+def test_tier_a_manifest_rejects_unlisted_npz(tmp_path):
+    manifest = {name: "0" * 64 for name in _expected_artifact_names()}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    np.savez(tmp_path / "unlisted.npz", lo=np.zeros(1), hi=np.zeros(1))
+    with pytest.raises(ValueError, match="unlisted NPZ"):
+        TierALookup(tmp_path).verify_manifest()
+
+
+def test_tier_a_manifest_rejects_wrong_array_shape(tmp_path):
+    _write_d0_manifest(
+        tmp_path,
+        lo=np.zeros((2, 3, 3), dtype=np.float32),
+        hi=np.zeros((2, 3, 3), dtype=np.float32),
+    )
+    with pytest.raises(ValueError, match="invalid array shape"):
+        TierALookup(tmp_path).verify_manifest()
+
+
+def test_tier_a_manifest_rejects_wrong_keys(tmp_path):
+    _write_d0_manifest(
+        tmp_path,
+        lo=np.zeros((2, 300, 300), dtype=np.float32),
+        unexpected=np.zeros((2, 300, 300), dtype=np.float32),
+    )
+    with pytest.raises(ValueError, match="exactly lo and hi"):
+        TierALookup(tmp_path).verify_manifest()
+
+
+def test_tier_a_manifest_rejects_wrong_dtype(tmp_path):
+    _write_d0_manifest(
+        tmp_path,
+        lo=np.zeros((2, 300, 300), dtype=np.float64),
+        hi=np.zeros((2, 300, 300), dtype=np.float64),
+    )
+    with pytest.raises(ValueError, match="float32"):
+        TierALookup(tmp_path).verify_manifest()
+
+
+def test_tier_a_manifest_rejects_unordered_interval(tmp_path):
+    _write_d0_manifest(
+        tmp_path,
+        lo=np.ones((2, 300, 300), dtype=np.float32),
+        hi=np.zeros((2, 300, 300), dtype=np.float32),
+    )
+    with pytest.raises(ValueError, match="unordered intervals"):
+        TierALookup(tmp_path).verify_manifest()
 
 
 def test_tier_a_lookup_hits_postleap_d0_and_rejects_preleap():

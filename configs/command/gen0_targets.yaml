@@ -1,7 +1,12 @@
 name: gen0_targets
 module: stl.commands.gen0_corpus
 args: null
-train_out: outputs/regen2rl/gen0_train_v2.npz
-ruler_out: outputs/regen2rl/gen0_external_ruler_v2.npz
+train_out: outputs/regen2rl/gen0_train_v3.npz
+ruler_out: outputs/regen2rl/gen0_external_ruler_v3.npz
+work_dir: outputs/regen2rl/gen0_work_v3
+tier_a_dir: checkpoints/tablebase/tier_a
+tier_a_max_width: 0.05
+tier_a_rows: 32
+split_seed: 20260714
 workers: 1
 smoke: false

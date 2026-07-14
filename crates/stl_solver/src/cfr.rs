@@ -1,20 +1,3 @@
-struct Matrix<'a> {
-    data: &'a [f64],
-    rows: usize,
-    cols: usize,
-}
-
-impl<'a> Matrix<'a> {
-    fn get(&self, row: usize, col: usize) -> f64 {
-        self.data[row * self.cols + col]
-    }
-}
-
-struct MatrixSolveResult {
-    strategy: Vec<f64>,
-    value: f64,
-}
-
 //if the action value was better than my current strategy I feel regret for not having played it
 //The goal of CFR+ is to clip -regret and minimize the regret over our strategy
 fn regret(strategy_value: f64, action_value: f64) -> f64 {

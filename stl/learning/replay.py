@@ -1,8 +1,9 @@
 """Versioned, reconstructable replay records for the Python RL pipeline.
 
-This module deliberately does not replace the legacy ``ValueTarget`` corpus
-format yet.  It provides the strict V2 boundary that later self-play and
-training phases can adopt without teaching the solver or engine about replay.
+V3 adds the label depth, cutoff mass, value interval, state origin, source
+artifact, and legal engine trajectory needed to audit Generation Zero.  It is
+an intentional clean break from the rejected V2 Gen-0 artifacts: a V2 shard is
+not silently interpreted under V3 semantics.
 
 Replay shards use a pickle-free NPZ payload and a canonical JSON manifest.  A
 writer publishes the payload first and the manifest last; the manifest is the
@@ -24,7 +25,13 @@ import uuid
 import numpy as np
 
 from stl.engine.actions import ACTION_SIZE, legal_mask
-from stl.engine.game import Game, Player, Referee
+from stl.engine.game import (
+    PHYSICALITY_BAKU,
+    PHYSICALITY_HAL,
+    Game,
+    Player,
+    Referee,
+)
 from stl.learning.model import (
     FEATURE_DIM,
     FEATURE_SCHEMA_VERSION,
@@ -36,8 +43,8 @@ from stl.learning.model import (
 from stl.solver.exact import ExactPublicState, exact_public_state
 
 
-RECORD_SCHEMA_V2 = "stl.training-record.v2"
-REPLAY_MANIFEST_SCHEMA_V2 = "stl.replay-shard.v2"
+RECORD_SCHEMA_V3 = "stl.training-record.v3"
+REPLAY_MANIFEST_SCHEMA_V3 = "stl.replay-shard.v3"
 ENGINE_SCHEMA_V1 = "stl.exact-public-state.v1"
 ACTION_SCHEMA_V1 = "stl.literal-seconds.padding0.normal1-60.baku-leap-dropper61.v1"
 FEATURE_SCHEMA_V1 = LEGACY_FEATURE_SCHEMA_VERSION
@@ -57,6 +64,7 @@ class TargetKind(StrEnum):
 
     EXACT_VALUE = "exact_value"
     TABLEBASE_VALUE = "tablebase_value"
+    INTERVAL_MIDPOINT = "interval_midpoint"
     SEARCH_BOOTSTRAP_VALUE = "search_bootstrap_value"
     TERMINAL_OUTCOME = "terminal_outcome"
 
@@ -66,6 +74,14 @@ class ShardRole(StrEnum):
 
     REPLAY = "replay"
     EXTERNAL_RULER = "external_ruler"
+
+
+class StateOrigin(StrEnum):
+    """How a stored exact state entered the data set."""
+
+    ENGINE_TRAJECTORY = "engine_trajectory"
+    TACTICAL_TABLEBASE = "tactical_tablebase"
+    TIER_A = "tier_a"
 
 
 def _readonly_float32(values: np.ndarray | Sequence[float]) -> np.ndarray:
@@ -93,13 +109,39 @@ def _normalize_rng_seeds(
     return normalized
 
 
+def _normalize_trajectory_actions(
+    actions: Sequence[Sequence[object]],
+) -> tuple[tuple[int, int, bool | None], ...]:
+    normalized: list[tuple[int, int, bool | None]] = []
+    for index, action in enumerate(actions):
+        if len(action) != 3:
+            raise ReplayValidationError(
+                f"trajectory action {index} must contain drop, check, and chance outcome"
+            )
+        drop_time, check_time, survived = action
+        if isinstance(drop_time, bool) or not isinstance(drop_time, (int, np.integer)):
+            raise ReplayValidationError(f"trajectory drop time {index} must be an integer")
+        if isinstance(check_time, bool) or not isinstance(check_time, (int, np.integer)):
+            raise ReplayValidationError(f"trajectory check time {index} must be an integer")
+        if survived is not None and not isinstance(survived, (bool, np.bool_)):
+            raise ReplayValidationError(
+                f"trajectory chance outcome {index} must be true, false, or null"
+            )
+        normalized.append(
+            (int(drop_time), int(check_time), None if survived is None else bool(survived))
+        )
+    return tuple(normalized)
+
+
 @dataclass(frozen=True)
-class TrainingRecordV2:
+class TrainingRecordV3:
     """One reconstructable policy/value training row.
 
     ``source`` is an operational provenance tag.  ``target_kind`` separately
     declares the mathematical meaning of ``value`` so callers never infer it
-    from a source string or overload a search-horizon field with iterations.
+    from a source string. ``value_horizon_half_rounds`` is exact-search depth;
+    ``cutoff_probability`` is unresolved leaf mass; and interval bounds retain
+    Tier-A uncertainty without misnaming it as a probability.
     """
 
     features: np.ndarray
@@ -111,6 +153,14 @@ class TrainingRecordV2:
     checker_dist: np.ndarray
     dropper_legal_mask: np.ndarray
     checker_legal_mask: np.ndarray
+    value_horizon_half_rounds: int = 0
+    cutoff_probability: float = 0.0
+    value_lower_bound: float | None = None
+    value_upper_bound: float | None = None
+    state_origin: StateOrigin = StateOrigin.TACTICAL_TABLEBASE
+    source_artifact: str = ""
+    source_artifact_digest: str = ""
+    trajectory_actions: tuple[tuple[int, int, bool | None], ...] = ()
     episode_id: str = ""
     half_round_index: int = 0
     truncated: bool = False
@@ -136,6 +186,30 @@ class TrainingRecordV2:
             self, "checker_legal_mask", _readonly_bool(self.checker_legal_mask)
         )
         object.__setattr__(self, "target_kind", TargetKind(self.target_kind))
+        object.__setattr__(
+            self, "value_horizon_half_rounds", int(self.value_horizon_half_rounds)
+        )
+        object.__setattr__(self, "cutoff_probability", float(self.cutoff_probability))
+        object.__setattr__(
+            self,
+            "value_lower_bound",
+            float(self.value if self.value_lower_bound is None else self.value_lower_bound),
+        )
+        object.__setattr__(
+            self,
+            "value_upper_bound",
+            float(self.value if self.value_upper_bound is None else self.value_upper_bound),
+        )
+        object.__setattr__(self, "state_origin", StateOrigin(self.state_origin))
+        object.__setattr__(self, "source_artifact", str(self.source_artifact))
+        object.__setattr__(
+            self, "source_artifact_digest", str(self.source_artifact_digest)
+        )
+        object.__setattr__(
+            self,
+            "trajectory_actions",
+            _normalize_trajectory_actions(self.trajectory_actions),
+        )
         object.__setattr__(self, "episode_id", str(self.episode_id))
         object.__setattr__(self, "source", str(self.source))
         object.__setattr__(self, "half_round_index", int(self.half_round_index))
@@ -369,8 +443,85 @@ def _validate_policy(
         raise ReplayValidationError(f"{name} probability mass must sum to 0 or 1")
 
 
+def _canonical_initial_game() -> Game:
+    hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
+    baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
+    game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
+    game.seed(0)
+    return game
+
+
+def _replay_trajectory(
+    actions: Sequence[tuple[int, int, bool | None]],
+) -> Game:
+    game = _canonical_initial_game()
+    for index, (drop_time, check_time, survived_outcome) in enumerate(actions):
+        if game.game_over:
+            raise ReplayValidationError(
+                f"trajectory continues after terminal transition at action {index}"
+            )
+        _dropper, checker = game.get_roles_for_half(game.current_half)
+        success = check_time >= drop_time
+        addition = check_time - drop_time if success else 60.0
+        death_occurs = (checker.cylinder + addition >= 300.0) if success else True
+        if death_occurs:
+            if survived_outcome is None:
+                raise ReplayValidationError(
+                    f"trajectory death action {index} is missing its chance outcome"
+                )
+            death_duration = min(checker.cylinder + addition, 300.0)
+            survival_probability = game.referee.compute_survival_probability(
+                checker, death_duration
+            )
+            if survived_outcome and survival_probability <= 0.0:
+                raise ReplayValidationError(
+                    f"trajectory action {index} forces a zero-probability survival"
+                )
+            if not survived_outcome and survival_probability >= 1.0:
+                raise ReplayValidationError(
+                    f"trajectory action {index} forces a zero-probability death"
+                )
+        elif survived_outcome is not None:
+            raise ReplayValidationError(
+                f"trajectory non-death action {index} carries a chance outcome"
+            )
+        game.resolve_half_round(drop_time, check_time, survived_outcome=survived_outcome)
+    return game
+
+
+def _validate_physical_invariants(game: Game, *, engine_snapshot: bool) -> None:
+    total_deaths = game.player1.deaths + game.player2.deaths
+    if game.referee.cprs_performed != total_deaths:
+        raise ReplayValidationError("referee CPR count does not match player deaths")
+    for player in (game.player1, game.player2):
+        if player.deaths < 0 or not (
+            60.0 * player.deaths <= player.ttd <= 300.0 * player.deaths
+        ):
+            raise ReplayValidationError("player TTD does not match the death count")
+        if player.cylinder < 0.0:
+            raise ReplayValidationError("player cylinder must be non-negative")
+        if engine_snapshot and not game.game_over and player.cylinder >= 300.0:
+            raise ReplayValidationError(
+                "nonterminal engine trajectory retains an injected cylinder"
+            )
+    if game.game_over:
+        if game.winner is None or game.loser is None or game.winner is game.loser:
+            raise ReplayValidationError("terminal state requires distinct winner and loser")
+        if game.loser.alive or not game.winner.alive:
+            raise ReplayValidationError("terminal alive flags are inconsistent")
+        if game.loser.deaths <= 0 or game.loser.ttd <= 0.0:
+            raise ReplayValidationError("terminal loser is missing the fatal death")
+    elif (
+        game.winner is not None
+        or game.loser is not None
+        or not game.player1.alive
+        or not game.player2.alive
+    ):
+        raise ReplayValidationError("nonterminal winner/loser/alive fields are inconsistent")
+
+
 def validate_record(
-    record: TrainingRecordV2,
+    record: TrainingRecordV3,
     *,
     expected_feature_schema: str | None = DEFAULT_FEATURE_SCHEMA,
     expected_feature_dim: int | None = FEATURE_DIM,
@@ -404,14 +555,65 @@ def validate_record(
         raise ReplayValidationError("features must be finite")
     if not math.isfinite(record.value) or not -1.000001 <= record.value <= 1.000001:
         raise ReplayValidationError("value must be finite and in [-1, 1]")
+    if record.value_horizon_half_rounds < 0:
+        raise ReplayValidationError("value_horizon_half_rounds must be non-negative")
+    if not math.isfinite(record.cutoff_probability) or not (
+        0.0 <= record.cutoff_probability <= 1.0
+    ):
+        raise ReplayValidationError("cutoff_probability must be finite and in [0, 1]")
+    lower = float(record.value_lower_bound)
+    upper = float(record.value_upper_bound)
+    if not all(math.isfinite(bound) for bound in (lower, upper)):
+        raise ReplayValidationError("value interval bounds must be finite")
+    if lower < -1.000001 or upper > 1.000001 or lower > upper:
+        raise ReplayValidationError("value interval must be ordered inside [-1, 1]")
+    if not lower - 1e-6 <= record.value <= upper + 1e-6:
+        raise ReplayValidationError("value must lie inside its stored interval")
     if not record.source:
         raise ReplayValidationError("source must be non-empty")
     if record.half_round_index < 0:
         raise ReplayValidationError("half_round_index must be non-negative")
     _validate_digest(record.parent_checkpoint_digest, "parent_checkpoint_digest")
     _validate_digest(record.search_config_digest, "search_config_digest")
+    _validate_digest(record.source_artifact_digest, "source_artifact_digest")
+
+    if record.state_origin is StateOrigin.ENGINE_TRAJECTORY:
+        if not record.episode_id:
+            raise ReplayValidationError("engine trajectories require an episode_id")
+        if record.half_round_index != len(record.trajectory_actions):
+            raise ReplayValidationError(
+                "trajectory action count must equal half_round_index"
+            )
+        replayed = _replay_trajectory(record.trajectory_actions)
+        if exact_public_state(replayed) != record.exact_state:
+            raise ReplayValidationError(
+                "stored exact state does not equal its replayed engine trajectory"
+            )
+    else:
+        if record.trajectory_actions:
+            raise ReplayValidationError(
+                "certified non-trajectory states may not carry trajectory actions"
+            )
+        if not record.source_artifact or not record.source_artifact_digest:
+            raise ReplayValidationError(
+                "certified states require a source artifact and SHA-256 digest"
+            )
+    if record.state_origin is StateOrigin.TIER_A:
+        if record.target_kind is not TargetKind.INTERVAL_MIDPOINT:
+            raise ReplayValidationError("Tier A rows must be interval_midpoint targets")
+        if record.value_horizon_half_rounds != 0 or record.cutoff_probability != 0.0:
+            raise ReplayValidationError(
+                "Tier A midpoint rows have no exact horizon or cutoff probability"
+            )
+        if record.dropper_dist.sum() != 0.0 or record.checker_dist.sum() != 0.0:
+            raise ReplayValidationError(
+                "Tier A policies are inactive until separately certified"
+            )
 
     game = reconstruct_game(record.exact_state)
+    _validate_physical_invariants(
+        game, engine_snapshot=record.state_origin is StateOrigin.ENGINE_TRAJECTORY
+    )
     _validate_policy(
         record.dropper_dist, record.dropper_legal_mask, name="dropper_dist"
     )
@@ -469,6 +671,14 @@ _ARRAY_NAMES = (
     "exact_state_hashes",
     "target_kinds",
     "sources",
+    "value_horizons_half_rounds",
+    "cutoff_probabilities",
+    "value_lower_bounds",
+    "value_upper_bounds",
+    "state_origins",
+    "source_artifacts",
+    "source_artifact_digests",
+    "trajectory_actions_json",
     "dropper_dists",
     "checker_dists",
     "dropper_legal_masks",
@@ -483,7 +693,7 @@ _ARRAY_NAMES = (
 
 
 def _records_to_arrays(
-    records: Sequence[TrainingRecordV2], *, feature_dim: int
+    records: Sequence[TrainingRecordV3], *, feature_dim: int
 ) -> dict[str, np.ndarray]:
     count = len(records)
     if count:
@@ -519,6 +729,36 @@ def _records_to_arrays(
             [record.target_kind.value for record in records], dtype=np.str_
         ),
         "sources": np.asarray([record.source for record in records], dtype=np.str_),
+        "value_horizons_half_rounds": np.asarray(
+            [record.value_horizon_half_rounds for record in records], dtype=np.int32
+        ),
+        "cutoff_probabilities": np.asarray(
+            [record.cutoff_probability for record in records], dtype=np.float32
+        ),
+        "value_lower_bounds": np.asarray(
+            [record.value_lower_bound for record in records], dtype=np.float32
+        ),
+        "value_upper_bounds": np.asarray(
+            [record.value_upper_bound for record in records], dtype=np.float32
+        ),
+        "state_origins": np.asarray(
+            [record.state_origin.value for record in records], dtype=np.str_
+        ),
+        "source_artifacts": np.asarray(
+            [record.source_artifact for record in records], dtype=np.str_
+        ),
+        "source_artifact_digests": np.asarray(
+            [record.source_artifact_digest for record in records], dtype=np.str_
+        ),
+        "trajectory_actions_json": np.asarray(
+            [
+                _canonical_json_bytes(record.trajectory_actions)
+                .decode("utf-8")
+                .rstrip("\n")
+                for record in records
+            ],
+            dtype=np.str_,
+        ),
         "dropper_dists": dropper_dists,
         "checker_dists": checker_dists,
         "dropper_legal_masks": dropper_masks,
@@ -579,6 +819,10 @@ def _validate_array_layout(
         "checker_dists": (count, action_size),
         "dropper_legal_masks": (count, action_size),
         "checker_legal_masks": (count, action_size),
+        "value_horizons_half_rounds": (count,),
+        "cutoff_probabilities": (count,),
+        "value_lower_bounds": (count,),
+        "value_upper_bounds": (count,),
     }
     for name, shape in expected_shapes.items():
         if arrays[name].shape != shape:
@@ -589,6 +833,11 @@ def _validate_array_layout(
         raise ReplayValidationError("features must use float32")
     if arrays["values"].dtype != np.float32:
         raise ReplayValidationError("values must use float32")
+    if arrays["value_horizons_half_rounds"].dtype != np.int32:
+        raise ReplayValidationError("value_horizons_half_rounds must use int32")
+    for name in ("cutoff_probabilities", "value_lower_bounds", "value_upper_bounds"):
+        if arrays[name].dtype != np.float32:
+            raise ReplayValidationError(f"{name} must use float32")
     for name in ("dropper_dists", "checker_dists"):
         if arrays[name].dtype != np.float32:
             raise ReplayValidationError(f"{name} must use float32")
@@ -611,19 +860,22 @@ def _array_manifest(arrays: Mapping[str, np.ndarray]) -> dict[str, dict[str, obj
 
 
 def save_replay_shard(
-    records: Sequence[TrainingRecordV2],
+    records: Sequence[TrainingRecordV3],
     shard_path: str | Path,
     *,
     shard_role: ShardRole = ShardRole.REPLAY,
     expected_feature_schema: str = DEFAULT_FEATURE_SCHEMA,
     expected_feature_dim: int = FEATURE_DIM,
+    generation_provenance: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Validate and atomically publish a V2 replay shard and its manifest."""
+    """Validate and atomically publish a V3 replay shard and its manifest."""
 
     path = Path(shard_path)
     if path.suffix.lower() != ".npz":
         raise ReplayValidationError("replay shard path must end in .npz")
     role = ShardRole(shard_role)
+    provenance = dict(generation_provenance or {})
+    provenance_bytes = _canonical_json_bytes(provenance)
     records = tuple(records)
     for record in records:
         validate_record(
@@ -641,6 +893,10 @@ def save_replay_shard(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_path_for(path)
+    if path.exists() or manifest_path.exists():
+        raise ReplayValidationError(
+            f"refusing to overwrite committed or partial replay shard: {path}"
+        )
     nonce = f"{os.getpid()}.{uuid.uuid4().hex}"
     payload_tmp = path.with_name(f".{path.name}.{nonce}.tmp.npz")
     manifest_tmp = manifest_path.with_name(f".{manifest_path.name}.{nonce}.tmp")
@@ -657,8 +913,8 @@ def save_replay_shard(
             action_size=ACTION_SIZE,
         )
         manifest: dict[str, object] = {
-            "schema": REPLAY_MANIFEST_SCHEMA_V2,
-            "record_schema": RECORD_SCHEMA_V2,
+            "schema": REPLAY_MANIFEST_SCHEMA_V3,
+            "record_schema": RECORD_SCHEMA_V3,
             "engine_schema": ENGINE_SCHEMA_V1,
             "action_schema": ACTION_SCHEMA_V1,
             "feature_schema": expected_feature_schema,
@@ -675,6 +931,10 @@ def save_replay_shard(
             "search_config_digests": sorted(
                 {record.search_config_digest for record in records}
             ),
+            "generation_provenance": provenance,
+            "generation_provenance_digest": hashlib.sha256(
+                provenance_bytes
+            ).hexdigest(),
         }
         manifest_tmp.write_bytes(_canonical_json_bytes(manifest))
         os.replace(payload_tmp, path)
@@ -700,11 +960,11 @@ def load_replay_manifest(shard_path: str | Path) -> dict[str, object]:
         raise ReplayValidationError("replay manifest must contain a JSON object")
     if raw_manifest != _canonical_json_bytes(manifest):
         raise ReplayValidationError("replay manifest is not canonical JSON")
-    if manifest.get("schema") != REPLAY_MANIFEST_SCHEMA_V2:
+    if manifest.get("schema") != REPLAY_MANIFEST_SCHEMA_V3:
         raise ReplayValidationError(
             f"replay manifest schema mismatch: {manifest.get('schema')!r}"
         )
-    if manifest.get("record_schema") != RECORD_SCHEMA_V2:
+    if manifest.get("record_schema") != RECORD_SCHEMA_V3:
         raise ReplayValidationError("training record schema mismatch")
     if manifest.get("engine_schema") != ENGINE_SCHEMA_V1:
         raise ReplayValidationError("engine schema mismatch")
@@ -716,6 +976,14 @@ def load_replay_manifest(shard_path: str | Path) -> dict[str, object]:
         ShardRole(str(manifest.get("shard_role")))
     except ValueError as exc:
         raise ReplayValidationError("unknown replay shard role") from exc
+    provenance = manifest.get("generation_provenance")
+    if not isinstance(provenance, dict):
+        raise ReplayValidationError("generation_provenance must be a JSON object")
+    expected_provenance_digest = hashlib.sha256(
+        _canonical_json_bytes(provenance)
+    ).hexdigest()
+    if manifest.get("generation_provenance_digest") != expected_provenance_digest:
+        raise ReplayValidationError("generation provenance digest mismatch")
     return manifest
 
 
@@ -746,8 +1014,8 @@ def _verify_manifest_arrays(
 
 def _records_from_arrays(
     arrays: Mapping[str, np.ndarray], manifest: Mapping[str, object]
-) -> list[TrainingRecordV2]:
-    records: list[TrainingRecordV2] = []
+) -> list[TrainingRecordV3]:
+    records: list[TrainingRecordV3] = []
     count = _manifest_int(manifest, "record_count")
     for index in range(count):
         state_payload = str(arrays["exact_states_json"][index])
@@ -776,8 +1044,26 @@ def _records_from_arrays(
             raise ReplayValidationError(
                 f"unknown target kind at record {index}"
             ) from exc
+        trajectory_payload = str(arrays["trajectory_actions_json"][index])
+        try:
+            trajectory_actions = json.loads(trajectory_payload)
+        except json.JSONDecodeError as exc:
+            raise ReplayValidationError(
+                f"invalid trajectory JSON at record {index}"
+            ) from exc
+        if not isinstance(trajectory_actions, list):
+            raise ReplayValidationError(
+                f"trajectory JSON at record {index} must contain an array"
+            )
+        if (
+            _canonical_json_bytes(trajectory_actions).decode("utf-8").rstrip("\n")
+            != trajectory_payload
+        ):
+            raise ReplayValidationError(
+                f"trajectory JSON at record {index} is not canonical"
+            )
         records.append(
-            TrainingRecordV2(
+            TrainingRecordV3(
                 features=arrays["features"][index],
                 exact_state=state,
                 value=float(arrays["values"][index]),
@@ -787,6 +1073,18 @@ def _records_from_arrays(
                 checker_dist=arrays["checker_dists"][index],
                 dropper_legal_mask=arrays["dropper_legal_masks"][index],
                 checker_legal_mask=arrays["checker_legal_masks"][index],
+                value_horizon_half_rounds=int(
+                    arrays["value_horizons_half_rounds"][index]
+                ),
+                cutoff_probability=float(arrays["cutoff_probabilities"][index]),
+                value_lower_bound=float(arrays["value_lower_bounds"][index]),
+                value_upper_bound=float(arrays["value_upper_bounds"][index]),
+                state_origin=StateOrigin(str(arrays["state_origins"][index])),
+                source_artifact=str(arrays["source_artifacts"][index]),
+                source_artifact_digest=str(
+                    arrays["source_artifact_digests"][index]
+                ),
+                trajectory_actions=trajectory_actions,
                 episode_id=str(arrays["episode_ids"][index]),
                 half_round_index=int(arrays["half_round_indices"][index]),
                 truncated=bool(arrays["truncated"][index]),
@@ -810,7 +1108,7 @@ def load_replay_shard(
     expected_feature_schema: str = DEFAULT_FEATURE_SCHEMA,
     expected_feature_dim: int = FEATURE_DIM,
     expected_parent_checkpoint_digest: str | None = None,
-) -> list[TrainingRecordV2]:
+) -> list[TrainingRecordV3]:
     """Load a shard only after manifest, hashes, shapes, and states validate."""
 
     path = Path(shard_path)
@@ -909,12 +1207,12 @@ class _DisjointSet:
 
 
 def grouped_split_indices(
-    records: Sequence[TrainingRecordV2],
+    records: Sequence[TrainingRecordV3],
     *,
     validation_fraction: float = 0.1,
     seed: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Split connected groups sharing an exact state *or* an episode.
+    """Split connected groups sharing an exact state, episode, or feature row.
 
     Union-find is required here: state A and state B may share episode X while
     state B also appears in episode Y.  Treating either key independently or
@@ -930,12 +1228,18 @@ def grouped_split_indices(
     groups = _DisjointSet(count)
     state_owner: dict[str, int] = {}
     episode_owner: dict[str, int] = {}
+    feature_owner: dict[str, int] = {}
     for index, record in enumerate(records):
         state_key = exact_state_hash(record.exact_state)
         if state_key in state_owner:
             groups.union(index, state_owner[state_key])
         else:
             state_owner[state_key] = index
+        feature_key = _feature_hash(record.features)
+        if feature_key in feature_owner:
+            groups.union(index, feature_owner[feature_key])
+        else:
+            feature_owner[feature_key] = index
         if record.episode_id:
             if record.episode_id in episode_owner:
                 groups.union(index, episode_owner[record.episode_id])
@@ -948,7 +1252,7 @@ def grouped_split_indices(
     ordered = sorted(components.values(), key=lambda component: component[0])
     if len(ordered) < 2:
         raise ReplayValidationError(
-            "at least two disconnected state/episode groups are required to split"
+            "at least two disconnected state/episode/feature groups are required to split"
         )
     rng = np.random.default_rng(seed)
     permutation = rng.permutation(len(ordered))
@@ -979,7 +1283,7 @@ def _feature_hash(features: np.ndarray) -> str:
 
 
 def audit_feature_collisions(
-    records: Sequence[TrainingRecordV2],
+    records: Sequence[TrainingRecordV3],
     *,
     divergent_only: bool = True,
     value_tolerance: float = 1e-6,
@@ -1018,13 +1322,14 @@ __all__ = [
     "ENGINE_SCHEMA_V1",
     "FEATURE_SCHEMA_V1",
     "FEATURE_SCHEMA_V2",
-    "RECORD_SCHEMA_V2",
-    "REPLAY_MANIFEST_SCHEMA_V2",
+    "RECORD_SCHEMA_V3",
+    "REPLAY_MANIFEST_SCHEMA_V3",
     "FeatureCollision",
     "ReplayValidationError",
     "ShardRole",
+    "StateOrigin",
     "TargetKind",
-    "TrainingRecordV2",
+    "TrainingRecordV3",
     "audit_feature_collisions",
     "canonical_exact_state_json",
     "exact_state_from_json",

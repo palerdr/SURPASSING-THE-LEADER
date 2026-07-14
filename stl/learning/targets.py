@@ -114,8 +114,16 @@ class ValueTarget:
     dropper_legal_mask: np.ndarray = field(default_factory=_zero_policy)
     checker_legal_mask: np.ndarray = field(default_factory=_zero_policy)
     unresolved_probability: float = 0.0
+    value_lower_bound: float | None = None
+    value_upper_bound: float | None = None
     exact_state: ExactPublicState | None = None
     target_kind: str = ""
+    state_origin: str = ""
+    source_artifact: str = ""
+    source_artifact_digest: str = ""
+    trajectory_actions: tuple[tuple[int, int, bool | None], ...] = ()
+    episode_id: str = ""
+    half_round_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -250,7 +258,9 @@ def _target_kind_for_source(source: str) -> str:
 
     if source == SOURCE_TERMINAL:
         return TargetKind.TERMINAL_OUTCOME.value
-    if source in (SOURCE_TABLEBASE, SOURCE_TABLEBASE_INTERIOR) or source.startswith("tier_a"):
+    if source.startswith("tier_a"):
+        return TargetKind.INTERVAL_MIDPOINT.value
+    if source in (SOURCE_TABLEBASE, SOURCE_TABLEBASE_INTERIOR):
         return TargetKind.TABLEBASE_VALUE.value
     if source in (SOURCE_MCTS_BOOTSTRAP, SOURCE_REANALYSIS_MCTS):
         return TargetKind.SEARCH_BOOTSTRAP_VALUE.value
@@ -999,7 +1009,7 @@ def generate_mcts_bootstrap_targets(
 # ── I/O ───────────────────────────────────────────────────────────────────
 
 
-def to_training_record_v2(
+def to_training_record_v3(
     target: ValueTarget,
     *,
     search_config_digest: str = "",
@@ -1010,14 +1020,16 @@ def to_training_record_v2(
 
     from stl.learning.replay import (
         TargetKind,
-        TrainingRecordV2,
+        TrainingRecordV3,
         exact_state_hash,
     )
 
     if target.exact_state is None:
-        raise ValueError("ValueTarget has no ExactPublicState; regenerate it under V2")
+        raise ValueError("ValueTarget has no ExactPublicState; regenerate it under V3")
+    if not target.state_origin:
+        raise ValueError("ValueTarget has no state_origin; regenerate it under V3")
     kind = TargetKind(target.target_kind or _target_kind_for_source(target.source))
-    return TrainingRecordV2(
+    return TrainingRecordV3(
         features=target.features,
         exact_state=target.exact_state,
         value=target.value,
@@ -1027,8 +1039,16 @@ def to_training_record_v2(
         checker_dist=target.checker_dist,
         dropper_legal_mask=target.dropper_legal_mask.astype(bool),
         checker_legal_mask=target.checker_legal_mask.astype(bool),
-        episode_id=f"anchor-{exact_state_hash(target.exact_state)}",
-        half_round_index=0,
+        value_horizon_half_rounds=target.horizon,
+        cutoff_probability=target.unresolved_probability,
+        value_lower_bound=target.value_lower_bound,
+        value_upper_bound=target.value_upper_bound,
+        state_origin=target.state_origin,
+        source_artifact=target.source_artifact,
+        source_artifact_digest=target.source_artifact_digest,
+        trajectory_actions=target.trajectory_actions,
+        episode_id=target.episode_id or f"anchor-{exact_state_hash(target.exact_state)}",
+        half_round_index=target.half_round_index,
         truncated=False,
         parent_checkpoint_digest=parent_checkpoint_digest,
         search_config_digest=search_config_digest,

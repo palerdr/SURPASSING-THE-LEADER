@@ -1,4 +1,4 @@
-use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
 
 pub const GAME_START_HOUR: u8 = 8;
 pub const SECONDS_PER_MINUTE: u32 = 60;
@@ -121,13 +121,13 @@ impl Referee {
             let max_t = CYLINDER_MAX as f64;
             (1.0 - (t / max_t).powf(BASE_CURVE_K as f64)).max(0.0)
         };
-        let cardiac_modifier = |ttd: u32| -> f64 {
-            CARDIAC_DECAY.powf(ttd as f64 / 60.0)
-        };
-        let referee_modifier = |cprs: u32| -> f64 {
-            REFEREE_FLOOR.max(REFEREE_DECAY.powf(cprs as f64))
-        };
-        death_curve(death_duration) * cardiac_modifier(player.ttd) * referee_modifier(self.cprs_performed) * player.physicality
+        let cardiac_modifier = |ttd: u32| -> f64 { CARDIAC_DECAY.powf(ttd as f64 / 60.0) };
+        let referee_modifier =
+            |cprs: u32| -> f64 { REFEREE_FLOOR.max(REFEREE_DECAY.powf(cprs as f64)) };
+        death_curve(death_duration)
+            * cardiac_modifier(player.ttd)
+            * referee_modifier(self.cprs_performed)
+            * player.physicality
     }
 
     pub fn attempt_revival(
@@ -154,10 +154,17 @@ impl Referee {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct HalfRoundAction {
-    pub drop_time: u8,
-    pub check_time: u8,
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct JointAction {
+    pub drop_time: u32,
+    pub check_time: u32,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum TerminalOutcome {
+    Ongoing,
+    WonBy(PlayerId),
+    Draw,
 }
 
 pub fn is_leap_second_turn(game_clock: u32) -> bool {
@@ -203,6 +210,7 @@ pub fn sample_second<R: Rng>(rng: &mut R, actor: PlayerId, role: Role, game_cloc
     rng.gen_range(1..=max)
 }
 
+#[derive(Clone)]
 pub struct Game {
     hal: Player,
     baku: Player,
@@ -217,6 +225,10 @@ pub struct Game {
     rng: StdRng,
 }
 impl Game {
+    pub fn fork_exact(&self) -> Self {
+        self.clone()
+    }
+
     pub fn new(seed: u64) -> Self {
         let hal = Player::new(PlayerId::Hal);
         let baku = Player::new(PlayerId::Baku);
@@ -254,6 +266,26 @@ impl Game {
 
     pub fn is_game_over(&self) -> bool {
         self.game_over
+    }
+    pub fn winner(&self) -> Option<Player> {
+        self.winner
+    }
+    pub fn loser(&self) -> Option<Player> {
+        self.loser
+    }
+
+    pub fn winner_id(&self) -> Option<PlayerId> {
+        self.winner.map(|winner| winner.id)
+    }
+
+    pub fn terminal_outcome(&self) -> TerminalOutcome {
+        if !self.game_over {
+            TerminalOutcome::Ongoing
+        } else if let Some(winner) = self.winner_id() {
+            TerminalOutcome::WonBy(winner)
+        } else {
+            TerminalOutcome::Draw
+        }
     }
 
     pub fn is_leap_second_turn(&self) -> bool {
@@ -409,14 +441,14 @@ impl Game {
 
         self.validate_drop_time(drop_time, turn_duration, Some(dropper_id))?;
         self.validate_check_time(check_time, turn_duration, Some(checker_id))?;
-        let (mut death_occurred, mut death_duration, mut survived, mut survival_probability, mut result, mut st_gained) = (
-            false,
-            0,
-            None,
-            None,
-            HalfRoundResult::CheckSuccess,
-            0,
-        );
+        let (
+            mut death_occurred,
+            mut death_duration,
+            mut survived,
+            mut survival_probability,
+            mut result,
+            mut st_gained,
+        ) = (false, 0, None, None, HalfRoundResult::CheckSuccess, 0);
         let mut checker_snapshot = None;
         {
             let (_dropper, checker) = self.get_roles_for_half();
@@ -439,16 +471,31 @@ impl Game {
 
         if death_occurred {
             let snapshot = checker_snapshot.expect("checker snapshot must exist when death occurs");
-            survival_probability = Some(self.referee.compute_survival_probability(&snapshot, death_duration));
+            survival_probability = Some(
+                self.referee
+                    .compute_survival_probability(&snapshot, death_duration),
+            );
             let did_survive = match survived_outcome {
                 Some(value) => {
                     self.referee.cprs_performed += 1;
                     value
                 }
-                None => self.referee.attempt_revival(&snapshot, death_duration, Some(&mut self.rng)),
+                None => {
+                    self.referee
+                        .attempt_revival(&snapshot, death_duration, Some(&mut self.rng))
+                }
             };
             survived = Some(did_survive);
-            let (dropper, checker) = self.get_roles_for_half();
+            let (dropper_player, checker_player) = if dropper_id == PlayerId::Hal {
+                (self.hal, self.baku)
+            } else {
+                (self.baku, self.hal)
+            };
+            let checker = if checker_id == PlayerId::Hal {
+                &mut self.hal
+            } else {
+                &mut self.baku
+            };
             checker.on_death(death_duration);
             if did_survive {
                 checker.on_revival();
@@ -460,8 +507,8 @@ impl Game {
             } else {
                 checker.on_permanent_death();
                 self.game_over = true;
-                self.winner = Some(*dropper);
-                self.loser = Some(*checker);
+                self.winner = Some(dropper_player);
+                self.loser = Some(checker_player);
                 result = if check_time >= drop_time {
                     HalfRoundResult::CylinderOverflowDied
                 } else {

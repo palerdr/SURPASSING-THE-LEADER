@@ -429,8 +429,10 @@ system:
   \item \path{stl/learning/contracts.py}: the versioned finite-episode,
         perspective, configuration, and horizon-sensitivity contract;
   \item \path{stl/learning/replay.py}: reconstructable
-        \path{TrainingRecordV2} rows, safe hash-verified shards, collision
+        \path{TrainingRecordV3} rows, safe hash-verified shards, collision
         audits, and grouped splits;
+  \item \path{stl/learning/reachable.py}: legal engine trajectories whose
+        snapshots can be replayed from the canonical opening before labeling;
   \item \path{stl/learning/train.py}: value MSE, masked role-policy cross
         entropy, source weights, grouped selection, and strict checkpoint
         bundles;
@@ -446,9 +448,14 @@ system:
 
 The P1 and P3 frozen conformance packs test exact transition/orientation
 parity, omitted-action gains, chance sampling, and horizon-one MCTS convergence.
-The P4 smoke writes and reloads small Generation-Zero V2 train and external
-ruler shards. These are valuable prerequisites; they do not yet form one
-closed RL loop.
+The first P4 V2 smoke and full generation completed computationally but failed
+the subsequent data audit. In the 458-row training shard, 370 nonterminal rows
+violated the death/TTD/CPR reachability invariants; the external ruler had 215
+such violations among 254 rows. All 48 terminal rows across both shards omitted
+the terminal death counters, and 22 tactical exact states appeared in both
+splits. Tier A was absent, while exact horizon and unresolved cutoff mass were
+dropped during replay conversion. Those artifacts are therefore rejected
+evidence, not a frozen Generation Zero.
 
 \subsection{Blocking Integration Gaps}
 
@@ -465,9 +472,9 @@ closed RL loop.
         MCTS bootstrap sweeps a constructed state grid and labels root value;
         it does not supply trajectory outcomes from the improved policy.
   \item \textbf{Generation Zero is not frozen.}
-        The structural smoke is complete, but the full exact/tablebase anchor
-        corpus, external-ruler review, training run, and search-in-the-loop
-        gate have not run.
+        The corrected V3 generator is implemented and structurally tested, but
+        no corrected tiny or full corpus, external-ruler review, training run,
+        or search-in-the-loop gate has run.
   \item \textbf{Incomplete promotion evidence.}
         Policy drift is optional in promotion, and finite-depth best response
         is called certified exploitability; the first omits a policy gate and
@@ -482,11 +489,13 @@ bucket search from the new self-play actor.
 
 \subsection{Reconstructable State and Replay}
 
-Each \path{TrainingRecordV2} row carries a versioned 52-field feature vector
+Each \path{TrainingRecordV3} row carries a versioned 52-field feature vector
 and a serialized exact public state. It also records both legal masks, both
 improved role policies, Hal-perspective value target, target kind, episode and
 half-round indices, truncation status, parent checkpoint digest, search/config
-digest, schema versions, and RNG seeds. Pickle-free numeric shards and a
+digest, exact value horizon, cutoff probability, value interval, state origin,
+source artifact, legal action trace where applicable, schema versions, and RNG
+seeds. Pickle-free numeric shards and a
 canonical JSON manifest are written atomically and verified by hashes. This
 turns replay into an auditable experiment record rather than an opaque tensor
 dump.
@@ -495,8 +504,69 @@ The V2 encoder includes every nonconstant value-relevant field in
 \path{ExactPublicState} and appends documented relative features. A
 compact network remains an approximation, but replay reconstruction permits
 collision analysis and exact or MCTS reanalysis. Split assignment is grouped
-by exact-state hash and episode so repeated or replicated states cannot cross
-train and validation boundaries.
+by exact-state hash, episode, and identical feature vector so repeated,
+adjacent, or representationally collapsed states cannot cross train and
+validation boundaries.
+
+\subsection{Reachability and Isolation Certificates}
+
+Let \(s_0\) be the canonical opening and let
+\(T(s,d,c,\omega)\) be the engine transition for drop/check seconds and a
+revival outcome. Define the reachable sets recursively by
+\[
+\mathcal{R}_0=\{s_0\},\qquad
+\mathcal{R}_{k+1}=\left\{
+T(s,d,c,\omega):s\in\mathcal{R}_k,\ d\in A_D(s),\ c\in A_C(s),
+\ P(\omega\mid s,d,c)>0
+\right\}.
+\]
+An engine-derived V3 row stores
+
+\[
+\tau=((d_1,c_1,\omega_1),\ldots,(d_k,c_k,\omega_k))
+\]
+
+and publication requires an independent replay to satisfy
+\[
+T^{\tau}(s_0)=s_{\mathrm{stored}}.
+\]
+At every death branch, forced survival requires \(p_{\mathrm{revive}}>0\), and
+forced death requires \(p_{\mathrm{revive}}<1\). By induction on \(k\), the
+base state is in \(\mathcal{R}_0\), and each certified step has legal actions
+and positive-probability chance support; therefore every stored trajectory
+snapshot lies in \(\mathcal{R}_k\). This is a constructive reachability
+certificate, stronger than merely checking plausible counters.
+
+Terminal rows are captured only after the engine applies the fatal transition.
+Consequently the loser is dead, has at least one death and positive total
+time-of-death, and the global CPR count equals the two players' total deaths.
+Certified tactical and Tier A rows are not misrepresented as trajectory
+snapshots; their distinct origin and source-artifact digest remain explicit.
+
+For split isolation, construct a graph whose vertices are candidate rows and
+whose edges connect equal exact-state hashes, equal episode IDs, or equal
+feature hashes. Train/ruler assignment operates on connected components before
+any LP label is computed. If \(C(s)\) denotes the component of row \(s\), then
+\[
+C(s_i)=C(s_j)\Longrightarrow
+\operatorname{split}(s_i)=\operatorname{split}(s_j).
+\]
+Hence no connected state, trajectory, or feature-equivalence class can cross
+the split boundary. A post-assembly audit recomputes all three intersections
+and rejects publication unless each is empty.
+
+Finally, exact and interval labels have different semantics. An exact row stores
+\[
+(v,h,p_{\mathrm{cut}},[v,v]),
+\]
+where \(h\) is measured in half-rounds and \(p_{\mathrm{cut}}\) is unresolved
+frontier probability. A Tier A row stores
+\[
+\left(\frac{\ell+u}{2},0,0,[\ell,u]\right),
+\]
+and its role-policy losses are inactive until a separate saddle certificate
+exists. This prevents interval width from being mislabeled as probability and
+prevents a one-ply heuristic policy from being advertised as exact.
 
 \subsection{Policy/Value Function}
 

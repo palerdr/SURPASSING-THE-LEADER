@@ -2,8 +2,12 @@ use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 
 mod cfr;
-mod payoff;
 mod game;
+mod matrix;
+mod minimax;
+mod payoff;
+mod transition;
+mod value;
 
 #[pyfunction]
 fn solve_minimax_rs<'py>(

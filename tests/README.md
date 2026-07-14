@@ -6,7 +6,7 @@ Subdirectories:
 
 - `engine/` - game clock, half-round resolution, death/revival, leap behavior.
 - `solver/` - exact minimax, selective search, MCTS, frozen conformance packs, tablebase, firewall.
-- `learning/` - episode contracts, replay V2, targets, value/policy training, calibration, gates.
+- `learning/` - episode contracts, replay V3, reachable targets, value/policy training, calibration, gates.
 - `play/` - playable adapters, teachers, self-play, route/play glue.
 
 Useful focused checks:
@@ -27,5 +27,6 @@ length-62 policy vectors, and the always-illegal padding index `0`.
 
 P1/P3 certification checks live in `test_solver_conformance.py` and
 `test_mcts_conformance.py`. Replay/checkpoint boundary checks live in
-`test_replay_v2.py`, while `test_gen0_corpus.py` exercises the short
+`test_replay_v2.py` (retained filename, current V3 contract), while
+`test_gen0_corpus.py` exercises the structural
 Generation-Zero shard-to-checkpoint path.

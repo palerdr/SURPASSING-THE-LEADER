@@ -142,20 +142,26 @@ def _regret_plus_strategy(cumulative_regret: np.ndarray) -> np.ndarray:
 
 def solve_minimax(payoff: np.ndarray) -> tuple[np.ndarray, float]:
     """Solve the row player's maximin strategy for a zero-sum payoff matrix."""
-    m, n = payoff.shape
+    matrix = np.asarray(payoff, dtype=np.float64)
+    if matrix.ndim != 2 or 0 in matrix.shape:
+        raise ValueError(f"payoff must be a non-empty 2D matrix, got shape {matrix.shape}")
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("payoff matrix must contain only finite values")
+
+    m, n = matrix.shape
     if m == 1:
-        return np.array([1.0]), float(payoff[0].min())
+        return np.array([1.0]), float(matrix[0].min())
     if n == 1:
-        best = int(np.argmax(payoff[:, 0]))
+        best = int(np.argmax(matrix[:, 0]))
         strategy = np.zeros(m)
         strategy[best] = 1.0
-        return strategy, float(payoff[best, 0])
+        return strategy, float(matrix[best, 0])
 
     c = np.zeros(m + 1)
     c[m] = -1.0
 
     a_ub = np.zeros((n, m + 1))
-    a_ub[:, :m] = -payoff.T
+    a_ub[:, :m] = -matrix.T
     a_ub[:, m] = 1.0
     b_ub = np.zeros(n)
 
@@ -174,16 +180,33 @@ def solve_minimax(payoff: np.ndarray) -> tuple[np.ndarray, float]:
     )
 
     if not result.success or result.x is None:
-        uniform = np.ones(m) / m
-        return uniform, float(np.min(uniform @ payoff))
+        raise RuntimeError(
+            "zero-sum minimax LP failed; refusing to substitute an uncertified "
+            f"strategy (status={result.status}, message={result.message!r})"
+        )
 
-    strategy = np.maximum(result.x[:m], 0.0)
+    if not np.all(np.isfinite(result.x)):
+        raise RuntimeError("zero-sum minimax LP returned non-finite primal values")
+
+    raw_strategy = np.asarray(result.x[:m], dtype=np.float64)
+    scale = max(1.0, float(np.max(np.abs(matrix))))
+    tolerance = 1e-8 * scale
+    if float(np.min(raw_strategy)) < -tolerance:
+        raise RuntimeError("zero-sum minimax LP returned materially negative probability")
+    strategy = np.maximum(raw_strategy, 0.0)
     total = strategy.sum()
-    if total > 1e-9:
-        strategy /= total
-    else:
-        strategy = np.ones(m) / m
-    return strategy, float(result.x[m])
+    if not np.isfinite(total) or total <= 1e-12:
+        raise RuntimeError("zero-sum minimax LP returned a zero-mass strategy")
+    strategy /= total
+
+    value = float(result.x[m])
+    guaranteed_value = float(np.min(strategy @ matrix))
+    if not np.isfinite(value) or value - guaranteed_value > tolerance:
+        raise RuntimeError(
+            "zero-sum minimax LP failed its primal feasibility check "
+            f"(reported={value}, guaranteed={guaranteed_value})"
+        )
+    return strategy, value
 
 
 def solve_cfr_plus(
@@ -453,6 +476,17 @@ class ExactSolveResult:
     check_actions: tuple[int, ...] = ()
     payoff_for_hal: np.ndarray | None = None
 
+    def __post_init__(self) -> None:
+        # Cached exact results are shared by reference.  Writable NumPy members
+        # would let one caller silently poison every later cache hit.
+        for field_name in ("dropper_strategy", "checker_strategy", "payoff_for_hal"):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            frozen = np.array(value, dtype=np.float64, copy=True)
+            frozen.setflags(write=False)
+            object.__setattr__(self, field_name, frozen)
+
 
 def exact_immediate_checker_payoff_matrix(game: Game, config: ExactSearchConfig | None = None) -> ExactMatrixGame:
     """Build exact checker-perspective immediate payoff matrix for the current half-round."""
@@ -495,6 +529,21 @@ def _weighted_breakdown(parts: list[tuple[float, UtilityBreakdown]]) -> UtilityB
     baku = sum(weight * part.baku_win_probability for weight, part in parts)
     unresolved = sum(weight * part.unresolved_probability for weight, part in parts)
     return UtilityBreakdown(value, hal, baku, unresolved)
+
+
+def _joint_outcome_signature(action: ExactJointAction) -> tuple[str, int]:
+    """Return the exact public-transition class for one timing pair.
+
+    At a fixed public state, successful cells depend on the chosen seconds only
+    through squandered time ``check - drop``.  Every failed cell applies the
+    same fixed penalty.  History records retain the literal pair, but no future
+    rigorous-engine transition reads those records, so one representative per
+    class has the same successor distribution and continuation value.
+    """
+
+    if action.check_time >= action.drop_time:
+        return ("success", action.check_time - action.drop_time)
+    return ("failure", 0)
 
 
 def evaluate_joint_action(
@@ -634,8 +683,13 @@ def solve_exact_finite_horizon(
     hal_payoff = np.zeros((len(drop_actions), len(check_actions)), dtype=np.float64)
     breakdowns: dict[tuple[int, int], UtilityBreakdown] = {}
 
+    outcome_breakdowns: dict[tuple[str, int], UtilityBreakdown] = {}
     for action in actions:
-        breakdown = evaluate_joint_action(game, action, half_round_horizon, config)
+        signature = _joint_outcome_signature(action)
+        breakdown = outcome_breakdowns.get(signature)
+        if breakdown is None:
+            breakdown = evaluate_joint_action(game, action, half_round_horizon, config)
+            outcome_breakdowns[signature] = breakdown
         i = d_index[action.drop_time]
         j = c_index[action.check_time]
         hal_payoff[i, j] = breakdown.value

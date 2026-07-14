@@ -1,6 +1,6 @@
 """Supervised policy/value training for the exact-to-self-play bridge.
 
-The default path consumes a validated ``TrainingRecordV2`` shard, performs a
+The default path consumes a validated ``TrainingRecordV3`` shard, performs a
 grouped train/validation split, optimizes Hal-perspective value MSE plus masked
 dropper/checker cross entropy, and selects the best epoch by grouped validation
 MSE. Manifestless corpora require an explicit legacy opt-in.
@@ -95,7 +95,7 @@ class TrainConfig:
     # ``init_checkpoint`` must match before any optimizer work begins.
     required_parent_digest: str | None = None
     # Manifestless ValueTarget NPZ files are legacy.  New training requires a
-    # validated TrainingRecordV2 shard unless a caller opts into migration.
+    # validated TrainingRecordV3 shard unless a caller opts into migration.
     allow_legacy_targets: bool = False
 
 

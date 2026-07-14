@@ -416,6 +416,8 @@ def forced_baku_overflow_fatigued_referee() -> TacticalScenario:
     """Forced Baku overflow with a fatigued referee (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=1)
     game.player2.cylinder = 300.0
+    game.player1.deaths = 10
+    game.player1.ttd = 600.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
         name="forced_baku_overflow_fatigued_referee",
@@ -432,6 +434,8 @@ def forced_hal_overflow_fatigued_referee() -> TacticalScenario:
     """Forced Hal overflow with a fatigued referee (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=2)
     game.player1.cylinder = 300.0
+    game.player2.deaths = 10
+    game.player2.ttd = 600.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
         name="forced_hal_overflow_fatigued_referee",
@@ -449,6 +453,8 @@ def forced_baku_overflow_high_ttd() -> TacticalScenario:
     game = _base_game(clock=720.0, current_half=1)
     game.player2.cylinder = 300.0
     game.player2.ttd = 240.0
+    game.player2.deaths = 1
+    game.referee.cprs_performed = 1
     return TacticalScenario(
         name="forced_baku_overflow_high_ttd",
         game=game,
@@ -468,6 +474,8 @@ def forced_baku_overflow_with_baku_deaths() -> TacticalScenario:
     game = _base_game(clock=720.0, current_half=1)
     game.player2.cylinder = 300.0
     game.player2.deaths = 1
+    game.player2.ttd = 60.0
+    game.referee.cprs_performed = 1
     return TacticalScenario(
         name="forced_baku_overflow_with_baku_deaths",
         game=game,
@@ -484,6 +492,8 @@ def forced_hal_overflow_with_hal_deaths() -> TacticalScenario:
     game = _base_game(clock=720.0, current_half=2)
     game.player1.cylinder = 300.0
     game.player1.deaths = 1
+    game.player1.ttd = 60.0
+    game.referee.cprs_performed = 1
     return TacticalScenario(
         name="forced_hal_overflow_with_hal_deaths",
         game=game,
@@ -504,6 +514,8 @@ def forced_baku_overflow_with_hal_deaths() -> TacticalScenario:
     game = _base_game(clock=720.0, current_half=1)
     game.player2.cylinder = 300.0
     game.player1.deaths = 1
+    game.player1.ttd = 60.0
+    game.referee.cprs_performed = 1
     return TacticalScenario(
         name="forced_baku_overflow_with_hal_deaths",
         game=game,
@@ -520,6 +532,8 @@ def forced_hal_overflow_with_baku_deaths() -> TacticalScenario:
     game = _base_game(clock=720.0, current_half=2)
     game.player1.cylinder = 300.0
     game.player2.deaths = 1
+    game.player2.ttd = 60.0
+    game.referee.cprs_performed = 1
     return TacticalScenario(
         name="forced_hal_overflow_with_baku_deaths",
         game=game,
@@ -655,6 +669,8 @@ def forced_hal_fail_survivable_fatigued() -> TacticalScenario:
     interior value (+0.568 fresh → -0.3728 fatigued).
     """
     game = _interior_fail_game(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=10)
+    game.player2.deaths = 10
+    game.player2.ttd = 600.0
     return TacticalScenario(
         name="forced_hal_fail_survivable_fatigued",
         game=game,
@@ -1388,14 +1404,50 @@ class TierALookup:
             raise FileNotFoundError(f"Tier A manifest not found: {manifest_path}")
         with manifest_path.open() as fh:
             manifest: dict[str, str] = json.load(fh)
+        expected_names = {
+            "d0.npz",
+            *(f"d1_hal_{ttd}.npz" for ttd in range(60, 300)),
+            *(f"d1_baku_{ttd}.npz" for ttd in range(60, 300)),
+        }
+        if set(manifest) != expected_names:
+            raise ValueError(
+                "Tier A manifest inventory mismatch: "
+                f"missing={sorted(expected_names - set(manifest))}, "
+                f"extra={sorted(set(manifest) - expected_names)}"
+            )
+        unlisted_npz = {
+            path.name for path in self.root.glob("*.npz") if path.name not in manifest
+        }
+        if unlisted_npz:
+            raise ValueError(
+                f"Tier A directory contains unlisted NPZ artifacts: {sorted(unlisted_npz)}"
+            )
         for name, expected in manifest.items():
             path = self.root / name
             if not path.exists():
                 raise FileNotFoundError(f"Tier A artifact listed in manifest is missing: {path}")
+            digest = hashlib.sha256()
             with path.open("rb") as fh:
-                actual = hashlib.sha256(fh.read()).hexdigest()
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            actual = digest.hexdigest()
             if actual != expected:
                 raise ValueError(f"Tier A artifact hash mismatch for {name}: {actual} != {expected}")
+            with np.load(path, allow_pickle=False) as data:
+                if set(data.files) != {"lo", "hi"}:
+                    raise ValueError(
+                        f"Tier A artifact {name} must contain exactly lo and hi arrays"
+                    )
+                lo = np.asarray(data["lo"])
+                hi = np.asarray(data["hi"])
+                if lo.shape != (2, 300, 300) or hi.shape != (2, 300, 300):
+                    raise ValueError(f"Tier A artifact {name} has an invalid array shape")
+                if lo.dtype != np.float32 or hi.dtype != np.float32:
+                    raise ValueError(f"Tier A artifact {name} must use float32 arrays")
+                if not np.isfinite(lo).all() or not np.isfinite(hi).all():
+                    raise ValueError(f"Tier A artifact {name} contains non-finite values")
+                if np.any(lo > hi + 1e-7):
+                    raise ValueError(f"Tier A artifact {name} contains unordered intervals")
         return manifest
 
     def _load(self, name: str) -> tuple[np.ndarray, np.ndarray]:
@@ -1403,7 +1455,7 @@ class TierALookup:
             path = self.root / name
             if not path.exists():
                 raise FileNotFoundError(f"Tier A artifact not found: {path}")
-            with np.load(path) as data:
+            with np.load(path, allow_pickle=False) as data:
                 self._cache[name] = (
                     data["lo"].astype(np.float64),
                     data["hi"].astype(np.float64),

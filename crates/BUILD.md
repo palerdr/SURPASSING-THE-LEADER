@@ -40,23 +40,40 @@ Build the Rust solver from small, inspectable game-theoretic pieces:
    `p`, each column action has value `(p^T A)_j`; the minimizing column player
    chooses a minimum.
 
-5. Matrix-game minimax:
+5. Joint-action transition primitive:
+   Given a public `Game` state and a `JointAction { drop, check }`,
+   produce the outcome branches caused by that single cell of the matrix. This
+   is the Rust mirror of Python's `evaluate_joint_action` path, but it should
+   be built in smaller pieces:
+   - apply the half-round with an explicit survival outcome,
+   - identify terminal versus nonterminal child states,
+   - expose death/survival as probability-weighted branches,
+   - restore or clone state so probing one matrix cell cannot mutate siblings.
+
+6. Joint-action value:
+   Convert transition branches into one Hal-perspective expected value:
+   `V(action) = sum_k P(branch_k | action) * V(child_k)`.
+   At horizon 1, `V(child_k)` is terminal value or unresolved value. At deeper
+   horizons, it comes from recursive solve.
+
+7. Matrix-game minimax:
    Solve for a saddle point:
    `max_p min_j (p^T A)_j`, subject to `p_i >= 0` and `sum_i p_i = 1`.
-   This is the next smallest exact solver piece after engine rules, payoff
-   matrices, and CFR+ tooling.
+   This can be developed as a standalone matrix primitive before or after
+   joint-action evaluation, but it is not enough to mirror the recursive solver
+   until matrix cells can be evaluated from real engine transitions.
 
-6. Recursive finite-horizon solve:
+8. Recursive finite-horizon solve:
    Build the current half-round matrix by evaluating each joint action. For
    nonterminal child states, recurse to the remaining horizon. For stochastic
    death/survival, combine child values by expectation.
 
-7. Selective search:
+9. Selective search:
    Restrict the matrix to a candidate action set, then compare against
    full-width exact solves as an audit rather than assuming the restriction is
    exact.
 
-8. Matrix-game MCTS:
+10. Matrix-game MCTS:
    Use sampled rollouts to estimate a Q-matrix at each public state, then solve
    the current matrix game at selection and at the root.
 
@@ -87,6 +104,6 @@ Prefer tests that teach one invariant at a time:
 
 ## Agent Boundary
 
-When a user asks "what should I build next?", answer with the next smallest
-piece, the math object, pseudocode, and focused tests. Do not write the Rust
-implementation unless the user explicitly asks for code.
+When a user asks "what should I build next?", inspect the current Rust kernel
+first. Answer with the next smallest piece, the math object, pseudocode, and focused tests. Do not
+write the Rust implementation unless the user explicitly asks for code.

@@ -11,6 +11,7 @@ to the existing ValueNet policy/value heads.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 import time
@@ -20,14 +21,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stl.solver.search import TerminalOnlyEvaluator
 from stl.solver.exact import ExactSearchConfig
 from stl.solver.exact import exact_public_state
-from stl.solver.search import selective_solve
 from stl.learning.model import extract_features
-from stl.commands.tier_a_decision import make_game, policy_vectors
-from stl.solver.tablebase import TierAEvaluator, TierALookup
-from stl.learning.targets import ValueTarget, save_targets, source_breakdown
+from stl.commands.tier_a_decision import make_game
+from stl.solver.tablebase import TierALookup
+from stl.learning.targets import (
+    ValueTarget,
+    _inactive_policy_vectors,
+    save_targets,
+    source_breakdown,
+)
 
 
 SOURCE_TIER_A = "tier_a"
@@ -92,13 +96,12 @@ def build_state_specs(args) -> list[dict]:
 
 
 def generate_targets(args) -> tuple[list[ValueTarget], dict]:
-    lookup = TierALookup(args.tier_a_dir, verify=args.verify_manifest)
-    evaluator = TierAEvaluator(
-        TerminalOnlyEvaluator(),
-        lookup=lookup,
-        max_width=args.runtime_width,
-        use_midpoint_for_wide=True,
-    )
+    if not args.verify_manifest:
+        raise ValueError("Tier A target generation requires strict manifest verification")
+    lookup = TierALookup(args.tier_a_dir)
+    manifest = lookup.verify_manifest()
+    manifest_path = Path(args.tier_a_dir) / "manifest.json"
+    manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     config = ExactSearchConfig()
     targets: list[ValueTarget] = []
     stats = {
@@ -109,6 +112,7 @@ def generate_targets(args) -> tuple[list[ValueTarget], dict]:
         "miss_reasons": {},
         "accepted_by_artifact": {},
         "max_width_seen": 0.0,
+        "tier_a_manifest_sha256": manifest_digest,
     }
 
     for spec in build_state_specs(args):
@@ -128,21 +132,26 @@ def generate_targets(args) -> tuple[list[ValueTarget], dict]:
             stats["wide"] += 1
             continue
 
-        solve = selective_solve(game, args.policy_horizon, config, evaluator=evaluator)
-        drop, check, drop_mask, check_mask = policy_vectors(game, solve)
+        drop, check, drop_mask, check_mask = _inactive_policy_vectors(game, config)
+        artifact = interval.source
         targets.append(
             ValueTarget(
                 features=extract_features(game),
                 value=float(interval.midpoint),
                 source=args.source,
-                horizon=args.policy_horizon,
+                horizon=0,
                 dropper_dist=drop,
                 checker_dist=check,
                 dropper_legal_mask=drop_mask,
                 checker_legal_mask=check_mask,
-                unresolved_probability=float(interval.width),
+                unresolved_probability=0.0,
+                value_lower_bound=float(interval.lo),
+                value_upper_bound=float(interval.hi),
                 exact_state=exact_public_state(game),
-                target_kind="tablebase_value",
+                target_kind="interval_midpoint",
+                state_origin="tier_a",
+                source_artifact=artifact,
+                source_artifact_digest=manifest[artifact],
             )
         )
         stats["accepted"] += 1
@@ -163,8 +172,18 @@ def main() -> int:
     )
     parser.add_argument("--tier-a-dir", default=str(Path("checkpoints") / "tablebase" / "tier_a"))
     parser.add_argument("--max-width", type=float, default=0.05)
-    parser.add_argument("--runtime-width", type=float, default=0.10)
-    parser.add_argument("--policy-horizon", type=int, default=1)
+    parser.add_argument(
+        "--runtime-width",
+        type=float,
+        default=0.10,
+        help="Deprecated compatibility option; target policies are always inactive.",
+    )
+    parser.add_argument(
+        "--policy-horizon",
+        type=int,
+        default=1,
+        help="Deprecated compatibility option; interval values have horizon zero.",
+    )
     parser.add_argument("--cylinder-points", type=int, default=24)
     parser.add_argument("--near-boundary-points", type=int, default=30)
     parser.add_argument("--ttd-points", type=int, default=10)
