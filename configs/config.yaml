@@ -1,0 +1,14 @@
+defaults:
+  - command: tier_a
+  - experiment: smoke
+  - rl: baseline_v1
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

@@ -1,0 +1,41 @@
+# @package _global_
+experiment:
+  description: Certificate-backed policy-head correction on the frozen Gen-0 corpus.
+command:
+  targets: outputs/regen2rl/gen0_scaled_train_v3.npz
+  validation_targets: outputs/regen2rl/gen0_scaled_development_v3.npz
+  policy_certificates: outputs/regen2rl/gen0_scaled_train_v3.certificates.npz
+  validation_policy_certificates: outputs/regen2rl/gen0_scaled_development_v3.certificates.npz
+  out: outputs/regen2rl/gen0_scaled_gap_finetune/h${command.hidden_dim}_s${command.seed}
+  epochs: 200
+  batch_size: 128
+  lr: 0.005
+  weight_decay: 0.0001
+  policy_loss_weight: 0.0
+  policy_saddle_gap_weight: 1.0
+  policy_saddle_gap_tail_weight: 1.0
+  checkpoint_selection_metric: saddle_gap_then_value
+  hidden_dim: 192
+  init_checkpoint: outputs/regen2rl/gen0_scaled_ladder/h192_s0/best.pt
+  trainable_parts: policy_head
+  early_stopping_patience: 30
+  seed: 0
+  device: cpu
+  allow_legacy_targets: false
+  source_batch_count:
+    - "exact_horizon_2:48"
+    - "exact_horizon_3:24"
+    - "tier_a:16"
+    - "tablebase:16"
+    - "tablebase_interior:12"
+    - "terminal:12"
+  source_weight:
+    - "exact_horizon_2:0.004166666666666667"
+    - "exact_horizon_3:0.008333333333333333"
+    - "tier_a:0.00625"
+    - "tablebase:0.009375"
+    - "tablebase_interior:0.016666666666666666"
+    - "terminal:0.0125"
+  policy_source_weight:
+    - "exact_horizon_2:0.011458333333333333"
+    - "exact_horizon_3:0.01875"

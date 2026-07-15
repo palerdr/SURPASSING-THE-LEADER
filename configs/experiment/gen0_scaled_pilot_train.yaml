@@ -1,0 +1,34 @@
+# @package _global_
+experiment:
+  description: One-epoch trainer preflight for the scaled three-way corpus.
+command:
+  targets: outputs/regen2rl/gen0_scaled_pilot_train_v3.npz
+  validation_targets: outputs/regen2rl/gen0_scaled_pilot_development_v3.npz
+  out: outputs/regen2rl/gen0_scaled_pilot_checkpoint_v3
+  epochs: 1
+  batch_size: 16
+  lr: 0.001
+  weight_decay: 0.0001
+  policy_loss_weight: 1.0
+  hidden_dim: 64
+  early_stopping_patience: 1
+  seed: 0
+  device: cpu
+  allow_legacy_targets: false
+  source_batch_count:
+    - "exact_horizon_2:4"
+    - "exact_horizon_3:2"
+    - "tier_a:2"
+    - "tablebase:3"
+    - "tablebase_interior:2"
+    - "terminal:3"
+  source_weight:
+    - "exact_horizon_2:0.05"
+    - "exact_horizon_3:0.1"
+    - "tier_a:0.05"
+    - "tablebase:0.05"
+    - "tablebase_interior:0.1"
+    - "terminal:0.05"
+  policy_source_weight:
+    - "exact_horizon_2:0.1375"
+    - "exact_horizon_3:0.225"

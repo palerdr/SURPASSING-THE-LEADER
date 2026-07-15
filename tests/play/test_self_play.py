@@ -1,0 +1,33 @@
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.getcwd())
+
+from stl.engine.actions import IllegalActionError
+from stl.play.opponents.base import Opponent
+from stl.learning.self_play import play_one_game
+
+
+class _IllegalHal:
+    def reset(self):
+        pass
+
+    def choose_action(self, game, role, turn_duration):
+        del game, role, turn_duration
+        return 61
+
+
+class _AlwaysOneOpponent(Opponent):
+    def reset(self):
+        pass
+
+    def choose_action(self, game, role, turn_duration):
+        del game, role, turn_duration
+        return 1
+
+
+def test_self_play_rejects_illegal_action():
+    with pytest.raises(IllegalActionError):
+        play_one_game(_IllegalHal(), _AlwaysOneOpponent(), seed=0)

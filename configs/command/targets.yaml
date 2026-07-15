@@ -1,0 +1,6 @@
+name: targets
+module: stl.commands.tier_a_targets
+args: null
+tier_a_dir: checkpoints/tablebase/tier_a
+out: checkpoints/tier_a_targets_smoke.npz
+limit: 8

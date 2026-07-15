@@ -1,0 +1,21 @@
+# @package _global_
+experiment:
+  description: Fresh V4 full evaluator corpus with causally complete tablebase grids.
+command:
+  profile: scaled_v4
+  smoke: false
+  split_seed: 20260715
+  train_out: outputs/regen2rl/gen0_v4_train.npz
+  dev_out: outputs/regen2rl/gen0_v4_development.npz
+  ruler_out: outputs/regen2rl/gen0_v4_sealed_holdout.npz
+  work_dir: outputs/regen2rl/gen0_v4_work_reuse
+  holdout_seal_out: outputs/regen2rl/gen0_v4_holdout.seal.json
+  tier_a_rows: 384
+  workers: 4
+  chunk_size: 16
+  blocked_artifact:
+    - outputs/regen2rl/gen0_scaled_train_v3.npz
+    - outputs/regen2rl/gen0_scaled_development_v3.npz
+    - outputs/regen2rl/gen0_scaled_external_ruler_v3.npz
+  reuse_train_artifact: outputs/regen2rl/gen0_scaled_train_v3.npz
+  reuse_dev_artifact: outputs/regen2rl/gen0_scaled_development_v3.npz

@@ -1,0 +1,7 @@
+name: tier_a
+module: stl.commands.tier_a
+args: null
+stage: 1
+limit: 1
+workers: 1
+max_tasks_per_child: 8

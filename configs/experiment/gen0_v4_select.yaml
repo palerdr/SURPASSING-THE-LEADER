@@ -1,0 +1,21 @@
+# @package _global_
+experiment:
+  description: Strict development-only V4 candidate selection.
+command:
+  train: outputs/regen2rl/gen0_v4_train.npz
+  development: outputs/regen2rl/gen0_v4_development.npz
+  certificates: outputs/regen2rl/gen0_v4_development.certificates.npz
+  taxonomy: outputs/regen2rl/gen0_v4_development.taxonomy.json
+  parent_checkpoint: outputs/regen2rl/gen0_scaled_gap_finetune/h192_s0/best.pt
+  out: outputs/regen2rl/gen0_v4_development_selection.json
+  tablebase_mse_max: 0.005
+  tablebase_interior_mse_max: 0.025
+  boundary_max_abs_error: 0.10
+  interior_max_abs_error: 0.22360679774997896
+  exact_saddle_gap_max: 0.04
+  unique_policy_tv_median_max: 0.15
+  exact_cutoff_max: 0.5
+  preservation_relative: 0.10
+  preservation_mse_floor: 0.001
+  preservation_max_abs_delta: 0.02
+  fail_on_gate: true

@@ -1,0 +1,39 @@
+# @package _global_
+experiment:
+  description: Development-only V4 value-head repair; trunk and policy remain frozen.
+command:
+  targets: outputs/regen2rl/gen0_v4_train.npz
+  validation_targets: outputs/regen2rl/gen0_v4_development.npz
+  training_taxonomy: outputs/regen2rl/gen0_v4_train.taxonomy.json
+  out: outputs/regen2rl/gen0_v4_value_head/s${command.seed}
+  epochs: 100
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 0.0001
+  policy_loss_weight: 0.0
+  policy_saddle_gap_weight: 0.0
+  checkpoint_selection_metric: value_mse
+  hidden_dim: 192
+  init_checkpoint: outputs/regen2rl/gen0_scaled_gap_finetune/h192_s0/best.pt
+  trainable_parts: value_head
+  early_stopping_patience: 20
+  seed: 0
+  device: cpu
+  source_batch_count:
+    - "exact_horizon_2:48"
+    - "exact_horizon_3:24"
+    - "tier_a:16"
+    - "tablebase_single_overflow:8"
+    - "tablebase_double_overflow:8"
+    - "tablebase_interior:12"
+    - "terminal:12"
+  source_weight:
+    - "exact_horizon_2:0.004166666666666667"
+    - "exact_horizon_3:0.008333333333333333"
+    - "tier_a:0.00625"
+    - "tablebase:0.009375"
+    - "tablebase_interior:0.016666666666666666"
+    - "terminal:0.0125"
+  policy_source_weight:
+    - "exact_horizon_2:0.011458333333333333"
+    - "exact_horizon_3:0.01875"

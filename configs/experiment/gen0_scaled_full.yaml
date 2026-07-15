@@ -1,0 +1,13 @@
+# @package _global_
+experiment:
+  description: Frozen overnight Generation-Zero corpus for the first MCTS evaluator.
+command:
+  profile: scaled_full
+  smoke: false
+  train_out: outputs/regen2rl/gen0_scaled_train_v3.npz
+  dev_out: outputs/regen2rl/gen0_scaled_development_v3.npz
+  ruler_out: outputs/regen2rl/gen0_scaled_external_ruler_v3.npz
+  work_dir: outputs/regen2rl/gen0_scaled_work_v3
+  tier_a_rows: 384
+  workers: 4
+  chunk_size: 16

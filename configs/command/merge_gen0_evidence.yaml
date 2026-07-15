@@ -1,0 +1,9 @@
+name: merge_gen0_evidence
+module: stl.commands.merge_gen0_evidence
+args: null
+input: ???
+certificate: ???
+taxonomy: null
+role: replay
+out: outputs/regen2rl/gen0_v5_train.npz
+out_certificates: outputs/regen2rl/gen0_v5_train.certificates.npz

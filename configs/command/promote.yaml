@@ -1,0 +1,6 @@
+name: promote
+module: stl.commands.promote
+args: null
+calibration_report: ???
+ladder_report: ???
+exploitability_report: ???
