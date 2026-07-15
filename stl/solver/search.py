@@ -284,9 +284,11 @@ def generate_candidates(
     # each newly added boundary induces another +/-1 response.  The frozen P1
     # omitted-action audit found profitable deviations when this band was
     # truncated, so use literal full width instead of pretending the candidate
-    # subset is reliable.  At safe_st=0 every successful check is already an
-    # overflow and the compact terminal candidate set remains sufficient.
-    if 0 < safe_st <= FULL_WIDTH_SAFE_ST_BAND:
+    # subset is reliable.  This includes safe_st=0: although every successful
+    # check overflows immediately, a horizon-3 continuation matrix still has a
+    # cyclic timing response chain.  The V5 Bellman smoke measured a 0.2222
+    # lifted saddle gap when that boundary was incorrectly kept compact.
+    if 0 <= safe_st <= FULL_WIDTH_SAFE_ST_BAND:
         return CandidateActions(
             drop_seconds=tuple(drop_legal),
             check_seconds=tuple(check_legal),

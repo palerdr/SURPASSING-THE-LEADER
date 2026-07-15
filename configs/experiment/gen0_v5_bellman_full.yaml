@@ -3,6 +3,9 @@ experiment:
   description: Balanced 96/36/32 Bellman closure with a fresh sealed ruler.
 command:
   out_prefix: outputs/regen2rl/gen0_v5_bellman
+  work_dir: outputs/regen2rl/gen0_v5_bellman_final_work
+  reuse_work_dir:
+    - outputs/regen2rl/gen0_v5_bellman_closure_work
   split_seed: 20260715
   smoke: false
   blocked_artifact:

@@ -113,6 +113,15 @@ def test_candidates_include_safe_check_boundary_check_at_low_drop():
     assert 60 in candidates.check_seconds
 
 
+def test_zero_safe_budget_uses_full_width_for_continuation_equilibrium():
+    game = make_game(baku_cyl=299.0)
+    candidates = generate_candidates(game)
+
+    assert candidates.drop_seconds == tuple(range(1, 61))
+    assert candidates.check_seconds == tuple(range(1, 61))
+    assert candidates.joint_count == 60 * 60
+
+
 def test_candidates_smaller_than_full_width_at_normal_turn():
     game = make_game()
     candidates = generate_candidates(game)

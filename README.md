@@ -293,13 +293,28 @@ the direct root prediction and the independently backed value
 B3_hat(s) = val(sum[s'] P(s'|s,a,b) V2_hat(s')).
 ```
 
-The V5 CLI smoke completed in `50.8 s`, producing `190` rows over three
-isolated splits and `184` unique successor states. Its sampled replay root also
-demonstrated that candidate-action representability can fail; smoke reports
-that diagnostic, while full generation treats it as a hard gate. The full V5
-generation/training/evaluation run has not been executed. P5 stays blocked
-until one candidate passes a newly generated joint calibration/Bellman seal
-and the aligned eight-root MCTS audit.
+The initial V5 CLI smoke completed in `50.8 s`, producing `190` rows over three
+isolated splits and `184` unique successor states. Its sampled replay root
+proved that zero-safe-budget states cannot use the compact candidate set: the
+omitted-action value error was `0.188889` and saddle gap was `0.222222`. Those
+states now use literal full-width actions; the stored matrix recheck reduced
+both errors to numerical zero. Bellman generation commits each root with
+hash-bound replay/certificate sidecars, merges those commits deterministically,
+and preserves exact artifacts even if the later candidate gate blocks sealing.
+A verified no-solve smoke resume completed in `5.3 s`. The first full
+allocation exposed 431 shared successor states across its three nominal root
+splits; no corpus was published. The corrected allocator now reserves each
+root's complete one-transition closure before solving. Its preflight certified
+zero cross-split overlap across `5,512` training, `2,147` development, and
+`1,874` external-ruler physical states, and reused `146/164` committed roots.
+
+The corrected full exact artifacts contain `5,608` training, `2,183`
+development, and `1,906` external-ruler records. They are intentionally
+unsealed: the representability gate found 25 training and 11 development roots
+whose compact candidate actions cannot reproduce the exact matrices, mainly at
+checker cylinders `239--242`. P5 stays blocked until that candidate-action
+defect is corrected, the preserved exact artifacts pass the gate, and one
+candidate passes the joint calibration/Bellman seal and aligned MCTS audit.
 
 There is intentionally no public `command=self_play` before P5. The old broken
 Hydra wrapper was removed; the tested compatibility module still runs the

@@ -372,6 +372,20 @@ usually one half-round, and evaluates the frontier with a tablebase or network
 adapter. LP remains the certification path; Python CFR+ is a runtime option for
 bounded local matrices.
 
+The V5 Bellman smoke falsified the earlier special case that retained a compact
+set when the checker had zero safe squandered seconds remaining. At one such
+root the restricted value error was \(0.188889\) and the lifted full-width
+saddle gap was \(0.222222\). Zero-safe-budget states therefore use the full
+legal exact-second matrix; the same stored root then has zero value error and
+saddle gap \(2.22\times10^{-16}\). This is a state-dependent exact fallback,
+not a claim that the remaining candidate sets are certified without audit.
+
+Bellman generation commits each root as a hash-bound bundle containing its
+closure graph, replay rows, and exact-policy certificates. A deterministic
+merge deduplicates successor states and remaps branch indices. Candidate-set
+failure blocks sealing and training but cannot discard these exact artifacts;
+only a passing gate can bind the concealed Bellman ruler into the one-use seal.
+
 \subsection{Matrix-Game MCTS}
 
 Each MCTS node stores candidate role actions, a Hal-perspective mean
@@ -557,6 +571,46 @@ C(s_i)=C(s_j)\Longrightarrow
 Hence no connected state, trajectory, or feature-equivalence class can cross
 the split boundary. A post-assembly audit recomputes all three intersections
 and rejects publication unless each is empty.
+
+Bellman roots require a stronger pre-label construction because one selected
+root publishes labels for an entire one-transition family. Define
+
+\[
+ \Gamma(s)=\{s\}\cup
+ \bigcup_{a\in A(s),\,b\in B(s)}
+ \operatorname{supp}P(\cdot\mid s,a,b),
+ \qquad
+ \Gamma(R)=\bigcup_{s\in R}\Gamma(s).
+\]
+
+\begin{proposition}[Closure-separated split isolation]
+Let (R_{\mathrm{tr}},R_{\mathrm{dev}},R_{\mathrm{ext}}) be Bellman root sets,
+and let each published shard contain exactly the root and successor identities
+in its corresponding (\Gamma(R)). Exact-state leakage between shards is absent
+if and only if
+\[
+ \Gamma(R_i)\cap\Gamma(R_j)=\varnothing
+ \quad\text{for every }i\neq j.
+\]
+Root disjointness (R_i\cap R_j=\varnothing) alone is not sufficient.
+\end{proposition}
+\begin{proof}
+The exact-state identities published by shard (i) are precisely
+(\Gamma(R_i)). Therefore a state is published by both shards (i) and (j)
+exactly when it belongs to their intersection. Empty pairwise intersections are
+thus sufficient, and any nonempty intersection supplies a leaking state, so
+they are necessary. Since distinct roots can share a successor, disjoint root
+sets need not have disjoint closures.
+\end{proof}
+
+The implemented allocator computes (\Gamma(s)) through engine transitions
+before solving any (V_2) or (V_3) label, reserves the disclosed fixtures
+first, then allocates the concealed ruler, development, and training roots
+against all earlier reservations. The first root-only full allocation
+demonstrated the necessity: its pairwise closure intersections contained
+(95), (89), and (247) states. The corrected allocation contains
+(5512), (2147), and (1874) reserved states with all three intersections
+empty.
 
 Finally, exact and interval labels have different semantics. An exact row stores
 \[

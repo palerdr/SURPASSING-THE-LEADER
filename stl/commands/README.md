@@ -48,6 +48,17 @@ uv run python -m stl.cli command=gen0_bellman_select --cfg job
 uv run python -m stl.cli command=gen0_bounded_audit --cfg job
 ```
 
+Bellman generation uses `command.work_dir` for one hash-committed root at a
+time. A matching rerun strict-loads those commits and the immutable plan instead
+of solving again. Exact replay, certificate, and closure artifacts are published
+independently of the candidate-action report; a failed report prevents holdout
+sealing and downstream training but does not erase completed exact work.
+`command.preflight_only=true` enumerates exact successor identities without
+solving labels and proves all three complete closures are disjoint first.
+`command.reuse_work_dir` lazily imports matching committed roots under a new
+closure-safe split, so matrices are decompressed one at a time instead of
+materializing the entire cache in memory.
+
 `merge_gen0_evidence` publishes the single training and development shards used
 by the trainer. Training combines V4 training with Bellman training.
 Development combines V4 development, the consumed V4 holdout, and Bellman

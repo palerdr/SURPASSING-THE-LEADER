@@ -724,6 +724,16 @@ mean/maximum certificate gap in addition to the weighted optimizer losses.
   \]
   holds to (10^{-8}). Candidate subsets are rejected before training when
   restricted value error exceeds `0.02` or lifted saddle gap exceeds `0.05`.
+  The smoke exposed that `safe_st=0` also requires literal full width; that
+  correction changed the failing root from value error `0.188889` and saddle
+  gap `0.222222` to numerical zero. Every root is now an independently
+  hash-committed Bellman/replay/certificate chunk. Final artifacts are assembled
+  from committed bytes, exact evidence is preserved if the candidate gate
+  fails, and a holdout seal is written only after that gate passes. Split
+  allocation reserves the root plus its complete one-transition successor
+  closure before any exact label solve. The immutable plan records a digest and
+  count for each reservation. Committed roots can be imported lazily into a new
+  split by a binding over the old plan, role/index, root hash, and commit digest.
 - [x] **S8.3 development-only training/selection implementation.** Existing V4
   training remains training evidence; V4 development and its consumed holdout
   are disclosed development evidence. The fixed width-192 ladder crosses
@@ -745,12 +755,23 @@ mean/maximum certificate gap in addition to the weighted optimizer losses.
   with one isolated root per split, producing `190` replay rows and `184`
   unique successor states. It exercised full-cell branch storage, manifests,
   policy certificates, and representability reporting without creating or
-  claiming a holdout seal.
-- [ ] **S8.6b execute the long V5 evidence cycle.** Run fresh calibration
-  generation, balanced exact Bellman generation, merge disclosed evidence, the
-  fixed value/policy ladder, development selection, and exactly one sealed
-  bounded audit. A failure consumes the ruler and begins another development
-  cycle.
+  claiming a holdout seal. After the zero-safe-budget correction, its previously
+  failing replay root passed with zero value error and numerical-zero saddle
+  gap; a second run resumed every root without solving in `5.3 s`.
+- [x] **S8.6b1 execute closure-separated full exact generation.** The first
+  root-only split failed closed after all roots because training/development,
+  development/external, and training/external closures shared `95`, `89`, and
+  `247` physical states. The corrected preflight reserved `5,512` training,
+  `2,147` development, and `1,874` external-ruler states with zero overlap,
+  reused `146/164` old root commits, and published `5,608`/`2,183`/`1,906`
+  records. The external ruler was not sealed or consumed.
+- [ ] **S8.6b2 repair candidate-action representability.** The full exact pack
+  failed the unchanged pre-training gate on 25 training and 11 development
+  roots, concentrated at checker cylinders `239--242`. Diagnose and correct
+  candidate construction against the preserved exact matrices; do not weaken
+  the `0.02` value-error or `0.05` saddle-gap limits. Then rerun publication
+  validation, merge disclosed evidence, train the fixed ladder, select on
+  development, and perform exactly one sealed bounded audit.
 - [ ] **S9 P4 handoff.** Freeze Generation Zero only after S7 and S8 pass. A
   failed gate returns to data/model diagnosis; it does not authorize threshold
   changes or P5 self-play.

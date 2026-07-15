@@ -223,25 +223,89 @@ def _rank(spec: BellmanRootSpec, *, salt: str) -> str:
     ).hexdigest()
 
 
+def bellman_closure_hashes(
+    spec: BellmanRootSpec,
+    *,
+    config: ExactSearchConfig | None = None,
+) -> frozenset[str]:
+    """Return the exact root plus every state reachable after one joint action.
+
+    This is deliberately label-free: it calls the engine transition expansion
+    but performs no horizon-2 or horizon-3 solve.  Split allocation can
+    therefore reserve a root's complete Bellman footprint before generating
+    any values or exposing any model-selection evidence.
+    """
+
+    config = config or ExactSearchConfig()
+    hashes = {exact_state_hash(exact_public_state(spec.game))}
+    # ExactPublicState intentionally excludes literal action history. Under the
+    # engine's single transition function, successful cells affect physical
+    # state only through check_time - drop_time, while every failed cell adds
+    # the same fixed penalty. These keys are therefore an exact transition
+    # quotient, not an action abstraction: every distinct successor class is
+    # still expanded through the engine, including all survival branches.
+    representatives = {}
+    for action in enumerate_joint_actions(spec.game, config):
+        key = (
+            ("success", action.check_time - action.drop_time)
+            if action.check_time >= action.drop_time
+            else ("failure", 0)
+        )
+        representatives.setdefault(key, action)
+    for action in representatives.values():
+        hashes.update(
+            exact_state_hash(outcome.state)
+            for outcome in expand_joint_action(spec.game, action, config)
+        )
+    return frozenset(hashes)
+
+
 def select_causal_roots(
     *,
     count: int,
     salt: str,
     blocked_state_hashes: set[str] | None = None,
+    blocked_closure_hashes: set[str] | None = None,
+    closure_cache: dict[str, frozenset[str]] | None = None,
+    progress: Callable[[int, int], None] | None = None,
     require_full_coverage: bool = True,
 ) -> tuple[BellmanRootSpec, ...]:
-    """Select a deterministic coverage-first root set from the causal grid."""
+    """Select deterministic roots whose full one-step closures are unblocked."""
 
     if count <= 0:
         raise ValueError("Bellman root count must be positive")
-    blocked = set(blocked_state_hashes or ())
-    candidates = [
+    blocked_roots = set(blocked_state_hashes or ())
+    closure_aware = blocked_closure_hashes is not None
+    blocked_closure = set(blocked_closure_hashes or ())
+    available = [
         item
         for item in causal_root_pool()
-        if exact_state_hash(exact_public_state(item.game)) not in blocked
+        if exact_state_hash(exact_public_state(item.game)) not in blocked_roots
     ]
+    cache = closure_cache if closure_cache is not None else {}
+    newly_computed = 0
+
+    def footprint(item: BellmanRootSpec) -> frozenset[str]:
+        nonlocal newly_computed
+        root_hash = exact_state_hash(exact_public_state(item.game))
+        stored = cache.get(root_hash)
+        if stored is None:
+            stored = bellman_closure_hashes(item)
+            cache[root_hash] = stored
+            newly_computed += 1
+            if progress is not None:
+                progress(newly_computed, len(available))
+        return stored
+
+    candidates = (
+        [item for item in available if footprint(item).isdisjoint(blocked_closure)]
+        if closure_aware
+        else list(available)
+    )
     if len(candidates) < count:
-        raise ValueError("not enough unblocked causal roots")
+        raise ValueError(
+            "not enough causal roots with closures disjoint from reserved states"
+        )
     candidates.sort(key=lambda item: _rank(item, salt=salt))
     selected: list[BellmanRootSpec] = []
     remaining = list(candidates)
@@ -259,14 +323,31 @@ def select_causal_roots(
     )
     required = {
         (name, value)
-        for candidate in candidates
+        for candidate in available
         for name, value in candidate.strata
         if name in factor_names
     }
     covered: set[tuple[str, str]] = set()
+    selected_root_hashes: set[str] = set()
+    selected_successor_hashes: set[str] = set()
     while len(selected) < count:
+        compatible = list(remaining)
+        if closure_aware:
+            compatible = []
+            for item in remaining:
+                root_hash = exact_state_hash(exact_public_state(item.game))
+                item_footprint = footprint(item)
+                if root_hash in selected_successor_hashes:
+                    continue
+                if item_footprint.isdisjoint(selected_root_hashes):
+                    compatible.append(item)
+        if not compatible:
+            raise ValueError(
+                "root quota cannot be filled without selecting a root that is "
+                "another selected root's successor"
+            )
         best = max(
-            remaining,
+            compatible,
             key=lambda item: (
                 len(set(item.strata) & (required - covered)),
                 -int(_rank(item, salt=salt), 16),
@@ -274,6 +355,10 @@ def select_causal_roots(
         )
         selected.append(best)
         remaining.remove(best)
+        if closure_aware:
+            best_hash = exact_state_hash(exact_public_state(best.game))
+            selected_root_hashes.add(best_hash)
+            selected_successor_hashes.update(footprint(best) - {best_hash})
         covered.update(best.strata)
     if require_full_coverage and required - covered:
         raise ValueError(
@@ -284,6 +369,20 @@ def select_causal_roots(
 
 def _config_digest(config: ExactSearchConfig) -> str:
     return config_digest(asdict(config))
+
+
+def _plan_digest(root_hashes: Sequence[str], search_digest: str) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "schema": BELLMAN_PLAN_SCHEMA,
+                "roots": list(root_hashes),
+                "search_config_digest": search_digest,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+    ).hexdigest()
 
 
 def build_bellman_bundle(
@@ -307,17 +406,7 @@ def build_bellman_bundle(
     root_hashes = [exact_state_hash(exact_public_state(item.game)) for item in specs]
     if len(root_hashes) != len(set(root_hashes)):
         raise ValueError("Bellman root specs contain duplicate exact states")
-    plan_digest = hashlib.sha256(
-        json.dumps(
-            {
-                "schema": BELLMAN_PLAN_SCHEMA,
-                "roots": root_hashes,
-                "search_config_digest": search_digest,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("ascii")
-    ).hexdigest()
+    plan_digest = _plan_digest(root_hashes, search_digest)
     successor_rows: list[BellmanSuccessor] = []
     successor_index: dict[str, int] = {}
     branches: list[BellmanBranch] = []
@@ -415,6 +504,90 @@ def build_bellman_bundle(
         search_config_digest=search_digest,
         plan_digest=plan_digest,
     )
+
+
+def merge_bellman_bundles(
+    bundles: Sequence[BellmanBundle],
+) -> BellmanBundle:
+    """Merge ordered, independently committed root bundles losslessly.
+
+    Successors are deduplicated by exact-state hash and branch indices are
+    remapped.  The resulting plan digest is identical to a single uninterrupted
+    ``build_bellman_bundle`` call over the same ordered roots.
+    """
+
+    if not bundles:
+        raise ValueError("at least one Bellman bundle is required")
+    search_digest = bundles[0].search_config_digest
+    roots: list[BellmanRoot] = []
+    successors: list[BellmanSuccessor] = []
+    successor_indices: dict[str, int] = {}
+    branches: list[BellmanBranch] = []
+    seen_roots: set[str] = set()
+
+    for bundle in bundles:
+        if bundle.search_config_digest != search_digest:
+            raise ValueError("Bellman bundles use different search configurations")
+        root_offset = len(roots)
+        for root in bundle.roots:
+            if root.state_hash in seen_roots:
+                raise ValueError(f"duplicate Bellman root {root.state_hash}")
+            seen_roots.add(root.state_hash)
+            roots.append(root)
+
+        local_to_merged: dict[int, int] = {}
+        for local_index, successor in enumerate(bundle.successors):
+            merged_index = successor_indices.get(successor.state_hash)
+            if merged_index is None:
+                merged_index = len(successors)
+                successor_indices[successor.state_hash] = merged_index
+                successors.append(successor)
+            else:
+                existing = successors[merged_index]
+                if existing.state != successor.state:
+                    raise ValueError("Bellman successor hash collision")
+                if not np.isclose(
+                    existing.value_h2,
+                    successor.value_h2,
+                    atol=BELLMAN_IDENTITY_TOLERANCE,
+                    rtol=0.0,
+                ):
+                    raise ValueError("Bellman successor value mismatch")
+                if not np.isclose(
+                    existing.unresolved_h2,
+                    successor.unresolved_h2,
+                    atol=BELLMAN_IDENTITY_TOLERANCE,
+                    rtol=0.0,
+                ):
+                    raise ValueError("Bellman successor cutoff mismatch")
+            local_to_merged[local_index] = merged_index
+
+        for branch in bundle.branches:
+            if not 0 <= branch.root_index < len(bundle.roots):
+                raise ValueError("Bellman branch has invalid local root index")
+            if branch.successor_index not in local_to_merged:
+                raise ValueError("Bellman branch has invalid local successor index")
+            branches.append(
+                BellmanBranch(
+                    root_index=root_offset + branch.root_index,
+                    drop_second=branch.drop_second,
+                    check_second=branch.check_second,
+                    probability=branch.probability,
+                    successor_index=local_to_merged[branch.successor_index],
+                )
+            )
+
+    merged = BellmanBundle(
+        roots=tuple(roots),
+        successors=tuple(successors),
+        branches=tuple(branches),
+        search_config_digest=search_digest,
+        plan_digest=_plan_digest(
+            [root.state_hash for root in roots], search_digest
+        ),
+    )
+    _recheck_branch_identity(merged)
+    return merged
 
 
 def _policy_vectors(game: Game, result) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -981,6 +1154,7 @@ __all__ = [
     "causal_root_pool",
     "evaluate_bellman_gate",
     "load_bellman_bundle",
+    "merge_bellman_bundles",
     "save_bellman_bundle",
     "select_causal_roots",
     "spot_recheck_bellman_bundle",
