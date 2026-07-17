@@ -1,0 +1,1 @@
+"""Compact game solver package."""

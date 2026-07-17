@@ -35,7 +35,7 @@ def bucket_pair_payoff(drop_bucket: Bucket, check_bucket: Bucket, checker_cylind
     c_range = np.arange(check_bucket.lo, check_bucket.hi + 1)
     drops, checks = np.meshgrid(d_range, c_range, indexing="ij")
     success = checks >= drops
-    st = checks - drops
+    st = checks - drops + 1
     overflow = (checker_cylinder + st) >= CYLINDER_MAX
     injection = min(checker_cylinder + FAILED_CHECK_PENALTY, CYLINDER_MAX)
 

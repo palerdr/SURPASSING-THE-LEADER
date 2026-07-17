@@ -22,7 +22,7 @@ uv run pytest tests/play -q
 changes.
 
 Action-core tests should cover legal seconds `1`, `60`, Baku-only leap `61`,
-same-second success with `ST=0`, strict fail triangle `check < drop`, dense
+same-second success with inclusive `ST=1`, strict fail triangle `check < drop`, dense
 length-62 policy vectors, and the always-illegal padding index `0`.
 
 P1/P3 certification checks live in `test_solver_conformance.py` and

@@ -284,7 +284,7 @@ def generate_candidates(
     # each newly added boundary induces another +/-1 response.  The frozen P1
     # omitted-action audit found profitable deviations when this band was
     # truncated, so use literal full width instead of pretending the candidate
-    # subset is reliable.  This includes safe_st=0: although every successful
+    # subset is reliable.  This includes safe_st=0: every successful
     # check overflows immediately, a horizon-3 continuation matrix still has a
     # cyclic timing response chain.  The V5 Bellman smoke measured a 0.2222
     # lifted saddle gap when that boundary was incorrectly kept compact.
@@ -298,8 +298,8 @@ def generate_candidates(
         for d in tuple(drop_seconds):
             for c in (
                 d - 1, d, d + 1,
-                d + safe_st, d + safe_st + 1,
-                d + overflow_st - 1, d + overflow_st,
+                d + safe_st - 1, d + safe_st,
+                d + overflow_st - 2, d + overflow_st - 1,
             ):
                 if c in check_legal:
                     check_seconds.add(c)
@@ -308,8 +308,8 @@ def generate_candidates(
         for c in tuple(check_seconds):
             for d in (
                 c - 1, c, c + 1,
-                c - safe_st - 1, c - safe_st,
-                c - overflow_st, c - overflow_st + 1,
+                c - safe_st, c - safe_st + 1,
+                c - overflow_st + 1, c - overflow_st + 2,
             ):
                 if d in drop_legal:
                     drop_seconds.add(d)

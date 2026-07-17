@@ -284,7 +284,7 @@ def test_exact_matrix_assembly_evaluates_one_representative_per_outcome_class(
 
     assert result.payoff_for_hal is not None
     assert result.payoff_for_hal.shape == expected_shape
-    assert len(calls) == 61  # success deltas 0..59, plus one failure class
+    assert len(calls) == 61  # inclusive success ST 1..60, plus one failure class
     assert len({exact_mod._joint_outcome_signature(action) for action in calls}) == 61
     assert result.payoff_for_hal[0, 0] == 0.0
     assert result.payoff_for_hal[1, 0] == -0.75

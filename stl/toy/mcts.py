@@ -652,7 +652,7 @@ def conformance_summary(records: tuple[ConformanceRecord, ...]) -> dict:
 
 def conformance_report(records: tuple[ConformanceRecord, ...]) -> dict:
     payload = {
-        "schema_version": "toy.mcts_conformance.v1",
+        "schema_version": "toy.mcts_conformance.v2",
         "policy_tv_is_report_only": True,
         "records": [asdict(record) for record in records],
         "summary": conformance_summary(records),

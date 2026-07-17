@@ -51,10 +51,19 @@ non-Hal dropper check and should not be generalized into a theorem about
 arbitrary actor names.
 
 Checks succeed iff `check_time >= drop_time`. Successful ST is exactly
-`check_time - drop_time`, so same-second checks succeed with `ST=0`; failed
-checks remain `check_time < drop_time` with the flat `+60` penalty. A failed
+`check_time - drop_time + 1`, so same-second checks succeed with `ST=1`; failed
+checks remain `check_time < drop_time` with the flat `+60` penalty. Narrative
+"0-second" actions map to literal action second `1`; there is no action `0` or
+pass/no-check action. See [`docs/ACTION_TIMING.md`](docs/ACTION_TIMING.md) for
+the manga evidence and repository-wide convention. A failed
 check resets the checker's cylinder only after successful revival; fatality is
 terminal and does not perform that reset.
+
+The cylinder holds 300 seconds and injects immediately on reaching capacity.
+A 300-second current dose is fatal, but cumulative TTD is different: resulting
+TTD exactly 300 remains revival-eligible and only `prior_ttd + dose > 300` is
+forced fatal. [`docs/CANONICAL_EXTENSIVE_FORM.md`](docs/CANONICAL_EXTENSIVE_FORM.md)
+is the frozen, source-cited boundary contract.
 
 Artifacts generated under the old action semantics are stale. See
 `docs/REGEN2RL.md` for the audited Python-first plan from exact regeneration

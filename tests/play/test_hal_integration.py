@@ -68,7 +68,7 @@ class TestBelief:
         return HalfRoundRecord(
             round_num=0, half=1, dropper=dropper, checker=checker,
             drop_time=drop_time, check_time=check_time, turn_duration=60,
-            result=HalfRoundResult.CHECK_SUCCESS, st_gained=check_time - drop_time,
+            result=HalfRoundResult.CHECK_SUCCESS, st_gained=check_time - drop_time + 1,
             death_duration=0.0, survived=None, game_clock_at_start=720.0,
             survival_probability=None,
         )

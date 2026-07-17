@@ -55,15 +55,15 @@ class TestPayoffMatrix:
         m = compute_payoff_matrix(0.0, turn_duration=61)
         assert m.shape == (61, 60)
 
-    def test_same_second_zero_st(self):
-        """drop=30, check=30 -> successful check, ST=0."""
+    def test_same_second_one_st(self):
+        """drop=30, check=30 -> successful check, inclusive ST=1."""
         m = compute_payoff_matrix(0.0)
-        assert m[29][29] == 0.0  # 0-indexed: second 30
+        assert m[29][29] == -1.0  # 0-indexed: second 30
 
     def test_successful_check_st(self):
-        """drop=10, check=45 → ST=35, payoff=-35."""
+        """drop=10, check=45 -> inclusive ST=36, payoff=-36."""
         m = compute_payoff_matrix(0.0)
-        assert m[9][44] == -35.0
+        assert m[9][44] == -36.0
 
     def test_failed_check_penalty(self):
         """drop=30, check=20 → failed, payoff=-(cyl + 60)."""
@@ -71,7 +71,7 @@ class TestPayoffMatrix:
         assert m[29][19] == -(90.0 + FAILED_CHECK_PENALTY)
 
     def test_cylinder_overflow(self):
-        """cyl=280, drop=1, check=30 → ST=29, cyl+ST=309 >= 300 → payoff=-300."""
+        """cyl=280, drop=1, check=30 -> ST=30 and overflow."""
         m = compute_payoff_matrix(280.0)
         assert m[0][29] == -CYLINDER_MAX
 
@@ -80,11 +80,11 @@ class TestPayoffMatrix:
         m = compute_payoff_matrix(0.0)
         assert m[59][0] == -60.0  # drop=60, check=1 → failed
 
-    def test_diagonal_is_zero_st(self):
-        """When drop_time == check_time, ST=0 and payoff is zero."""
+    def test_diagonal_is_one_st(self):
+        """When drop_time == check_time, inclusive ST and cost are one."""
         m = compute_payoff_matrix(0.0)
         for i in range(60):
-            assert m[i][i] == 0.0
+            assert m[i][i] == -1.0
 
     def test_upper_triangle_is_successful(self):
         """check > drop → successful check, payoffs are -ST (<=0)."""

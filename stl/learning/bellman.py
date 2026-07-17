@@ -240,7 +240,7 @@ def bellman_closure_hashes(
     hashes = {exact_state_hash(exact_public_state(spec.game))}
     # ExactPublicState intentionally excludes literal action history. Under the
     # engine's single transition function, successful cells affect physical
-    # state only through check_time - drop_time, while every failed cell adds
+    # state only through check_time - drop_time + 1, while every failed cell adds
     # the same fixed penalty. These keys are therefore an exact transition
     # quotient, not an action abstraction: every distinct successor class is
     # still expanded through the engine, including all survival branches.

@@ -14,7 +14,7 @@ from stl.toy.network import ToyPolicyValueNet, make_network_evaluator
 from stl.toy.rules import ToyRuleset
 
 
-REPLAY_SCHEMA = "toy.self_play_replay.v1"
+REPLAY_SCHEMA = "toy.self_play_replay.v2"
 
 
 @dataclass(frozen=True, slots=True)

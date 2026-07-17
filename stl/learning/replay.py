@@ -477,7 +477,7 @@ def _replay_trajectory(
             )
         _dropper, checker = game.get_roles_for_half(game.current_half)
         success = check_time >= drop_time
-        addition = check_time - drop_time if success else 60.0
+        addition = check_time - drop_time + 1 if success else 60.0
         death_occurs = (checker.cylinder + addition >= 300.0) if success else True
         if death_occurs:
             if survived_outcome is None:

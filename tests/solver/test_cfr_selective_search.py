@@ -38,7 +38,7 @@ def test_selective_solve_pins_forced_baku_overflow_to_plus_one():
 
 
 def test_selective_solve_with_evaluator_returns_value_at_horizon_0():
-    scenario = get_scenario("safe_budget_pressure_at_cylinder_240")
+    scenario = get_scenario("safe_budget_pressure_at_cylinder_239")
 
     class FixedEvaluator:
         def __call__(self, game):
@@ -52,7 +52,7 @@ def test_selective_solve_with_evaluator_returns_value_at_horizon_0():
 
 
 def test_selective_solve_without_evaluator_preserves_cutoff_unresolved():
-    scenario = get_scenario("safe_budget_pressure_at_cylinder_240")
+    scenario = get_scenario("safe_budget_pressure_at_cylinder_239")
     result = selective_solve(scenario.game, 0, scenario.config)
 
     assert result.value_for_hal == pytest.approx(0.0)
@@ -74,7 +74,7 @@ def test_selective_audit_zero_gap_on_pinned_overflow_pair():
 
 
 def test_selective_audit_zero_gap_on_safe_budget_pair():
-    for name in ("safe_budget_pressure_at_cylinder_241", "safe_budget_pressure_at_cylinder_240"):
+    for name in ("safe_budget_pressure_at_cylinder_240", "safe_budget_pressure_at_cylinder_239"):
         audit = _audit(name)
         assert audit.value_gap == pytest.approx(0.0, abs=1e-9), name
 
@@ -120,8 +120,8 @@ def test_selective_solve_distribution_sums_to_one():
     for name in (
         "forced_baku_overflow_death",
         "forced_hal_overflow_death",
-        "safe_budget_pressure_at_cylinder_241",
         "safe_budget_pressure_at_cylinder_240",
+        "safe_budget_pressure_at_cylinder_239",
     ):
         scenario = get_scenario(name)
         result = selective_solve(scenario.game, scenario.half_round_horizon, scenario.config)

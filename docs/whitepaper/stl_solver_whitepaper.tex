@@ -159,8 +159,9 @@ A_C(s)=\{1,\ldots,60\}.
 Dense learned policies have length 62. Index 0 is illegal padding and index
 \(j\) denotes literal second \(j\).
 
-The check succeeds iff \(c\ge d\). On success the checker accumulates
-\(c-d\) seconds, including zero on the diagonal. On failure the checker incurs
+The check succeeds iff \(c\ge d\). On success the checker accumulates the
+inclusive interval \(c-d+1\) seconds, including one second on the diagonal.
+Literal second 1 is the immediate action; index 0 remains illegal padding. On failure the checker incurs
 the fixed 60-second penalty. All death, revival, clock, and leap effects then
 come from \path{stl/engine/game.py}.
 
@@ -172,6 +173,13 @@ P(s'\mid s,a_{\hal},a_{\baku})
 \]
 be the transition kernel induced by the engine, including survival and fatal
 branches. The rigorous solver does not learn or reimplement this kernel.
+
+For current death duration (q) and prior cumulative time dead (t), the
+engine assigns zero revival probability when (q\ge300) or (t+q>300).
+The second inequality is deliberately strict: resulting cumulative TTD exactly
+300 remains eligible for revival. Cylinder capacity, current dose, and
+cumulative TTD are therefore separate quantities even though they share the
+same five-minute numerical boundary.
 
 Terminal utility is always Hal-perspective:
 \[
@@ -186,10 +194,12 @@ There is no intermediate shaped reward in \path{stl/solver}.
 
 \subsection{Why Reinforcement Learning Needs an Episode Contract}
 
-\begin{observation}[The engine does not force a finite episode]
-A repeated diagonal action pair \(c=d\) succeeds with squandered time zero.
-Such a path need not increase either cylinder and can therefore remain
-nonterminal for arbitrarily many half-rounds.
+\begin{observation}[The engine has no deterministic finite episode bound]
+Every successful check now adds at least one second, so the old zero-ST
+diagonal self-loop does not exist. A failed checker may nevertheless revive
+and reset its cylinder repeatedly. The stochastic engine therefore does not
+provide a deterministic half-round cap that is suitable as an RL batch
+contract.
 \end{observation}
 
 Consequently, a completed-game outcome is not guaranteed merely by calling

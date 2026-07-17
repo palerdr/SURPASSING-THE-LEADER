@@ -13,7 +13,7 @@ from stl.toy.rules import ToyRuleset
 from stl.toy.state import ToyState
 
 
-TABLEBASE_SCHEMA = "toy.tablebase.v1"
+TABLEBASE_SCHEMA = "toy.tablebase.v2"
 
 
 def state_horizon_id(state: ToyState, horizon: int, rules: ToyRuleset) -> str:

@@ -16,8 +16,8 @@ def test_v0_action_mapping_and_same_bucket_transition():
     state = ToyState(hal_load=7, baku_load=11, role_phase=0)
     branch = rules.expand_joint_action(state, 4, 4)[0]
     assert branch.probability == 1.0
-    assert branch.squandered_units == 0
-    assert branch.state == ToyState(hal_load=7, baku_load=11, role_phase=1)
+    assert branch.squandered_units == 1
+    assert branch.state == ToyState(hal_load=7, baku_load=12, role_phase=1)
     assert state == ToyState(hal_load=7, baku_load=11, role_phase=0)
 
 
@@ -25,9 +25,9 @@ def test_successful_overcheck_accumulates_checker_load():
     rules = Bucket12Fixed50Rules()
     branch = rules.expand_joint_action(ToyState(baku_load=10), 2, 5)[0]
     assert branch.event == "check_success"
-    assert branch.squandered_units == 3
+    assert branch.squandered_units == 4
     assert branch.state is not None
-    assert branch.state.baku_load == 13
+    assert branch.state.baku_load == 14
     assert branch.state.role_phase == 1
 
 
@@ -70,6 +70,10 @@ def test_variable_revival_endpoints_and_history_modifiers():
         expected,
         rel_tol=1e-12,
     )
+    exact_boundary = ToyState(hal_ttd=240)
+    over_boundary = ToyState(hal_ttd=241)
+    assert history.survival_probability(exact_boundary, checker_is_hal=True, dose_units=60) > 0.0
+    assert history.survival_probability(over_boundary, checker_is_hal=True, dose_units=60) == 0.0
     assert history.encode_state(history_state, 8).shape == (9,)
 
 

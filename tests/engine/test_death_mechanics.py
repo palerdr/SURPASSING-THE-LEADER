@@ -27,6 +27,16 @@ class TestSurvivalProbability:
         prob = referee.compute_survival_probability(hal, death_duration=350)
         assert prob == 0.0
 
+    def test_resulting_total_ttd_exactly_300_remains_revival_eligible(self, referee, hal):
+        hal.ttd = 240
+        prob = referee.compute_survival_probability(hal, death_duration=60)
+        assert prob > 0.0
+
+    def test_resulting_total_ttd_above_300_is_fatal(self, referee, hal):
+        hal.ttd = 241
+        prob = referee.compute_survival_probability(hal, death_duration=60)
+        assert prob == 0.0
+
     def test_cardiac_degradation(self, referee, hal):
         """Prior deaths weaken the heart, reducing survival probability."""
         prob_fresh = referee.compute_survival_probability(hal, death_duration=60)

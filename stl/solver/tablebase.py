@@ -90,18 +90,18 @@ def forced_hal_overflow_death() -> TacticalScenario:
     )
 
 
-def safe_budget_pressure_at_cylinder_241() -> TacticalScenario:
-    """Baku checker at cyl=241: drop=1 + check=60 forces terminal overflow.
+def safe_budget_pressure_at_cylinder_240() -> TacticalScenario:
+    """Baku checker at cyl=240: drop=1 + check=60 forces terminal overflow.
 
-    Paired with ``safe_budget_pressure_at_cylinder_240``. At cyl=241 a single
+    Paired with ``safe_budget_pressure_at_cylinder_239``. At cyl=240 a single
     cell of the joint matrix (drop=1, check=60) is terminal Hal-win because
-    ST=59 pushes cylinder to exactly 300; failed checks are also terminal.
+    inclusive ST=60 pushes the cylinder to exactly 300; failed checks are also terminal.
     Hal's mixed-strategy value is strictly positive.
     """
     game = _base_game()
-    game.player2.cylinder = 241.0
+    game.player2.cylinder = 240.0
     return TacticalScenario(
-        name="safe_budget_pressure_at_cylinder_241",
+        name="safe_budget_pressure_at_cylinder_240",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
@@ -111,17 +111,17 @@ def safe_budget_pressure_at_cylinder_241() -> TacticalScenario:
     )
 
 
-def safe_budget_pressure_at_cylinder_240() -> TacticalScenario:
-    """Baku checker at cyl=240: check=60 always succeeds without overflow.
+def safe_budget_pressure_at_cylinder_239() -> TacticalScenario:
+    """Baku checker at cyl=239: check=60 always succeeds without overflow.
 
-    Paired with ``safe_budget_pressure_at_cylinder_241``. With cyl=240 the
-    maximum reachable post-success cylinder is 240+59=299 < 300, so check=60
+    Paired with ``safe_budget_pressure_at_cylinder_240``. With cyl=239 the
+    maximum reachable post-success cylinder is 239+60=299 < 300, so check=60
     is a guaranteed-survive strategy and Hal cannot force a terminal cell.
     """
     game = _base_game()
-    game.player2.cylinder = 240.0
+    game.player2.cylinder = 239.0
     return TacticalScenario(
-        name="safe_budget_pressure_at_cylinder_240",
+        name="safe_budget_pressure_at_cylinder_239",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
@@ -745,8 +745,8 @@ REGISTRY: dict[str, ScenarioFactory] = {
         forced_baku_overflow_death,
         forced_hal_overflow_death,
         # Original relational (Phase 8)
-        safe_budget_pressure_at_cylinder_241,
         safe_budget_pressure_at_cylinder_240,
+        safe_budget_pressure_at_cylinder_239,
         cpr_degradation_fresh_referee,
         cpr_degradation_fatigued_referee,
         # Original holdout diagnostics (Phase 8)
@@ -846,7 +846,7 @@ def verify_pinned_value(name: str, *, abs_tol: float = 1e-9) -> ExactSolveResult
 At a half-round decision state, the 60x60 (61x60 in the leap turn) joint
 action space collapses to at most 61 distinct outcomes:
 
-- success cells (check >= drop) depend ONLY on ST = check - drop:
+- success cells (check >= drop) depend ONLY on inclusive ST = check - drop + 1:
   the checker's cylinder grows by ST; at >= CYLINDER_MAX the injection is
   immediate and always fatal (death_duration = 300 => survival probability
   is exactly 0 in src/Referee.py).
@@ -882,8 +882,8 @@ from stl.engine.game import Game
 
 from stl.solver.exact import ExactGameSnapshot, exact_public_state
 
-MAX_ST = TURN_DURATION_NORMAL - 1  # check <= 60, drop >= 1 => successful ST in 0..59
-ST_COUNT = MAX_ST + 1
+MAX_ST = TURN_DURATION_NORMAL  # check <= 60, drop >= 1 => successful ST in 1..60
+ST_COUNT = MAX_ST + 1  # index 0 is deliberately unused
 
 
 @dataclass(frozen=True)
@@ -909,7 +909,7 @@ class StageOutcomes:
     turn_duration: int
     drop_seconds: tuple[int, ...]
     check_seconds: tuple[int, ...]
-    successes: tuple[StageSuccess, ...]  # indexed by st
+    successes: tuple[StageSuccess, ...]  # ordered by st=1..MAX_ST
     fail: StageFail
 
 
@@ -923,7 +923,7 @@ def analytic_stage_outcomes(game: Game) -> StageOutcomes:
     check_max = legal_max_second(checker.name, "checker", turn_duration)
 
     successes = []
-    for st in range(0, MAX_ST + 1):
+    for st in range(1, MAX_ST + 1):
         cyl_after = checker.cylinder + st
         successes.append(
             StageSuccess(
@@ -1004,10 +1004,10 @@ def verify_stage_outcomes_against_engine(game: Game) -> None:
     ttd_field = "p1_ttd" if checker_is_p1 else "p2_ttd"
     deaths_field = "p1_deaths" if checker_is_p1 else "p2_deaths"
 
-    # Success classes: one probe per ST, plus an extra diagonal cell for ST=0.
+    # Success classes: one probe per ST, plus an extra diagonal cell for ST=1.
     for success in outcomes.successes:
         st = success.st
-        cells = [(1, 1 + st)] if st > 0 else [(1, 1), (2, 2)]
+        cells = [(1, st)] if st > 1 else [(1, 1), (2, 2)]
         for drop, check in cells:
             if check > max(outcomes.check_seconds):
                 continue
@@ -1069,7 +1069,7 @@ def _st_index_matrix(n_drop: int, n_check: int) -> tuple[np.ndarray, np.ndarray]
         drops = np.arange(1, n_drop + 1)[:, None]
         checks = np.arange(1, n_check + 1)[None, :]
         fail_mask = checks < drops
-        st = checks - drops  # only meaningful where not fail
+        st = checks - drops + 1  # only meaningful where not fail
         _ST_INDEX_CACHE[key] = (fail_mask, st)
     return _ST_INDEX_CACHE[key]
 
@@ -1082,7 +1082,8 @@ def assemble_payoff_matrix(
 ) -> np.ndarray:
     """Payoff matrix over 1-based (drop, check) grids from outcome values.
 
-    ``success_values``: length-ST_COUNT array, success_values[st] = value
+    ``success_values``: length-ST_COUNT array with index 0 unused;
+    success_values[st] = value
     after a successful check with that ST (already +-1 for overflow
     terminals). ``fail_value``: the chance-weighted value of the shared
     fail cell (p * V_survive + (1-p) * terminal).
@@ -1238,8 +1239,8 @@ def solve_epoch(
                 terminal = -1.0 if checker_is_hal else 1.0  # checker dies
                 next_bit = 1 - bit
 
-                # Success outcome values per ST. ST=0 is a same-cylinder
-                # role swap and is filled by the local fixed-point solve below.
+                # Success outcome values per inclusive ST. Index 0 is unused;
+                # every success increases a cylinder, so the sweep is acyclic.
                 succ_lo = np.full(ST_COUNT, terminal)
                 succ_hi = np.full(ST_COUNT, terminal)
                 room = (CYL - 1) - checker_cyl
@@ -1267,29 +1268,23 @@ def solve_epoch(
                 succ_by_bit[bit] = (succ_lo, succ_hi)
                 fail_by_bit[bit] = (fail_lo, fail_hi)
 
-            def solve_local(upper: bool) -> np.ndarray:
-                values = np.zeros(2, dtype=np.float64)
+            def solve_stage(upper: bool) -> np.ndarray:
+                values = np.empty(2, dtype=np.float64)
                 idx = 1 if upper else 0
-                for _ in range(200):
-                    updated = np.empty(2, dtype=np.float64)
-                    for bit in (0, 1):
-                        succ = succ_by_bit[bit][idx].copy()
-                        succ[0] = values[1 - bit]
-                        fail = fail_by_bit[bit][idx]
-                        matrix = assemble_payoff_matrix(60, 60, succ, fail)
-                        if bit == 0:
-                            _, value = solve_minimax(matrix)       # Hal (dropper) maximizes
-                        else:
-                            _, neg = solve_minimax(-matrix)        # Baku (dropper) minimizes
-                            value = -neg
-                        updated[bit] = value
-                    if float(np.max(np.abs(updated - values))) <= 1e-10:
-                        return updated
-                    values = updated
+                for bit in (0, 1):
+                    succ = succ_by_bit[bit][idx]
+                    fail = fail_by_bit[bit][idx]
+                    matrix = assemble_payoff_matrix(60, 60, succ, fail)
+                    if bit == 0:
+                        _, value = solve_minimax(matrix)       # Hal (dropper) maximizes
+                    else:
+                        _, neg = solve_minimax(-matrix)        # Baku (dropper) minimizes
+                        value = -neg
+                    values[bit] = value
                 return values
 
-            V_lo[:, ch, cb] = solve_local(upper=False)
-            V_hi[:, ch, cb] = solve_local(upper=True)
+            V_lo[:, ch, cb] = solve_stage(upper=False)
+            V_hi[:, ch, cb] = solve_stage(upper=True)
             states += 2
 
         if progress is not None and cyl_sum % 100 == 0:

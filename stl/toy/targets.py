@@ -11,7 +11,7 @@ from stl.toy.rules import ToyRuleset
 from stl.toy.tablebase import build_tablebase
 
 
-TARGET_SCHEMA = "toy.exact_targets.v1"
+TARGET_SCHEMA = "toy.exact_targets.v2"
 
 
 def build_exact_targets(

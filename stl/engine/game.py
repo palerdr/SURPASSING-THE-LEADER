@@ -41,6 +41,7 @@ FAILED_CHECK_PENALTY = 60           # 1 minute NDD added on failed check
 # CYLINDER / NDD
 # ──────────────────────────────────────────────
 CYLINDER_MAX = 300                  # 5 minutes — at or above this, instant injection
+TOTAL_TTD_MAX = 300                 # exactly 5 minutes remains revival-eligible; over is fatal
 DEATH_PROCEDURE_OVERHEAD = 120      # injection + waiting + CPR + recovery (~2 min)
 # ──────────────────────────────────────────────
 # CLOCK ADVANCEMENT
@@ -63,6 +64,8 @@ WITHIN_ROUND_OVERHEAD = 60          # total procedural time within a round (sett
 # SURVIVAL PROBABILITY
 #
 # P(survival) = base_curve(t) * cardiac(ttd_prior) * referee(n) * physicality
+# subject to hard guards: current dose >= 300 or resulting total TTD > 300
+# has probability zero; resulting total TTD == 300 remains eligible.
 #
 # base_curve(t)       = max(0, 1 - (t / CYLINDER_MAX) ^ BASE_CURVE_K)
 # cardiac(ttd_prior)  = CARDIAC_DECAY ^ (ttd_prior / 60)
@@ -206,8 +209,16 @@ class Referee:
             - referee uses self.cprs_performed (global fatigue)
             - physicality is player.physicality (constant per player)
             - Multiply all four. Clamp to [0.0, 1.0].
-            - At death_duration >= 300: always return 0.0 regardless of other factors.
+            - A death_duration >= 300 is always fatal.
+            - Resulting cumulative TTD > 300 is always fatal. Exactly 300
+              remains eligible for the probability calculation.
         """
+        if (
+            death_duration >= CYLINDER_MAX
+            or player.ttd + death_duration > TOTAL_TTD_MAX
+        ):
+            return 0.0
+
         death_curve = lambda t: max(0.0, 1 - (t / CYLINDER_MAX) ** BASE_CURVE_K)
         cardiac_modifier = lambda ttd: CARDIAC_DECAY ** (ttd / 60)
         referee_modifier = lambda n: max(REFEREE_FLOOR, REFEREE_DECAY ** n)
@@ -218,7 +229,7 @@ class Referee:
             * player.physicality
         )
 
-        return 0.0 if death_duration >= 300 else death_pr
+        return death_pr
 
     def attempt_revival(self, player: Player, death_duration: float, rng: random.Random | None = None) -> bool:
         """
@@ -457,7 +468,7 @@ class Game:
         survival_probability: Optional[float] = None
         ST = 0.0
         if success:
-            ST = check_time - drop_time
+            ST = check_time - drop_time + 1
             overflow = checker.add_to_cylinder(ST)
             if overflow:
                 death_occurred = True

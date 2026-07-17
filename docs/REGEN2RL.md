@@ -144,7 +144,8 @@ Python loop, not more disconnected training scripts.
 5. Exact labels and certification use full-width LP minimax. Candidate sets,
    CFR+, MCTS, neural values, and replay are approximate layers.
 6. Engine chance comes only from `stl.engine`. No learned survival model and no
-   reward shaping may enter `stl.solver`.
+   reward shaping may enter `stl.solver`. The dose and cumulative-TTD boundary
+   is frozen in [`CANONICAL_EXTENSIVE_FORM.md`](CANONICAL_EXTENSIVE_FORM.md).
 7. Search policy targets use the linearly weighted average of per-iteration
    empirical mean-Q equilibria, not optimism-augmented selection strategies or
    an arbitrary final LP vertex over a nearly flat mean-Q matrix.
@@ -249,7 +250,7 @@ rules and expose measurable approximation error.
   turns and every leap-window role assignment.
 - [x] **P1.2 Transition conformance.** For a stratified state/action fixture,
   compare `expand_joint_action` with direct engine resolution, including
-  no-death, survival, fatality, same-second success, failed check, overflow,
+  no-death, survival, fatality, same-second success with inclusive ST=1, failed check, overflow,
   and Baku drop `61`.
 - [x] **P1.3 Matrix orientation.** On both halves, compare the drop/check matrix
   orientation to an explicitly Hal-row/Baku-column matrix and verify both

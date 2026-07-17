@@ -28,6 +28,8 @@ docs/whitepaper/build/
 # Training artifacts
 models/
 checkpoints/
+pure/artifacts/
+pure/checkpoints/
 
 # Generated media
 *.png

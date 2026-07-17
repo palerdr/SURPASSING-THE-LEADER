@@ -22,7 +22,12 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import linprog
 
-from stl.engine.game import CYLINDER_MAX, FAILED_CHECK_PENALTY, TURN_DURATION_NORMAL
+from stl.engine.game import (
+    CYLINDER_MAX,
+    FAILED_CHECK_PENALTY,
+    TOTAL_TTD_MAX,
+    TURN_DURATION_NORMAL,
+)
 from stl.engine.game import Game, HalfRoundRecord
 
 from stl.engine.actions import legal_seconds
@@ -511,7 +516,7 @@ def exact_immediate_checker_payoff_matrix(game: Game, config: ExactSearchConfig 
 
     for action in actions:
         if action.check_time >= action.drop_time:
-            st = action.check_time - action.drop_time
+            st = action.check_time - action.drop_time + 1
             payoff[d_index[action.drop_time], c_index[action.check_time]] = (
                 -CYLINDER_MAX if checker.cylinder + st >= CYLINDER_MAX else -st
             )
@@ -545,14 +550,14 @@ def _joint_outcome_signature(action: ExactJointAction) -> tuple[str, int]:
     """Return the exact public-transition class for one timing pair.
 
     At a fixed public state, successful cells depend on the chosen seconds only
-    through squandered time ``check - drop``.  Every failed cell applies the
+    through inclusive squandered time ``check - drop + 1``.  Every failed cell applies the
     same fixed penalty.  History records retain the literal pair, but no future
     rigorous-engine transition reads those records, so one representative per
     class has the same successor distribution and continuation value.
     """
 
     if action.check_time >= action.drop_time:
-        return ("success", action.check_time - action.drop_time)
+        return ("success", action.check_time - action.drop_time + 1)
     return ("failure", 0)
 
 
@@ -792,7 +797,7 @@ def survival_probability(
     physicality: float,
 ) -> float:
     """Compute survival probability using the engine's exact formula."""
-    if death_duration >= CYLINDER_MAX:
+    if death_duration >= CYLINDER_MAX or player_ttd + death_duration > TOTAL_TTD_MAX:
         return 0.0
     base = max(0.0, 1.0 - (death_duration / CYLINDER_MAX) ** BASE_CURVE_K)
     cardiac = CARDIAC_DECAY ** (player_ttd / 60.0)
@@ -821,7 +826,7 @@ def compute_payoff_matrix(
             check_time = c + 1
 
             if check_time >= drop_time:
-                st = check_time - drop_time
+                st = check_time - drop_time + 1
                 if checker_cylinder + st >= CYLINDER_MAX:
                     payoff[d][c] = -CYLINDER_MAX
                 else:
@@ -844,7 +849,7 @@ def build_augmented_payoff_matrix(
     """Build augmented payoff matrix from precomputed continuation values.
 
     Args:
-        st_to_cont_val: Maps ST (0..59 normally) to checker continuation value for that outcome.
+        st_to_cont_val: Maps ST (1..60 normally) to checker continuation value for that outcome.
             For overflow STs, the value already includes survival probability weighting.
         fail_cont_val: Checker continuation value for failed check (survived).
         fail_surv_prob: Survival probability for failed check.
@@ -861,7 +866,7 @@ def build_augmented_payoff_matrix(
             check_time = c + 1
 
             if check_time >= drop_time:
-                st = check_time - drop_time
+                st = check_time - drop_time + 1
                 payoff[d][c] = st_to_cont_val.get(st, 0.0)
             else:
                 payoff[d][c] = fail_payoff

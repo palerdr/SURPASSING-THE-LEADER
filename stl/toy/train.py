@@ -249,7 +249,7 @@ def train_exact_targets(
         float(np.max(check_targets[:, ~legal_mask].sum(axis=1))) if np.any(~legal_mask) else 0.0,
     )
     manifest = {
-        "schema_version": "toy.checkpoint.v1",
+        "schema_version": "toy.checkpoint.v2",
         "ruleset_id": rules.ruleset_id,
         "feature_schema": list(rules.feature_names),
         "action_schema": {

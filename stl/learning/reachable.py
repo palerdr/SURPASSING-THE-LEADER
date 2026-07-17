@@ -176,15 +176,15 @@ def execute_recipe(recipe: TrajectoryRecipe) -> tuple[ReachableSnapshot, ...]:
 
 
 def _success(gain: int) -> TrajectoryStep:
-    if not 0 < gain < 60:
-        raise ValueError("successful accumulation gain must be in [1, 59]")
-    return TrajectoryStep(60 - gain, 60)
+    if not 0 < gain <= 60:
+        raise ValueError("successful accumulation gain must be in [1, 60]")
+    return TrajectoryStep(61 - gain, 60)
 
 
 def _partition_total(total: int, parts: int, *, salt: int) -> tuple[int, ...]:
     """Partition an integer accumulation into legal successful-turn gains."""
 
-    if parts <= 0 or total < parts or total > 59 * parts:
+    if parts <= 0 or total < parts or total > 60 * parts:
         raise ValueError(f"cannot partition total={total} over {parts} legal gains")
     values = [1] * parts
     remaining = total - parts
@@ -195,7 +195,7 @@ def _partition_total(total: int, parts: int, *, salt: int) -> tuple[int, ...]:
         order.reverse()
     while remaining:
         for cursor in order:
-            addition = min(59 - values[cursor], remaining)
+            addition = min(60 - values[cursor], remaining)
             values[cursor] += addition
             remaining -= addition
             if not remaining:

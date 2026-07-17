@@ -127,16 +127,17 @@ def test_stage_matrix_assembly_semantics():
     assert matrix.shape == (len(outcomes.drop_seconds), len(outcomes.check_seconds))
     # fail triangle: check < drop
     assert matrix[5, 0] == 1.0
-    # tie cell (drop 1, check 1): ST = 0 -> 297 remains below 300 -> continuation
+    # tie cell (drop 1, check 1): inclusive ST = 1 -> 298 remains below 300
     assert matrix[0, 0] == 0.5
     # ST=2 continuation (297+2=299), ST=3 overflow (300)
-    assert matrix[0, 2] == 0.5
-    assert matrix[0, 3] == 1.0
+    assert matrix[0, 1] == 0.5
+    assert matrix[0, 2] == 1.0
 
 
-def test_st_never_exceeds_59_even_in_leap_turn():
+def test_st_never_exceeds_60_even_in_leap_turn():
     game = make_game(clock=float(LS_WINDOW_START), half=2)
     outcomes = analytic_stage_outcomes(game)
-    assert len(outcomes.successes) == ST_COUNT == 60
-    assert outcomes.successes[0].st == 0
-    assert outcomes.successes[-1].st == MAX_ST == 59
+    assert len(outcomes.successes) == MAX_ST == 60
+    assert ST_COUNT == 61  # index zero is unused
+    assert outcomes.successes[0].st == 1
+    assert outcomes.successes[-1].st == MAX_ST == 60

@@ -8,7 +8,7 @@ pub(crate) fn half_round_payoff(drop_time: usize, check_time: usize, checker_cyl
         let injected = (checker_cylinder + FAILED_CHECK_PENALTY).min(CYLINDER_MAX);
         -(injected as f64)
     } else {
-        let st = (check_time - drop_time) as u32;
+        let st = (check_time - drop_time + 1) as u32;
         if checker_cylinder + st >= CYLINDER_MAX {
             -(CYLINDER_MAX as f64)
         } else {
@@ -23,14 +23,14 @@ pub(crate) fn compute_augmented_payoff_matrix(
     success_values: &[f64],
     fail_value: f64,
 ) -> Vec<f64> {
-    assert!(success_values.len() >= n_check);
+    assert!(success_values.len() > n_check);
     let mut payoff = vec![0.0; n_drop * n_check];
     for row in 0..n_drop {
         let drop = row + 1;
         for col in 0..n_check {
             let check = col + 1;
             let value = if check >= drop {
-                let st = check - drop;
+                let st = check - drop + 1;
                 success_values[st]
             } else {
                 fail_value
@@ -119,8 +119,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn half_round_payoff_has_zero_diagonal() {
-        assert_eq!(half_round_payoff(10, 10, 0), -0.0);
+    fn half_round_payoff_diagonal_has_one_inclusive_second() {
+        assert_eq!(half_round_payoff(10, 10, 0), -1.0);
     }
 
     #[test]
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn half_round_payoff_success_uses_elapsed_seconds() {
-        assert_eq!(half_round_payoff(10, 13, 0), -3.0);
+        assert_eq!(half_round_payoff(10, 13, 0), -4.0);
     }
 
     #[test]

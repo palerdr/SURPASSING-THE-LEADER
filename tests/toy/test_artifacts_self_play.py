@@ -42,7 +42,7 @@ def test_self_play_labels_and_replay_round_trip(tmp_path):
     assert np.all(arrays["truncated"] | np.isin(arrays["outcome"], (-1.0, 1.0)))
     npz_path, manifest_path, manifest = write_self_play(first, tmp_path / "replay")
     loaded, _ = __import__("stl.toy.artifacts", fromlist=["load_npz_artifact"]).load_npz_artifact(
-        npz_path, manifest_path, expected_schema_version="toy.self_play_replay.v1"
+        npz_path, manifest_path, expected_schema_version="toy.self_play_replay.v2"
     )
     assert loaded["states"].shape == arrays["states"].shape
     assert manifest["metadata"]["trajectory_sha256"] == first.metadata["trajectory_sha256"]

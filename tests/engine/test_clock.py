@@ -152,12 +152,12 @@ class TestLeapSecondGameplay:
                                HalfRoundResult.CHECK_FAIL_DIED)
 
     def test_same_second_drop_and_check_succeeds_min_st(self):
-        """Drop at 60, check at 60 during leap succeeds with ST=0."""
+        """Drop at 60, check at 60 during leap succeeds with inclusive ST=1."""
         g = make_game(LS_WINDOW_START)
         rec = g.play_half_round(drop_time=60, check_time=60)
         from stl.engine.game import HalfRoundResult
         assert rec.result == HalfRoundResult.CHECK_SUCCESS
-        assert rec.st_gained == 0
+        assert rec.st_gained == 1
 
     def test_checker_cannot_check_at_61_during_leap(self):
         """Checkers remain capped at 60 during a leap turn."""

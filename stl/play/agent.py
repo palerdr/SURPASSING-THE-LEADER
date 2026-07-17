@@ -8,7 +8,7 @@ state in, sampled equilibrium action out. Design rules it enforces:
 - **Mixed play.** ``choose_action`` SAMPLES from the root equilibrium
   mixture. Argmaxing a mixed equilibrium in this game is maximally
   exploitable (a fixed check second c invites drop at c+1 every
-  half-round; a fixed drop d invites check at exactly d for ST=0).
+  half-round; a fixed drop d invites check at exactly d for inclusive ST=1).
 - **Markov policy.** The search RNG is derived deterministically from the
   public state, so the mixture pi(s) is a pure function of s. The
   best-response exploitability probe (Track C) requires this; action

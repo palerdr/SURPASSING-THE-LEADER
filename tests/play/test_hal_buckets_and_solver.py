@@ -72,9 +72,9 @@ class TestBucketPairPayoff:
         d = Bucket(1, 1, "instant")
         c = Bucket(59, 60, "safe")
         pay = bucket_pair_payoff(d, c, checker_cylinder=0.0)
-        # check >= drop always (59>=1, 60>=1), ST = 58 or 59
-        # avg = -(58 + 59) / 2 = -58.5
-        assert pay == pytest.approx(-58.5)
+        # check >= drop always; inclusive ST = 59 or 60
+        # avg = -(59 + 60) / 2 = -59.5
+        assert pay == pytest.approx(-59.5)
 
     def test_safe_vs_instant_no_cylinder(self):
         d = Bucket(59, 60, "safe")
@@ -88,14 +88,14 @@ class TestBucketPairPayoff:
     def test_same_bucket_no_cylinder(self):
         b = Bucket(30, 30, "single")
         pay = bucket_pair_payoff(b, b, checker_cylinder=0.0)
-        # check == drop -> ST = 0
-        assert pay == pytest.approx(0.0)
+        # check == drop -> inclusive ST = 1
+        assert pay == pytest.approx(-1.0)
 
     def test_overflow_triggers(self):
         d = Bucket(1, 1, "instant")
         c = Bucket(59, 60, "safe")
         pay = bucket_pair_payoff(d, c, checker_cylinder=250.0)
-        # ST = 58 or 59, both cause 250+58=308 ≥ 300 and 250+59=309 ≥ 300
+        # ST = 59 or 60, both overflow the cylinder
         assert pay == pytest.approx(-CYLINDER_MAX)
 
     def test_payoff_matches_full_matrix(self):
@@ -109,7 +109,7 @@ class TestBucketPairPayoff:
         for drop in range(2, 11):
             for check in range(41, 53):
                 if check >= drop:
-                    st = check - drop
+                    st = check - drop + 1
                     if cyl + st >= CYLINDER_MAX:
                         total += -CYLINDER_MAX
                     else:

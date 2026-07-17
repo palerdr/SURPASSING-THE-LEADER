@@ -1,9 +1,9 @@
 """Epoch-sweep solver (plan Phase 3, ticket 15 machinery).
 
-The historical Tier-0 pilot artifact was generated under the old minimum-ST
-rule and is intentionally not a migration target. These tests assert corrected
-post-reset invariants directly: ST=0 creates a local role-swap cycle, fatal
-fail bands have exact intervals, and survivable fails preserve brackets.
+The historical Tier-0 pilot artifact was generated under the old zero-ST rule
+and is intentionally not a migration target. These tests assert the inclusive
+minimum-ST invariants directly: every success advances a cylinder, fatal fail
+bands have exact intervals, and survivable fails preserve brackets.
 """
 
 import os
@@ -22,8 +22,8 @@ def region(arr: np.ndarray, lo: int) -> np.ndarray:
     return arr[:, lo:, lo:]
 
 
-def test_forced_fatal_epoch_solves_diagonal_zero_cycle():
-    """All-deaths-fatal cap state has only terminal off-diagonal outcomes."""
+def test_forced_fatal_epoch_has_no_zero_st_cycle():
+    """At cylinder 299 every success and failure is terminal."""
     zeros = np.zeros(CYL)
     spec = EpochSpec(ttd_hal=0.0, ttd_baku=0.0, cprs=0)
     V_lo, V_hi = solve_epoch(
@@ -33,7 +33,7 @@ def test_forced_fatal_epoch_solves_diagonal_zero_cycle():
         min_cyl=298,
     )
 
-    expected = 59.0 / 61.0
+    expected = 1.0
     np.testing.assert_allclose(region(V_lo, 298), region(V_hi, 298), atol=1e-10)
     assert V_lo[0, 299, 299] == pytest.approx(expected, abs=1e-9)
     assert V_lo[1, 299, 299] == pytest.approx(-expected, abs=1e-9)
@@ -47,8 +47,8 @@ def test_real_epoch_high_cap_band_is_exact_when_fails_are_fatal():
     V_lo, V_hi = solve_epoch(spec, bracket_survive_value(), min_cyl=298)
 
     np.testing.assert_allclose(region(V_lo, 298), region(V_hi, 298), atol=1e-10)
-    assert V_lo[0, 299, 299] == pytest.approx(59.0 / 61.0, abs=1e-9)
-    assert V_lo[1, 299, 299] == pytest.approx(-59.0 / 61.0, abs=1e-9)
+    assert V_lo[0, 299, 299] == pytest.approx(1.0, abs=1e-9)
+    assert V_lo[1, 299, 299] == pytest.approx(-1.0, abs=1e-9)
 
 
 def test_intervals_ordered_and_bounded():

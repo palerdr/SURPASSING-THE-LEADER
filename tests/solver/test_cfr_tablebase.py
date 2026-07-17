@@ -25,8 +25,8 @@ EXPECTED_NAMES = (
     # Original Phase 8 scenarios
     "forced_baku_overflow_death",
     "forced_hal_overflow_death",
-    "safe_budget_pressure_at_cylinder_241",
     "safe_budget_pressure_at_cylinder_240",
+    "safe_budget_pressure_at_cylinder_239",
     "cpr_degradation_fresh_referee",
     "cpr_degradation_fatigued_referee",
     "baku_dropper_leap_window_alignment",
@@ -105,8 +105,8 @@ def test_pinned_scenarios_include_phase_f_expansion():
 def test_scenarios_by_tag_filters_correctly():
     safe_budget = scenarios_by_tag("safe_budget")
     assert {s.name for s in safe_budget} == {
-        "safe_budget_pressure_at_cylinder_241",
         "safe_budget_pressure_at_cylinder_240",
+        "safe_budget_pressure_at_cylinder_239",
     }
     # near_overflow is widely used across Phase F pins; just assert
     # the original three remain present rather than enumerating all.
@@ -132,18 +132,18 @@ def test_pinned_hal_overflow_value_is_minus_one():
 
 def test_verify_pinned_value_rejects_unpinned_scenarios():
     with pytest.raises(ValueError):
-        verify_pinned_value("safe_budget_pressure_at_cylinder_241")
+        verify_pinned_value("safe_budget_pressure_at_cylinder_240")
 
 
 def test_safe_budget_threshold_pair_distinguishes_cylinder_value():
-    # cyl=241 lets Hal force a single terminal cell at (drop=1, check=60);
-    # cyl=240's max-success cylinder is 299 < 300, so check=60 is a safe pure
+    # cyl=240 lets Hal force a terminal cell at (drop=1, check=60);
+    # cyl=239's max-success cylinder is 299 < 300, so check=60 is a safe pure
     # strategy and Hal cannot force any terminal cell at horizon=1.
-    pressure_241 = solve_target("safe_budget_pressure_at_cylinder_241")
     pressure_240 = solve_target("safe_budget_pressure_at_cylinder_240")
+    pressure_239 = solve_target("safe_budget_pressure_at_cylinder_239")
 
-    assert pressure_241.value_for_hal > pressure_240.value_for_hal
-    assert pressure_240.value_for_hal == pytest.approx(0.0)
+    assert pressure_240.value_for_hal > pressure_239.value_for_hal
+    assert pressure_239.value_for_hal == pytest.approx(0.0)
 
 
 def test_late_cpr_degradation_pair_increases_hal_value_under_forced_fail():

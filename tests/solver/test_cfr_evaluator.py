@@ -249,8 +249,8 @@ def test_tablebase_evaluator_relational_scenarios_are_not_in_table():
     # values we'd want to short-circuit on.
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
     relational_names = (
-        "safe_budget_pressure_at_cylinder_241",
         "safe_budget_pressure_at_cylinder_240",
+        "safe_budget_pressure_at_cylinder_239",
         "cpr_degradation_fresh_referee",
         "cpr_degradation_fatigued_referee",
     )

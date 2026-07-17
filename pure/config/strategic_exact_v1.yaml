@@ -1,0 +1,41 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: strategic_exact_v1
+output: pure/artifacts/strategic_exact_v1.npz
+emission: roots_only
+seed: 4
+progress_every: 25
+
+target_sets:
+  - horizon: 1
+    count: 512
+  - horizon: 2
+    count: 128
+  - horizon: 3
+    count: 16
+
+sampler:
+  st_values: [0, 1, 59, 60, 119, 120, 179, 180, 219, 238, 239, 240, 241, 269, 289, 298, 299]
+  ttd_values: [0, 60, 120, 180, 239, 240, 241, 299, 300]
+  forced_roots:
+    - [0, 0, 0, 0]
+    - [239, 0, 0, 0]
+    - [240, 0, 0, 0]
+    - [299, 0, 0, 0]
+    - [0, 240, 0, 0]
+    - [0, 241, 0, 0]
+    - [180, 60, 0, 0]
+    - [181, 60, 0, 0]
+    - [0, 0, 239, 0]
+    - [239, 0, 239, 0]
+    - [180, 60, 180, 60]
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

@@ -42,8 +42,8 @@ FROZEN_SEEDS = tuple(range(10))
 FROZEN_HORIZON_ONE_SCENARIOS = (
     "forced_baku_overflow_death",
     "forced_hal_overflow_death",
+    "safe_budget_pressure_at_cylinder_239",
     "safe_budget_pressure_at_cylinder_240",
-    "safe_budget_pressure_at_cylinder_241",
 )
 
 

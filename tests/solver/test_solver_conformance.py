@@ -15,6 +15,7 @@ from stl.solver.exact import (
     enumerate_joint_actions,
     exact_public_state,
     expand_joint_action,
+    survival_probability,
     solve_exact_finite_horizon,
     solve_minimax,
 )
@@ -23,7 +24,7 @@ from stl.solver.tablebase import (
     forced_baku_overflow_death,
     forced_hal_overflow_death,
     materialize_all,
-    safe_budget_pressure_at_cylinder_241,
+    safe_budget_pressure_at_cylinder_240,
 )
 
 
@@ -36,6 +37,11 @@ def _game(*, clock: float = 720.0, half: int = 1, first: str = "Hal") -> Game:
     game.game_clock = clock
     game.current_half = half
     return game
+
+
+def test_scalar_survival_helper_preserves_strict_total_ttd_boundary():
+    assert survival_probability(60, 240, 0, 1.0) > 0.0
+    assert survival_probability(60, 241, 0, 1.0) == 0.0
 
 
 @pytest.mark.parametrize("clock", [720.0, 3540.0, 3600.0, 3601.0])
@@ -152,7 +158,7 @@ def test_python_cfr_plus_meets_frozen_lp_error_and_saddle_gap_gates():
 
 
 def test_candidate_audit_reports_omitted_action_best_response_gain():
-    scenario = safe_budget_pressure_at_cylinder_241()
+    scenario = safe_budget_pressure_at_cylinder_240()
     audit = audit_against_full_width(
         scenario.game,
         scenario.half_round_horizon,

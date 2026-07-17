@@ -44,7 +44,7 @@ from stl.solver.search import (
 from stl.solver.tablebase import (
     forced_baku_overflow_death,
     forced_hal_overflow_death,
-    safe_budget_pressure_at_cylinder_241,
+    safe_budget_pressure_at_cylinder_240,
 )
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
@@ -444,7 +444,7 @@ def test_step_into_child_leaves_engine_at_post_action_position():
     _step_into_child(node, game, d_idx, c_idx, rng, config)
 
     assert game.current_half == 2
-    assert game.player2.cylinder == 59
+    assert game.player2.cylinder == 60
     assert game.player1.cylinder == 0
 
 
@@ -620,7 +620,7 @@ def test_mcts_search_value_above_horizon_one_baseline_on_safe_budget():
     # MCTS deepens past horizon=1 LP value (0.5) on safe_budget_pressure_at_241
     # because deep search reaches the forced-overflow position. Value sits in
     # [0.5, 1.0], strictly above the unresolved 0.0.
-    scenario = safe_budget_pressure_at_cylinder_241()
+    scenario = safe_budget_pressure_at_cylinder_240()
     rng = np.random.default_rng(123)
     result = mcts_search(scenario.game, _config(1500), TerminalOnlyEvaluator(), rng, scenario.config)
     assert 0.5 <= result.root_value_for_hal <= 1.0
@@ -747,11 +747,11 @@ def test_principal_line_after_search_is_non_empty():
 
 
 def test_principal_line_is_deterministic_under_same_seed():
-    scenario = safe_budget_pressure_at_cylinder_241()
+    scenario = safe_budget_pressure_at_cylinder_240()
     rng = np.random.default_rng(7)
     result = mcts_search(scenario.game, _config(200), TerminalOnlyEvaluator(), rng, scenario.config)
 
-    scenario2 = safe_budget_pressure_at_cylinder_241()
+    scenario2 = safe_budget_pressure_at_cylinder_240()
     rng2 = np.random.default_rng(7)
     result2 = mcts_search(scenario2.game, _config(200), TerminalOnlyEvaluator(), rng2, scenario2.config)
 
@@ -960,7 +960,7 @@ def test_full_width_mode_preserves_leap_role_asymmetry():
 
 
 def test_canonical_improved_policies_are_separate_from_mean_q_diagnostics():
-    scenario = safe_budget_pressure_at_cylinder_241()
+    scenario = safe_budget_pressure_at_cylinder_240()
     result = mcts_search(
         scenario.game,
         MCTSConfig(iterations=64, exploration_c=1.0),
@@ -982,7 +982,7 @@ def test_canonical_improved_policies_are_separate_from_mean_q_diagnostics():
 
 def test_root_noise_is_separate_seeded_and_disabled_for_evaluation():
     def run(noise_seed: int):
-        scenario = safe_budget_pressure_at_cylinder_241()
+        scenario = safe_budget_pressure_at_cylinder_240()
         return mcts_search(
             scenario.game,
             MCTSConfig(
@@ -1011,7 +1011,7 @@ def test_root_noise_is_separate_seeded_and_disabled_for_evaluation():
         and np.array_equal(first.improved_checker_policy, changed.improved_checker_policy)
     )
 
-    scenario = safe_budget_pressure_at_cylinder_241()
+    scenario = safe_budget_pressure_at_cylinder_240()
     with pytest.raises(ValueError, match="root_noise_rng"):
         mcts_search(
             scenario.game,

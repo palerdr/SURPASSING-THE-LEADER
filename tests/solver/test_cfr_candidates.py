@@ -14,8 +14,8 @@ from stl.solver.search import (
 )
 from stl.solver.exact import ExactSearchConfig
 from stl.solver.tablebase import (
+    safe_budget_pressure_at_cylinder_239,
     safe_budget_pressure_at_cylinder_240,
-    safe_budget_pressure_at_cylinder_241,
 )
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL
 from stl.engine.game import Game
@@ -46,7 +46,7 @@ def test_overflow_threshold_at_low_cylinder_uses_full_distance():
     assert overflow_st_threshold(0) == 300
 
 
-def test_overflow_threshold_at_cap_allows_diagonal_zero():
+def test_overflow_threshold_at_cap_includes_diagonal_one():
     assert overflow_st_threshold(299) == 1
     assert overflow_st_threshold(300) == 0
     assert overflow_st_threshold(310) == 0
@@ -98,16 +98,16 @@ def test_candidates_never_include_check_61_for_hal():
 
 
 def test_candidates_include_overflow_threshold_seconds_at_high_cylinder():
-    # At cyl=241 (overflow_st=59) drop=1 plus check=60 forces a terminal cell.
-    scenario = safe_budget_pressure_at_cylinder_241()
+    # At cyl=240, inclusive ST=60 overflows at drop=1/check=60.
+    scenario = safe_budget_pressure_at_cylinder_240()
     candidates = generate_candidates(scenario.game, scenario.config)
     assert 1 in candidates.drop_seconds
     assert 60 in candidates.check_seconds
 
 
 def test_candidates_include_safe_check_boundary_check_at_low_drop():
-    # safe_st = 59 at cyl=240; drop=1 paired with check=1+59=60 sits on the boundary.
-    scenario = safe_budget_pressure_at_cylinder_240()
+    # At cyl=239, the maximum inclusive ST=60 still ends safely at 299.
+    scenario = safe_budget_pressure_at_cylinder_239()
     candidates = generate_candidates(scenario.game, scenario.config)
     assert 1 in candidates.drop_seconds
     assert 60 in candidates.check_seconds

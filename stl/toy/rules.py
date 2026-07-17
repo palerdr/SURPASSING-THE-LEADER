@@ -22,6 +22,7 @@ TURN_DURATION_LEAP = 61
 FAILED_CHECK_PENALTY_SECONDS = 60
 DEATH_PROCEDURE_OVERHEAD = 120
 WITHIN_ROUND_OVERHEAD = 60
+TIMING_CONVENTION_ID = "ordinal-seconds-inclusive-st-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +80,8 @@ class ToyRuleset:
 
     @property
     def schema_version(self) -> str:
-        return f"toy.state.{self.ruleset_id}.v1"
+        # v2 adopts ordinal actions 1..N and inclusive ST = check - drop + 1.
+        return f"toy.state.{self.ruleset_id}.v2"
 
     def initial_state(self) -> ToyState:
         return ToyState(game_clock=self.initial_clock)
@@ -206,6 +208,8 @@ class ToyRuleset:
             return float(np.clip(base, 0.0, 1.0))
 
         ttd = state.hal_ttd if checker_is_hal else state.baku_ttd
+        if ttd + dose_seconds > self.load_cap_seconds:
+            return 0.0
         physicality = self.hal_physicality if checker_is_hal else self.baku_physicality
         cardiac = self.cardiac_decay ** (ttd / 60.0)
         referee = max(self.referee_floor, self.referee_decay ** state.cprs_performed)
@@ -320,7 +324,7 @@ class ToyRuleset:
 
         checker_is_hal, checker_load = self._checker_load(state)
         if check >= drop:
-            squandered_units = check - drop
+            squandered_units = check - drop + 1
             candidate_load = checker_load + squandered_units
             if candidate_load < self.load_cap_units:
                 successor = self._replace_checker_load(state, checker_is_hal, candidate_load)

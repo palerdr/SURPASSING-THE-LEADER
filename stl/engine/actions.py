@@ -5,7 +5,10 @@ Action index equals action second throughout the active codebase.
 Normal action seconds are 1..60. During a leap-window half-round only a
 non-Hal dropper (Baku in canonical play) may also use second 61. Checkers
 are capped at 60, Hal can never use 61 in either role, and index/second 0
-is permanently illegal padding in dense policy vectors.
+is permanently illegal padding in dense policy vectors. These are ordinal
+literal seconds: action 1 is an immediate first-second action. Successful ST
+is counted inclusively by the engine as ``check - drop + 1``. See
+``docs/ACTION_TIMING.md``.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from stl.engine.game import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
 NORMAL_MAX_SECOND = TURN_DURATION_NORMAL
 LEAP_MAX_SECOND = TURN_DURATION_LEAP
 ACTION_SIZE = LEAP_MAX_SECOND + 1
+TIMING_CONVENTION_ID = "ordinal-seconds-inclusive-st-v1"
 NORMAL_SECONDS = tuple(range(1, NORMAL_MAX_SECOND + 1))
 LEAP_SECONDS = tuple(range(1, LEAP_MAX_SECOND + 1))
 

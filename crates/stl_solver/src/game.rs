@@ -10,6 +10,7 @@ pub const TURN_DURATION_NORMAL: u32 = 60;
 pub const TURN_DURATION_LEAP: u32 = 61;
 pub const FAILED_CHECK_PENALTY: u32 = 60;
 pub const CYLINDER_MAX: u32 = 300;
+pub const TOTAL_TTD_MAX: u32 = 300;
 pub const DEATH_PROCEDURE_OVERHEAD: u32 = 120;
 pub const WITHIN_ROUND_OVERHEAD: u32 = 60;
 pub const BASE_CURVE_K: u32 = 3;
@@ -113,7 +114,9 @@ impl Referee {
     }
 
     pub fn compute_survival_probability(&self, player: &Player, death_duration: u32) -> f64 {
-        if death_duration >= CYLINDER_MAX {
+        if death_duration >= CYLINDER_MAX
+            || player.ttd.saturating_add(death_duration) > TOTAL_TTD_MAX
+        {
             return 0.0;
         }
         let death_curve = |t: u32| -> f64 {
@@ -454,7 +457,7 @@ impl Game {
             let (_dropper, checker) = self.get_roles_for_half();
             let success = check_time >= drop_time;
             if success {
-                st_gained = check_time - drop_time;
+                st_gained = check_time - drop_time + 1;
                 let overflow = checker.add_to_cylinder(st_gained);
                 if overflow {
                     death_occurred = true;
@@ -546,5 +549,21 @@ impl Game {
             }
         }
         Ok(record)
+    }
+}
+
+#[cfg(test)]
+mod ttd_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn exactly_300_total_ttd_remains_eligible_but_above_is_fatal() {
+        let referee = Referee::new();
+        let mut player = Player::new(PlayerId::Hal);
+        player.ttd = 240;
+        assert!(referee.compute_survival_probability(&player, 60) > 0.0);
+
+        player.ttd = 241;
+        assert_eq!(referee.compute_survival_probability(&player, 60), 0.0);
     }
 }

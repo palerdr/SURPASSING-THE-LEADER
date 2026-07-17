@@ -25,10 +25,10 @@ class SafeBot(Opponent):
     This is the "rational" strategy from game theory — checking at 60
     means the handkerchief is guaranteed to be on the ground (since D
     must drop by 60), so you never fail a check. The cost is maximum
-    squandered time (ST = 60 - drop_time).
+    squandered time (ST = 60 - drop_time + 1).
 
     As dropper, dropping at 1 maximizes the opponent's ST if they use
-    safe strategy (ST = 59).
+    safe strategy (ST = 60).
     """
 
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:

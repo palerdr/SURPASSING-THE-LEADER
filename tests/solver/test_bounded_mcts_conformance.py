@@ -21,7 +21,7 @@ class _RecordingEvaluator:
 
 
 def test_depth_one_search_queries_v3_root_and_v2_children():
-    scenario = get_scenario("safe_budget_pressure_at_cylinder_240")
+    scenario = get_scenario("safe_budget_pressure_at_cylinder_239")
     evaluator = _RecordingEvaluator()
     mcts_search(
         scenario.game,
