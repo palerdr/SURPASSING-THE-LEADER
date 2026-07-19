@@ -139,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument(
-        "--out", default="outputs/regen2rl/gen0_mcts_evaluator_audit_v3.json"
+        "--out", default="stl/outputs/regen2rl/gen0_mcts_evaluator_audit_v3.json"
     )
     parser.add_argument("--budget", action="append", type=int, default=None)
     parser.add_argument("--seed", action="append", type=int, default=None)

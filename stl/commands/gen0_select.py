@@ -320,7 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--taxonomy", default=None)
     parser.add_argument("--parent-checkpoint", default=None)
     parser.add_argument(
-        "--out", default="outputs/regen2rl/gen0_development_selection_v3.json"
+        "--out", default="stl/outputs/regen2rl/gen0_development_selection_v3.json"
     )
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--tablebase-mse-max", type=float, default=0.01)

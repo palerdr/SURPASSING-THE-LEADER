@@ -1,0 +1,8 @@
+# @package _global_
+experiment:
+  description: Tiny three-split Bellman closure smoke; no sealed holdout claim.
+command:
+  out_prefix: stl/outputs/regen2rl/gen0_v5_bellman_smoke
+  work_dir: stl/outputs/regen2rl/gen0_v5_bellman_smoke_work
+  split_seed: 20260715
+  smoke: true

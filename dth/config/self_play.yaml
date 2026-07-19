@@ -1,0 +1,28 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_exact_v2/best.pt
+output: dth/artifacts/self_play_smoke_v1
+games: 4
+seed: 4
+max_half_rounds: 3
+device: cpu
+action_temperature: 1.0
+simulations: 64
+confidence_constant: 1.5
+exploration_scale: 1.0
+prior_uniform_mix: 0.05
+policy_update_interval: 16
+root_warmup_cells: 3600
+max_depth: 1
+root_noise_epsilon: 0.25
+root_dirichlet_alpha_scale: 10.0
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

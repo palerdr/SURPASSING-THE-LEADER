@@ -1,0 +1,51 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_exact_v6/best.pt
+exact_targets: dth/artifacts/strategic_exact_v6.npz
+anchor_horizons: [1, 2, 3]
+output: dth/artifacts/boundary_self_play_v5
+games: 36
+seed: 5
+max_half_rounds: 5
+device: cpu
+action_temperature: 1.0
+simulations: 0
+confidence_constant: 1.5
+exploration_scale: 1.0
+prior_uniform_mix: 0.05
+policy_update_interval: 16
+root_warmup_cells: 3600
+internal_warmup_cells: 3600
+internal_warmup_horizons: [4]
+max_depth: null
+root_noise_epsilon: 0.0
+root_dirichlet_alpha_scale: 10.0
+starts:
+  - state: [240, 0, 0, 0]
+    horizon: 1
+  - state: [0, 240, 240, 0]
+    horizon: 2
+  - state: [239, 0, 0, 240]
+    horizon: 3
+  - state: [0, 240, 239, 0]
+    horizon: 3
+  - state: [239, 0, 0, 240]
+    horizon: 4
+  - state: [0, 240, 240, 0]
+    horizon: 4
+  - state: [239, 0, 1, 240]
+    horizon: 4
+  - state: [239, 0, 0, 240]
+    horizon: 5
+  - state: [0, 240, 239, 0]
+    horizon: 5
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

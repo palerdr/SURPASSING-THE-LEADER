@@ -1,0 +1,40 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_exact_v2/best.pt
+device: cpu
+output: dth/artifacts/mcts_convergence_v1.json
+evaluators: [exact_leaf, network]
+budgets: [64, 256, 1024]
+seeds: [0, 1, 2]
+
+mcts:
+  confidence_constant: 1.5
+  exploration_scale: 1.0
+  prior_uniform_mix: 0.05
+  policy_update_interval: 16
+  root_warmup_cells: 0
+  max_depth: null
+
+roots:
+  - state: [0, 0, 0, 0]
+    horizon: 1
+  - state: [240, 0, 0, 0]
+    horizon: 1
+  - state: [180, 60, 0, 0]
+    horizon: 2
+  - state: [239, 0, 239, 0]
+    horizon: 2
+  - state: [0, 0, 0, 0]
+    horizon: 3
+  - state: [180, 60, 180, 60]
+    horizon: 3
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

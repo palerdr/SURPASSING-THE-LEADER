@@ -145,9 +145,9 @@ def build_next_run(args, summary: dict) -> dict:
     train_command = (
         f"python scripts/run_gen_iteration.py --in-checkpoint {args.checkpoint} "
         f"--out-dir {out_dir} --out-targets {out_targets} "
-        f"--anchor-targets checkpoints/ceiling_corpus.npz "
+        f"--anchor-targets stl/checkpoints/ceiling_corpus.npz "
         f"--extra-targets {target_path} "
-        f"--held-out-targets checkpoints/ceiling_holdout_clean.npz "
+        f"--held-out-targets stl/checkpoints/ceiling_holdout_clean.npz "
         f"--iterations {args.next_iterations} --epochs {args.next_epochs} "
         f"--hidden-dim 192 --split-interior --weight-decay 1e-4 "
         f"--tablebase-weight 15 --tier-a-weight {args.next_tier_a_weight} "

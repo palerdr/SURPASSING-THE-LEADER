@@ -33,7 +33,7 @@ from stl.solver.search import (
     ValueNetEvaluator,
 )
 from stl.solver.exact import CFRPlusConfig, ExactSearchConfig, exact_public_state
-from stl.solver.search import MCTSConfig, MCTSResult, mcts_search
+from stl.solver.search import MCTSConfig, MCTSResult, is_critical, mcts_search
 from stl.play.opponents.base import Opponent
 from stl.engine.game import Game
 
@@ -129,8 +129,7 @@ class SolverAgent(Opponent):
         config = MCTSConfig(
             iterations=self.iterations,
             exploration_c=self.exploration_c,
-            evaluator=None,
-            use_tablebase=False,
+            action_mode="candidate_playable",
             prior_uniform_mix=self.search_prior_uniform_mix,
         )
         return mcts_search(
@@ -158,6 +157,7 @@ class SolverAgent(Opponent):
             iterations=self.iterations,
             exploration_c=self.exploration_c,
             action_mode="candidate_playable",
+            prior_uniform_mix=self.search_prior_uniform_mix,
         )
         result = mcts_search(
             game,
@@ -237,15 +237,7 @@ class SolverAgent(Opponent):
         if key in self._policy_cache:
             return self._policy_cache[key]
 
-        result = self.search(game)
-        # Play the canonical linearly weighted average of per-iteration mean-Q
-        # equilibria. The final LP over mean-Q is retained only as a diagnostic.
-        if role == "dropper":
-            seconds = result.root_drop_seconds
-            probs = np.asarray(result.improved_dropper_policy, dtype=np.float64)
-        else:
-            seconds = result.root_check_seconds
-            probs = np.asarray(result.improved_checker_policy, dtype=np.float64)
+        seconds, probs = self._ensemble_policy(game, role)
 
         if len(seconds) == 0 or probs.size == 0:
             raise RuntimeError(f"search produced an empty {role} strategy at {key[0]!r}")

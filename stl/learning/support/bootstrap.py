@@ -17,9 +17,9 @@ heavy lifting (training, MCTS, calibration) lives in those modules.
 Usage (programmatic):
 
     bootstrap_one_generation(
-        gen_in_checkpoint="checkpoints/gen0/best.pt",
+        gen_in_checkpoint="stl/checkpoints/gen0/best.pt",
         gen_out_targets="targets/gen1.npz",
-        gen_out_dir="checkpoints/gen1",
+        gen_out_dir="stl/checkpoints/gen1",
         iterations_per_state=2000,
     )
 

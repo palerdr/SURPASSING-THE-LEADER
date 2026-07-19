@@ -19,7 +19,6 @@ ROUND7_PRESSURE = {
     "hal": {"cylinder": 93.0, "ttd": 84.0, "deaths": 1, "alive": True},
     "baku": {"cylinder": 0.0, "ttd": 153.0, "deaths": 2, "alive": True},
     "referee_cprs": 3,
-    "awareness": "deduced",
 }
 
 ROUND8_BRIDGE = {
@@ -31,7 +30,6 @@ ROUND8_BRIDGE = {
     "hal": {"cylinder": 0.0, "ttd": 178.0, "deaths": 2, "alive": True},
     "baku": {"cylinder": 58.0, "ttd": 153.0, "deaths": 2, "alive": True},
     "referee_cprs": 4,
-    "awareness": "deduced",
 }
 
 ROUND9_PRE_LEAP = {
@@ -43,11 +41,10 @@ ROUND9_PRE_LEAP = {
     "hal": {"cylinder": 0.0, "ttd": 238.0, "deaths": 2, "alive": True},
     "baku": {"cylinder": 115.0, "ttd": 153.0, "deaths": 2, "alive": True},
     "referee_cprs": 4,
-    "awareness": "deduced",
 }
 
-ROUND9_LEAP_DEDUCED = {
-    "name": "round9_leap_deduced",
+ROUND9_LEAP = {
+    "name": "round9_leap",
     "game_clock": 3540.0,
     "round_num": 8,
     "current_half": 2,
@@ -55,19 +52,6 @@ ROUND9_LEAP_DEDUCED = {
     "hal": {"cylinder": 0.0, "ttd": 238.0, "deaths": 2, "alive": True},
     "baku": {"cylinder": 175.0, "ttd": 153.0, "deaths": 2, "alive": True},
     "referee_cprs": 4,
-    "awareness": "deduced",
-}
-
-ROUND9_LEAP_IMPAIRED = {
-    "name": "round9_leap_impaired",
-    "game_clock": 3540.0,
-    "round_num": 8,
-    "current_half": 2,
-    "first_dropper": "hal",
-    "hal": {"cylinder": 0.0, "ttd": 238.0, "deaths": 2, "alive": True},
-    "baku": {"cylinder": 175.0, "ttd": 153.0, "deaths": 2, "alive": True},
-    "referee_cprs": 4,
-    "awareness": "memory_impaired",
 }
 
 
@@ -75,8 +59,7 @@ SCENARIOS = {
     "round7_pressure": ROUND7_PRESSURE,
     "round8_bridge": ROUND8_BRIDGE,
     "round9_pre_leap": ROUND9_PRE_LEAP,
-    "round9_leap_deduced": ROUND9_LEAP_DEDUCED,
-    "round9_leap_impaired": ROUND9_LEAP_IMPAIRED,
+    "round9_leap": ROUND9_LEAP,
 }
 
 
@@ -91,15 +74,14 @@ CURRICULA = {
         (0.10, None),
         (0.15, "round7_pressure"),
         (0.30, "round9_pre_leap"),
-        (0.25, "round9_leap_deduced"),
-        (0.20, "round9_leap_impaired"),
+        (0.45, "round9_leap"),
     ],
     "bridge": [
         (0.20, None),
         (0.20, "round7_pressure"),
         (0.30, "round8_bridge"),
         (0.20, "round9_pre_leap"),
-        (0.10, "round9_leap_deduced"),
+        (0.10, "round9_leap"),
     ],
     "opening_to_round7": [
         (1.00, None),
@@ -114,8 +96,7 @@ CURRICULA = {
         (0.20, None),
         (0.20, "round7_pressure"),
         (0.25, "round9_pre_leap"),
-        (0.20, "round9_leap_deduced"),
-        (0.15, "round9_leap_impaired"),
+        (0.35, "round9_leap"),
     ],
 }
 

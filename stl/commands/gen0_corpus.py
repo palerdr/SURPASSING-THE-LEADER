@@ -147,7 +147,7 @@ def _sha256_file(path: Path) -> str:
 def _source_tree_digest(repo_root: Path) -> str:
     paths = [
         *repo_root.glob("stl/**/*.py"),
-        *repo_root.glob("configs/**/*.yaml"),
+        *repo_root.glob("stl/config/**/*.yaml"),
         repo_root / "pyproject.toml",
         repo_root / "uv.lock",
     ]
@@ -1266,7 +1266,7 @@ def generate_gen0_pair(args: argparse.Namespace) -> dict[str, object]:
                 getattr(
                     args,
                     "holdout_seal_out",
-                    "outputs/regen2rl/gen0_v4_holdout.seal.json",
+                    "stl/outputs/regen2rl/gen0_v4_holdout.seal.json",
                 ),
                 holdout_path=output_paths["ruler"],
                 certificate_path=_certificate_output_path(output_paths["ruler"]),
@@ -1276,7 +1276,7 @@ def generate_gen0_pair(args: argparse.Namespace) -> dict[str, object]:
             )
             _log(
                 "sealed holdout: "
-                f"{getattr(args, 'holdout_seal_out', 'outputs/regen2rl/gen0_v4_holdout.seal.json')} "
+                f"{getattr(args, 'holdout_seal_out', 'stl/outputs/regen2rl/gen0_v4_holdout.seal.json')} "
                 f"digest={str(seal_payload['seal_digest'])[:12]}..."
             )
         _log(f"Generation Zero complete in {perf_counter() - started_at:.1f}s")
@@ -1302,13 +1302,13 @@ def generate_gen0_pair(args: argparse.Namespace) -> dict[str, object]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-out", default="outputs/regen2rl/gen0_train_v3.npz")
-    parser.add_argument("--dev-out", default="outputs/regen2rl/gen0_development_v3.npz")
+    parser.add_argument("--train-out", default="stl/outputs/regen2rl/gen0_train_v3.npz")
+    parser.add_argument("--dev-out", default="stl/outputs/regen2rl/gen0_development_v3.npz")
     parser.add_argument(
-        "--ruler-out", default="outputs/regen2rl/gen0_external_ruler_v3.npz"
+        "--ruler-out", default="stl/outputs/regen2rl/gen0_external_ruler_v3.npz"
     )
-    parser.add_argument("--work-dir", default="outputs/regen2rl/gen0_work_v3")
-    parser.add_argument("--tier-a-dir", default="checkpoints/tablebase/tier_a")
+    parser.add_argument("--work-dir", default="stl/outputs/regen2rl/gen0_work_v3")
+    parser.add_argument("--tier-a-dir", default="stl/checkpoints/tablebase/tier_a")
     parser.add_argument("--tier-a-max-width", type=float, default=0.05)
     parser.add_argument(
         "--tier-a-rows",
@@ -1329,7 +1329,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reuse-dev-artifact", default=None)
     parser.add_argument(
         "--holdout-seal-out",
-        default="outputs/regen2rl/gen0_v4_holdout.seal.json",
+        default="stl/outputs/regen2rl/gen0_v4_holdout.seal.json",
     )
     parser.add_argument(
         "--profile",

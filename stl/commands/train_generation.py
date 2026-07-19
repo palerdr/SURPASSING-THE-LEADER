@@ -3,11 +3,11 @@ class-rebalanced training -> calibration gate.
 
 Usage:
     python scripts/run_gen_iteration.py \
-        --in-checkpoint checkpoints/gen1_v8/best.pt \
-        --out-dir checkpoints/gen2/ \
-        --out-targets checkpoints/gen2_targets.npz \
-        --anchor-targets checkpoints/gen0_targets.npz \
-        --held-out-targets checkpoints/holdout_targets.npz \
+        --in-checkpoint stl/checkpoints/gen1_v8/best.pt \
+        --out-dir stl/checkpoints/gen2/ \
+        --out-targets stl/checkpoints/gen2_targets.npz \
+        --anchor-targets stl/checkpoints/gen0_targets.npz \
+        --held-out-targets stl/checkpoints/holdout_targets.npz \
         --iterations 1000 \
         --epochs 150
 
@@ -288,12 +288,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--subgame-resolve-at-critical",
         action="store_true",
         help="Use bounded root subgame re-solving for MCTS bootstrap labels at critical states.",
-    )
-    parser.add_argument(
-        "--subgame-resolve-horizon",
-        type=int,
-        default=1,
-        help="Half-round horizon for critical root resolve. Default 1 bounds the resolve to the current turn.",
     )
     parser.add_argument(
         "--subgame-resolve-cfr-iters",

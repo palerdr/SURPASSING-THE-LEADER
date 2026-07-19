@@ -1,0 +1,67 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset: dth/artifacts/strategic_exact_v6.npz
+output_dir: dth/checkpoints/strategic_capacity_probe_128x2
+initial_checkpoint: null
+seed: 4
+device: cuda
+
+model:
+  hidden_width: 128
+  hidden_layers: 2
+  horizon_scale: 3.0
+
+training:
+  epochs: 200
+  batch_size: 256
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  validation_fraction: 0.2
+  policy_weight: 0.1
+  selection_metric: decision
+  patience: 50
+  minimum_delta: 0.000001
+  log_every: 25
+
+self_play:
+  dataset: dth/artifacts/boundary_self_play_v5.npz
+  exact_targets: dth/artifacts/strategic_exact_v6.npz
+  max_saddle_gap: 0.000001
+  min_coverage_fraction: 1.0
+  repeats: 4
+
+exact_frontiers:
+  repeats: 32
+  roots:
+    - state: [239, 0, 0, 240]
+      horizon: 5
+    - state: [0, 240, 239, 0]
+      horizon: 5
+
+decision_selection:
+  exact_targets: dth/artifacts/strategic_exact_v6.npz
+  baseline_checkpoint: dth/checkpoints/strategic_mixed_v7/best.pt
+  roots:
+    - state: [239, 0, 0, 240]
+      horizon: 5
+    - state: [0, 240, 239, 0]
+      horizon: 5
+  guard_roots:
+    - state: [239, 0, 0, 240]
+      horizon: 4
+  guard_tolerance: 0.000001
+  minimum_gap_improvement: 0.000001
+  tie_tolerance: 0.000001
+
+audit:
+  max_rows_per_horizon: 8
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

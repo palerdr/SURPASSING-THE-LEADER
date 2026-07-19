@@ -9,7 +9,7 @@ Stage 2 — the deaths=0 epoch (canonical opening lattice): its survived-
 death exits land exactly on stage-1 epochs (duration in {60..299} ==
 the dier's new ttd), so its brackets inherit stage-1 tightness.
 
-Artifacts: checkpoints/tablebase/tier_a/d1_{dier}_{ttd}.npz (lo, hi as
+Artifacts: stl/checkpoints/tablebase/tier_a/d1_{dier}_{ttd}.npz (lo, hi as
 float32), d0.npz, manifest.json with sha256 per file.
 
 Cost (measured pilot numbers): ~7.4-8.8 ms/state, 180,000 states/epoch

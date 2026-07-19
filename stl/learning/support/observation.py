@@ -1,4 +1,4 @@
-"""Observation builder for DTH environment.
+"""Fully observed public-state features for the STL environment.
 
 Translates engine game state into a fixed-size numpy array that the RL
 agent receives as input. The observation is always from one player's
@@ -6,11 +6,9 @@ agent receives as input. The observation is always from one player's
 
 Key design decisions:
     - All values normalized to roughly [0, 1] for neural network stability.
-    - LSR features (variation, rounds_until_leap, is_leap_turn) are masked
-      to zero for Hal until he has died at least once.
-    - Baku always sees full LSR information.
+    - Both players always receive the public leap-second features.
 
-Observation vector layout (20 features):
+Observation vector layout (19 features):
     [0]  my_cylinder          / 300
     [1]  opp_cylinder         / 300
     [2]  my_ttd               / 600
@@ -27,7 +25,6 @@ Observation vector layout (20 features):
     [13-16] lsr_variation     one-hot V1/V2/V3/V4
     [17] rounds_until_leap    / 15
     [18] is_leap_turn         binary
-    [19] leap_known           binary (has this player unlocked LS knowledge?)
 """
 
 from __future__ import annotations
@@ -42,8 +39,8 @@ from .routing_features import (
     build_public_opponent_history_features,
 )
 
-OBS_SIZE = 20
-OBS_V2_SIZE = 24  # v1 (20) + public opponent history features (4)
+OBS_SIZE = 19
+OBS_V2_SIZE = 23  # v1 (19) + public opponent history features (4)
 
 
 def compute_lsr_variation(game: Game) -> int:
@@ -88,7 +85,6 @@ def build_observation(
     game: Game,
     perspective: Player,
     opponent: Player,
-    leap_known: bool,
 ) -> np.ndarray:
     """Build the full observation vector from one player's perspective.
 
@@ -114,17 +110,13 @@ def build_observation(
     [16]  lsr_v4 (one-hot)
     [17]  rounds_until_leap / 15
     [18]  is_leap_turn (binary)
-    [19]  leap_known (binary)
 
     Args:
         game: Current game state.
         perspective: The player whose POV we're building for.
         opponent: The other player.
-        leap_known: Whether this player has unlocked leap second knowledge.\
-
-    
     Returns:
-        np.ndarray of shape (20,), dtype float32.
+        np.ndarray of shape (19,), dtype float32.
     """
     
     obs = np.zeros(OBS_SIZE, dtype = np.float32)
@@ -156,15 +148,10 @@ def build_observation(
 
     obs[12] = game.game_clock / 4200.0
 
-    if leap_known:
-        lsr_idx = compute_lsr_variation(game)
-        obs[12 + lsr_idx] = 1.0
-        
-        obs[17] = compute_rounds_until_leap(game) / 15.0
-
-        obs[18] = 1.0 if game.is_leap_second_turn() else 0.0
-
-    obs[19] = 1.0 if leap_known else 0.0
+    lsr_idx = compute_lsr_variation(game)
+    obs[12 + lsr_idx] = 1.0
+    obs[17] = compute_rounds_until_leap(game) / 15.0
+    obs[18] = 1.0 if game.is_leap_second_turn() else 0.0
 
     return obs
 
@@ -173,16 +160,15 @@ def build_observation_v2(
     game: Game,
     perspective: Player,
     opponent: Player,
-    leap_known: bool,
 ) -> np.ndarray:
-    """Build v2 observation: v1 (20 dims) + public opponent history (4 dims).
+    """Build v2 observation: v1 (19 dims) + public opponent history (4 dims).
 
-    Indices 0-19: identical to v1 (see build_observation).
-    Indices 20-23: public opponent action history features from routing_features.
+    Indices 0-18: identical to v1 (see build_observation).
+    Indices 19-22: public opponent action history features from routing_features.
 
     Returns:
-        np.ndarray of shape (24,), dtype float32.
+        np.ndarray of shape (23,), dtype float32.
     """
-    base = build_observation(game, perspective, opponent, leap_known)
+    base = build_observation(game, perspective, opponent)
     history = build_public_opponent_history_features(game, opponent)
     return np.concatenate((base, history))

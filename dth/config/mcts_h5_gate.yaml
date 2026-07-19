@@ -1,0 +1,37 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_exact_v6/best.pt
+exact_targets: dth/artifacts/strategic_exact_v6.npz
+reference_targets: dth/artifacts/strategic_exact_v6.npz
+anchor_horizons: [1, 2, 3]
+device: cpu
+output: dth/artifacts/mcts_h5_gate_exact_v6_d1.json
+evaluators: [exact_leaf]
+budgets: [0, 4096]
+seeds: [0, 1, 2]
+warmup_cells: [3600]
+
+mcts:
+  confidence_constant: 1.5
+  exploration_scale: 1.0
+  prior_uniform_mix: 0.05
+  policy_update_interval: 16
+  root_warmup_cells: 3600
+  internal_warmup_cells: 0
+  max_depth: 1
+
+roots:
+  - state: [239, 0, 0, 240]
+    horizon: 5
+  - state: [0, 240, 239, 0]
+    horizon: 5
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

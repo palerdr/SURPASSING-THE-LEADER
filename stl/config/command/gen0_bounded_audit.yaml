@@ -1,0 +1,19 @@
+name: gen0_bounded_audit
+module: stl.commands.gen0_bounded_audit
+args: null
+checkpoint: ???
+bellman_train: stl/outputs/regen2rl/gen0_v5_train.npz
+bellman_holdout: stl/outputs/regen2rl/gen0_v5_bellman_external_ruler.npz
+bellman_certificates: stl/outputs/regen2rl/gen0_v5_bellman_external_ruler.certificates.npz
+bellman_bundle: stl/outputs/regen2rl/gen0_v5_bellman_external_ruler.bellman.npz
+calibration_train: stl/outputs/regen2rl/gen0_v5_train.npz
+calibration_holdout: stl/outputs/regen2rl/gen0_v5_calibration_holdout.npz
+calibration_certificates: stl/outputs/regen2rl/gen0_v5_calibration_holdout.certificates.npz
+calibration_taxonomy: stl/outputs/regen2rl/gen0_v5_calibration_holdout.taxonomy.json
+seal: stl/outputs/regen2rl/gen0_v5_holdout.seal.json
+ledger: stl/outputs/regen2rl/gen0_v5_holdout.use.json
+out: stl/outputs/regen2rl/gen0_v5_bounded_audit.json
+budget: [64, 256, 1024]
+seed: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+device: cpu
+maximum_candidate_worsening: 0.02

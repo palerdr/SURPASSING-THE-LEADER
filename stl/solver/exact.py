@@ -331,9 +331,8 @@ def solve_cfr_plus_rust(
 class ExactSearchConfig:
     """Perspective configuration for exact action expansion.
 
-    The historical hal_leap_deduced / hal_memory_impaired flags are gone —
-    Hal can never play check=61 in this codebase, period. The strategic
-    constraint is hard-coded in legal_actions.py, not configured here.
+    Leap timing is public. Structural actor/role legality is owned by
+    ``stl.engine.actions`` and is not configurable here.
     """
 
     perspective_name: str = "Hal"

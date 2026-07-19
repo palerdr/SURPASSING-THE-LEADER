@@ -784,9 +784,9 @@ def _atomic_write_json(report: dict[str, object], path: str | Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--train", default="outputs/regen2rl/gen0_train_v3.npz")
+    parser.add_argument("--train", default="stl/outputs/regen2rl/gen0_train_v3.npz")
     parser.add_argument(
-        "--ruler", default="outputs/regen2rl/gen0_external_ruler_v3.npz"
+        "--ruler", default="stl/outputs/regen2rl/gen0_external_ruler_v3.npz"
     )
     parser.add_argument("--certificates", default=None)
     parser.add_argument("--taxonomy", default=None)
@@ -794,7 +794,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ledger", default=None)
     parser.add_argument(
         "--out",
-        default="outputs/regen2rl/gen0_external_ruler_report_v3.json",
+        default="stl/outputs/regen2rl/gen0_external_ruler_report_v3.json",
     )
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--tablebase-mse-max", type=float, default=0.01)

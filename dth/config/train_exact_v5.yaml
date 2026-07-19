@@ -1,0 +1,43 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset: dth/artifacts/strategic_exact_v5.npz
+output_dir: dth/checkpoints/strategic_exact_v5
+initial_checkpoint: dth/checkpoints/strategic_mixed_v6/best.pt
+seed: 4
+device: cuda
+
+model:
+  hidden_width: 64
+  hidden_layers: 2
+  horizon_scale: 3.0
+
+training:
+  epochs: 200
+  batch_size: 256
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  validation_fraction: 0.2
+  policy_weight: 0.1
+  selection_metric: all_sources
+  patience: 50
+  minimum_delta: 0.000001
+  log_every: 25
+
+exact_frontiers:
+  repeats: 64
+  roots:
+    - state: [239, 0, 0, 240]
+      horizon: 4
+
+audit:
+  max_rows_per_horizon: 8
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

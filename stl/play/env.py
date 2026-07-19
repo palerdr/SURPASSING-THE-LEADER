@@ -11,7 +11,7 @@ Action space: Discrete(62)
     action 0  → illegal padding
     action 61 → second 61 (only legal for Baku dropper during leap turn)
 
-Observation space: Box(0, 1, shape=(20,)) — see observation.py
+Observation space: Box(0, 1, shape=(19,)) — see observation.py
 
 The environment uses SB3's action masking via the action_masks() method.
 MaskablePPO will call this each step to know which actions are legal.
@@ -33,15 +33,7 @@ from stl.engine.game import (
     PHYSICALITY_BAKU,
 )
 
-from stl.learning.awareness import (
-    AwarenessConfig,
-    LeapAwareness,
-    build_action_mask,
-    exposes_leap_features,
-    initial_awareness_for_role,
-    update_awareness,
-)
-from stl.engine.actions import IllegalActionError, validate_action
+from stl.engine.actions import IllegalActionError, legal_mask, validate_action
 from stl.engine.actions import ACTION_SIZE
 from stl.learning.observation import OBS_SIZE, OBS_V2_SIZE, build_observation, build_observation_v2
 from stl.learning.reward import compute_route_shaping_bonus, shaped_reward, sparse_reward
@@ -55,8 +47,8 @@ from stl.learning.scenarios import (
 )
 
 
-class DTHEnv(gym.Env):
-    """Gymnasium environment for Drop The Handkerchief."""
+class STLEnv(gym.Env):
+    """Gymnasium environment for the fully observed STL game."""
 
     metadata = {"render_modes": []}
 
@@ -67,7 +59,6 @@ class DTHEnv(gym.Env):
         seed: int | None = None,
         use_shaping: bool = False,
         shaping_preset: str = "light",
-        awareness_config: AwarenessConfig | None = None,
         scenario_sampler: Callable[[np.random.Generator], dict | None] | None = None,
         max_steps: int | None = None,
         obs_version: int = 1,
@@ -81,7 +72,6 @@ class DTHEnv(gym.Env):
         self._seed = seed
         self.use_shaping = use_shaping
         self.shaping_preset = shaping_preset
-        self.awareness_config = awareness_config or AwarenessConfig()
         self.scenario_sampler = scenario_sampler
         self.max_steps = max_steps
         self.obs_version = obs_version
@@ -95,7 +85,6 @@ class DTHEnv(gym.Env):
         self.game = None
         self.agent = None
         self.opp_player = None
-        self.awareness = initial_awareness_for_role(agent_role)
         self.episode_steps = 0
         self.current_scenario_name = "opening"
         self._awarded_route_stages: set[str] = set()
@@ -129,19 +118,14 @@ class DTHEnv(gym.Env):
             self.agent = BAKU
             self.opp_player = HAL
 
-        awareness_override = None
         if scenario is not None:
             validate_scenario_reachability(self.game, scenario)
             apply_scenario(self.game, HAL, BAKU, scenario)
             validate_named_scenario_semantics(self.game, scenario)
-            awareness_override = scenario.awareness
             self.current_scenario_name = scenario.name
         else:
             self.current_scenario_name = "opening"
         
-        self.awareness = initial_awareness_for_role(self.agent_role)
-        if awareness_override is not None:
-            self.awareness = awareness_override
         self.episode_steps = 0
         self._awarded_route_stages = {
             stage_name
@@ -154,7 +138,7 @@ class DTHEnv(gym.Env):
         init_obs = self._build_obs()
         info_dict = {
             "game_clock": self.game.game_clock,
-            "awareness": self.awareness.value,
+            "leap_aware": True,
             "scenario_name": self.current_scenario_name,
             "episode_steps": self.episode_steps,
         }
@@ -168,14 +152,9 @@ class DTHEnv(gym.Env):
 
     def _build_obs(self) -> np.ndarray:
         """Build observation using the configured obs_version."""
-        leap_known = exposes_leap_features(self.awareness)
         if self.obs_version == 2:
-            return build_observation_v2(
-                self.game, self.agent, self.opp_player, leap_known,
-            )
-        return build_observation(
-            self.game, self.agent, self.opp_player, leap_known,
-        )
+            return build_observation_v2(self.game, self.agent, self.opp_player)
+        return build_observation(self.game, self.agent, self.opp_player)
 
     def action_masks(self) -> np.ndarray:
         """
@@ -187,12 +166,7 @@ class DTHEnv(gym.Env):
 
         dropper, checker = self.game.get_roles_for_half(self.game.current_half)
         role = "dropper" if self.agent is dropper else "checker"
-        return build_action_mask(
-            role=role,
-            is_leap_turn=self.game.is_leap_second_turn(),
-            awareness=self.awareness,
-            actor=self.agent_role,
-        )
+        return legal_mask(self.agent_role, role, self.game.get_turn_duration())
         
 
     def step(self, action: int):
@@ -255,14 +229,6 @@ class DTHEnv(gym.Env):
             check_time = agent_second
 
         record = self.game.play_half_round(drop_time, check_time)
-        self.awareness = update_awareness(
-            self.awareness,
-            controlled_role_name=self.agent_role,
-            config=self.awareness_config,
-            game=self.game,
-            record=record,
-        )
-        
         obs = self._build_obs()
         terminated = self.game.game_over
         agent_won = self.game.winner is self.agent
@@ -285,7 +251,7 @@ class DTHEnv(gym.Env):
         info = {
             "game_clock": self.game.game_clock,
             "result": record.result,
-            "awareness": self.awareness.value,
+            "leap_aware": True,
             "scenario_name": self.current_scenario_name,
             "episode_steps": self.episode_steps,
         }

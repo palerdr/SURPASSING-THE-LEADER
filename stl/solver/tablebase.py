@@ -1385,7 +1385,7 @@ def _bit_for_current_roles(game: Game) -> tuple[int | None, str | None]:
 
 
 class TierALookup:
-    """Lazy lookup for ``checkpoints/tablebase/tier_a`` interval artifacts."""
+    """Lazy lookup for ``stl/checkpoints/tablebase/tier_a`` interval artifacts."""
 
     def __init__(self, root: str | os.PathLike[str] = DEFAULT_TIER_A_DIR, *, verify: bool = False) -> None:
         self.root = Path(root)

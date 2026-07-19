@@ -1,0 +1,11 @@
+# @package _global_
+experiment:
+  description: One-epoch CPU smoke over the reconstructable Generation-Zero shard.
+command:
+  targets: stl/outputs/regen2rl/gen0_train_smoke_v3.npz
+  out: stl/outputs/regen2rl/gen0_checkpoint_smoke_v3
+  epochs: 1
+  batch_size: 8
+  seed: 4
+  device: cpu
+  allow_legacy_targets: false

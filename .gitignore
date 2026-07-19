@@ -23,13 +23,18 @@ graphify-out/
 multirun/
 logs/
 demos/
-docs/whitepaper/build/
+papers/whitepaper/build/
+stl/outputs/
+dth/outputs/
+toy/outputs/
 
 # Training artifacts
 models/
 checkpoints/
-pure/artifacts/
-pure/checkpoints/
+stl/checkpoints/
+dth/artifacts/
+dth/checkpoints/
+toy/checkpoints/
 
 # Generated media
 *.png
@@ -40,6 +45,4 @@ Thumbs.db
 
 # Local AI/tooling metadata
 /.codex
-/AGENTS.md
-/foundations.md
 /.agents

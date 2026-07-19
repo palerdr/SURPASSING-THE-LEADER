@@ -1,0 +1,1004 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{tabularx}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+\setlength{\emergencystretch}{3em}
+\allowdisplaybreaks
+
+\newtheorem{assumption}{Assumption}
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{observation}{Observation}
+
+\newcommand{\stl}{\textsc{STL}}
+\newcommand{\hal}{\mathrm{Hal}}
+\newcommand{\baku}{\mathrm{Baku}}
+\newcommand{\states}{\mathcal{S}}
+\newcommand{\actions}{\mathcal{A}}
+\newcommand{\expect}{\mathbb{E}}
+\newcommand{\prob}{\mathbb{P}}
+\newcommand{\valuefn}{V}
+\newcommand{\simplex}{\Delta}
+\newcommand{\val}{\operatorname{val}}
+\newcommand{\gap}{\operatorname{gap}}
+
+\title{From Exact Anchors to Simultaneous-Move AlphaZero\\
+for the \stl{} Handkerchief Game}
+\author{Repository whitepaper}
+\date{July 15, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This whitepaper records both the implemented solver and the revised plan for
+reinforcement learning. The game is modeled as a fully observed, two-player,
+zero-sum stochastic game with simultaneous exact-second actions. The Python
+engine is the rule oracle. The rigorous solver performs finite-horizon
+backward induction with engine-derived chance and linear-programming minimax
+at every simultaneous node. The approximate stack provides candidate search,
+matrix-game Monte Carlo tree search (MCTS), tablebase frontiers, and a
+policy/value network.
+
+The repository does not yet implement a complete AlphaZero loop. Phases P0--P3
+of the Python bridge now provide a finite episode contract, exact/search
+conformance, reconstructable replay and checkpoints, and a tested
+simultaneous-MCTS improvement object. The V4 static Generation-Zero ruler has
+passed, but the first learned-MCTS audit mixed a horizon-one oracle with a
+multi-step learned frontier. A horizon-aware V3 checkpoint contract, exact
+V3-root/V2-successor Bellman closure, fresh sealing workflow, and aligned MCTS
+audit are now implemented; their full generation and training runs remain
+unexecuted. The compatibility self-play module still uses a legacy bucketed agent against
+scripted opponents. This distinction matters: AlphaZero-style reinforcement
+learning requires search policies at states actually visited by MCTS self-play
+and terminal episode outcomes as value targets. Rust is deferred until the
+Python behavior and evidence package are stable. We prove the finite-horizon exact result, the
+non-expansiveness of minimax backup, a frontier-error bound, and a local saddle
+gap bound. We also state precisely why these results do not prove convergence
+or global exploitability of the learned agent.
+\end{abstract}
+
+\section{Scope, Status, and Claims}
+
+The live runtime tree is under \path{stl/}. The disconnected old package mirror
+was removed after pushed archival commit \texttt{a4b03db}; Git, rather than a
+second source tree, retains that history. The implementation plan is
+\path{stl/docs/REGEN2RL.md}, and the granular removal ledger is
+\path{docs/DISTILLATION_AUDIT.md}. This paper supplies the mathematical
+rationale and claim boundary.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Path & Responsibility \\
+\midrule
+\path{stl/engine/} & Rule authority, clock, roles, legality, death, revival, and leap behavior \\
+\path{stl/solver/exact.py} & Exact public state, engine expansion, LP minimax, and finite-horizon solve \\
+\path{stl/solver/search.py} & Candidate search, bounded resolve, leaf adapters, and matrix-game MCTS \\
+\path{stl/solver/tablebase.py} & Tactical fixtures, certified intervals, and Tier A lookup \\
+\path{stl/learning/} & Targets, policy/value model, training, replay support, and gates \\
+\path{stl/play/} & Playable agents, scripted opponents, environment wrappers, and legacy bucket baseline \\
+\path{stl/commands/} & Hydra command implementations \\
+\path{stl/config/} & Resolved experiment and command parameters \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The following claims are justified now:
+
+\begin{itemize}[leftmargin=*]
+  \item engine-relative correctness of exact action legality and transition
+        expansion, subject to the regression suite;
+  \item exact minimax value for the finite-horizon game actually enumerated by
+        the full-width LP solver;
+  \item exact values of pinned analytic fixtures by their construction; and
+  \item finite-depth best-response intervals under their reported frontier
+        brackets.
+\end{itemize}
+
+The following claims are not justified now:
+
+\begin{itemize}[leftmargin=*]
+  \item that the unrestricted-duration game has been solved;
+  \item that finite-budget candidate MCTS converges under the present
+        selection rule;
+  \item that held-out mean squared error implies low exploitability;
+  \item that existing self-play code is AlphaZero self-play; or
+  \item that a Rust implementation is required for, or already defines, the
+        learning baseline.
+\end{itemize}
+
+\section{Game Model}
+
+\subsection{Fully Observed State with Simultaneous Actions}
+
+Let the players be \(\mathcal{N}=\{\hal,\baku\}\). At a nonterminal public
+state \(s\in\states\), both players observe the complete state represented by
+\path{ExactPublicState}: player cylinders, total time dead, death counts, life
+status, physicality, referee CPR count, clock, half-round, round number, first
+dropper, and terminal fields. The players then choose their current actions
+without observing the other current action. This is a perfect-state or fully
+observed simultaneous-move game, not an alternating-action board game and not
+a hidden-state poker game.
+
+The engine assigns a dropper \(D(s)\) and checker \(C(s)\). It is convenient
+to write the two player action sets as \(A_{\hal}(s)\) and
+\(A_{\baku}(s)\), then map the resulting pair to a drop second \(d\) and a
+check second \(c\) according to the roles. The code stores matrices as
+drop-by-check and transposes or negates them so that Hal remains the maximizing
+player.
+
+\subsection{Actor-Aware Exact-Second Legality}
+
+Normal legal seconds are \(1,\ldots,60\). In the leap window only Baku, when
+Baku is the dropper, may select second 61. Checkers are always capped at 60,
+and Hal can never select 61. Thus
+\[
+A_D(s)=
+\begin{cases}
+\{1,\ldots,61\}, & D(s)=\baku \text{ and }s\text{ is a leap turn},\\
+\{1,\ldots,60\}, & \text{otherwise},
+\end{cases}
+\qquad
+A_C(s)=\{1,\ldots,60\}.
+\]
+Dense learned policies have length 62. Index 0 is illegal padding and index
+\(j\) denotes literal second \(j\).
+
+The check succeeds iff \(c\ge d\). On success the checker accumulates the
+inclusive interval \(c-d+1\) seconds, including one second on the diagonal.
+Literal second 1 is the immediate action; index 0 remains illegal padding. On failure the checker incurs
+the fixed 60-second penalty. All death, revival, clock, and leap effects then
+come from \path{stl/engine/game.py}.
+
+\subsection{Transition Kernel and Utility}
+
+Let
+\[
+P(s'\mid s,a_{\hal},a_{\baku})
+\]
+be the transition kernel induced by the engine, including survival and fatal
+branches. The rigorous solver does not learn or reimplement this kernel.
+
+For current death duration (q) and prior cumulative time dead (t), the
+engine assigns zero revival probability when (q\ge300) or (t+q>300).
+The second inequality is deliberately strict: resulting cumulative TTD exactly
+300 remains eligible for revival. Cylinder capacity, current dose, and
+cumulative TTD are therefore separate quantities even though they share the
+same five-minute numerical boundary.
+
+Terminal utility is always Hal-perspective:
+\[
+u(s)=
+\begin{cases}
++1, & s\text{ is terminal and Hal wins},\\
+-1, & s\text{ is terminal and Baku wins},\\
+0, & s\text{ is an explicitly declared draw}.
+\end{cases}
+\]
+There is no intermediate shaped reward in \path{stl/solver}.
+
+\subsection{Why Reinforcement Learning Needs an Episode Contract}
+
+\begin{observation}[The engine has no deterministic finite episode bound]
+Every successful check now adds at least one second, so the old zero-ST
+diagonal self-loop does not exist. A failed checker may nevertheless revive
+and reset its cylinder repeatedly. The stochastic engine therefore does not
+provide a deterministic half-round cap that is suitable as an RL batch
+contract.
+\end{observation}
+
+Consequently, a completed-game outcome is not guaranteed merely by calling
+the engine in a loop. The first Python RL baseline defines a capped training
+game \(G_H\): after \(H\) half-rounds, a nonterminal trajectory is assigned
+training result zero and marked as truncated. The initial plan freezes
+\(H_{\mathrm{train}}=64\) and \(H_{\mathrm{eval}}=128\), then gates promotion
+on low truncation rate and sensitivity to the cap. This is an RL-wrapper
+adjudication, not a new engine terminal rule. Any result learned under this
+contract is a result about \(G_H\), not automatically about the
+unrestricted-duration game.
+
+\section{Exact Finite-Horizon Solver}
+
+\begin{assumption}[Engine authority]
+The Python engine in \path{stl/engine} is the rule oracle. Solver correctness
+is relative to its legality and transition functions.
+\end{assumption}
+
+Let \(b:\states\to[-1,1]\) be a boundary evaluator. For a terminal state,
+the boundary is ignored in favor of \(u\). Define
+\[
+V_0^b(s)=
+\begin{cases}
+u(s), & s\text{ terminal},\\
+b(s), & s\text{ nonterminal},
+\end{cases}
+\]
+and, for \(h>0\), define the Hal-payoff matrix
+\[
+M_h^b(s)_{ij}
+=
+\sum_{s'}P(s'\mid s,a_{\hal,i},a_{\baku,j})
+V_{h-1}^b(s').
+\]
+The Bellman-Shapley backup is
+\[
+V_h^b(s)=\val\!\left(M_h^b(s)\right)
+=
+\max_{\sigma\in\simplex(A_{\hal}(s))}
+\min_{\tau\in\simplex(A_{\baku}(s))}
+\sigma^{\mathsf T}M_h^b(s)\tau.
+\]
+
+For a matrix \(M\in\mathbb{R}^{m\times n}\), the row-player LP is
+\[
+\begin{aligned}
+\max_{\sigma,v}\quad &v\\
+\text{subject to}\quad
+&\sum_{i=1}^{m}\sigma_i M_{ij}\ge v,
+&&j=1,\ldots,n,\\
+&\sum_{i=1}^{m}\sigma_i=1,\\
+&\sigma_i\ge0,
+&&i=1,\ldots,m.
+\end{aligned}
+\]
+
+The certified code path uses full legal exact-second actions and this LP. With
+the current terminal-only exact cutoff, \(b(s)=0\) and unresolved probability
+is tracked separately.
+
+\begin{proposition}[Exact finite-horizon value]
+For fixed engine state \(s\), finite horizon \(h\), full legal action sets,
+and boundary evaluator \(b\), recursive engine expansion followed by exact LP
+minimax returns \(V_h^b(s)\).
+\end{proposition}
+
+\begin{proof}
+The claim is immediate for \(h=0\). Assume it holds at \(h-1\). For each
+legal joint action at \(s\), the engine enumerates all successor chance
+branches and the induction hypothesis gives the continuation value at every
+successor. Their probability-weighted sum is therefore the corresponding
+entry of \(M_h^b(s)\). The one-step decision is a finite zero-sum matrix game,
+so von Neumann's minimax theorem equates its LP value with
+\(\val(M_h^b(s))\). This is \(V_h^b(s)\), completing the induction.
+\end{proof}
+
+\section{Error Reasoning for Depth-Limited Search}
+
+\subsection{Minimax Backup Is Non-Expansive}
+
+\begin{lemma}[Matrix-value Lipschitz bound]
+If two equally shaped payoff matrices satisfy
+\(\lVert M-\widehat M\rVert_{\infty}\le\epsilon\), then
+\[
+\left|\val(M)-\val(\widehat M)\right|\le\epsilon.
+\]
+\end{lemma}
+
+\begin{proof}
+For every pair of mixed strategies \((\sigma,\tau)\),
+\[
+\left|\sigma^{\mathsf T}(M-\widehat M)\tau\right|
+\le\epsilon
+\]
+because \(\sigma\) and \(\tau\) are probability vectors. Taking a minimum
+and then a maximum cannot enlarge this uniform bound. Applying the same
+argument with \(M\) and \(\widehat M\) exchanged gives the absolute-value
+claim.
+\end{proof}
+
+\begin{proposition}[Frontier error does not amplify under exact backup]
+Suppose two boundary evaluators satisfy
+\(\sup_s|b(s)-\widehat b(s)|\le\epsilon\). If all actions and transitions are
+expanded exactly, then for every finite horizon \(h\),
+\[
+\sup_s|V_h^b(s)-V_h^{\widehat b}(s)|\le\epsilon.
+\]
+\end{proposition}
+
+\begin{proof}
+At depth zero the result is the hypothesis. If it holds at depth \(h-1\),
+then every action-cell continuation differs by at most \(\epsilon\), since an
+expectation is non-expansive in the supremum norm. The matrix-value lemma then
+bounds the backed-up value difference by \(\epsilon\). Induction proves the
+claim.
+\end{proof}
+
+This proposition justifies calibrated frontier values for an exact
+depth-limited resolve. It does not say that a finite-sample MCTS estimate has a
+uniform error bound, nor that a compact feature map can represent such a
+bound.
+
+\subsection{Local Policy Quality from Matrix Accuracy}
+
+For a Hal row strategy \(\widehat\sigma\) and Baku column strategy
+\(\widehat\tau\), define the exact matrix saddle gap
+\[
+\gap_M(\widehat\sigma,\widehat\tau)
+=
+\max_{\sigma}\sigma^{\mathsf T}M\widehat\tau
+-
+\min_{\tau}\widehat\sigma^{\mathsf T}M\tau.
+\]
+It is zero at an exact saddle point and measures the total one-step gain
+available from unilateral deviations.
+
+\begin{proposition}[Approximate-matrix saddle gap]
+Let \((\widehat\sigma,\widehat\tau)\) be an exact equilibrium of
+\(\widehat M\). If
+\(\lVert M-\widehat M\rVert_{\infty}\le\epsilon\), then
+\[
+\gap_M(\widehat\sigma,\widehat\tau)\le2\epsilon.
+\]
+\end{proposition}
+
+\begin{proof}
+Let \(\widehat v=\val(\widehat M)\). Uniform matrix error implies
+\[
+\max_{\sigma}\sigma^{\mathsf T}M\widehat\tau
+\le \widehat v+\epsilon,
+\qquad
+\min_{\tau}\widehat\sigma^{\mathsf T}M\tau
+\ge \widehat v-\epsilon.
+\]
+Subtracting the second inequality from the first gives the result.
+\end{proof}
+
+This provides a concrete policy gate: whenever full-width exact matrices are
+available, report saddle gap in addition to value error.
+
+\subsection{Candidate Sets Need Their Own Audit}
+
+No analogous bound follows merely because a candidate set contains many
+actions or tactically plausible seconds. A restricted matrix can be identically
+zero while one omitted Hal action pays \(+1\) against every Baku action. The
+restricted value is then zero and the full value is one. Candidate search is
+therefore an approximation whose omitted-action best-response gain must be
+measured against full width on a frozen audit distribution.
+
+\section{Current Search Stack}
+
+\subsection{Selective Solve and Bounded Resolve}
+
+\path{stl/solver/search.py} generates candidate seconds around endpoints,
+diagonals, safe budgets, and overflow boundaries. Its selective recursion
+still uses engine transitions and role-correct matrix minimax, but its action
+restriction is approximate. Critical-state resolve applies a hard horizon,
+usually one half-round, and evaluates the frontier with a tablebase or network
+adapter. LP remains the certification path; Python CFR+ is a runtime option for
+bounded local matrices.
+
+The V5 Bellman smoke falsified the earlier special case that retained a compact
+set when the checker had zero safe squandered seconds remaining. At one such
+root the restricted value error was \(0.188889\) and the lifted full-width
+saddle gap was \(0.222222\). Zero-safe-budget states therefore use the full
+legal exact-second matrix; the same stored root then has zero value error and
+saddle gap \(2.22\times10^{-16}\). This is a state-dependent exact fallback,
+not a claim that the remaining candidate sets are certified without audit.
+
+Bellman generation commits each root as a hash-bound bundle containing its
+closure graph, replay rows, and exact-policy certificates. A deterministic
+merge deduplicates successor states and remaps branch indices. Candidate-set
+failure blocks sealing and training but cannot discard these exact artifacts;
+only a passing gate can bind the concealed Bellman ruler into the one-use seal.
+
+\subsection{Matrix-Game MCTS}
+
+Each MCTS node stores candidate role actions, a Hal-perspective mean
+\(Q\)-matrix, joint cell counts, priors, children, and an exact engine
+snapshot. The current exploration term is
+\[
+U_{ij}=c_{\mathrm{puct}}P_{ij}
+\frac{\sqrt{N}}{1+N_{ij}}.
+\]
+The Hal maximizer solves an optimistic matrix \(Q+U\); the opponent solves an
+optimistic matrix for its own payoff, equivalently \(-Q+U\). Joint actions are
+sampled from the two resulting role marginals, chance is sampled through the
+engine, and Hal-perspective leaf values are backed up without alternating sign.
+
+Let \(\widehat\sigma_D^{(t)}\) and
+\(\widehat\sigma_C^{(t)}\) be role equilibria of the root's empirical
+mean-\(Q\) matrix before the \(t\)-th root selection. The canonical improvement
+policy is their linearly weighted average
+\[
+\pi_D=\frac{1}{W_T}\sum_{t=1}^{T}t\widehat\sigma_D^{(t)},
+\qquad
+\pi_C=\frac{1}{W_T}\sum_{t=1}^{T}t\widehat\sigma_C^{(t)},
+\qquad
+W_T=\sum_{t=1}^{T}t.
+\]
+Later empirical matrices receive greater weight without collapsing mixed play.
+The optimism-augmented equilibria select exploratory joint cells but are not
+reported as policy probability. Network priors are masked and normalized per
+role, their outer product defines the joint prior, and optional root Dirichlet
+noise perturbs the two legal marginals independently. The final saddle point
+of the mean \(Q\)-matrix remains a separate value/policy diagnostic; in a
+nearly flat matrix an LP may return an arbitrary pure vertex, so it is not the
+canonical training or deployed policy.
+
+The convergence theorem for simultaneous-move MCTS in
+\cite{lisy2013} assumes Hannan-consistent selection, guaranteed exploration,
+and a finite game tree. The repository's PUCT-like matrix selection, neural
+frontier, candidate actions, transpositions, and finite episode wrapper are not
+automatically covered by that theorem. The frozen exact-matrix convergence pack
+therefore supplies empirical, not theorem-level, evidence: across 120
+fixture/budget/seed records its 1024-iteration median absolute value error is
+zero, 95th-percentile error is \(0.001812\), maximum saddle gap is
+\(0.005726\), maximum per-fixture root-value standard deviation is
+\(0.000736\), and no fixture worsens from 256 to 1024 iterations. A future
+regret-matching SM-MCTS replacement remains appropriate if broader frozen
+packs violate the declared gate.
+
+\section{Audit of the Current Learning Attempt}
+
+\subsection{Implemented Pieces}
+
+The repository already contains several components needed by the target
+system:
+
+\begin{itemize}[leftmargin=*]
+  \item \path{stl/learning/model.py}: a shared trunk, Hal value head, and two
+        length-62 role-policy heads driven by 52 named V2 features;
+  \item \path{stl/learning/contracts.py}: the versioned finite-episode,
+        perspective, configuration, and horizon-sensitivity contract;
+  \item \path{stl/learning/replay.py}: reconstructable
+        \path{TrainingRecordV3} rows, safe hash-verified shards, collision
+        audits, and grouped splits;
+  \item \path{stl/learning/reachable.py}: legal engine trajectories whose
+        snapshots can be replayed from the canonical opening before labeling;
+  \item \path{stl/learning/train.py}: value MSE, masked role-policy cross
+        entropy, source weights, grouped selection, and strict checkpoint
+        bundles;
+  \item \path{stl/learning/targets.py}: exact/tablebase labels and MCTS
+        bootstrap labels;
+  \item \path{stl/learning/support/reanalysis.py}: deeper exact attempts and a
+        high-iteration MCTS fallback;
+  \item calibration, audit, ladder, policy-drift, finite-depth best-response,
+        SPRT, and promotion utilities; and
+  \item \path{stl/play/agent.py}: a playable network-plus-MCTS agent that
+        samples the canonical improved role policies.
+\end{itemize}
+
+The P1 and P3 frozen conformance packs test exact transition/orientation
+parity, omitted-action gains, chance sampling, and horizon-one MCTS convergence.
+The first P4 V2 smoke and full generation completed computationally but failed
+the subsequent data audit. In the 458-row training shard, 370 nonterminal rows
+violated the death/TTD/CPR reachability invariants; the external ruler had 215
+such violations among 254 rows. All 48 terminal rows across both shards omitted
+the terminal death counters, and 22 tactical exact states appeared in both
+splits. Tier A was absent, while exact horizon and unresolved cutoff mass were
+dropped during replay conversion. Those artifacts are therefore rejected
+evidence, not a frozen Generation Zero.
+
+\subsection{Blocking Integration Gaps}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{No premature command surface.}
+        The broken legacy \path{command=self_play} wrapper has been removed.
+        A public command is added only when P5 supplies the joint MCTS actor,
+        reconstructable replay, and command-contract tests.
+  \item \textbf{Legacy actor.}
+        \path{stl/learning/support/self_play.py} uses bucketed
+        \path{CanonicalHal} against scripted opponents. It is curriculum or
+        legacy outcome data, not MCTS self-play by both sides.
+  \item \textbf{Expert-iteration labels.}
+        MCTS bootstrap sweeps a constructed state grid and labels root value;
+        it does not supply trajectory outcomes from the improved policy.
+  \item \textbf{Generation Zero is not frozen.}
+        The corrected V3 generator is implemented and structurally tested, but
+        no corrected tiny or full corpus, external-ruler review, training run,
+        or search-in-the-loop gate has run.
+  \item \textbf{Incomplete promotion evidence.}
+        Policy drift is optional in promotion, and finite-depth best response
+        is called certified exploitability; the first omits a policy gate and
+        the second can be misread as a global claim.
+\end{itemize}
+
+The correct response is not to discard the exact stack. It is to connect the
+existing pieces with explicit schemas and gates, while quarantining legacy
+bucket search from the new self-play actor.
+
+\section{Target Python AlphaZero System}
+
+\subsection{Reconstructable State and Replay}
+
+Each \path{TrainingRecordV3} row carries a versioned 52-field feature vector
+and a serialized exact public state. It also records both legal masks, both
+improved role policies, Hal-perspective value target, target kind, episode and
+half-round indices, truncation status, parent checkpoint digest, search/config
+digest, exact value horizon, cutoff probability, value interval, state origin,
+source artifact, legal action trace where applicable, schema versions, and RNG
+seeds. Pickle-free numeric shards and a
+canonical JSON manifest are written atomically and verified by hashes. This
+turns replay into an auditable experiment record rather than an opaque tensor
+dump.
+
+The V2 encoder includes every nonconstant value-relevant field in
+\path{ExactPublicState} and appends documented relative features. A
+compact network remains an approximation, but replay reconstruction permits
+collision analysis and exact or MCTS reanalysis. Split assignment is grouped
+by exact-state hash, episode, and identical feature vector so repeated,
+adjacent, or representationally collapsed states cannot cross train and
+validation boundaries.
+
+\subsection{Reachability and Isolation Certificates}
+
+Let \(s_0\) be the canonical opening and let
+\(T(s,d,c,\omega)\) be the engine transition for drop/check seconds and a
+revival outcome. Define the reachable sets recursively by
+\[
+\mathcal{R}_0=\{s_0\},\qquad
+\mathcal{R}_{k+1}=\left\{
+T(s,d,c,\omega):s\in\mathcal{R}_k,\ d\in A_D(s),\ c\in A_C(s),
+\ P(\omega\mid s,d,c)>0
+\right\}.
+\]
+An engine-derived V3 row stores
+
+\[
+\tau=((d_1,c_1,\omega_1),\ldots,(d_k,c_k,\omega_k))
+\]
+
+and publication requires an independent replay to satisfy
+\[
+T^{\tau}(s_0)=s_{\mathrm{stored}}.
+\]
+At every death branch, forced survival requires \(p_{\mathrm{revive}}>0\), and
+forced death requires \(p_{\mathrm{revive}}<1\). By induction on \(k\), the
+base state is in \(\mathcal{R}_0\), and each certified step has legal actions
+and positive-probability chance support; therefore every stored trajectory
+snapshot lies in \(\mathcal{R}_k\). This is a constructive reachability
+certificate, stronger than merely checking plausible counters.
+
+Terminal rows are captured only after the engine applies the fatal transition.
+Consequently the loser is dead, has at least one death and positive total
+time-of-death, and the global CPR count equals the two players' total deaths.
+Certified tactical and Tier A rows are not misrepresented as trajectory
+snapshots; their distinct origin and source-artifact digest remain explicit.
+
+For split isolation, construct a graph whose vertices are candidate rows and
+whose edges connect equal exact-state hashes, equal episode IDs, or equal
+feature hashes. Train/ruler assignment operates on connected components before
+any LP label is computed. If \(C(s)\) denotes the component of row \(s\), then
+\[
+C(s_i)=C(s_j)\Longrightarrow
+\operatorname{split}(s_i)=\operatorname{split}(s_j).
+\]
+Hence no connected state, trajectory, or feature-equivalence class can cross
+the split boundary. A post-assembly audit recomputes all three intersections
+and rejects publication unless each is empty.
+
+Bellman roots require a stronger pre-label construction because one selected
+root publishes labels for an entire one-transition family. Define
+
+\[
+ \Gamma(s)=\{s\}\cup
+ \bigcup_{a\in A(s),\,b\in B(s)}
+ \operatorname{supp}P(\cdot\mid s,a,b),
+ \qquad
+ \Gamma(R)=\bigcup_{s\in R}\Gamma(s).
+\]
+
+\begin{proposition}[Closure-separated split isolation]
+Let (R_{\mathrm{tr}},R_{\mathrm{dev}},R_{\mathrm{ext}}) be Bellman root sets,
+and let each published shard contain exactly the root and successor identities
+in its corresponding (\Gamma(R)). Exact-state leakage between shards is absent
+if and only if
+\[
+ \Gamma(R_i)\cap\Gamma(R_j)=\varnothing
+ \quad\text{for every }i\neq j.
+\]
+Root disjointness (R_i\cap R_j=\varnothing) alone is not sufficient.
+\end{proposition}
+\begin{proof}
+The exact-state identities published by shard (i) are precisely
+(\Gamma(R_i)). Therefore a state is published by both shards (i) and (j)
+exactly when it belongs to their intersection. Empty pairwise intersections are
+thus sufficient, and any nonempty intersection supplies a leaking state, so
+they are necessary. Since distinct roots can share a successor, disjoint root
+sets need not have disjoint closures.
+\end{proof}
+
+The implemented allocator computes (\Gamma(s)) through engine transitions
+before solving any (V_2) or (V_3) label, reserves the disclosed fixtures
+first, then allocates the concealed ruler, development, and training roots
+against all earlier reservations. The first root-only full allocation
+demonstrated the necessity: its pairwise closure intersections contained
+(95), (89), and (247) states. The corrected allocation contains
+(5512), (2147), and (1874) reserved states with all three intersections
+empty.
+
+Finally, exact and interval labels have different semantics. An exact row stores
+\[
+(v,h,p_{\mathrm{cut}},[v,v]),
+\]
+where \(h\) is measured in half-rounds and \(p_{\mathrm{cut}}\) is unresolved
+frontier probability. A Tier A row stores
+\[
+\left(\frac{\ell+u}{2},0,0,[\ell,u]\right),
+\]
+and its role-policy losses are inactive until a separate saddle certificate
+exists. This prevents interval width from being mislabeled as probability and
+prevents a one-ply heuristic policy from being advertised as exact.
+
+\subsection{Policy/Value Function}
+
+The network is
+\[
+f_{\theta}(x(s))=
+\left(p_D(\cdot\mid s),p_C(\cdot\mid s),v_{\theta}(s)\right),
+\]
+where each policy is masked and normalized over the actor-aware legal seconds
+for its role, and \(v_{\theta}(s)\in[-1,1]\) estimates Hal outcome. Role heads
+are appropriate because the state encoder identifies which named player holds
+each role.
+
+The two policies define independent mixed actions. A joint correlated policy
+would define a different strategic object, because it could coordinate the
+players' simultaneous actions. Therefore the joint prior and sampling law are
+factorized:
+\[
+P_{ij}=p_D(i\mid s)p_C(j\mid s),
+\qquad
+d\sim\pi_D(\cdot\mid s),
+\quad
+c\sim\pi_C(\cdot\mid s).
+\]
+
+\subsection{MCTS Self-Play}
+
+At every visited state, one search produces both improved role marginals.
+Self-play exploration perturbs the legal marginals separately and records the
+noise seed. Evaluation disables noise. Because a simultaneous equilibrium may
+require mixing, evaluation samples the noise-free marginals rather than taking
+an argmax.
+
+The actor stores temporary rows
+\[
+(s_t,\pi_{D,t},\pi_{C,t},m_{D,t},m_{C,t})
+\]
+and samples the next engine transition. At the end of the episode, it attaches
+\(z\in\{-1,0,+1\}\) to every row, with zero reserved for the explicit capped
+draw contract when no engine draw exists. Root MCTS value is logged for
+diagnosis but is not mislabeled as the terminal outcome.
+
+\subsection{Learning Objective}
+
+For replay sample \((s,\pi_D,\pi_C,z)\), the AlphaZero-style loss adapted to
+two role heads is
+\[
+\mathcal{L}(\theta)=
+\lambda_v\left(z-v_{\theta}(s)\right)^2
+-\lambda_D\sum_{a\in A_D(s)}\pi_D(a\mid s)\log p_D(a\mid s)
+-\lambda_C\sum_{a\in A_C(s)}\pi_C(a\mid s)\log p_C(a\mid s)
++c\lVert\theta\rVert_2^2.
+\]
+This is the direct analogue of the AlphaZero objective
+\cite{alphazero2017}, with separate simultaneous role policies. Exact and
+tablebase anchors may substitute certified value and equilibrium-policy
+targets. Rows without a certified policy have that policy loss disabled; they
+do not receive a fabricated uniform label.
+
+The initial replay mixture keeps 25 percent immutable exact/tablebase anchors
+and 75 percent self-play rows. This ratio is an engineering baseline, not a
+convergence theorem. Its purpose is to prevent catastrophic drift from exact
+anchors while the empirical promotion gates judge whether self-play improves
+strength.
+
+\subsection{Reanalysis}
+
+Reanalysis reconstructs stored states and refreshes the search policies using
+the current frozen champion. Completed episode outcomes remain unchanged.
+Exact and tablebase rows are immutable. Search-bootstrap values, if retained
+for experiments, carry a distinct target-kind tag so they cannot be confused
+with Monte Carlo outcomes.
+
+\section{Promotion and Evidence}
+
+Promotion is more conservative than AlphaZero's policy of continually using
+the latest network. AlphaGo Zero's evaluate-and-select lineage, together with
+the repository's observed calibration and strength regressions, motivates a
+frozen champion/candidate gate.
+
+Every candidate must pass:
+
+\begin{enumerate}[leftmargin=*]
+  \item artifact and configuration digest consistency;
+  \item exact/tablebase value calibration and role-policy legality;
+  \item the exact-matrix MCTS convergence pack;
+  \item a paired two-direction arena that respects Hal/Baku asymmetry and uses
+        a predeclared SPRT;
+  \item non-regression against the scripted robustness league, including
+        \path{pattern_reader};
+  \item finite-depth best-response interval comparison at identical scenarios,
+        horizons, support mass, and frontiers; and
+  \item a mandatory policy-drift/readability report with exact-anchor saddle
+        gaps.
+\end{enumerate}
+
+Best-response intervals certify only their bounded calculation. If
+\([L_C,U_C]\) and \([L_B,U_B]\) overlap, the comparison is inconclusive. A
+promotion report may say that no sampled case is certified worse; it may not
+infer global improvement or global low exploitability.
+
+\section{Phased Implementation and Rust Boundary}
+
+The executable plan and numeric exit criteria live in
+\path{stl/docs/REGEN2RL.md}. Its dependency chain is:
+
+\begin{enumerate}[leftmargin=*]
+  \item freeze the objective, perspective, and finite episode contract;
+  \item certify engine/exact/search conformance in Python;
+  \item introduce reconstructable replay and checkpoint schemas;
+  \item validate matrix-game MCTS as the improvement operator;
+  \item train a supervised exact-anchor generation zero;
+  \item build genuine MCTS self-play for both roles;
+  \item close replay, training, and reanalysis;
+  \item integrate statistical promotion; and
+  \item freeze a reproducible Python baseline and evidence package.
+\end{enumerate}
+
+Items 1--4 (P0--P3) are implemented and verified. Item 5 has produced and
+consumed a successful V4 static holdout, but that horizon-blind checkpoint is
+not admitted to search. The horizon-aware Bellman-closure implementation is
+complete; its balanced exact generation, fixed candidate ladder, new one-use
+holdout, and aligned MCTS evidence are the current stopping boundary.
+
+No phase in this chain requires new Rust work. Existing Rust CFR+ bindings are
+opt-in comparison fixtures only. After the Python baseline is frozen, narrow
+profiled kernels may be ported behind parity tests. Python remains the oracle
+for legal actions, transitions, policy normalization, replay semantics, and
+promotion. The Rust acceptance ordering is behavioral parity first and speed
+second.
+
+\section{What the Proofs Do and Do Not Establish}
+
+The exact induction proves a finite-horizon result when all legal actions and
+chance branches are represented and the LP is solved. The non-expansive backup
+and saddle-gap propositions explain how a genuine uniform frontier or matrix
+error bound would control local value and policy error.
+
+They do not provide such a uniform error bound for a neural network. Empirical
+MSE is distribution-dependent; feature collisions can force incompatible
+states to share a prediction. Finite-budget MCTS adds sampling and selection
+error. Candidate sets add unmeasured action error unless full-width audits are
+performed. Function approximation, replay nonstationarity, and policy/value
+co-adaptation remove the assumptions of tabular exact policy iteration.
+
+Accordingly, the planned system is a rigorously anchored empirical solver, not
+a theorem of global AlphaZero convergence. A future global claim would require
+at least a well-defined unrestricted objective, exhaustive or otherwise valid
+full-game bounds, and a global exploitability certificate. Until then, reports
+must keep these categories separate:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{exact}: full-width finite-horizon LP or analytic tablebase;
+  \item \textbf{bounded}: interval or error statement for a declared horizon
+        and frontier;
+  \item \textbf{approximate}: finite-budget candidate MCTS or neural output;
+  \item \textbf{empirical}: self-play, arena, calibration, and robustness
+        results on declared distributions.
+\end{itemize}
+
+\section{Generation-Zero Generalization Firewall}
+
+The first learned evaluator is admitted to search only after a three-way
+development protocol.  A previously queried ruler is diagnostic evidence and
+cannot remain a holdout.  The replacement benchmark is generated and sealed
+before optimization; its digest is bound to exactly one checkpoint and gate
+configuration when evaluation begins.
+
+For a boundary state whose current checker has cylinder accumulation \(300\),
+every legal joint action injects a fatal dose into that checker.  Hence the
+continuation value is invariant to timing but not to role order:
+\[
+V(s)=\begin{cases}
++1,&\text{Baku is the checker},\\
+-1,&\text{Hal is the checker}.
+\end{cases}
+\]
+The benchmark crosses this invariant with single and double overflow, clock
+class, and physically valid death/TTD histories.  In the Leap Second interior
+construction, Baku's legal drop at second \(61\) defeats every Hal check in
+seconds \(1\) through \(60\).  For dose \(q=x_H+60<300\),
+\[
+V(s)=p_{\mathrm{rev}}(q,\eta_H,n_R)(+1)
+ +(1-p_{\mathrm{rev}}(q,\eta_H,n_R))(-1)
+ =2p_{\mathrm{rev}}-1,
+\]
+where \(\eta_H\) contains Hal's own death and TTD history and \(n_R\) is the
+referee CPR count.  Varying only the opponent's history is therefore not a
+valid generalization test.
+
+Aggregate MSE is insufficient because many easy invariant states can hide one
+missing interaction.  Promotion consequently requires source MSE, semantic
+family MSE, and maximum per-row error simultaneously.  Model correction first
+freezes the shared trunk and policies; trunk updates are permitted only after
+that conservative stage fails development, and any such update requires a new
+certificate-backed policy audit.  No MCTS result is promotion evidence until
+the one-use full holdout passes.
+
+The implemented V4 run makes the distinction concrete.  The sealed split
+contained $4483$ training, $871$ development, and $849$ holdout rows,
+with empty pairwise intersections of exact-state, episode, and feature hashes.
+The selected model passed its one-use holdout with overall MSE $0.002281$,
+boundary/interior tablebase MSE $0.000177/0.000838$, and maximum exact-matrix
+saddle gap $0.028476$.  These results certify interpolation on the declared
+holdout distribution; they do not certify its use as a recursive leaf oracle.
+
+To see why, let $D_0$ denote the sealed root distribution and let
+$D_1^{\pi}$ be the successor distribution induced by an MCTS sampling policy
+$\pi$.  The learned cell estimate is
+\[
+  \widehat Q(s,a,b)
+    = \mathbb{E}_{S'\sim P(\cdot\mid s,a,b)}[\widehat V(S')].
+\]
+Consequently,
+\[
+  |\widehat Q(s,a,b)-Q(s,a,b)|
+  \leq
+  \mathbb{E}_{S'\sim P(\cdot\mid s,a,b)}
+  |\widehat V(S')-V(S')|.
+\]
+A small $\mathbb{E}_{s\sim D_0}(\widehat V(s)-V(s))^2$ supplies no bound on
+the right-hand side when $D_1^{\pi}$ is not covered by $D_0$.  This is the
+successor-closure requirement: every state distribution on which search asks
+the network for a value needs exact development evidence or a separately
+validated error bound.
+
+The first candidate-guided MCTS audit reported median, 95th-percentile, and
+maximum absolute root-value errors $0.183849$, $0.910766$, and $0.911683$ at
+$1024$ simulations, with maximum full-width saddle gap $0.804233$.  The
+configuration is rejected.  It does not, however, isolate successor
+generalization: the audit's oracle was terminal-frontier $V_1$, whereas the
+candidate supplied longer-horizon continuation at depth-one leaves.  On the
+two safe fixtures the exact values are $V_1=0/0.5$ but approximately
+$V_3=0.737/0.75$.  Comparing those objects is not a valid evaluator-error test.
+
+The repaired contract writes the approximation as $\widehat V(s,h)$, with
+the finite horizon supplied separately from the physical state.  For the first
+bounded learned search, root horizon is three and a single transition leaves
+horizon two:
+\[
+ \widehat Q_3(s,a,b)
+ =\sum_{s'}P(s'\mid s,a,b)\widehat V(s',2),\qquad
+ \widehat B_3(s)=\val(\widehat Q_3(s)).
+\]
+The development gate measures both accuracy
+$|\widehat B_3(s)-V_3(s)|$ and internal consistency
+$|\widehat V(s,3)-\widehat B_3(s)|$.  The second quantity alone is not an
+accuracy certificate: two jointly biased predictions may be perfectly
+consistent.
+
+\begin{proposition}[Bellman-closure error bound]
+For a stored root whose full legal matrix and all engine chance branches are
+present,
+\[
+ |\widehat B_3(s)-V_3(s)|
+ \leq \|\widehat Q_3(s)-Q_3(s)\|_\infty
+ \leq \max_{a,b}\sum_{s'}P(s'\mid s,a,b)
+       |\widehat V(s',2)-V_2(s')|.
+\]
+\end{proposition}
+\begin{proof}
+The first inequality is non-expansiveness of the zero-sum matrix value under
+the sup norm.  For each cell, linearity of chance expectation followed by the
+triangle inequality bounds its error by expected successor error.  Taking the
+largest legal cell gives the result.
+\end{proof}
+
+The V5 artifact therefore stores every legal cell, every positive-probability
+engine branch, and every unique exact $V_2$ successor, and verifies
+$V_3(s)=\val(Q_3(s))$ before training.  A new sealed holdout binds this closure
+to fresh calibration evidence.  Self-play remains unauthorized until one
+checkpoint passes direct, backed, residual, saddle-gap, and aligned MCTS gates.
+
+\section{Validation Protocol}
+
+The minimum documentation-aligned regression commands are:
+
+\begin{verbatim}
+uv run pytest tests/engine -q
+uv run pytest tests/solver -q
+uv run pytest tests/learning -q
+uv run pytest tests/play -q
+uv run pytest -q
+uv run pytest --collect-only -q
+\end{verbatim}
+
+The stable-baseline gate additionally requires deterministic self-play replay,
+exact-state reconstruction, grouped split isolation, exact-matrix MCTS budget
+curves, a successful and a rejected promotion dry-run, horizon sensitivity,
+and a graph refresh by running \texttt{graphify update} against the repository
+root; generated
+checkpoints and reports remain outside source review unless the artifact itself
+is under audit.
+
+\section{Conclusion}
+
+The repository has a credible exact/search foundation: engine authority,
+literal-second stochastic minimax, tablebase anchors, bounded resolve, a tested
+matrix-game MCTS improvement object, reconstructable replay/checkpoints, and a
+policy/value learner. The remaining gap is a frozen Generation Zero, genuine
+MCTS self-play trajectories with terminal outcomes, a closed replay/reanalysis
+loop, and mandatory statistical promotion. Only after those Python phases
+produce a stable evidence package is the baseline suitable as an oracle for a
+later Rust kernel.
+
+\begin{thebibliography}{99}
+
+\bibitem{vonneumann1928}
+John von Neumann.
+\newblock Zur Theorie der Gesellschaftsspiele.
+\newblock \emph{Mathematische Annalen}, 100:295--320, 1928.
+\newblock \url{https://doi.org/10.1007/BF01448847}
+
+\bibitem{shapley1953}
+Lloyd S. Shapley.
+\newblock Stochastic games.
+\newblock \emph{Proceedings of the National Academy of Sciences},
+39(10):1095--1100, 1953.
+\newblock \url{https://doi.org/10.1073/pnas.39.10.1095}
+
+\bibitem{zinkevich2007}
+Martin Zinkevich, Michael Johanson, Michael Bowling, and Carmelo Piccione.
+\newblock Regret minimization in games with incomplete information.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2007.
+\newblock \url{https://papers.nips.cc/paper_files/paper/2007/hash/08d98638c6fcd194a4b1e6992063e944-Abstract.html}
+
+\bibitem{lisy2013}
+Viliam Lisy, Vojtech Kovarik, Marc Lanctot, and Branislav Bosansky.
+\newblock Convergence of Monte Carlo tree search in simultaneous move games.
+\newblock arXiv:1310.8613, 2013.
+\newblock \url{https://arxiv.org/abs/1310.8613}
+
+\bibitem{deepstack2017}
+Matej Moravcik, Martin Schmid, Neil Burch, Viliam Lisy, Dustin Morrill,
+Nolan Bard, Trevor Davis, Kevin Waugh, Michael Johanson, and Michael Bowling.
+\newblock DeepStack: Expert-level artificial intelligence in heads-up
+no-limit poker.
+\newblock \emph{Science}, 356(6337):508--513, 2017.
+\newblock \url{https://doi.org/10.1126/science.aam6960}
+
+\bibitem{alphagozero2017}
+David Silver, Julian Schrittwieser, Karen Simonyan, Ioannis Antonoglou,
+Aja Huang, Arthur Guez, Thomas Hubert, Lucas Baker, Matthew Lai, Adrian Bolton,
+Yutian Chen, Timothy Lillicrap, Fan Hui, Laurent Sifre,
+George van den Driessche, Thore Graepel, and Demis Hassabis.
+\newblock Mastering the game of Go without human knowledge.
+\newblock \emph{Nature}, 550:354--359, 2017.
+\newblock \url{https://doi.org/10.1038/nature24270}
+
+\bibitem{alphazero2017}
+David Silver, Thomas Hubert, Julian Schrittwieser, Ioannis Antonoglou,
+Matthew Lai, Arthur Guez, Marc Lanctot, Laurent Sifre, Dharshan Kumaran,
+Thore Graepel, Timothy Lillicrap, Karen Simonyan, and Demis Hassabis.
+\newblock Mastering chess and shogi by self-play with a general reinforcement
+learning algorithm.
+\newblock arXiv:1712.01815, 2017.
+\newblock \url{https://arxiv.org/abs/1712.01815}
+
+\bibitem{rebel2020}
+Noam Brown, Anton Bakhtin, Adam Lerer, and Qucheng Gong.
+\newblock Combining deep reinforcement learning and search for
+imperfect-information games.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2020.
+\newblock \url{https://proceedings.neurips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html}
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,21 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: strategic_exact_v3
+output: dth/artifacts/strategic_exact_v3.npz
+emission: reachable_layers
+horizon: 3
+root_states:
+  - [180, 60, 180, 60]
+base_datasets:
+  - dth/artifacts/strategic_exact_v2.npz
+progress_every: 250
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

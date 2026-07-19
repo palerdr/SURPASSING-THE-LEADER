@@ -222,8 +222,8 @@ def build_next_run(args, accepted: dict, rejected: list[dict], runtime: dict | N
         command = (
             f"python scripts/run_gen_iteration.py --in-checkpoint {checkpoint} "
             f"--init-checkpoint {checkpoint} --out-dir {out_dir} --out-targets {out_targets} "
-            f"--anchor-targets checkpoints/ceiling_corpus.npz "
-            f"--extra-targets checkpoints/tier_a_targets_50k_w001.npz "
+            f"--anchor-targets stl/checkpoints/ceiling_corpus.npz "
+            f"--extra-targets stl/checkpoints/tier_a_targets_50k_w001.npz "
             f"--held-out-targets {args.held_out_targets} --iterations 300 --epochs {args.epochs} "
             f"--learning-rate {args.learning_rate:g} --hidden-dim 192 --split-interior "
             f"--weight-decay 1e-4 --tablebase-weight 15 --interior-weight 100 "
@@ -281,8 +281,8 @@ def build_next_run(args, accepted: dict, rejected: list[dict], runtime: dict | N
         train_command = (
             f"python scripts/run_gen_iteration.py --in-checkpoint {checkpoint} "
             f"--init-checkpoint {checkpoint} --out-dir {out_dir} --out-targets {out_targets} "
-            f"--anchor-targets checkpoints/ceiling_corpus.npz "
-            f"--extra-targets checkpoints/tier_a_targets_50k_w001.npz "
+            f"--anchor-targets stl/checkpoints/ceiling_corpus.npz "
+            f"--extra-targets stl/checkpoints/tier_a_targets_50k_w001.npz "
             f"--held-out-targets {args.held_out_targets} --iterations 300 --epochs {args.epochs} "
             f"--learning-rate {args.learning_rate:g} "
             f"--hidden-dim 192 --split-interior --weight-decay 1e-4 "

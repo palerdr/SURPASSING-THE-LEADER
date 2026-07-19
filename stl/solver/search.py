@@ -384,6 +384,7 @@ def _weighted_breakdown(parts: list[tuple[float, UtilityBreakdown]]) -> UtilityB
 
 
 MatrixSolver = Literal["lp", "cfr_plus", "rust_cfr_plus"]
+_SelectiveCache = dict[tuple[ExactPublicState, int, str], SelectiveSearchResult]
 
 
 def _solve_role_strategies(
@@ -425,6 +426,7 @@ def _evaluate_joint_action_selective(
     evaluator: LeafEvaluator | None = None,
     solver: MatrixSolver = "lp",
     cfr_plus_config: CFRPlusConfig | None = None,
+    cache: _SelectiveCache | None = None,
 ) -> UtilityBreakdown:
     if game.game_over:
         return _terminal_breakdown(terminal_value(game, perspective_name=config.perspective_name))
@@ -450,6 +452,7 @@ def _evaluate_joint_action_selective(
                 evaluator=evaluator,
                 solver=solver,
                 cfr_plus_config=cfr_plus_config,
+                _cache=cache,
             ).breakdown
         snap.restore(game)
         return part
@@ -471,6 +474,7 @@ def _evaluate_joint_action_selective(
                 evaluator=evaluator,
                 solver=solver,
                 cfr_plus_config=cfr_plus_config,
+                _cache=cache,
             ).breakdown
         parts.append((probability, part))
         snap.restore(game)
@@ -486,13 +490,26 @@ def selective_solve(
     evaluator: LeafEvaluator | None = None,
     solver: MatrixSolver = "lp",
     cfr_plus_config: CFRPlusConfig | None = None,
+    _cache: _SelectiveCache | None = None,
 ) -> SelectiveSearchResult:
     """Selective candidate-only minimax over exact-second matrix games."""
     config = config or ExactSearchConfig()
+    cache_key = None
+    if candidates is None:
+        if _cache is None:
+            _cache = {}
+        cache_key = (
+            exact_public_state(game),
+            int(half_round_horizon),
+            str(config.perspective_name),
+        )
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
     terminal = terminal_value(game, perspective_name=config.perspective_name)
     if terminal is not None or half_round_horizon <= 0:
         breakdown = _terminal_breakdown(terminal) if terminal is not None else _frontier_breakdown(game, evaluator)
-        return SelectiveSearchResult(
+        result = SelectiveSearchResult(
             value_for_hal=breakdown.value,
             breakdown=breakdown,
             unresolved_probability=breakdown.unresolved_probability,
@@ -504,6 +521,9 @@ def selective_solve(
             payoff_for_hal=None,
             candidate_count=0,
         )
+        if cache_key is not None:
+            _cache[cache_key] = result
+        return result
 
     if candidates is None:
         candidates = generate_candidates(game, config)
@@ -529,6 +549,7 @@ def selective_solve(
                 evaluator=evaluator,
                 solver=solver,
                 cfr_plus_config=cfr_plus_config,
+                cache=_cache,
             )
             i = d_index[d]
             j = c_index[c]
@@ -556,7 +577,7 @@ def selective_solve(
 
     breakdown = _weighted_breakdown(parts)
     value = float(value_for_hal)
-    return SelectiveSearchResult(
+    result = SelectiveSearchResult(
         value_for_hal=value,
         breakdown=breakdown,
         unresolved_probability=breakdown.unresolved_probability,
@@ -568,6 +589,9 @@ def selective_solve(
         payoff_for_hal=hal_payoff,
         candidate_count=len(drop_actions) * len(check_actions),
     )
+    if cache_key is not None:
+        _cache[cache_key] = result
+    return result
 
 
 def audit_against_full_width(
@@ -866,6 +890,7 @@ class MCTSConfig:
     iterations: int
     exploration_c: float
     action_mode: MCTSActionMode = "candidate"
+    prior_uniform_mix: float = 0.0
     root_noise_epsilon: float = 0.0
     root_dirichlet_alpha_scale: float = 10.0
     max_depth: int | None = None
@@ -878,6 +903,8 @@ class MCTSConfig:
             raise ValueError("MCTS exploration_c must be finite and nonnegative")
         if self.action_mode not in ("candidate", "candidate_playable", "full_width"):
             raise ValueError(f"unknown MCTS action_mode {self.action_mode!r}")
+        if not 0.0 <= self.prior_uniform_mix < 1.0:
+            raise ValueError("prior_uniform_mix must be in [0, 1)")
         if self.root_value_horizon is not None and self.root_value_horizon <= 0:
             raise ValueError("root_value_horizon must be positive when provided")
         if (
@@ -917,6 +944,9 @@ class MCTSResult:
     # action sets, so (seconds, strategy) always pair up.
     root_drop_seconds: tuple[int, ...] = ()
     root_check_seconds: tuple[int, ...] = ()
+    root_prior: np.ndarray | None = None
+    root_q: np.ndarray | None = None
+    root_n_cell: np.ndarray | None = None
     # Linearly weighted average of per-iteration empirical mean-Q equilibria.
     # This is the canonical improvement target; optimistic policies are used
     # only to choose exploratory samples.
@@ -988,6 +1018,19 @@ def _validate_distribution(policy: np.ndarray, size: int, *, name: str) -> np.nd
     if not np.isclose(float(result.sum()), 1.0, atol=1e-8):
         raise ValueError(f"{name} failed normalization")
     return result
+
+
+def _mix_joint_prior_with_uniform(
+    prior: np.ndarray,
+    prior_uniform_mix: float,
+) -> np.ndarray:
+    if prior.size == 0 or prior_uniform_mix == 0.0:
+        return prior
+    if not 0.0 <= prior_uniform_mix < 1.0:
+        raise ValueError("prior_uniform_mix must be in [0, 1)")
+    uniform = np.full_like(prior, 1.0 / prior.size, dtype=np.float64)
+    mixed = (1.0 - prior_uniform_mix) * prior + prior_uniform_mix * uniform
+    return mixed / float(mixed.sum())
 
 
 def _prior_from_evaluator(
@@ -1077,6 +1120,7 @@ def make_node(
     *,
     action_mode: MCTSActionMode = "candidate",
     value_horizon: int | None = None,
+    prior_uniform_mix: float = 0.0,
 ) -> MCTSNode:
     """Build an MCTSNode at the current game state.
 
@@ -1116,6 +1160,17 @@ def make_node(
         cands.check_seconds,
         evaluator,
         value_horizon=value_horizon,
+    )
+    prior = _mix_joint_prior_with_uniform(prior, prior_uniform_mix)
+    dropper_prior = _validate_distribution(
+        prior.sum(axis=1),
+        D,
+        name="mixed dropper prior",
+    )
+    checker_prior = _validate_distribution(
+        prior.sum(axis=0),
+        C,
+        name="mixed checker prior",
     )
 
     return MCTSNode(
@@ -1213,6 +1268,7 @@ def _step_into_child(
     evaluator: LeafEvaluator | None = None,
     action_mode: MCTSActionMode = "candidate",
     value_horizon: int | None = None,
+    prior_uniform_mix: float = 0.0,
 ) -> tuple["MCTSNode", bool | None]:
     """Apply the joint action at (d_idx, c_idx) to the engine, sample the
     chance outcome if a death is possible, and return the child node along
@@ -1247,6 +1303,7 @@ def _step_into_child(
                 evaluator=evaluator,
                 action_mode=action_mode,
                 value_horizon=value_horizon,
+                prior_uniform_mix=prior_uniform_mix,
             )
             node.children[key] = child
             if transposition is not None:
@@ -1297,6 +1354,7 @@ def mcts_search(
         evaluator=evaluator,
         action_mode=config.action_mode,
         value_horizon=config.root_value_horizon,
+        prior_uniform_mix=config.prior_uniform_mix,
     )
     c = config.exploration_c
 
@@ -1385,6 +1443,7 @@ def mcts_search(
                     if node.value_horizon is None
                     else node.value_horizon - 1
                 ),
+                prior_uniform_mix=config.prior_uniform_mix,
             )
             depth += 1
         _backup(path, leaf_value)
@@ -1471,6 +1530,9 @@ def mcts_search(
         action_mode=config.action_mode,
         root_drop_seconds=root_drop_seconds,
         root_check_seconds=root_check_seconds,
+        root_prior=np.asarray(root.prior, dtype=np.float64).copy(),
+        root_q=np.asarray(root.Q, dtype=np.float64).copy(),
+        root_n_cell=np.asarray(root.N_cell, dtype=np.int64).copy(),
     )
 
 

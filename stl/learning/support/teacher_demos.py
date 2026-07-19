@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stl.play.env import DTHEnv
+from stl.play.env import STLEnv
 from stl.learning.route_stages import current_route_stage_flags
 from stl.learning.curriculum import get_scenario
 
@@ -69,7 +69,7 @@ def rollout_teacher_episode(
     scenario_name: str,
     max_steps: int,
 ):
-    env = DTHEnv(opponent=opponent, agent_role=agent_role, seed=seed)
+    env = STLEnv(opponent=opponent, agent_role=agent_role, seed=seed)
     obs, _ = env.reset(options=scenario_options_for_name(scenario_name))
     assert env.game is not None
     assert env.agent is not None

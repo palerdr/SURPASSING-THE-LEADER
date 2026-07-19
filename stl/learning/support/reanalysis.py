@@ -148,9 +148,10 @@ def reanalyze_state(
         checker_strategy=result.improved_checker_policy,
     )
     _, _, drop_mask, check_mask = _legal_policy_vectors(game, config)
+    value_for_hal = float(np.clip(result.root_value_for_hal, -1.0, 1.0))
     target = ValueTarget(
         features=extract_features(game),
-        value=float(result.root_value_for_hal),
+        value=value_for_hal,
         source=SOURCE_REANALYSIS_MCTS,
         horizon=mcts_iters,
         dropper_dist=drop_dist,
@@ -163,7 +164,7 @@ def reanalyze_state(
     )
     return ReanalysisOutcome(
         tier=SOURCE_REANALYSIS_MCTS,
-        value_for_hal=float(result.root_value_for_hal),
+        value_for_hal=value_for_hal,
         unresolved_after=float(deep.unresolved_probability),
         target=target,
     )

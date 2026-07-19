@@ -17,7 +17,7 @@ class Opponent(ABC):
     def choose_action(self, game: Game, role: str, turn_duration: int) -> int:
         """Pick a second within the actor's legal range for this role/state.
 
-        The legal max depends on actor identity, role, and leap awareness:
+        The legal max depends on actor identity, role, and leap-window state:
           - Hal dropper: never 61.
           - Hal checker: may use 61 only when leap_deduced and not in AMNESIA.
           - Baku dropper: may use 61 when turn_duration == 61.

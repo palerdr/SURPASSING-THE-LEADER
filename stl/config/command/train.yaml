@@ -1,0 +1,11 @@
+name: train
+module: stl.commands.train_generation
+args: null
+in_checkpoint: stl/checkpoints/gen_phaseG_iter3/best.pt
+out_dir: stl/checkpoints/gen_next
+out_targets: stl/checkpoints/gen_next_targets.npz
+anchor_targets: stl/checkpoints/phase_g_targets.npz
+held_out_targets: stl/checkpoints/ceiling_holdout_clean.npz
+iterations: 100
+epochs: 5
+device: cpu

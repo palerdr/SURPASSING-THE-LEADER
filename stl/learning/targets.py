@@ -942,26 +942,25 @@ def generate_mcts_bootstrap_targets(
     )
     bootstrap_count = 0
 
-    state_grid = (
-        (baku_cyl, hal_cyl, clock, half, baku_deaths, hal_deaths, cprs)
-        for baku_cyl in baku_cylinder_grid
-        for hal_cyl in hal_cylinder_grid
-        for clock in clock_grid
-        for half in half_grid
-        for baku_deaths, hal_deaths in death_pairs
-        for cprs in cpr_grid
-    )
-    for baku_cyl, hal_cyl, clock, half, baku_deaths, hal_deaths, cprs in state_grid:
-        if bootstrap_max_states is not None and bootstrap_count >= bootstrap_max_states:
-            break
-
-                            tval = terminal_value(
-                                game, perspective_name=config.perspective_name
+    for baku_cyl in baku_cylinder_grid:
+        for hal_cyl in hal_cylinder_grid:
+            for clock in clock_grid:
+                for half in half_grid:
+                    for baku_deaths, hal_deaths in death_pairs:
+                        for cprs in cpr_grid:
+                            game = _build_game(
+                                baku_cylinder=baku_cyl,
+                                hal_cylinder=hal_cyl,
+                                clock=clock,
+                                current_half=half,
+                                baku_deaths=baku_deaths,
+                                hal_deaths=hal_deaths,
+                                referee_cprs=cprs,
                             )
+
+                            tval = terminal_value(game, perspective_name=config.perspective_name)
                             if tval is not None:
-                                drop_dist, check_dist, drop_mask, check_mask = (
-                                    _legal_policy_vectors(game, config)
-                                )
+                                drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
                                 targets.append(
                                     ValueTarget(
                                         features=extract_features(game),
@@ -974,18 +973,14 @@ def generate_mcts_bootstrap_targets(
                                         checker_legal_mask=check_mask,
                                         unresolved_probability=0.0,
                                         exact_state=exact_public_state(game),
-                                        target_kind=_target_kind_for_source(
-                                            SOURCE_TERMINAL
-                                        ),
+                                        target_kind=_target_kind_for_source(SOURCE_TERMINAL),
                                     )
                                 )
                                 continue
 
                             state = exact_public_state(game)
                             if state in pinned_table:
-                                drop_dist, check_dist, drop_mask, check_mask = (
-                                    _inactive_policy_vectors(game, config)
-                                )
+                                drop_dist, check_dist, drop_mask, check_mask = _inactive_policy_vectors(game, config)
                                 targets.append(
                                     ValueTarget(
                                         features=extract_features(game),
@@ -998,30 +993,18 @@ def generate_mcts_bootstrap_targets(
                                         checker_legal_mask=check_mask,
                                         unresolved_probability=0.0,
                                         exact_state=exact_public_state(game),
-                                        target_kind=_target_kind_for_source(
-                                            SOURCE_TABLEBASE
-                                        ),
+                                        target_kind=_target_kind_for_source(SOURCE_TABLEBASE),
                                     )
                                 )
                                 continue
 
-        state = exact_public_state(game)
-        if state in pinned_table:
-            drop_dist, check_dist, drop_mask, check_mask = _legal_policy_vectors(game, config)
-            targets.append(
-                ValueTarget(
-                    features=extract_features(game),
-                    value=pinned_table[state],
-                    source=SOURCE_TABLEBASE,
-                    horizon=0,
-                    dropper_dist=drop_dist,
-                    checker_dist=check_dist,
-                    dropper_legal_mask=drop_mask,
-                    checker_legal_mask=check_mask,
-                    unresolved_probability=0.0,
-                )
-            )
-            continue
+                            if bootstrap_critical_only and not is_critical(game):
+                                continue
+                            if (
+                                bootstrap_max_states is not None
+                                and bootstrap_count >= bootstrap_max_states
+                            ):
+                                continue
 
                             state_seed = int(rng_root.integers(0, 1 << 31))
                             mcts_rng = np.random.default_rng(state_seed)
@@ -1049,9 +1032,7 @@ def generate_mcts_bootstrap_targets(
                                 dropper_strategy=result.improved_dropper_policy,
                                 checker_strategy=result.improved_checker_policy,
                             )
-                            _, _, drop_mask, check_mask = _legal_policy_vectors(
-                                game, config
-                            )
+                            _, _, drop_mask, check_mask = _legal_policy_vectors(game, config)
                             targets.append(
                                 ValueTarget(
                                     features=extract_features(game),
@@ -1064,18 +1045,14 @@ def generate_mcts_bootstrap_targets(
                                     checker_legal_mask=check_mask,
                                     unresolved_probability=0.0,
                                     exact_state=exact_public_state(game),
-                                    target_kind=_target_kind_for_source(
-                                        SOURCE_MCTS_BOOTSTRAP
-                                    ),
+                                    target_kind=_target_kind_for_source(SOURCE_MCTS_BOOTSTRAP),
                                 )
                             )
                             bootstrap_count += 1
 
     if include_anchor_classes:
         targets.extend(_generate_terminal_targets(config, TRAINING_TERMINAL_CONFIGS))
-        targets.extend(
-            _generate_tablebase_targets(config, split_interior=split_interior)
-        )
+        targets.extend(_generate_tablebase_targets(config, split_interior=split_interior))
 
     return targets
 

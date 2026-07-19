@@ -1,0 +1,37 @@
+# @package _global_
+experiment:
+  description: Horizon-aware width-192 Bellman value/policy candidate.
+command:
+  targets: stl/outputs/regen2rl/gen0_v5_train.npz
+  validation_targets: stl/outputs/regen2rl/gen0_v5_development.npz
+  policy_certificates: stl/outputs/regen2rl/gen0_v5_train.certificates.npz
+  validation_policy_certificates: stl/outputs/regen2rl/gen0_v5_development.certificates.npz
+  training_taxonomy: stl/outputs/regen2rl/gen0_v5_train.taxonomy.json
+  out: stl/outputs/regen2rl/gen0_v5_horizon/lr${command.lr}_s${command.seed}
+  epochs: 100
+  batch_size: 128
+  lr: 0.0003
+  hidden_dim: 192
+  early_stopping_patience: 20
+  checkpoint_selection_metric: value_mse
+  trainable_parts: trunk_value
+  policy_loss_weight: 0.0
+  policy_saddle_gap_weight: 0.0
+  source_weight:
+    - bellman_successor_h2:0.007777777777777778
+    - bellman_root_h2:0.007692307692307693
+    - bellman_root_h3:0.007692307692307693
+    - exact_horizon_2:0.0075
+    - exact_horizon_3:0.008333333333333333
+    - tablebase:0.008333333333333333
+    - terminal:0.008333333333333333
+    - tier_a:0.007692307692307693
+  source_batch_count:
+    - bellman_successor_h2:45
+    - bellman_root_h2:13
+    - bellman_root_h3:26
+    - exact_horizon_2:10
+    - exact_horizon_3:9
+    - tablebase:6
+    - terminal:6
+    - tier_a:13

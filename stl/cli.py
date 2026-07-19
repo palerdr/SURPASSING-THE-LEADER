@@ -59,7 +59,7 @@ def _patched_argv(module_name: str, args: list[str]):
         sys.argv = original
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="config")
+@hydra.main(version_base="1.3", config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
     if "command" not in cfg or "module" not in cfg.command:
         raise ValueError("Hydra config must select a command with a module")

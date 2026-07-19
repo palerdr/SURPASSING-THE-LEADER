@@ -95,7 +95,7 @@ class MCTSConformanceReport:
 
 @dataclass(frozen=True)
 class MCTSConformanceGateThresholds:
-    """Frozen P3 acceptance thresholds from ``docs/REGEN2RL.md``."""
+    """Frozen P3 acceptance thresholds from ``stl/docs/REGEN2RL.md``."""
 
     evaluation_budget: int = 1024
     comparison_budget: int = 256

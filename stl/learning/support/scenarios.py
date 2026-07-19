@@ -11,9 +11,6 @@ from dataclasses import dataclass
 from stl.engine.game import Game
 from stl.engine.game import Player
 
-from .awareness import LeapAwareness
-
-
 @dataclass(frozen=True)
 class PlayerScenario:
     cylinder: float = 0.0
@@ -31,7 +28,6 @@ class EpisodeScenario:
     hal: PlayerScenario = PlayerScenario()
     baku: PlayerScenario = PlayerScenario()
     referee_cprs: int = 0
-    awareness: LeapAwareness | None = None
     name: str = "custom"
 
 
@@ -40,31 +36,21 @@ BUILT_IN_SCENARIO_EXPECTATIONS = {
         "first_dropper_name": "hal",
         "current_half": 1,
         "is_leap_turn": False,
-        "awareness": LeapAwareness.DEDUCED,
     },
     "round8_bridge": {
         "first_dropper_name": "hal",
         "current_half": 1,
         "is_leap_turn": False,
-        "awareness": LeapAwareness.DEDUCED,
     },
     "round9_pre_leap": {
         "first_dropper_name": "hal",
         "current_half": 1,
         "is_leap_turn": False,
-        "awareness": LeapAwareness.DEDUCED,
     },
-    "round9_leap_deduced": {
+    "round9_leap": {
         "first_dropper_name": "hal",
         "current_half": 2,
         "is_leap_turn": True,
-        "awareness": LeapAwareness.DEDUCED,
-    },
-    "round9_leap_impaired": {
-        "first_dropper_name": "hal",
-        "current_half": 2,
-        "is_leap_turn": True,
-        "awareness": LeapAwareness.MEMORY_IMPAIRED,
     },
 }
 
@@ -89,9 +75,6 @@ def scenario_from_options(options: dict | None) -> EpisodeScenario | None:
     if raw is None:
         return None
 
-    awareness_raw = raw.get("awareness")
-    awareness = None if awareness_raw is None else LeapAwareness(awareness_raw)
-
     return EpisodeScenario(
         game_clock=float(raw.get("game_clock", 0.0)),
         round_num=int(raw.get("round_num", 0)),
@@ -100,7 +83,6 @@ def scenario_from_options(options: dict | None) -> EpisodeScenario | None:
         hal=player_scenario_from_dict(raw.get("hal")),
         baku=player_scenario_from_dict(raw.get("baku")),
         referee_cprs=int(raw.get("referee_cprs", 0)),
-        awareness=awareness,
         name=str(raw.get("name", "custom")),
     )
 
@@ -170,9 +152,3 @@ def validate_named_scenario_semantics(game: Game, scenario: EpisodeScenario) -> 
     if game.is_leap_second_turn() != expected["is_leap_turn"]:
         state = "leap turn" if expected["is_leap_turn"] else "non-leap turn"
         raise ValueError(f"{scenario.name} must begin on a {state}")
-
-    if scenario.awareness != expected["awareness"]:
-        raise ValueError(
-            f"{scenario.name} requires awareness={expected['awareness'].value}, "
-            f"got {None if scenario.awareness is None else scenario.awareness.value}"
-        )

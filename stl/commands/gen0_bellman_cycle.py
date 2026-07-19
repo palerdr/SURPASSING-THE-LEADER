@@ -228,7 +228,7 @@ def _write_or_validate_plan(
     repo_root = Path(__file__).resolve().parents[2]
     source_paths = [
         *repo_root.glob("stl/**/*.py"),
-        *repo_root.glob("configs/**/*.yaml"),
+        *repo_root.glob("stl/config/**/*.yaml"),
         repo_root / "pyproject.toml",
         repo_root / "uv.lock",
     ]
@@ -937,7 +937,7 @@ def generate_cycle(args: argparse.Namespace) -> dict[str, object]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--out-prefix", default="outputs/regen2rl/gen0_v5_bellman"
+        "--out-prefix", default="stl/outputs/regen2rl/gen0_v5_bellman"
     )
     parser.add_argument(
         "--work-dir",
