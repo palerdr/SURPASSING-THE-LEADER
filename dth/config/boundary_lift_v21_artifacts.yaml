@@ -1,0 +1,177 @@
+schema_version: boundary-lift-v21-artifacts-v1
+experiment: boundary_lift_v21
+promotion_decision: no-promote
+current_champion: dth/checkpoints/strategic_mixed_v7/best.pt
+
+archive:
+  path: dth/artifacts/boundary_lift_v21_portable.zip
+  required: true
+  size_bytes: 801308
+  sha256: 428a555055af24f2662330c44ee62a7d51ede2cfb0862dc399e0c0cde43f5aaa
+  git_tracked: false
+  transfer_separately: true
+
+entries:
+  - path: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+    role: required v19 migration source checkpoint
+    required: true
+    size_bytes: 60437
+    sha256: 8efa6dc4ca034c242b0887f8b517332932f4ab2c3dc07a054d064ecfb85baa58
+    checkpoint_model_config: {hidden_width: 64, hidden_layers: 2, action_count: 60, horizon_scale: 3.0, feature_lift: identity}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/strategic_exact_dth_full_v6.npz
+    role: required exact LP-target corpus
+    required: true
+    size_bytes: 342244
+    sha256: 8040cdd3b2a193a22509f6163a4929754fa447531e867a24b72cdbd5c48496aa
+    schema: dth-v1-ttd-strict-overflow
+    arrays: {states: [68768, 4], horizons: [68768], values: [68768], drop_policies: [68768, 60], check_policies: [68768, 60]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/readiness_training_reference_v2.npz
+    role: required exact training/reference corpus
+    required: true
+    size_bytes: 980875
+    sha256: 94f533c7d5dc8a05107ddab669a34d77c0782ebeb5b40aff2e5336f67a5e49d2
+    schema: dth-v1-ttd-strict-overflow
+    arrays: {states: [215426, 4], horizons: [215426], values: [215426], drop_policies: [215426, 60], check_policies: [215426, 60]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_reference_v1.npz
+    role: required mixed-v7 readiness reference/solver audit corpus
+    required: true
+    size_bytes: 512328
+    sha256: 352b7679dd6bf4a8b43ceb7562d5a447642e72604ad4ecc01557510357d0ed0a
+    schema: dth-v1-ttd-strict-overflow
+    arrays: {states: [112855, 4], horizons: [112855], values: [112855], drop_policies: [112855, 60], check_policies: [112855, 60]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_exact_v1.npz
+    role: required exact readiness corpus
+    required: true
+    size_bytes: 279109
+    sha256: 918d00a084ba86064b4a6f2c12412f227c60d0ef029df8024e3eedf820f17141
+    schema: dth-v1-ttd-strict-overflow
+    arrays: {states: [62194, 4], horizons: [62194], values: [62194], drop_policies: [62194, 60], check_policies: [62194, 60]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/mcts_readiness_mixed_v7_v1.json
+    role: required frozen mixed-v7 ladder baseline
+    required: true
+    size_bytes: 1036195
+    sha256: 7b1b4d2fbacf71cb5563f2e8dfc2e1d8272d388ac3813dce4a3c41d73ad2aa6a
+    schema: dth-mcts-convergence-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/mcts_readiness_v19_v1.json
+    role: required v19 ladder baseline used by final report
+    required: true
+    size_bytes: 1018525
+    sha256: e798d2adb319df3559771508085b29fc18b520bdf92e86d74a251cc1ebc80f3c
+    schema: dth-mcts-convergence-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/config/train_matrix_policy_generalization_balanced_v19.yaml
+    role: resolved-config comparison baseline
+    required: true
+    size_bytes: 1875
+    sha256: 8b87a88ae397fe99be2774ff5cf10b7f92f9c7fc791e8593dbc2f4b885a413c0
+    git_tracked: true
+    transfer_separately: false
+  - path: dth/config/train_matrix_policy_boundary_lift_v21.yaml
+    role: primary v21 training configuration
+    required: true
+    size_bytes: 278
+    sha256: d8459bcb266ef1c5463bbd3502ee3a30bce4cd1c848ed45f5d7a6be102c27a6d
+    git_tracked: true
+    transfer_separately: false
+  - path: dth/artifacts/boundary_lift_v21_config_comparison.json
+    role: pre-training resolved-config proof
+    required: true
+    size_bytes: 917
+    sha256: 29ad975adb5c89985cc27923e0a9157dfa13143ac2ee89ab58be89050768f9bb
+    schema: boundary-lift-v21-config-comparison-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
+    role: audited migrated initialization checkpoint
+    required: true
+    size_bytes: 62613
+    sha256: 8a973eda2a90a70840cd870c787d968c840f7b8cbe0e36dc7954e7ab2b1823df
+    checkpoint_model_config: {hidden_width: 64, hidden_layers: 2, action_count: 60, horizon_scale: 3.0, feature_lift: boundary_v1}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21/best.pt
+    role: selected v21 checkpoint
+    required: true
+    size_bytes: 61461
+    sha256: af8790ab99ae995b0ac01a5a6660d47d06066d69b3df29a2f628bb105fe6f98e
+    checkpoint_model_config: {hidden_width: 64, hidden_layers: 2, action_count: 60, horizon_scale: 3.0, feature_lift: boundary_v1}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21/training_report.json
+    role: primary v21 training report
+    required: true
+    size_bytes: 914405
+    sha256: 6785eb523a0fa5274ede8a25157ffca464b4dbf303c115257b5e83b9fc442c87
+    schema: dth-training-report-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/mcts_readiness_boundary_lift_v21_v1.json
+    role: candidate mixed-v7 readiness report
+    required: true
+    size_bytes: 1085215
+    sha256: 5c389970b245e5107be681e2c11ee1fd304afc772730bc6063532ae920994a84
+    schema: dth-mcts-convergence-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_boundary_lift_v21_run1.json
+    role: deterministic replay run 1 manifest
+    required: true
+    size_bytes: 4471
+    sha256: 49fdf16d69109f14f6ac35ab8782774f63ad31ca10cce9252d5f38d463724fc4
+    schema: dth-self-play-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_boundary_lift_v21_run1.npz
+    role: deterministic replay run 1 arrays
+    required: true
+    size_bytes: 4481
+    sha256: fb21369edf92a8daeacc31238c848da16086a999efb60419d8a8d5583684caa3
+    schema: dth-self-play-v1
+    arrays: {states: [7, 4], features: [7, 5], horizon: [7], outcome: [7], truncated: [7]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_boundary_lift_v21_run2.json
+    role: deterministic replay run 2 manifest
+    required: true
+    size_bytes: 4471
+    sha256: b437344dec265f8c06bf2754de1d9269dfccd7edd81534ee5d9fbe52baa6b55b
+    schema: dth-self-play-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/self_play_readiness_boundary_lift_v21_run2.npz
+    role: deterministic replay run 2 arrays
+    required: true
+    size_bytes: 4481
+    sha256: fb21369edf92a8daeacc31238c848da16086a999efb60419d8a8d5583684caa3
+    schema: dth-self-play-v1
+    arrays: {states: [7, 4], features: [7, 5], horizon: [7], outcome: [7], truncated: [7]}
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/artifacts/boundary_lift_v21_readiness.json
+    role: final machine-readable readiness report
+    required: true
+    size_bytes: 40452
+    sha256: c9d73564a2836bd5c76cdc5bb738646b58ca99735a4d215b96a9304f08873932
+    schema: dth-self-play-readiness-v1
+    git_tracked: false
+    transfer_separately: true
+  - path: dth/docs/WORKFLOWS.md
+    role: tracked portability and restore instructions
+    required: true
+    size_bytes: 12787
+    sha256: f10cbc65538e1555a120fb58715a10bfa60480288e4e372816d0cbebb155cc51
+    git_tracked: true
+    transfer_separately: false

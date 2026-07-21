@@ -258,3 +258,35 @@ Validate MCTS against the exact solver.
 Use that network as the MCTS leaf evaluator.
 Run capped MCTS self-play.
 Train the next network on MCTS policies and terminal/truncated outcomes.
+
+## Boundary-lift v21 portability and readiness
+
+The v21 boundary experiment is restored from
+`dth/artifacts/boundary_lift_v21_portable.zip`. On another clone, check out
+the v21 source branch, copy the archive to `dth/artifacts/`, and extract it at
+the repository root so its `dth/` paths are preserved:
+
+```powershell
+Get-FileHash dth/artifacts/boundary_lift_v21_portable.zip -Algorithm SHA256
+Expand-Archive -LiteralPath dth/artifacts/boundary_lift_v21_portable.zip -DestinationPath . -Force
+```
+
+Use `dth/config/boundary_lift_v21_artifacts.yaml` to verify every listed file's
+size and SHA256 after extraction. The readiness report can be rerun without
+retraining:
+
+```powershell
+uv run python -m dth.readiness `
+  --baseline dth/artifacts/mcts_readiness_v19_v1.json `
+  --candidate dth/artifacts/mcts_readiness_boundary_lift_v21_v1.json `
+  --checkpoint dth/checkpoints/strategic_matrix_policy_boundary_lift_v21/best.pt `
+  --exact-targets dth/artifacts/self_play_readiness_reference_v1.npz `
+  --replay-a dth/artifacts/self_play_readiness_boundary_lift_v21_run1.json `
+  --replay-b dth/artifacts/self_play_readiness_boundary_lift_v21_run2.json `
+  --output dth/artifacts/boundary_lift_v21_readiness.json
+```
+
+The current self-play champion remains
+`dth/checkpoints/strategic_mixed_v7/best.pt`; v21 was `no-promote` because the
+unchanged frozen gates failed. The v21 selected checkpoint is retained for
+reproduction and analysis, not promotion.

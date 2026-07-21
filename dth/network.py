@@ -16,6 +16,8 @@ FEATURE_SCHEMA = (
     "remaining_horizon/horizon_scale",
 )
 
+FEATURE_LIFTS = ("identity", "boundary_v1")
+
 
 @dataclass(frozen=True)
 class DTHNetworkConfig:
@@ -23,8 +25,9 @@ class DTHNetworkConfig:
     hidden_layers: int = 2
     action_count: int = 60
     horizon_scale: float = 3.0
+    feature_lift: str = "identity"
 
-    def to_dict(self) -> dict[str, int | float]:
+    def to_dict(self) -> dict[str, int | float | str]:
         return asdict(self)
 
 
@@ -62,9 +65,11 @@ class DTHPolicyValueNet(nn.Module):
             raise ValueError("hidden width and layer count must be positive")
         if self.config.action_count <= 0:
             raise ValueError("action count must be positive")
+        if self.config.feature_lift not in FEATURE_LIFTS:
+            raise ValueError(f"unknown feature lift {self.config.feature_lift!r}")
 
         layers: list[nn.Module] = []
-        input_width = len(FEATURE_SCHEMA)
+        input_width = self._lifted_width
         for _ in range(self.config.hidden_layers):
             layers.extend(
                 (
@@ -79,13 +84,44 @@ class DTHPolicyValueNet(nn.Module):
         self.drop_head = nn.Linear(input_width, self.config.action_count)
         self.check_head = nn.Linear(input_width, self.config.action_count)
 
-    def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    @property
+    def _lifted_width(self) -> int:
+        return len(FEATURE_SCHEMA) + (4 if self.config.feature_lift == "boundary_v1" else 0)
+
+    @staticmethod
+    def _boundary_features(features: Tensor) -> Tensor:
+        """Return the four deterministic boundary coordinates for five inputs."""
+
+        checker_st = features[:, 0] * 300.0
+        checker_ttd = features[:, 1] * 300.0
+        dropper_st = features[:, 2] * 300.0
+        dropper_ttd = features[:, 3] * 300.0
+        return torch.stack(
+            (
+                ((checker_st - 240.0) / 60.0).clamp_min(0.0),
+                ((checker_st + checker_ttd - 240.0) / 300.0).clamp_min(0.0),
+                ((dropper_st - 240.0) / 60.0).clamp_min(0.0),
+                ((dropper_st + dropper_ttd - 240.0) / 300.0).clamp_min(0.0),
+            ),
+            dim=1,
+        )
+
+    def apply_feature_lift(self, features: Tensor) -> Tensor:
+        """Apply the configured deterministic lift to the five external inputs."""
+
         if features.ndim != 2 or features.shape[1] != len(FEATURE_SCHEMA):
             raise ValueError(
                 f"features must have shape (N, {len(FEATURE_SCHEMA)}), "
                 f"got {tuple(features.shape)}"
             )
-        hidden = self.trunk(features)
+        if self.config.feature_lift == "identity":
+            return features
+        if self.config.feature_lift == "boundary_v1":
+            return torch.cat((features, self._boundary_features(features)), dim=1)
+        raise ValueError(f"unknown feature lift {self.config.feature_lift!r}")
+
+    def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        hidden = self.trunk(self.apply_feature_lift(features))
         value = torch.tanh(self.value_head(hidden)).squeeze(-1)
         return value, self.drop_head(hidden), self.check_head(hidden)
 

@@ -42,6 +42,7 @@ def widen_state_dict(
         hidden_layers=source_config.hidden_layers,
         action_count=source_config.action_count,
         horizon_scale=source_config.horizon_scale,
+        feature_lift=source_config.feature_lift,
     )
 
     source_model = DTHPolicyValueNet(source_config)
