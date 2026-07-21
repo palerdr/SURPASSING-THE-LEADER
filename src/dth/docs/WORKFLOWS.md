@@ -180,43 +180,6 @@ to `0.240992`. The machine report is
 `src/dth/artifacts/self_play_readiness_v2_report.json`; its recommendation is
 `no-promote`. Do not use v19 as the self-play champion.
 
-## Function-preserving width probe v20
-
-The bounded v20 capacity probe changes only the hidden width from 64 to 128.
-Create its initialization by embedding the selected v19 tensors into the
-leading blocks of a 128x2 network:
-
-```powershell
-uv run python -m dth.widen_checkpoint --source src/dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt --destination src/dth/checkpoints/strategic_matrix_policy_capacity_widened_v20_initial/widened.pt --target-width 128
-uv run python -m dth.train --config-name train_matrix_policy_capacity_widened_v20
-```
-
-`src/dth/widen_checkpoint.py` duplicates every hidden neuron and divides its
-outgoing weight between copies with deterministic unequal shares. The widened
-value and both policy logits therefore equal v19 within floating-point
-roundoff at initialization, while the unequal shares let duplicate neurons
-receive different gradients immediately. The checkpoint records its source
-hash and widening method.
-The training config inherits the v19 data, roots, depth, losses, optimizer,
-selection rules, and seed unchanged.
-
-The primary run selected epoch 45 and improved the development worst gap from
-`0.476041` to `0.411942`, with its internal guard passing. It did not nearly
-pass the unchanged frozen readiness gate, so the conditional second seed was
-not run. Against mixed-v7, worst-anchor gap improved `5.88%` (required `10%`),
-evaluation median improved `3.32%` (required `10%`), and evaluation maximum
-regressed from `0.235416` to `0.254937`. The H4 anchor value-error regression
-was `0.009187`, inside the allowed `0.01`.
-
-The favorable root `[179,60,119,120]` at H3 improved from `0.235416` to
-`0.153602`, while `[179,60,59,180]` at H4 worsened from `0.213575` to
-`0.254937`. Torch/NumPy CFR+ parity and the two-run, three-episode replay audit
-passed. The machine report is
-`src/dth/artifacts/self_play_readiness_v20_report.json`; its recommendation is
-`no-promote`. This isolates the remaining failure as cross-root interference
-that raw width alone did not remove. Do not increase width again or launch bulk
-self-play from v20.
-
 ## Regression requirements
 
 At minimum, tests must pin:
