@@ -24,6 +24,7 @@ from dth.generate_dataset import TARGET_SCHEMA, live_successors
 from dth.network import FEATURE_SCHEMA, DTHNetworkConfig, DTHPolicyValueNet
 from dth.self_play import validate_replay
 from dth.mcts import ExactTargetStore, payoff_from_exact_targets
+from dth.torch_cfr import solve_matrix_cfr_plus_torch
 from dth.solver import (
     CHECKER_ACTIONS,
     DROPPER_ACTIONS,
@@ -554,6 +555,7 @@ class DecisionRoot:
     exact_value: float
     exact_matrix: np.ndarray
     value_preservation_weight: float = 0.0
+    saddle_gap_weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -569,6 +571,7 @@ class DecisionLossRoot:
     exact_drop_policy: Tensor
     exact_check_policy: Tensor
     value_preservation_weight: float
+    saddle_gap_weight: float
     matrix_base: Tensor
     child_coefficients: Tensor
 
@@ -586,8 +589,11 @@ def build_decision_roots(
         value_preservation_weight = float(
             root.get("value_preservation_weight", 0.0)
         )
+        saddle_gap_weight = float(root.get("saddle_gap_weight", 1.0))
         if value_preservation_weight < 0.0:
             raise ValueError("root value-preservation weight must be nonnegative")
+        if saddle_gap_weight <= 0.0:
+            raise ValueError("root saddle-gap weight must be positive")
         key = (state, horizon)
         if key not in targets.values:
             raise ValueError(f"decision root is missing from exact targets: {key!r}")
@@ -604,6 +610,7 @@ def build_decision_roots(
                 exact_value=targets.values[key],
                 exact_matrix=matrix,
                 value_preservation_weight=value_preservation_weight,
+                saddle_gap_weight=saddle_gap_weight,
             )
         )
     if not prepared:
@@ -679,6 +686,7 @@ def prepare_decision_loss_roots(
                     exact_check_policy, dtype=torch.float32, device=device
                 ),
                 value_preservation_weight=root.value_preservation_weight,
+                saddle_gap_weight=root.saddle_gap_weight,
                 matrix_base=torch.as_tensor(
                     matrix_base.reshape(-1), dtype=torch.float32, device=device
                 ),
@@ -699,10 +707,18 @@ def decision_training_objective(
     saddle_gap_weight: float,
     matrix_weight: float,
     matrix_top_k: int,
+    solver_iterations: int = 64,
+    solver_averaging_delay: int = 0,
+    guard_limits: dict[tuple[NTState, int], tuple[float, float]] | None = None,
+    guard_hinge_weight: float = 1.0,
 ) -> tuple[Tensor, dict[str, Tensor]]:
-    """Minimize the worst root's exploitability, matrix, and value error."""
+    """Supervise policies induced by learned matrices against exact matrices.
 
-    if saddle_gap_weight < 0.0 or matrix_weight < 0.0:
+    The approximate matrices are solved by a fixed unrolled CFR+ computation.
+    Exact matrices and LP values remain detached target authority.
+    """
+
+    if saddle_gap_weight < 0.0 or matrix_weight < 0.0 or guard_hinge_weight < 0.0:
         raise ValueError("decision loss weights must be nonnegative")
     if matrix_top_k <= 0:
         raise ValueError("matrix top-k must be positive")
@@ -714,6 +730,7 @@ def decision_training_objective(
         saddle_gap_weight == 0.0
         and matrix_weight == 0.0
         and not any(root.value_preservation_weight > 0.0 for root in prepared_roots)
+        and (not guard_limits or guard_hinge_weight == 0.0)
     ):
         raise ValueError("at least one decision loss weight must be positive")
     feature_batches = [root.root_features for root in prepared_roots]
@@ -722,23 +739,13 @@ def decision_training_objective(
         for root in prepared_roots
         if root.child_features.shape[0] > 0
     )
-    predicted_values, all_drop_logits, all_check_logits = model(
-        torch.cat(feature_batches, dim=0)
-    )
+    predicted_values, _, _ = model(torch.cat(feature_batches, dim=0))
 
-    gaps: list[Tensor] = []
+    approximate_matrices: list[Tensor] = []
     top_k_errors: list[Tensor] = []
     max_errors: list[Tensor] = []
-    value_errors: list[Tensor] = []
-    root_losses: list[Tensor] = []
     child_offset = len(prepared_roots)
-    for root_index, root in enumerate(prepared_roots):
-        drop_policy = torch.softmax(all_drop_logits[root_index], dim=-1)
-        check_policy = torch.softmax(all_check_logits[root_index], dim=-1)
-        lower = torch.min(root.exact_matrix.T @ drop_policy)
-        upper = torch.max(root.exact_matrix @ check_policy)
-        gaps.append(torch.clamp(upper - lower, min=0.0))
-
+    for root in prepared_roots:
         if root.child_features.shape[0] > 0:
             child_count = int(root.child_features.shape[0])
             child_values = predicted_values[
@@ -751,6 +758,7 @@ def decision_training_objective(
         else:
             approximate_flat = root.matrix_base
         approximate_matrix = approximate_flat.reshape(root.exact_matrix.shape)
+        approximate_matrices.append(approximate_matrix)
         cell_errors = torch.abs(approximate_matrix - root.exact_matrix).reshape(-1)
         top_k = min(matrix_top_k, int(cell_errors.numel()))
         root_top_k_error = torch.topk(cell_errors, top_k).values.mean()
@@ -758,24 +766,46 @@ def decision_training_objective(
         top_k_errors.append(root_top_k_error)
         max_errors.append(root_max_error)
 
-        exact_drop_lower = torch.min(
-            approximate_matrix.T @ root.exact_drop_policy
-        )
-        exact_check_upper = torch.max(
-            approximate_matrix @ root.exact_check_policy
-        )
-        root_value_error = torch.maximum(
-            torch.abs(exact_drop_lower - root.exact_value),
-            torch.abs(exact_check_upper - root.exact_value),
-        )
+    approximate_batch = torch.stack(approximate_matrices)
+    induced = solve_matrix_cfr_plus_torch(
+        approximate_batch,
+        iterations=solver_iterations,
+        averaging_delay=solver_averaging_delay,
+    )
+    exact_batch = torch.stack([root.exact_matrix for root in prepared_roots])
+    exact_lower = torch.matmul(
+        exact_batch.transpose(-2, -1), induced.drop_policy.unsqueeze(-1)
+    ).squeeze(-1).amin(dim=-1)
+    exact_upper = torch.matmul(
+        exact_batch, induced.check_policy.unsqueeze(-1)
+    ).squeeze(-1).amax(dim=-1)
+    exact_gaps = torch.clamp(exact_upper - exact_lower, min=0.0)
+
+    limits = guard_limits or {}
+    value_errors: list[Tensor] = []
+    gap_violations: list[Tensor] = []
+    value_violations: list[Tensor] = []
+    root_losses: list[Tensor] = []
+    for root_index, root in enumerate(prepared_roots):
+        root_value_error = torch.abs(induced.value[root_index] - root.exact_value)
         value_errors.append(root_value_error)
+        gap_limit, value_limit = limits.get(
+            (root.state, root.horizon), (float("inf"), float("inf"))
+        )
+        gap_violation = torch.clamp(exact_gaps[root_index] - gap_limit, min=0.0)
+        value_violation = torch.clamp(root_value_error - value_limit, min=0.0)
+        gap_violations.append(gap_violation)
+        value_violations.append(value_violation)
         root_losses.append(
-            float(saddle_gap_weight) * gaps[-1]
-            + float(matrix_weight) * root_top_k_error
+            float(saddle_gap_weight)
+            * float(root.saddle_gap_weight)
+            * exact_gaps[root_index]
+            + float(matrix_weight) * top_k_errors[root_index]
             + float(root.value_preservation_weight) * root_value_error
+            + float(guard_hinge_weight) * (gap_violation + value_violation)
         )
 
-    mean_gap = torch.stack(gaps).mean()
+    mean_gap = exact_gaps.mean()
     mean_top_k = torch.stack(top_k_errors).mean()
     mean_max = torch.stack(max_errors).mean()
     mean_value_error = torch.stack(value_errors).mean()
@@ -783,11 +813,17 @@ def decision_training_objective(
     return total, {
         "total_loss": total,
         "worst_root_loss": total,
-        "worst_saddle_gap": torch.stack(gaps).max(),
+        "worst_saddle_gap": exact_gaps.max(),
+        "worst_induced_exact_saddle_gap": exact_gaps.max(),
+        "worst_approximate_solver_saddle_gap": induced.saddle_gap.max(),
         "worst_matrix_top_k_error": torch.stack(top_k_errors).max(),
         "worst_matrix_max_error": torch.stack(max_errors).max(),
         "worst_root_value_error": torch.stack(value_errors).max(),
+        "worst_guard_gap_violation": torch.stack(gap_violations).max(),
+        "worst_guard_value_violation": torch.stack(value_violations).max(),
         "mean_saddle_gap": mean_gap,
+        "mean_induced_exact_saddle_gap": mean_gap,
+        "mean_approximate_solver_saddle_gap": induced.saddle_gap.mean(),
         "mean_matrix_top_k_error": mean_top_k,
         "mean_matrix_max_error": mean_max,
         "mean_root_value_error": mean_value_error,
@@ -802,6 +838,10 @@ def evaluate_decision_training_objective(
     saddle_gap_weight: float,
     matrix_weight: float,
     matrix_top_k: int,
+    solver_iterations: int = 64,
+    solver_averaging_delay: int = 0,
+    guard_limits: dict[tuple[NTState, int], tuple[float, float]] | None = None,
+    guard_hinge_weight: float = 1.0,
 ) -> dict[str, float]:
     model.eval()
     _, metrics = decision_training_objective(
@@ -810,6 +850,10 @@ def evaluate_decision_training_objective(
         saddle_gap_weight=saddle_gap_weight,
         matrix_weight=matrix_weight,
         matrix_top_k=matrix_top_k,
+        solver_iterations=solver_iterations,
+        solver_averaging_delay=solver_averaging_delay,
+        guard_limits=guard_limits,
+        guard_hinge_weight=guard_hinge_weight,
     )
     return {name: float(value.item()) for name, value in metrics.items()}
 
@@ -864,8 +908,10 @@ def evaluate_decision_roots(
     roots: Iterable[DecisionRoot],
     *,
     device: torch.device,
+    solver_iterations: int | None = None,
+    solver_averaging_delay: int = 0,
 ) -> dict[str, Any]:
-    """Evaluate approximate root decisions against certified root matrices."""
+    """Evaluate approximate-matrix-induced policies on certified matrices."""
 
     model.eval()
     records: list[dict[str, Any]] = []
@@ -876,9 +922,26 @@ def evaluate_decision_roots(
             root.horizon,
             device=device,
         )
-        approximate_value, drop_policy, check_policy = solve_matrix(
-            approximate_matrix
-        )
+        if solver_iterations is None:
+            approximate_value, drop_policy, check_policy = solve_matrix(
+                approximate_matrix
+            )
+            approximate_solver_gap = 0.0
+            solver = "lp"
+        else:
+            approximate_tensor = torch.as_tensor(
+                approximate_matrix, dtype=torch.float32, device=device
+            )
+            induced = solve_matrix_cfr_plus_torch(
+                approximate_tensor,
+                iterations=solver_iterations,
+                averaging_delay=solver_averaging_delay,
+            )
+            approximate_value = float(induced.value.item())
+            drop_policy = induced.drop_policy.cpu().numpy()
+            check_policy = induced.check_policy.cpu().numpy()
+            approximate_solver_gap = float(induced.saddle_gap.item())
+            solver = "torch_cfr_plus"
         lower = float(np.min(root.exact_matrix.T @ drop_policy))
         upper = float(np.max(root.exact_matrix @ check_policy))
         records.append(
@@ -889,9 +952,13 @@ def evaluate_decision_roots(
                 "approximate_value": float(approximate_value),
                 "value_error": abs(float(approximate_value) - root.exact_value),
                 "saddle_gap": max(0.0, upper - lower),
+                "approximate_solver_saddle_gap": approximate_solver_gap,
             }
         )
     return {
+        "solver": solver,
+        "solver_iterations": solver_iterations,
+        "solver_averaging_delay": solver_averaging_delay,
         "roots": records,
         "max_saddle_gap": max(record["saddle_gap"] for record in records),
         "max_value_error": max(record["value_error"] for record in records),
@@ -904,11 +971,30 @@ def decision_guard_passes(
     *,
     tolerance: float,
 ) -> bool:
-    return (
+    aggregate_passes = (
         candidate["max_saddle_gap"]
         <= baseline["max_saddle_gap"] + tolerance
         and candidate["max_value_error"]
         <= baseline["max_value_error"] + tolerance
+    )
+    if not aggregate_passes:
+        return False
+    baseline_roots = {
+        (tuple(record["state"]), int(record["horizon"])): record
+        for record in baseline.get("roots", ())
+    }
+    candidate_roots = {
+        (tuple(record["state"]), int(record["horizon"])): record
+        for record in candidate.get("roots", ())
+    }
+    if baseline_roots.keys() != candidate_roots.keys():
+        return False
+    return all(
+        candidate_roots[key]["saddle_gap"]
+        <= baseline_record["saddle_gap"] + tolerance
+        and candidate_roots[key]["value_error"]
+        <= baseline_record["value_error"] + tolerance
+        for key, baseline_record in baseline_roots.items()
     )
 
 
@@ -1103,7 +1189,20 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     decision_loss_values = config.get("decision_loss")
     decision_loss_roots = None
     decision_loss_repeats = 0
+    decision_guard_limits: dict[tuple[NTState, int], tuple[float, float]] = {}
+    decision_loss_solver_iterations = 64
+    decision_loss_solver_averaging_delay = 0
+    decision_guard_hinge_weight = 1.0
     if decision_loss_values:
+        decision_loss_solver_iterations = int(
+            decision_loss_values.get("solver_iterations", 64)
+        )
+        decision_loss_solver_averaging_delay = int(
+            decision_loss_values.get("solver_averaging_delay", 0)
+        )
+        decision_guard_hinge_weight = float(
+            decision_loss_values.get("guard_hinge_weight", 1.0)
+        )
         decision_loss_store = (
             decision_store
             if decision_store is not None
@@ -1131,6 +1230,9 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             saddle_gap_weight=float(decision_loss_values["saddle_gap_weight"]),
             matrix_weight=float(decision_loss_values["matrix_weight"]),
             matrix_top_k=int(decision_loss_values["matrix_top_k"]),
+            solver_iterations=decision_loss_solver_iterations,
+            solver_averaging_delay=decision_loss_solver_averaging_delay,
+            guard_hinge_weight=decision_guard_hinge_weight,
         )
     best_loss = float("inf")
     best_epoch = 0
@@ -1201,7 +1303,17 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     best_attempt_guard_metrics = None
     best_attempt_guard_passed = True
     best_attempt_gap = float("inf")
+    decision_selection_solver_iterations = None
+    decision_selection_solver_averaging_delay = 0
     if selection_metric == "decision":
+        decision_selection_solver_iterations = (
+            int(decision_values["solver_iterations"])
+            if decision_values.get("solver_iterations") is not None
+            else None
+        )
+        decision_selection_solver_averaging_delay = int(
+            decision_values.get("solver_averaging_delay", 0)
+        )
         baseline_model = model
         if baseline_checkpoint is not None:
             baseline_payload = torch.load(
@@ -1253,12 +1365,24 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             baseline_model,
             decision_roots,
             device=device,
+            solver_iterations=decision_selection_solver_iterations,
+            solver_averaging_delay=decision_selection_solver_averaging_delay,
         )
         baseline_guard_metrics = evaluate_decision_roots(
             baseline_model,
             decision_guard_roots,
             device=device,
+            solver_iterations=decision_selection_solver_iterations,
+            solver_averaging_delay=decision_selection_solver_averaging_delay,
         )
+        guard_tolerance = float(decision_values["guard_tolerance"])
+        decision_guard_limits = {
+            (tuple(record["state"]), int(record["horizon"])): (
+                float(record["saddle_gap"]) + guard_tolerance,
+                float(record["value_error"]) + guard_tolerance,
+            )
+            for record in baseline_guard_metrics["roots"]
+        }
         baseline_equilibrium_loss = (
             evaluate_decision_training_objective(
                 baseline_model,
@@ -1268,6 +1392,10 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 ),
                 matrix_weight=float(decision_loss_values["matrix_weight"]),
                 matrix_top_k=int(decision_loss_values["matrix_top_k"]),
+                solver_iterations=decision_loss_solver_iterations,
+                solver_averaging_delay=decision_loss_solver_averaging_delay,
+                guard_limits=decision_guard_limits,
+                guard_hinge_weight=decision_guard_hinge_weight,
             )
             if decision_loss_roots is not None
             else None
@@ -1356,6 +1484,10 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                     ),
                     matrix_weight=float(decision_loss_values["matrix_weight"]),
                     matrix_top_k=int(decision_loss_values["matrix_top_k"]),
+                    solver_iterations=decision_loss_solver_iterations,
+                    solver_averaging_delay=decision_loss_solver_averaging_delay,
+                    guard_limits=decision_guard_limits,
+                    guard_hinge_weight=decision_guard_hinge_weight,
                 )
                 loss.backward()
                 optimizer.step()
@@ -1393,12 +1525,24 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             else None
         )
         decision_metrics = (
-            evaluate_decision_roots(model, decision_roots, device=device)
+            evaluate_decision_roots(
+                model,
+                decision_roots,
+                device=device,
+                solver_iterations=decision_selection_solver_iterations,
+                solver_averaging_delay=decision_selection_solver_averaging_delay,
+            )
             if decision_roots is not None
             else None
         )
         guard_metrics = (
-            evaluate_decision_roots(model, decision_guard_roots, device=device)
+            evaluate_decision_roots(
+                model,
+                decision_guard_roots,
+                device=device,
+                solver_iterations=decision_selection_solver_iterations,
+                solver_averaging_delay=decision_selection_solver_averaging_delay,
+            )
             if decision_guard_roots is not None
             else None
         )
@@ -1420,6 +1564,10 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 ),
                 matrix_weight=float(decision_loss_values["matrix_weight"]),
                 matrix_top_k=int(decision_loss_values["matrix_top_k"]),
+                solver_iterations=decision_loss_solver_iterations,
+                solver_averaging_delay=decision_loss_solver_averaging_delay,
+                guard_limits=decision_guard_limits,
+                guard_hinge_weight=decision_guard_hinge_weight,
             )
             if decision_loss_roots is not None
             else None
@@ -1549,6 +1697,10 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             saddle_gap_weight=float(decision_loss_values["saddle_gap_weight"]),
             matrix_weight=float(decision_loss_values["matrix_weight"]),
             matrix_top_k=int(decision_loss_values["matrix_top_k"]),
+            solver_iterations=decision_loss_solver_iterations,
+            solver_averaging_delay=decision_loss_solver_averaging_delay,
+            guard_limits=decision_guard_limits,
+            guard_hinge_weight=decision_guard_hinge_weight,
         )
         if decision_loss_roots is not None
         else None

@@ -1,0 +1,58 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_mixed_v7/best.pt
+exact_targets: dth/artifacts/self_play_readiness_reference_v1.npz
+reference_targets: dth/artifacts/self_play_readiness_reference_v1.npz
+anchor_horizons: null
+device: cpu
+output: dth/artifacts/mcts_readiness_mixed_v7_v1.json
+evaluators: [network]
+budgets: [0, 256, 1024, 4096]
+seeds: [0, 1, 2]
+warmup_cells: [3600]
+
+mcts:
+  confidence_constant: 1.5
+  exploration_scale: 1.0
+  prior_uniform_mix: 0.05
+  policy_update_interval: 16
+  root_warmup_cells: 3600
+  internal_warmup_cells: 0
+  max_depth: 1
+
+roots:
+  # Training anchors.
+  - state: [239, 0, 0, 240]
+    horizon: 5
+  - state: [0, 240, 239, 0]
+    horizon: 5
+  - state: [239, 0, 0, 240]
+    horizon: 4
+  # Frozen evaluation-only H4 mirrored pairs.
+  - state: [238, 0, 1, 240]
+    horizon: 4
+  - state: [1, 240, 238, 0]
+    horizon: 4
+  - state: [179, 60, 59, 180]
+    horizon: 4
+  - state: [59, 180, 179, 60]
+    horizon: 4
+  # Frozen evaluation-only H3 mirrored pairs.
+  - state: [219, 0, 19, 240]
+    horizon: 3
+  - state: [19, 240, 219, 0]
+    horizon: 3
+  - state: [119, 120, 179, 60]
+    horizon: 3
+  - state: [179, 60, 119, 120]
+    horizon: 3
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

@@ -1,0 +1,15 @@
+defaults:
+  - train_matrix_policy_cfr_guarded_v14
+  - _self_
+
+output_dir: dth/checkpoints/strategic_matrix_policy_cfr_constrained_v15
+
+training:
+  epochs: 100
+  learning_rate: 0.00001
+  patience: 40
+
+decision_loss:
+  repeats: 16
+  matrix_weight: 0.0
+  guard_hinge_weight: 20.0

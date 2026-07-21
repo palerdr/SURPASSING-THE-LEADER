@@ -1,0 +1,79 @@
+defaults:
+  - train_matrix_policy_cfr_guarded_v14
+  - _self_
+
+output_dir: dth/checkpoints/strategic_matrix_policy_generalization_v17
+initial_checkpoint: dth/checkpoints/strategic_mixed_v7/best.pt
+
+training:
+  epochs: 100
+  learning_rate: 0.00001
+  patience: 100
+  log_every: 10
+
+decision_loss:
+  exact_targets: dth/artifacts/readiness_training_reference_v2.npz
+  repeats: 4
+  matrix_weight: 0.0
+  guard_hinge_weight: 20.0
+  roots:
+    # Retained readiness anchors act as explicit guards.
+    - state: [239, 0, 0, 240]
+      horizon: 5
+    - state: [0, 240, 239, 0]
+      horizon: 5
+    - state: [239, 0, 0, 240]
+      horizon: 4
+    # Frozen-disjoint, mirrored H3 development roots.
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [180, 0, 180, 61]
+      horizon: 3
+    - state: [180, 61, 180, 0]
+      horizon: 3
+    - state: [179, 60, 180, 60]
+      horizon: 3
+    - state: [180, 60, 179, 60]
+      horizon: 3
+    - state: [59, 0, 219, 0]
+      horizon: 3
+    - state: [219, 0, 59, 0]
+      horizon: 3
+    - state: [119, 120, 179, 120]
+      horizon: 3
+    - state: [179, 120, 119, 120]
+      horizon: 3
+    - state: [60, 180, 241, 0]
+      horizon: 3
+    - state: [241, 0, 60, 180]
+      horizon: 3
+    # The same mirrored boundary families at H4.
+    - state: [0, 0, 240, 0]
+      horizon: 4
+    - state: [240, 0, 0, 0]
+      horizon: 4
+    - state: [180, 0, 180, 61]
+      horizon: 4
+    - state: [180, 61, 180, 0]
+      horizon: 4
+    - state: [179, 60, 180, 60]
+      horizon: 4
+    - state: [180, 60, 179, 60]
+      horizon: 4
+    - state: [59, 0, 219, 0]
+      horizon: 4
+    - state: [219, 0, 59, 0]
+      horizon: 4
+    - state: [119, 120, 179, 120]
+      horizon: 4
+    - state: [179, 120, 119, 120]
+      horizon: 4
+    - state: [60, 180, 241, 0]
+      horizon: 4
+    - state: [241, 0, 60, 180]
+      horizon: 4
+
+decision_selection:
+  exact_targets: dth/artifacts/readiness_training_reference_v2.npz

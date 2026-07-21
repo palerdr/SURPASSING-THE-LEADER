@@ -258,6 +258,27 @@ def test_decision_guard_rejects_h4_regression():
     assert not decision_guard_passes(regressed, baseline, tolerance=1e-6)
 
 
+def test_decision_guard_rejects_a_masked_per_root_regression():
+    baseline = {
+        "max_saddle_gap": 0.2,
+        "max_value_error": 0.2,
+        "roots": [
+            {"state": [1, 0, 0, 0], "horizon": 2, "saddle_gap": 0.2, "value_error": 0.2},
+            {"state": [2, 0, 0, 0], "horizon": 2, "saddle_gap": 0.01, "value_error": 0.01},
+        ],
+    }
+    candidate = {
+        "max_saddle_gap": 0.19,
+        "max_value_error": 0.19,
+        "roots": [
+            {"state": [1, 0, 0, 0], "horizon": 2, "saddle_gap": 0.19, "value_error": 0.19},
+            {"state": [2, 0, 0, 0], "horizon": 2, "saddle_gap": 0.03, "value_error": 0.01},
+        ],
+    }
+
+    assert not decision_guard_passes(candidate, baseline, tolerance=0.01)
+
+
 def test_h5_decision_audit_matches_an_exact_zero_child_matrix():
     state = (239, 0, 0, 240)
     from dth.train import approximate_payoff_from_network
@@ -365,6 +386,28 @@ def test_decision_loss_uses_the_worst_root_instead_of_the_mean():
     assert loss.item() > metrics["mean_saddle_gap"].item()
 
 
+def test_decision_loss_supports_explicit_per_root_gap_weights():
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    for parameter in model.parameters():
+        torch.nn.init.zeros_(parameter)
+    matrix = np.zeros((60, 60), dtype=np.float64)
+    matrix[0, :] = 1.0
+    root = DecisionRoot(
+        (0, 0, 0, 0), 1, 1.0, matrix, saddle_gap_weight=3.0
+    )
+    prepared = prepare_decision_loss_roots(model, [root], device=torch.device("cpu"))
+
+    loss, metrics = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=1.0,
+        matrix_weight=0.0,
+        matrix_top_k=16,
+    )
+
+    assert loss.item() == pytest.approx(3.0 * metrics["worst_saddle_gap"].item())
+
+
 def test_root_value_preservation_loss_backpropagates_through_child_values():
     state = (239, 0, 0, 240)
     exact = solve(state, 2)
@@ -391,6 +434,34 @@ def test_root_value_preservation_loss_backpropagates_through_child_values():
     assert loss.item() > 0.0
     assert model.value_head.weight.grad is not None
     assert torch.isfinite(model.value_head.weight.grad).all()
+
+
+def test_decision_loss_applies_explicit_guard_hinges():
+    state = (239, 0, 0, 240)
+    exact = solve(state, 2)
+    root = DecisionRoot(state, 2, exact.value, payoff(state, 2))
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    prepared = prepare_decision_loss_roots(model, [root], device=torch.device("cpu"))
+
+    loss, metrics = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=0.0,
+        matrix_weight=0.0,
+        matrix_top_k=16,
+        solver_iterations=32,
+        guard_limits={(state, 2): (0.0, 0.0)},
+        guard_hinge_weight=1.0,
+    )
+    loss.backward()
+
+    assert metrics["worst_guard_gap_violation"].item() > 0.0
+    assert metrics["worst_guard_value_violation"].item() > 0.0
+    assert loss.item() == pytest.approx(
+        metrics["worst_guard_gap_violation"].item()
+        + metrics["worst_guard_value_violation"].item()
+    )
+    assert model.value_head.weight.grad is not None
 
 
 def test_decision_training_retains_epoch_zero_without_gap_improvement(tmp_path):

@@ -1,0 +1,63 @@
+defaults:
+  - train_matrix_policy_generalization_v17
+  - _self_
+
+output_dir: dth/checkpoints/strategic_matrix_policy_generalization_guarded_v18
+
+training:
+  learning_rate: 0.000005
+
+decision_loss:
+  guard_hinge_weight: 100.0
+
+decision_selection:
+  minimum_gap_improvement: 0.000001
+  roots:
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [180, 0, 180, 61]
+      horizon: 3
+    - state: [180, 61, 180, 0]
+      horizon: 3
+    - state: [179, 60, 180, 60]
+      horizon: 3
+    - state: [180, 60, 179, 60]
+      horizon: 3
+    - state: [59, 0, 219, 0]
+      horizon: 3
+    - state: [219, 0, 59, 0]
+      horizon: 3
+    - state: [119, 120, 179, 120]
+      horizon: 3
+    - state: [179, 120, 119, 120]
+      horizon: 3
+    - state: [60, 180, 241, 0]
+      horizon: 3
+    - state: [241, 0, 60, 180]
+      horizon: 3
+    - state: [0, 0, 240, 0]
+      horizon: 4
+    - state: [240, 0, 0, 0]
+      horizon: 4
+    - state: [180, 0, 180, 61]
+      horizon: 4
+    - state: [180, 61, 180, 0]
+      horizon: 4
+    - state: [179, 60, 180, 60]
+      horizon: 4
+    - state: [180, 60, 179, 60]
+      horizon: 4
+    - state: [59, 0, 219, 0]
+      horizon: 4
+    - state: [219, 0, 59, 0]
+      horizon: 4
+    - state: [119, 120, 179, 120]
+      horizon: 4
+    - state: [179, 120, 119, 120]
+      horizon: 4
+    - state: [60, 180, 241, 0]
+      horizon: 4
+    - state: [241, 0, 60, 180]
+      horizon: 4

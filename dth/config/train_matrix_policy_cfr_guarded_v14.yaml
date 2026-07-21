@@ -1,0 +1,26 @@
+defaults:
+  - train_matrix_policy_cfr_v13
+  - _self_
+
+output_dir: dth/checkpoints/strategic_matrix_policy_cfr_guarded_v14
+
+training:
+  epochs: 100
+  learning_rate: 0.00001
+  patience: 30
+  log_every: 10
+
+decision_loss:
+  repeats: 4
+  guard_hinge_weight: 8.0
+
+decision_selection:
+  guard_roots:
+    - state: [239, 0, 0, 240]
+      horizon: 5
+    - state: [0, 240, 239, 0]
+      horizon: 5
+    - state: [239, 0, 0, 240]
+      horizon: 4
+  guard_tolerance: 0.01
+  minimum_gap_improvement: 0.011955

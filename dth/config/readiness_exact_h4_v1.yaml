@@ -1,0 +1,24 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: self_play_readiness_exact_v1
+output: dth/artifacts/self_play_readiness_exact_v1.npz
+emission: reachable_layers
+horizon: 4
+root_states:
+  - [238, 0, 1, 240]
+  - [1, 240, 238, 0]
+  - [179, 60, 59, 180]
+  - [59, 180, 179, 60]
+base_datasets:
+  - dth/artifacts/self_play_readiness_exact_h3_v1.npz
+progress_every: 250
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

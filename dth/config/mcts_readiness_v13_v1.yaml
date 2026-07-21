@@ -1,0 +1,6 @@
+defaults:
+  - mcts_readiness_mixed_v7_v1
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_matrix_policy_cfr_v13/best.pt
+output: dth/artifacts/mcts_readiness_v13_v1.json

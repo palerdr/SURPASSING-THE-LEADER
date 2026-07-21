@@ -238,14 +238,18 @@ def merge_exact_target_artifacts(
                 raise ValueError(f"target schema mismatch in {source}")
             states = artifact["states"]
             horizons = artifact["horizons"]
+            values = artifact["values"]
+            drop_policies = artifact["drop_policies"]
+            check_policies = artifact["check_policies"]
+            saddle_gaps = artifact["saddle_gaps"]
             for index in range(len(states)):
                 state = tuple(int(value) for value in states[index])
                 key = (int(horizons[index]), state)
                 records[key] = (
-                    float(artifact["values"][index]),
-                    artifact["drop_policies"][index].astype(np.float32, copy=True),
-                    artifact["check_policies"][index].astype(np.float32, copy=True),
-                    float(artifact["saddle_gaps"][index]),
+                    float(values[index]),
+                    drop_policies[index].astype(np.float32, copy=True),
+                    check_policies[index].astype(np.float32, copy=True),
+                    float(saddle_gaps[index]),
                 )
 
     ordered = sorted(records.items(), key=lambda item: (item[0][0], item[0][1]))

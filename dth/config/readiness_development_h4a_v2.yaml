@@ -1,0 +1,26 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: readiness_development_h4a_v2
+output: dth/artifacts/readiness_development_h4a_v2.npz
+emission: reachable_layers
+horizon: 4
+root_states:
+  - [0, 0, 240, 0]
+  - [240, 0, 0, 0]
+  - [180, 0, 180, 61]
+  - [180, 61, 180, 0]
+  - [179, 60, 180, 60]
+  - [180, 60, 179, 60]
+base_datasets:
+  - dth/artifacts/readiness_development_h3_v2.npz
+progress_every: 500
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

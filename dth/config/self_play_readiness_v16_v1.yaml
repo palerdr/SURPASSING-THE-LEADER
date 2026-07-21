@@ -1,0 +1,18 @@
+defaults:
+  - self_play
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_matrix_policy_cfr_constrained_continue_v16/best.pt
+output: dth/artifacts/self_play_readiness_v16_run1
+games: 3
+seed: 16
+max_half_rounds: 3
+simulations: 64
+root_warmup_cells: 64
+starts:
+  - state: [239, 0, 0, 240]
+    horizon: 5
+  - state: [0, 240, 239, 0]
+    horizon: 5
+  - state: [239, 0, 0, 240]
+    horizon: 4

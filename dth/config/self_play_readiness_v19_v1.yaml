@@ -1,0 +1,6 @@
+defaults:
+  - self_play_readiness_v16_v1
+  - _self_
+
+checkpoint: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+output: dth/artifacts/self_play_readiness_v19_run1

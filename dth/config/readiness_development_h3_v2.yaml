@@ -1,0 +1,37 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: readiness_development_h3_v2
+output: dth/artifacts/readiness_development_h3_v2.npz
+emission: reachable_layers
+horizon: 3
+root_states:
+  # safe | dose-fatal
+  - [0, 0, 240, 0]
+  - [240, 0, 0, 0]
+  # pressure | TTD-fatal
+  - [180, 0, 180, 61]
+  - [180, 61, 180, 0]
+  # near-300 | exact-300
+  - [179, 60, 180, 60]
+  - [180, 60, 179, 60]
+  # safe | pressure
+  - [59, 0, 219, 0]
+  - [219, 0, 59, 0]
+  # near-300 | TTD-fatal
+  - [119, 120, 179, 120]
+  - [179, 120, 119, 120]
+  # exact-300 | dose-fatal
+  - [60, 180, 241, 0]
+  - [241, 0, 60, 180]
+base_datasets: []
+progress_every: 500
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

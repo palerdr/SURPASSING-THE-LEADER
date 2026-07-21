@@ -1,0 +1,11 @@
+defaults:
+  - train_matrix_policy_generalization_balanced_v19
+  - _self_
+
+output_dir: dth/checkpoints/strategic_matrix_policy_capacity_widened_v20_trainable
+initial_checkpoint: dth/checkpoints/strategic_matrix_policy_capacity_widened_v20_initial/widened.pt
+
+# Width is the sprint's only structural variable. Depth, data, objective,
+# root packs, loss weights, optimizer settings, and readiness gates inherit v19.
+model:
+  hidden_width: 128
