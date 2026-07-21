@@ -1048,6 +1048,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         hidden_layers=int(model_values["hidden_layers"]),
         action_count=len(DROPPER_ACTIONS),
         horizon_scale=float(model_values["horizon_scale"]),
+        feature_lift=str(model_values.get("feature_lift", "identity")),
     )
     model = DTHPolicyValueNet(model_config)
     device = torch.device(str(config["device"]))
@@ -1059,7 +1060,9 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             map_location=device,
             weights_only=False,
         )
-        if dict(initial["model_config"]) != model_config.to_dict():
+        initial_config = dict(initial["model_config"])
+        initial_config.setdefault("feature_lift", "identity")
+        if initial_config != model_config.to_dict():
             raise ValueError("initial checkpoint model configuration does not match")
         model.load_state_dict(initial["state_dict"])
 
