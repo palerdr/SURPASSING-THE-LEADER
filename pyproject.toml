@@ -19,7 +19,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["stl/tests", "dth/tests", "toy/tests", "tests/meta"]
+testpaths = ["stl/tests", "dth/tests", "abstract/tests", "tests/meta"]
 pythonpath = ["."]
 
 [tool.uv]

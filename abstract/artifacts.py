@@ -1,4 +1,4 @@
-"""Versioned NPZ/JSON artifact helpers for the toy pipeline."""
+"""Versioned NPZ/JSON artifact helpers for the exact abstract pipeline."""
 
 from __future__ import annotations
 

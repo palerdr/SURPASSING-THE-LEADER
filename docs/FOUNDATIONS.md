@@ -35,6 +35,5 @@ exploitability evidence, and any declared policy-drift/readability gates.
 
 The current STL solver is a fully observed public-state baseline. It does not
 claim to solve a private-information game with hidden leap knowledge, memory
-loss, signaling, or unobserved within-turn information. DTH and toy make still
+loss, signaling, or unobserved within-turn information. DTH and abstract make still
 smaller explicit abstractions, documented locally.
-

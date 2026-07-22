@@ -35,7 +35,7 @@ same-second pair succeeds and accumulates one second.
 Both players know the leap rule from initialization. Knowledge does not alter
 structural legality: only Baku while acting as Dropper may additionally choose
 61 in the leap window. Checker remains capped at 60, so `(d=61, c<=60)` fails.
-DTH and the canonical toy example have no leap-second action.
+DTH and the canonical abstract example have no leap-second action.
 
 ## Dense policy indices
 

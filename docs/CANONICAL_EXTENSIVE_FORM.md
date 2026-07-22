@@ -31,7 +31,9 @@ STL's eligible revival probability is:
 ```
 
 DTH deliberately removes referee fatigue and physicality and uses its locally
-documented prior-TTD factor. It retains the same strict boundary inequalities.
+documented prior-TTD factor. The enumerated `abstract` ruleset also removes
+those terms; its versioned no-CPR survival surrogate is documented locally in
+`abstract/docs/MODEL.md`. Both retain the same strict boundary inequalities.
 
 <!-- canon:C-AUTHORITY -->
 ## Executable authorities
@@ -40,7 +42,7 @@ documented prior-TTD factor. It retains the same strict boundary inequalities.
 - `stl/engine/actions.py` owns STL action legality.
 - `crates/stl_solver/src/game.rs` must match the Python engine where covered.
 - `dth/solver.py` owns the no-leap DTH abstraction.
-- `toy/rules.py` owns only the enumerated toy abstraction.
+- `abstract/rules.py` owns only the enumerated role-relative abstraction.
 
 Solvers may use audited scalar helpers but must not reimplement divergent game
 rules. Rule-bound artifacts must identify their schema and source/config digest.

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PROJECTS = ("stl", "dth", "toy")
+PROJECTS = ("stl", "dth", "abstract")
 IGNORED_PARTS = {
     ".git",
     ".venv",
@@ -33,7 +33,7 @@ def test_only_root_readme_remains():
 
 
 def test_markdown_is_owned_by_an_approved_context_root():
-    approved_roots = {"docs", "papers", "stl", "dth", "toy", "crates", ".codex"}
+    approved_roots = {"docs", "papers", "stl", "dth", "abstract", "crates", ".codex"}
     for path in _source_files(".md"):
         relative = path.relative_to(ROOT)
         if len(relative.parts) == 1:
@@ -79,7 +79,7 @@ def test_removed_python_namespaces_do_not_reappear():
         if path.resolve() == Path(__file__).resolve():
             continue
         text = path.read_text(encoding="utf-8")
-        assert "stl.toy" not in text, path
+        assert "stl.abstract" not in text, path
         assert not re.search(r"(?:from|import)\s+pure(?:\.|\s)", text), path
 
 
@@ -88,7 +88,7 @@ def test_solver_configs_own_their_default_artifact_paths():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"(?<!stl/)outputs/", text), path
         assert not re.search(r"(?<!stl/)checkpoints/", text), path
-    for project in ("dth", "toy"):
+    for project in ("dth", "abstract"):
         config_root = ROOT / project / "config"
         if not config_root.exists():
             continue

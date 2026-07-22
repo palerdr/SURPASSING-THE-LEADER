@@ -26,7 +26,7 @@ demos/
 papers/whitepaper/build/
 stl/outputs/
 dth/outputs/
-toy/outputs/
+abstract/outputs/
 
 # Training artifacts
 models/
@@ -34,7 +34,6 @@ checkpoints/
 stl/checkpoints/
 dth/artifacts/
 dth/checkpoints/
-toy/checkpoints/
 
 # Generated media
 *.png
