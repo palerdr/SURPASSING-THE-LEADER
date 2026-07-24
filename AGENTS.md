@@ -11,7 +11,8 @@
 - `docs/` owns repository-wide canonical game and solver contracts.
 - `papers/` owns primary evidence, the whitepaper, and cited literature.
 - `stl/`, `dth/`, and `abstract/` are peer projects. They must not import one
-  another.
+  another. `arena/` is a neutral play surface: it may consume their public
+  interfaces, but they must not import it or one another.
 - `crates/` is a shared Rust workspace; Python remains behavioral authority
   until an explicit parity contract says otherwise.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.

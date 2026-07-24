@@ -6,7 +6,8 @@ This repository contains three deliberately separate game-solving projects:
 | --- | --- | --- |
 | `stl/` | Full Surpassing the Leader engine, exact solver, search, learning, and play surface | Leap-aware public game; only Baku as Dropper may use second 61 |
 | `dth/` | Pure Drop the Handkerchief solver | Literal seconds 1..60; no leap second or STL-only rules |
-| `abstract/` | Small exact example | Role-relative 10-second TTD abstraction solved by exhaustive LP tablebase |
+| `abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
+| `arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
 
 Repository-wide game contracts live in [`docs/`](docs/). The whitepaper,
 primary game evidence, and cited research are kept separately in
@@ -35,9 +36,13 @@ uv run python -m dth --help
 uv run python -m dth dataset --help
 uv run python -m dth train --help
 
-# Exact abstract example
+# Exact abstract example (optional: `arena play` builds this automatically when absent)
 uv run python -m abstract --help
 uv run python -m abstract exact
+
+# Canonical referee with a pluggable Hal policy provider
+uv run python -m arena play --hal-agent abstract
+uv run python -m arena play --hal-agent abstract --buckets 5
 ```
 
 Each project owns its `config/`, `docs/`, tests, checkpoints, and outputs.

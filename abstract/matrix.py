@@ -14,6 +14,7 @@ class MatrixEquilibrium:
     column_strategy: np.ndarray
     value: float
     saddle_gap: float
+    solver_kind: str
 
     def __post_init__(self) -> None:
         for name in ("row_strategy", "column_strategy"):
@@ -155,6 +156,7 @@ def solve_matrix(payoff: np.ndarray) -> MatrixEquilibrium:
                         column_strategy=column_strategy,
                         value=value,
                         saddle_gap=gap,
+                        solver_kind="pure_saddle",
                     )
     key = matrix.shape
     solver = _PERSISTENT_SOLVERS.get(key)
@@ -170,4 +172,5 @@ def solve_matrix(payoff: np.ndarray) -> MatrixEquilibrium:
         column_strategy=column_strategy,
         value=value,
         saddle_gap=gap,
+        solver_kind="lp",
     )

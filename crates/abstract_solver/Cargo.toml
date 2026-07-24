@@ -1,0 +1,16 @@
+[package]
+name = "abstract_solver_rs"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "abstract_solver_rs"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+numpy = "*"
+pyo3 = "*"

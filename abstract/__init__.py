@@ -1,7 +1,12 @@
-"""Exact role-relative 10-second game abstraction."""
+"""Exact role-relative bucketed game abstractions."""
 
 from abstract.exact import AbstractExactResult, enumerate_reachable_states, solve_exact
-from abstract.rules import AbstractRuleset, Bucket6TTDCurve95Rules, ruleset_for_name
+from abstract.rules import (
+    AbstractRuleset,
+    Bucket6TTDCurve95Rules,
+    Bucket12TTDCurve95Rules,
+    ruleset_for_name,
+)
 from abstract.state import AbstractBranch, AbstractState
 
 __all__ = [
@@ -9,6 +14,7 @@ __all__ = [
     "AbstractExactResult",
     "AbstractRuleset",
     "AbstractState",
+    "Bucket12TTDCurve95Rules",
     "Bucket6TTDCurve95Rules",
     "enumerate_reachable_states",
     "ruleset_for_name",

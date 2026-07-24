@@ -42,7 +42,11 @@ those terms; its versioned no-CPR survival surrogate is documented locally in
 - `stl/engine/actions.py` owns STL action legality.
 - `crates/stl_solver/src/game.rs` must match the Python engine where covered.
 - `dth/solver.py` owns the no-leap DTH abstraction.
-- `abstract/rules.py` owns only the enumerated role-relative abstraction.
+- `abstract/rules.py` owns only the enumerated role-relative 10-second and
+  5-second bucket abstractions; their shared exact contract is documented in
+  `abstract/docs/MODEL.md`.
+- `arena/` owns no game rules; it adapts solver policies to the canonical STL
+  referee for live play.
 
 Solvers may use audited scalar helpers but must not reimplement divergent game
 rules. Rule-bound artifacts must identify their schema and source/config digest.

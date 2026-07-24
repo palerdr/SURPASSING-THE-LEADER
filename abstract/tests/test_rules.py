@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from abstract.rules import Bucket6TTDCurve95Rules, ruleset_for_name
+from abstract.rules import Bucket6TTDCurve95Rules, Bucket12TTDCurve95Rules, ruleset_for_name
 from abstract.state import AbstractState
 
 
@@ -47,5 +47,6 @@ def test_overflow_is_terminal_and_nonterminal_children_increase_potential() -> N
 def test_ruleset_name_is_closed_and_role_relative_domain_is_known() -> None:
     rules = ruleset_for_name("bucket6_ttd_curve95")
     assert rules.physical_state_upper_bound == 30 * 31 * 30 * 31
-    with pytest.raises(ValueError, match="bucket6_ttd_curve95"):
+    assert ruleset_for_name("bucket12_ttd_curve95") == Bucket12TTDCurve95Rules()
+    with pytest.raises(ValueError, match="bucket6_ttd_curve95.*bucket12_ttd_curve95"):
         ruleset_for_name("bucket12_fixed50")

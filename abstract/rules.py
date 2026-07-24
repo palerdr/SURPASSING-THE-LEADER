@@ -1,4 +1,4 @@
-"""Rules for the exact 10-second, role-relative TTD abstraction."""
+"""Rules for the exact role-relative TTD bucket abstractions."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ TIMING_CONVENTION_ID = "ordinal-buckets-inclusive-st-v1"
 
 @dataclass(frozen=True, slots=True)
 class AbstractRuleset:
-    """The one canonical exact role-relative abstraction.
+    """One exact role-relative discretization of the canonical abstraction.
 
-    Every numeric transition quantity is an ordinal ten-second bucket.  The
+    Every numeric transition quantity is an ordinal time bucket.  The
     seconds mapping is metadata only; it never enters the solver algebra.
     """
 
@@ -218,7 +218,35 @@ def Bucket6TTDCurve95Rules() -> AbstractRuleset:
     )
 
 
+def Bucket12TTDCurve95Rules() -> AbstractRuleset:
+    """Five-second formulation with the same physical rules as bucket6.
+
+    Loads and TTD are measured in five-second units, so every unit-valued
+    parameter in :func:`Bucket6TTDCurve95Rules` is doubled while probabilities
+    and boundary inequalities are unchanged.
+    """
+
+    return AbstractRuleset(
+        ruleset_id="bucket12_ttd_curve95",
+        action_values=tuple(range(1, 13)),
+        bucket_seconds=5,
+        load_cap_units=60,
+        failed_check_penalty_units=12,
+        revival_baseline=0.95,
+        dose_curve_exponent=3.0,
+        ttd_half_life_units=24.0,
+        ttd_curve_exponent=1.3,
+    )
+
+
 def ruleset_for_name(name: str) -> AbstractRuleset:
-    if name != "bucket6_ttd_curve95":
-        raise ValueError(f"unknown abstract ruleset {name!r}; expected 'bucket6_ttd_curve95'")
-    return Bucket6TTDCurve95Rules()
+    factories = {
+        "bucket6_ttd_curve95": Bucket6TTDCurve95Rules,
+        "bucket12_ttd_curve95": Bucket12TTDCurve95Rules,
+    }
+    try:
+        factory = factories[name]
+    except KeyError as exc:
+        expected = ", ".join(repr(value) for value in factories)
+        raise ValueError(f"unknown abstract ruleset {name!r}; expected one of {expected}") from exc
+    return factory()

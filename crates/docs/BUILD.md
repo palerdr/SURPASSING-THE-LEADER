@@ -107,3 +107,17 @@ Prefer tests that teach one invariant at a time:
 When a user asks "what should I build next?", inspect the current Rust kernel
 first. Answer with the next smallest piece, the math object, pseudocode, and focused tests. Do not
 write the Rust implementation unless the user explicitly asks for code.
+
+## Abstract packed-tablebase accelerator
+
+`crates/abstract_solver` is an opt-in PyO3 accelerator for the abstract
+project's reachability and same-potential backup chunks. Python remains
+behavioral authority and retains all genuinely mixed LP solves. Its eligibility
+contract is `abstract/docs/PACKED_TABLEBASE_PARITY.md`.
+
+```powershell
+cd crates/abstract_solver
+uv run --project ../.. maturin develop --release
+cd ../..
+uv run python -m pytest abstract/tests/test_rust_parity.py -q
+```

@@ -33,7 +33,7 @@ def test_only_root_readme_remains():
 
 
 def test_markdown_is_owned_by_an_approved_context_root():
-    approved_roots = {"docs", "papers", "stl", "dth", "abstract", "crates", ".codex"}
+    approved_roots = {"docs", "papers", "stl", "dth", "abstract", "arena", "crates", ".codex"}
     for path in _source_files(".md"):
         relative = path.relative_to(ROOT)
         if len(relative.parts) == 1:
