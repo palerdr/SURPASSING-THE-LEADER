@@ -14,14 +14,14 @@ eval $(opam env --switch=stl-dth-ocaml)
 ```
 
 All commands below may be run from the monorepo root by passing
-`--root src/dth_ocaml`.
+`--root src/ocaml`.
 
 ## Install dependencies
 
 The `dth.opam` file declares every required library. Pull them in with:
 
 ```bash
-opam install --switch=stl-dth-ocaml ./src/dth_ocaml --deps-only --yes
+opam install --switch=stl-dth-ocaml ./src/ocaml --deps-only --yes
 ```
 
 This installs `dune` (>= 3.21), `alcotest`, and `notty`.
@@ -33,7 +33,7 @@ If `notty` fails to build, you may need its system dependency for terminal handl
 ## Build
 
 ```bash
-opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
+opam exec --switch=stl-dth-ocaml -- dune build --root src/ocaml
 ```
 
 Or use the Makefile shortcut:
@@ -49,7 +49,7 @@ A clean build produces no output. If `eval $(opam env)` is already loaded for th
 The interactive TUI:
 
 ```bash
-opam exec --switch=stl-dth-ocaml -- dune exec --root src/dth_ocaml dth-play
+opam exec --switch=stl-dth-ocaml -- dune exec --root src/ocaml dth-play
 ```
 
 Launch flow:
@@ -66,7 +66,7 @@ Controls:
 ## Tests
 
 ```bash
-opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
+opam exec --switch=stl-dth-ocaml -- dune runtest --root src/ocaml
 ```
 
 Or:

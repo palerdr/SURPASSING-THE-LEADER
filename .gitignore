@@ -36,10 +36,10 @@ src/dth/artifacts/
 src/dth/checkpoints/
 
 # Imported OCaml/Dune build products
-src/dth_ocaml/_build/
-src/dth_ocaml/_opam/
-src/dth_ocaml/_coverage/
-src/dth_ocaml/bisect*.coverage
+src/ocaml/_build/
+src/ocaml/_opam/
+src/ocaml/_coverage/
+src/ocaml/bisect*.coverage
 
 # Generated media
 *.png

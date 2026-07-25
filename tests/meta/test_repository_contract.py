@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = ROOT / "src"
 PROJECTS = ("stl", "dth", "abstract")
-IMPLEMENTATIONS = (*PROJECTS, "crates", "dth_ocaml")
+IMPLEMENTATIONS = (*PROJECTS, "crates", "ocaml")
 IGNORED_PARTS = {
     ".git",
     ".venv",

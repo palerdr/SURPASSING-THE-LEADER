@@ -10,7 +10,7 @@
 
 - `docs/` owns repository-wide canonical game and solver contracts.
 - `papers/` owns primary evidence, the whitepaper, and cited literature.
-- `src/stl/`, `src/dth/`, `src/abstract/`, and `src/dth_ocaml/` are peer
+- `src/stl/`, `src/dth/`, `src/abstract/`, and `src/ocaml/` are peer
   projects. They must not import one another. `arena/` is a neutral play
   surface: it may consume their public interfaces, but they must not import it
   or one another.
@@ -30,8 +30,8 @@ place subsystem status, plans, or invariants in the repository root.
 - In STL's leap window only Baku as Dropper may choose 61; Checker remains
   capped at 60. Both players know the leap rule from game initialization.
 - DTH and abstract do not inherit STL-only leap or information-state mechanics.
-- The historical `dth_ocaml` name is retained for provenance, but that project
-  implements the leap-aware STL public game and follows the STL rule above.
+- The `ocaml` project implements the leap-aware STL public game and follows the
+  STL rule above.
 
 Any rules change must update canonical docs, evidence citations, schemas, and
 tests together. Do not weaken solver firewalls, gates, tolerances, or artifact
@@ -43,8 +43,8 @@ validation to make a change pass.
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 cargo test --workspace
-opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
-opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
+opam exec --switch=stl-dth-ocaml -- dune build --root src/ocaml
+opam exec --switch=stl-dth-ocaml -- dune runtest --root src/ocaml
 ```
 
 After code changes, run `graphify update .`. Use `graphify query`, `path`, or

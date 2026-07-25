@@ -48,7 +48,7 @@ inequalities.
 - `src/abstract/rules.py` owns only the enumerated role-relative 10-second and
   5-second bucket abstractions; their shared exact contract is documented in
   `src/abstract/docs/MODEL.md`.
-- `src/dth_ocaml/lib/engine/` owns the imported leap-aware OCaml engine. It
+- `src/ocaml/lib/engine/` owns the imported leap-aware OCaml engine. It
   already uses the selected two-variable revival surface as a parity target;
   this does not silently reclassify older STL/DTH checkpoints.
 - `arena/` owns no game rules; it adapts solver policies to the canonical STL

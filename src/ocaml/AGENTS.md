@@ -15,6 +15,6 @@ in `PROVENANCE.md`.
 Validate with:
 
 ```sh
-opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
-opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
+opam exec --switch=stl-dth-ocaml -- dune build --root src/ocaml
+opam exec --switch=stl-dth-ocaml -- dune runtest --root src/ocaml
 ```
