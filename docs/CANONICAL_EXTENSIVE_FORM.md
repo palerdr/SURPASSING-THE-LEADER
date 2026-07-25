@@ -35,19 +35,22 @@ documented prior-TTD factor. The production `abstract` rulesets also remove
 identity-specific physicality and explicit CPR count. They use a versioned
 two-variable surrogate in pre-failure ST and accrued TTD; its TTD-derived
 effective referee burden and evidence boundary are documented locally in
-`abstract/docs/MODEL.md`. All projects retain the same strict boundary
+`src/abstract/docs/MODEL.md`. All projects retain the same strict boundary
 inequalities.
 
 <!-- canon:C-AUTHORITY -->
 ## Executable authorities
 
-- `stl/engine/game.py` owns full-game transitions.
-- `stl/engine/actions.py` owns STL action legality.
-- `crates/stl_solver/src/game.rs` must match the Python engine where covered.
-- `dth/solver.py` owns the no-leap DTH abstraction.
-- `abstract/rules.py` owns only the enumerated role-relative 10-second and
+- `src/stl/engine/game.py` owns full-game transitions.
+- `src/stl/engine/actions.py` owns STL action legality.
+- `src/crates/stl_solver/src/game.rs` must match the Python engine where covered.
+- `src/dth/solver.py` owns the no-leap DTH abstraction.
+- `src/abstract/rules.py` owns only the enumerated role-relative 10-second and
   5-second bucket abstractions; their shared exact contract is documented in
-  `abstract/docs/MODEL.md`.
+  `src/abstract/docs/MODEL.md`.
+- `src/dth_ocaml/lib/engine/` owns the imported leap-aware OCaml engine. It
+  already uses the selected two-variable revival surface as a parity target;
+  this does not silently reclassify older STL/DTH checkpoints.
 - `arena/` owns no game rules; it adapts solver policies to the canonical STL
   referee for live play.
 

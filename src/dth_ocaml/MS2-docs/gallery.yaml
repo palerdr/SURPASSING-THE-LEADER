@@ -1,0 +1,30 @@
+---
+group:
+  - name: James Cenawood
+    netid: jcc463
+  - name: Orion Hoch
+    netid: ogh6
+  - name: Emily Wei
+    netid: ejw235
+  - name: Max Masleyev
+    netid: mam759
+
+pm:
+  name: Austin Lu
+  netid: al2622
+publish: true
+title: "Drop The Handkerchief: Surpassing The Leader"
+git-repo: "https://github.coecis.cornell.edu/jcc463/3110-DTH"
+demo-video-url: "https://youtu.be/qKpmL0925M4"
+desc: >
+  An OCaml adaptation of the asymmetric two-player death game from the
+  "Surpassing The Leader" arc of the manga *Usogui*. One player ("Baku") faces
+  off against a scripted "Hal" opponent over up to nine rounds, alternating
+  between dropping a handkerchief and checking for it. Each successful check
+  loads the checker's cylinder with non-detection-duration; reach 300 seconds
+  and the cylinder injects, triggering a survival roll.
+
+  The strategic core is the leap second at 8:59:60 AM: deaths shift the game
+  clock, which shifts which player is the dropper during the leap-second turn,
+  which is decisive. The current build ships a working game-engine plus a notty-based terminal
+  UI for live two-player play.

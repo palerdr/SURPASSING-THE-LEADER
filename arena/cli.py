@@ -14,10 +14,10 @@ from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_H
 def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
     if args.buckets == 5:
         ruleset_id = "bucket12_unified80"
-        default = Path("abstract/outputs") / ruleset_id
+        default = Path("src/abstract/outputs") / ruleset_id
     else:
         ruleset_id = "bucket6_unified80"
-        default = Path("abstract/outputs") / ruleset_id
+        default = Path("src/abstract/outputs") / ruleset_id
     return (
         Path(args.abstract_tablebase) if args.abstract_tablebase else default,
         ruleset_id,

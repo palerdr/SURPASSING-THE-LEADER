@@ -71,11 +71,11 @@ def test_bucket_flag_selects_bucket_specific_default_artifact() -> None:
     five = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "5"])
     ten = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "10"])
     assert cli._abstract_artifact(five) == (
-        Path("abstract/outputs/bucket12_unified80"),
+        Path("src/abstract/outputs/bucket12_unified80"),
         "bucket12_unified80",
     )
     assert cli._abstract_artifact(ten) == (
-        Path("abstract/outputs/bucket6_unified80"),
+        Path("src/abstract/outputs/bucket6_unified80"),
         "bucket6_unified80",
     )
 

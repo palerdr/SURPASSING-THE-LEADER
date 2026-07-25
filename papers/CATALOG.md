@@ -16,5 +16,5 @@
 
 The `references/` directory contains the cited CFR, CFR+, AlphaZero, DeepStack,
 ReBeL, and related game-solving papers. STL-specific interpretation belongs in
-`stl/docs/LITERATURE_ASSESSMENT.md`; the PDFs remain unmodified source material.
+`src/stl/docs/LITERATURE_ASSESSMENT.md`; the PDFs remain unmodified source material.
 

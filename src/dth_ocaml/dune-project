@@ -1,0 +1,31 @@
+(lang dune 3.21)
+
+(name dth)
+
+(generate_opam_files true)
+
+(source
+ (uri https://github.coecis.cornell.edu/jcc463/3110-DTH))
+
+(authors
+ "James Cenawood"
+ "Orion Hoch"
+ "Emily Wei"
+ "Max Masleyev")
+
+(maintainers "James Cenawood")
+
+(package
+ (name dth)
+ (synopsis "Drop The Handkerchief engine and solver")
+ (description "OCaml engine, CLI, and solver experiments for Drop The Handkerchief.")
+ (depends
+  dune
+  ocaml
+  bisect_ppx
+  alcotest
+  notty)
+ (tags
+  (game ocaml solver mcts cfr)))
+
+; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

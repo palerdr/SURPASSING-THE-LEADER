@@ -1,0 +1,6 @@
+(library
+ (name dth_solver)
+ (public_name dth.solver)
+ (libraries dth_engine)
+ (instrumentation
+  (backend bisect_ppx)))

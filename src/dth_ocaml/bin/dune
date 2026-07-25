@@ -1,0 +1,5 @@
+(executable
+ (public_name dth-play)
+ (name play_cli)
+ (modules play_cli tui_theme tui_art tui_layout tui_input tui_max_additions)
+ (libraries dth_engine dth_solver notty notty.unix))

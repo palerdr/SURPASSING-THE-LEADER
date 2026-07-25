@@ -6,7 +6,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SOURCE_ROOT = ROOT / "src"
 PROJECTS = ("stl", "dth", "abstract")
+IMPLEMENTATIONS = (*PROJECTS, "crates", "dth_ocaml")
 IGNORED_PARTS = {
     ".git",
     ".venv",
@@ -28,18 +30,25 @@ def _source_files(suffix: str):
             yield path
 
 
-def test_only_root_readme_remains():
-    assert [path.relative_to(ROOT) for path in _source_files("README.md")] == [Path("README.md")]
+def test_readmes_are_owned_by_root_or_an_implementation():
+    for path in _source_files("README.md"):
+        relative = path.relative_to(ROOT)
+        assert relative == Path("README.md") or (
+            relative.parts[0] == "src" and relative.parts[1] in IMPLEMENTATIONS
+        ), relative
 
 
 def test_markdown_is_owned_by_an_approved_context_root():
-    approved_roots = {"docs", "papers", "stl", "dth", "abstract", "arena", "crates", ".codex"}
+    approved_roots = {"docs", "papers", "src", "arena", ".codex"}
     for path in _source_files(".md"):
         relative = path.relative_to(ROOT)
         if len(relative.parts) == 1:
             assert relative.name in {"README.md", "AGENTS.md"}
         else:
             assert relative.parts[0] in approved_roots, relative
+            if relative.parts[0] == "src":
+                assert len(relative.parts) >= 3
+                assert relative.parts[1] in IMPLEMENTATIONS, relative
 
 
 def test_evidence_line_links_resolve_and_include_their_marker():
@@ -59,7 +68,7 @@ def test_evidence_line_links_resolve_and_include_their_marker():
 def test_solver_projects_do_not_import_each_other():
     for project in PROJECTS:
         forbidden = set(PROJECTS) - {project}
-        for path in (ROOT / project).rglob("*.py"):
+        for path in (SOURCE_ROOT / project).rglob("*.py"):
             if IGNORED_PARTS.intersection(path.relative_to(ROOT).parts):
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -84,12 +93,12 @@ def test_removed_python_namespaces_do_not_reappear():
 
 
 def test_solver_configs_own_their_default_artifact_paths():
-    for path in (ROOT / "stl" / "config").rglob("*.yaml"):
+    for path in (SOURCE_ROOT / "stl" / "config").rglob("*.yaml"):
         text = path.read_text(encoding="utf-8")
-        assert not re.search(r"(?<!stl/)outputs/", text), path
-        assert not re.search(r"(?<!stl/)checkpoints/", text), path
+        assert not re.search(r"(?<!src/stl/)outputs/", text), path
+        assert not re.search(r"(?<!src/stl/)checkpoints/", text), path
     for project in ("dth", "abstract"):
-        config_root = ROOT / project / "config"
+        config_root = SOURCE_ROOT / project / "config"
         if not config_root.exists():
             continue
         for path in config_root.rglob("*.yaml"):

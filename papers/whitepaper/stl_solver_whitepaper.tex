@@ -74,10 +74,10 @@ or global exploitability of the learned agent.
 
 \section{Scope, Status, and Claims}
 
-The live runtime tree is under \path{stl/}. The disconnected old package mirror
+The live runtime tree is under \path{src/stl/}. The disconnected old package mirror
 was removed after pushed archival commit \texttt{a4b03db}; Git, rather than a
 second source tree, retains that history. The implementation plan is
-\path{stl/docs/REGEN2RL.md}, and the granular removal ledger is
+\path{src/stl/docs/REGEN2RL.md}, and the granular removal ledger is
 \path{docs/DISTILLATION_AUDIT.md}. This paper supplies the mathematical
 rationale and claim boundary.
 
@@ -86,14 +86,14 @@ rationale and claim boundary.
 \toprule
 Path & Responsibility \\
 \midrule
-\path{stl/engine/} & Rule authority, clock, roles, legality, death, revival, and leap behavior \\
-\path{stl/solver/exact.py} & Exact public state, engine expansion, LP minimax, and finite-horizon solve \\
-\path{stl/solver/search.py} & Candidate search, bounded resolve, leaf adapters, and matrix-game MCTS \\
-\path{stl/solver/tablebase.py} & Tactical fixtures, certified intervals, and Tier A lookup \\
-\path{stl/learning/} & Targets, policy/value model, training, replay support, and gates \\
-\path{stl/play/} & Playable agents, scripted opponents, environment wrappers, and legacy bucket baseline \\
-\path{stl/commands/} & Hydra command implementations \\
-\path{stl/config/} & Resolved experiment and command parameters \\
+\path{src/stl/engine/} & Rule authority, clock, roles, legality, death, revival, and leap behavior \\
+\path{src/stl/solver/exact.py} & Exact public state, engine expansion, LP minimax, and finite-horizon solve \\
+\path{src/stl/solver/search.py} & Candidate search, bounded resolve, leaf adapters, and matrix-game MCTS \\
+\path{src/stl/solver/tablebase.py} & Tactical fixtures, certified intervals, and Tier A lookup \\
+\path{src/stl/learning/} & Targets, policy/value model, training, replay support, and gates \\
+\path{src/stl/play/} & Playable agents, scripted opponents, environment wrappers, and legacy bucket baseline \\
+\path{src/stl/commands/} & Hydra command implementations \\
+\path{src/stl/config/} & Resolved experiment and command parameters \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -163,7 +163,7 @@ The check succeeds iff \(c\ge d\). On success the checker accumulates the
 inclusive interval \(c-d+1\) seconds, including one second on the diagonal.
 Literal second 1 is the immediate action; index 0 remains illegal padding. On failure the checker incurs
 the fixed 60-second penalty. All death, revival, clock, and leap effects then
-come from \path{stl/engine/game.py}.
+come from \path{src/stl/engine/game.py}.
 
 \subsection{Transition Kernel and Utility}
 
@@ -190,7 +190,7 @@ u(s)=
 0, & s\text{ is an explicitly declared draw}.
 \end{cases}
 \]
-There is no intermediate shaped reward in \path{stl/solver}.
+There is no intermediate shaped reward in \path{src/stl/solver}.
 
 \subsection{Why Reinforcement Learning Needs an Episode Contract}
 
@@ -215,7 +215,7 @@ unrestricted-duration game.
 \section{Exact Finite-Horizon Solver}
 
 \begin{assumption}[Engine authority]
-The Python engine in \path{stl/engine} is the rule oracle. Solver correctness
+The Python engine in \path{src/stl/engine} is the rule oracle. Solver correctness
 is relative to its legality and transition functions.
 \end{assumption}
 
@@ -374,7 +374,7 @@ measured against full width on a frozen audit distribution.
 
 \subsection{Selective Solve and Bounded Resolve}
 
-\path{stl/solver/search.py} generates candidate seconds around endpoints,
+\path{src/stl/solver/search.py} generates candidate seconds around endpoints,
 diagonals, safe budgets, and overflow boundaries. Its selective recursion
 still uses engine transitions and role-correct matrix minimax, but its action
 restriction is approximate. Critical-state resolve applies a hard horizon,
@@ -451,25 +451,25 @@ The repository already contains several components needed by the target
 system:
 
 \begin{itemize}[leftmargin=*]
-  \item \path{stl/learning/model.py}: a shared trunk, Hal value head, and two
+  \item \path{src/stl/learning/model.py}: a shared trunk, Hal value head, and two
         length-62 role-policy heads driven by 52 named V2 features;
-  \item \path{stl/learning/contracts.py}: the versioned finite-episode,
+  \item \path{src/stl/learning/contracts.py}: the versioned finite-episode,
         perspective, configuration, and horizon-sensitivity contract;
-  \item \path{stl/learning/replay.py}: reconstructable
+  \item \path{src/stl/learning/replay.py}: reconstructable
         \path{TrainingRecordV3} rows, safe hash-verified shards, collision
         audits, and grouped splits;
-  \item \path{stl/learning/reachable.py}: legal engine trajectories whose
+  \item \path{src/stl/learning/reachable.py}: legal engine trajectories whose
         snapshots can be replayed from the canonical opening before labeling;
-  \item \path{stl/learning/train.py}: value MSE, masked role-policy cross
+  \item \path{src/stl/learning/train.py}: value MSE, masked role-policy cross
         entropy, source weights, grouped selection, and strict checkpoint
         bundles;
-  \item \path{stl/learning/targets.py}: exact/tablebase labels and MCTS
+  \item \path{src/stl/learning/targets.py}: exact/tablebase labels and MCTS
         bootstrap labels;
-  \item \path{stl/learning/support/reanalysis.py}: deeper exact attempts and a
+  \item \path{src/stl/learning/support/reanalysis.py}: deeper exact attempts and a
         high-iteration MCTS fallback;
   \item calibration, audit, ladder, policy-drift, finite-depth best-response,
         SPRT, and promotion utilities; and
-  \item \path{stl/play/agent.py}: a playable network-plus-MCTS agent that
+  \item \path{src/stl/play/agent.py}: a playable network-plus-MCTS agent that
         samples the canonical improved role policies.
 \end{itemize}
 
@@ -492,7 +492,7 @@ evidence, not a frozen Generation Zero.
         A public command is added only when P5 supplies the joint MCTS actor,
         reconstructable replay, and command-contract tests.
   \item \textbf{Legacy actor.}
-        \path{stl/learning/support/self_play.py} uses bucketed
+        \path{src/stl/learning/support/self_play.py} uses bucketed
         \path{CanonicalHal} against scripted opponents. It is curriculum or
         legacy outcome data, not MCTS self-play by both sides.
   \item \textbf{Expert-iteration labels.}
@@ -738,7 +738,7 @@ infer global improvement or global low exploitability.
 \section{Phased Implementation and Rust Boundary}
 
 The executable plan and numeric exit criteria live in
-\path{stl/docs/REGEN2RL.md}. Its dependency chain is:
+\path{src/stl/docs/REGEN2RL.md}. Its dependency chain is:
 
 \begin{enumerate}[leftmargin=*]
   \item freeze the objective, perspective, and finite episode contract;
