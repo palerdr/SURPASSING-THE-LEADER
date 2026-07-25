@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from abstract.rules import Bucket12TTDCurve95Rules
+from abstract.rules import Bucket12Unified80Rules
 from arena import abstract_adapter, cli
 from arena.abstract_adapter import AbstractTablebasePolicyProvider, project_to_abstract_state
 from arena.agent import PolicyDrivenAgent, decision_from_game, normalize_legal_policy
@@ -34,7 +34,7 @@ def test_projection_floors_seconds_to_role_relative_ten_second_buckets() -> None
 
 
 def test_projection_floors_seconds_to_role_relative_five_second_buckets() -> None:
-    state = project_to_abstract_state(_decision(), Bucket12TTDCurve95Rules())
+    state = project_to_abstract_state(_decision(), Bucket12Unified80Rules())
     assert (state.checker_load, state.checker_ttd, state.dropper_load, state.dropper_ttd) == (
         3,
         24,
@@ -48,7 +48,7 @@ def test_five_second_provider_uses_packed_lookup_and_lifts_actions(
     tmp_path,
 ) -> None:
     class _Packed:
-        manifest = {"metadata": {"ruleset_id": "bucket12_ttd_curve95"}}
+        manifest = {"metadata": {"ruleset_id": "bucket12_unified80"}}
 
         def __init__(self, artifact_dir) -> None:
             assert artifact_dir == tmp_path
@@ -71,12 +71,12 @@ def test_bucket_flag_selects_bucket_specific_default_artifact() -> None:
     five = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "5"])
     ten = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "10"])
     assert cli._abstract_artifact(five) == (
-        Path("abstract/outputs/bucket12_ttd_curve95"),
-        "bucket12_ttd_curve95",
+        Path("abstract/outputs/bucket12_unified80"),
+        "bucket12_unified80",
     )
     assert cli._abstract_artifact(ten) == (
-        Path("abstract/outputs/bucket6_ttd_curve95/tablebase.npz"),
-        "bucket6_ttd_curve95",
+        Path("abstract/outputs/bucket6_unified80"),
+        "bucket6_unified80",
     )
 
 

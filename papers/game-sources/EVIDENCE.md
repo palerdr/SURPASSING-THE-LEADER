@@ -39,3 +39,11 @@ Source: `Leader-Deviation-Strategy.pdf`, PDF page 127. The analysis describes a
 state where failing to check before accumulation goes over five minutes causes
 an immediate loss.
 
+## Modeling boundary — revival odds are not identified
+
+The cited passages establish capacity, injection, and eligibility boundaries;
+they do not supply an empirical or canonical numerical revival-probability
+surface. Numerical dose/TTD curves, decay constants, physicality multipliers,
+and referee-fatigue surrogates in executable models are therefore explicit
+modeling assumptions. They must be versioned and must not be presented as
+documentary odds.

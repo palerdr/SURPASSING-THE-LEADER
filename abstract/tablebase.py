@@ -13,7 +13,7 @@ from abstract.rules import AbstractRuleset, TIMING_CONVENTION_ID
 from abstract.state import AbstractState
 
 
-TABLEBASE_SCHEMA = "abstract.tablebase.v1"
+TABLEBASE_SCHEMA = "abstract.tablebase.v2"
 
 
 def state_id(state: AbstractState, rules: AbstractRuleset) -> str:
@@ -42,7 +42,6 @@ def build_tablebase(
     results = [result for _state, result in rows]
     arrays: dict[str, np.ndarray] = {
         "states": states,
-        "state_id": np.asarray([state_id(state, rules) for state, _result in rows], dtype="U64"),
         "value": np.asarray([result.value_for_dropper for result in results], dtype=np.float64),
         "drop_policy": np.stack([_policy_row(result, drop=True, action_size=rules.action_size) for result in results]),
         "check_policy": np.stack([_policy_row(result, drop=False, action_size=rules.action_size) for result in results]),
@@ -73,15 +72,8 @@ def build_tablebase(
             "load_cap_units": rules.load_cap_units,
             "load_cap_seconds": rules.load_cap_seconds,
             "failed_check_penalty_units": rules.failed_check_penalty_units,
-            "revival_model": {
-                "kind": "no_cpr_dose_cubic_ttd_stretched_exponential_v1",
-                "baseline": rules.revival_baseline,
-                "dose_curve_exponent": rules.dose_curve_exponent,
-                "ttd_half_life_units": rules.ttd_half_life_units,
-                "ttd_curve_exponent": rules.ttd_curve_exponent,
-                "cpr_term": "absent",
-                "physicality_term": "absent",
-            },
+            "revival_model": rules.revival_model_metadata,
+            "state_ids": "derived_on_lookup_or_export_sha256",
             "root_state": list(rules.state_fields(root)),
             "reachable_state_count": len(rows),
             "physical_state_upper_bound": rules.physical_state_upper_bound,

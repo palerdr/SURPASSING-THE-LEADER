@@ -16,13 +16,18 @@ from abstract.artifacts import canonical_json, digest_files, digest_json, sha256
 from abstract.matrix import saddle_gap as matrix_saddle_gap
 from abstract.matrix import solve_matrix
 from abstract.packed import PackedStateCodec, packed_live_successors
-from abstract.rules import AbstractRuleset, TIMING_CONVENTION_ID
+from abstract.rules import (
+    LEGACY_REVIVAL_MODEL,
+    UNIFIED_REVIVAL_MODEL,
+    AbstractRuleset,
+    TIMING_CONVENTION_ID,
+)
 from abstract.state import AbstractState
 from abstract.tablebase import state_id
 
 
-PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v2"
-PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v1"
+PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v3"
+PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v2"
 UNREACHABLE_ORDINAL = np.iinfo(np.uint32).max
 
 _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -35,6 +40,13 @@ _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
     "dropper_win_probability": ("float64", ("reachable",)),
     "checker_win_probability": ("float64", ("reachable",)),
 }
+
+
+def _rust_revival_model_code(rules: AbstractRuleset) -> int:
+    return {
+        LEGACY_REVIVAL_MODEL: 0,
+        UNIFIED_REVIVAL_MODEL: 1,
+    }[rules.revival_model_kind]
 
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -110,10 +122,7 @@ class PackedTablebaseBuilder:
                 "bucket_seconds": self.rules.bucket_seconds,
                 "load_cap_units": self.rules.load_cap_units,
                 "failed_check_penalty_units": self.rules.failed_check_penalty_units,
-                "revival_baseline": self.rules.revival_baseline,
-                "dose_curve_exponent": self.rules.dose_curve_exponent,
-                "ttd_half_life_units": self.rules.ttd_half_life_units,
-                "ttd_curve_exponent": self.rules.ttd_curve_exponent,
+                "revival_model": self.rules.revival_model_metadata,
             }
         )
         self._rust_kernel = self._load_rust_kernel()
@@ -140,7 +149,7 @@ class PackedTablebaseBuilder:
                     "see crates/docs/BUILD.md"
                 )
             return None
-        expected = "abstract-packed-parity-v1"
+        expected = "abstract-packed-parity-v2"
         if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
             raise RuntimeError("Rust packed solver does not match the Python parity contract")
         return module
@@ -554,10 +563,13 @@ class PackedTablebaseBuilder:
             self.rules.load_cap_units,
             size,
             self.rules.failed_check_penalty_units,
+            _rust_revival_model_code(self.rules),
             self.rules.revival_baseline,
             self.rules.dose_curve_exponent,
             self.rules.ttd_half_life_units,
             self.rules.ttd_curve_exponent,
+            self.rules.referee_decay_per_death_dose,
+            self.rules.referee_floor,
         )
         (
             pure_mask,
@@ -712,10 +724,7 @@ class PackedTablebaseBuilder:
                 "load_cap_units": self.rules.load_cap_units,
                 "load_cap_seconds": self.rules.load_cap_seconds,
                 "failed_check_penalty_units": self.rules.failed_check_penalty_units,
-                "revival_baseline": self.rules.revival_baseline,
-                "dose_curve_exponent": self.rules.dose_curve_exponent,
-                "ttd_half_life_units": self.rules.ttd_half_life_units,
-                "ttd_curve_exponent": self.rules.ttd_curve_exponent,
+                "revival_model": self.rules.revival_model_metadata,
                 "root_state_index": 0,
                 "reachable_state_count": reachable,
                 "physical_state_upper_bound": self.rules.physical_state_upper_bound,
@@ -823,10 +832,13 @@ class PackedTablebaseBuilder:
                     self.rules.load_cap_units,
                     size,
                     self.rules.failed_check_penalty_units,
+                    _rust_revival_model_code(self.rules),
                     self.rules.revival_baseline,
                     self.rules.dose_curve_exponent,
                     self.rules.ttd_half_life_units,
                     self.rules.ttd_curve_exponent,
+                    self.rules.referee_decay_per_death_dose,
+                    self.rules.referee_floor,
                 )
                 mixed_positions = np.asarray(result[6], dtype=np.int64)
                 if mixed_positions.size == 0:
@@ -941,16 +953,22 @@ class PackedTablebase:
 
     @staticmethod
     def _rules_for_manifest(metadata: dict[str, Any]) -> AbstractRuleset:
+        revival = metadata["revival_model"]
         return AbstractRuleset(
             ruleset_id=str(metadata["ruleset_id"]),
             action_values=tuple(int(value) for value in metadata["action_values"]),
             bucket_seconds=int(metadata["bucket_seconds"]),
             load_cap_units=int(metadata["load_cap_units"]),
             failed_check_penalty_units=int(metadata["failed_check_penalty_units"]),
-            revival_baseline=float(metadata["revival_baseline"]),
-            dose_curve_exponent=float(metadata["dose_curve_exponent"]),
-            ttd_half_life_units=float(metadata["ttd_half_life_units"]),
-            ttd_curve_exponent=float(metadata["ttd_curve_exponent"]),
+            revival_model_kind=str(revival["kind"]),
+            revival_baseline=float(revival["baseline"]),
+            dose_curve_exponent=float(revival.get("dose_curve_exponent", 3.0)),
+            ttd_half_life_units=float(revival["ttd_half_life_units"]),
+            ttd_curve_exponent=float(revival["ttd_curve_exponent"]),
+            referee_decay_per_death_dose=float(
+                revival.get("referee_decay_per_death_dose", 1.0)
+            ),
+            referee_floor=float(revival.get("referee_floor", 1.0)),
         )
 
     def lookup(self, state: AbstractState | tuple[int, int, int, int] | int) -> dict[str, Any]:

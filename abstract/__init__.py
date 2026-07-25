@@ -3,6 +3,8 @@
 from abstract.exact import AbstractExactResult, enumerate_reachable_states, solve_exact
 from abstract.rules import (
     AbstractRuleset,
+    Bucket6Unified80Rules,
+    Bucket12Unified80Rules,
     Bucket6TTDCurve95Rules,
     Bucket12TTDCurve95Rules,
     ruleset_for_name,
@@ -14,7 +16,9 @@ __all__ = [
     "AbstractExactResult",
     "AbstractRuleset",
     "AbstractState",
+    "Bucket12Unified80Rules",
     "Bucket12TTDCurve95Rules",
+    "Bucket6Unified80Rules",
     "Bucket6TTDCurve95Rules",
     "enumerate_reachable_states",
     "ruleset_for_name",

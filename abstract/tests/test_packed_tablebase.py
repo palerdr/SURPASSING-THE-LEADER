@@ -12,7 +12,7 @@ from abstract.packed_tablebase import (
     PackedTablebase,
     PackedTablebaseBuilder,
 )
-from abstract.rules import AbstractRuleset, Bucket12TTDCurve95Rules
+from abstract.rules import AbstractRuleset, Bucket12Unified80Rules
 from abstract.state import AbstractState
 
 
@@ -28,7 +28,7 @@ def _tiny_rules() -> AbstractRuleset:
 
 
 def test_five_second_formulation_doubles_physical_unit_counts() -> None:
-    rules = Bucket12TTDCurve95Rules()
+    rules = Bucket12Unified80Rules()
     assert rules.action_values == tuple(range(1, 13))
     assert tuple(rules.action_seconds(action) for action in rules.action_values) == tuple(
         range(5, 61, 5)
@@ -55,7 +55,7 @@ def test_packed_transition_contract_matches_python_rules(
     drop: int,
     check: int,
 ) -> None:
-    rules = Bucket12TTDCurve95Rules()
+    rules = Bucket12Unified80Rules()
     codec = PackedStateCodec(rules.load_cap_units)
     state = AbstractState(*fields)
     packed = packed_branches(codec.encode(*fields), drop, check, rules, codec=codec)
@@ -74,7 +74,7 @@ def test_packed_transition_contract_matches_python_rules(
 
 
 def test_packed_codec_is_bijective_and_successors_increase_potential() -> None:
-    rules = Bucket12TTDCurve95Rules()
+    rules = Bucket12Unified80Rules()
     codec = PackedStateCodec(rules.load_cap_units)
     samples = (
         (0, 0, 0, 0),

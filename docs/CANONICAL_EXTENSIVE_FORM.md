@@ -31,9 +31,12 @@ STL's eligible revival probability is:
 ```
 
 DTH deliberately removes referee fatigue and physicality and uses its locally
-documented prior-TTD factor. The enumerated `abstract` ruleset also removes
-those terms; its versioned no-CPR survival surrogate is documented locally in
-`abstract/docs/MODEL.md`. Both retain the same strict boundary inequalities.
+documented prior-TTD factor. The production `abstract` rulesets also remove
+identity-specific physicality and explicit CPR count. They use a versioned
+two-variable surrogate in pre-failure ST and accrued TTD; its TTD-derived
+effective referee burden and evidence boundary are documented locally in
+`abstract/docs/MODEL.md`. All projects retain the same strict boundary
+inequalities.
 
 <!-- canon:C-AUTHORITY -->
 ## Executable authorities

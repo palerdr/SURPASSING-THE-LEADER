@@ -18,7 +18,11 @@ def _output_dir(args: argparse.Namespace, ruleset_id: str) -> Path:
 
 def command_exact(args: argparse.Namespace) -> int:
     rules = ruleset_for_name(args.ruleset)
-    packed = args.packed or rules.action_size > 6
+    packed = (
+        args.packed
+        or rules.ruleset_id in {"bucket6_unified80", "bucket12_unified80"}
+        or rules.action_size > 6
+    )
     if packed:
         output_dir = _output_dir(args, rules.ruleset_id)
         print(
@@ -76,12 +80,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m abstract")
     subparsers = parser.add_subparsers(dest="command", required=True)
     exact = subparsers.add_parser("exact", help="build the exhaustive role-relative terminal tablebase")
-    exact.add_argument("--ruleset", default="bucket6_ttd_curve95")
+    exact.add_argument("--ruleset", default="bucket6_unified80")
     exact.add_argument("--output-dir")
     exact.add_argument(
         "--packed",
         action="store_true",
-        help="use the resumable packed v2 builder (automatic for the 5-second ruleset)",
+        help="use the resumable packed v3 builder (automatic for production rulesets)",
     )
     exact.add_argument(
         "--checkpoint-states",

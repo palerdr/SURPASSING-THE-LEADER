@@ -11,6 +11,8 @@ from abstract.state import AbstractBranch, AbstractState
 
 
 TIMING_CONVENTION_ID = "ordinal-buckets-inclusive-st-v1"
+LEGACY_REVIVAL_MODEL = "dose_cubic_ttd_stretched_exponential_v1"
+UNIFIED_REVIVAL_MODEL = "linear_st_ttd_effective_referee_v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,10 +28,13 @@ class AbstractRuleset:
     bucket_seconds: int
     load_cap_units: int
     failed_check_penalty_units: int
+    revival_model_kind: str = LEGACY_REVIVAL_MODEL
     revival_baseline: float = 0.95
     dose_curve_exponent: float = 3.0
     ttd_half_life_units: float = 12.0
     ttd_curve_exponent: float = 1.3
+    referee_decay_per_death_dose: float = 1.0
+    referee_floor: float = 1.0
 
     def __post_init__(self) -> None:
         if not self.ruleset_id:
@@ -48,12 +53,18 @@ class AbstractRuleset:
             raise ValueError("action buckets must be the contiguous range 1..failed_check_penalty_units")
         if not 0.0 < self.revival_baseline <= 1.0:
             raise ValueError("revival_baseline must be in (0, 1]")
+        if self.revival_model_kind not in {LEGACY_REVIVAL_MODEL, UNIFIED_REVIVAL_MODEL}:
+            raise ValueError(f"unknown revival_model_kind {self.revival_model_kind!r}")
         if self.dose_curve_exponent <= 0.0:
             raise ValueError("dose_curve_exponent must be positive")
         if self.ttd_half_life_units <= 0.0:
             raise ValueError("ttd_half_life_units must be positive")
         if self.ttd_curve_exponent <= 0.0:
             raise ValueError("ttd_curve_exponent must be positive")
+        if not 0.0 < self.referee_decay_per_death_dose <= 1.0:
+            raise ValueError("referee_decay_per_death_dose must be in (0, 1]")
+        if not 0.0 < self.referee_floor <= 1.0:
+            raise ValueError("referee_floor must be in (0, 1]")
 
     @property
     def load_cap_seconds(self) -> int:
@@ -66,6 +77,24 @@ class AbstractRuleset:
     @property
     def schema_version(self) -> str:
         return f"abstract.state.{self.ruleset_id}.v1"
+
+    @property
+    def revival_model_metadata(self) -> dict[str, float | str]:
+        """Return the complete, hot-artifact revival-model contract."""
+
+        metadata: dict[str, float | str] = {
+            "kind": self.revival_model_kind,
+            "baseline": self.revival_baseline,
+            "ttd_half_life_units": self.ttd_half_life_units,
+            "ttd_curve_exponent": self.ttd_curve_exponent,
+        }
+        if self.revival_model_kind == LEGACY_REVIVAL_MODEL:
+            metadata["dose_curve_exponent"] = self.dose_curve_exponent
+        else:
+            metadata["st_shape"] = "linear_pre_failure_load"
+            metadata["referee_decay_per_death_dose"] = self.referee_decay_per_death_dose
+            metadata["referee_floor"] = self.referee_floor
+        return metadata
 
     def initial_state(self) -> AbstractState:
         return AbstractState()
@@ -116,19 +145,35 @@ class AbstractRuleset:
                         yield AbstractState(checker_load, checker_ttd, dropper_load, dropper_ttd)
 
     def revival_probability(self, prior_ttd: int, dose_units: int) -> float:
-        """No-CPR revival model in ordinal bucket units.
+        """Return revival probability from pre-failure ST and accrued TTD.
 
-        The curve is ``baseline * (1 - (dose / cap)^3) *
-        2**(-((prior_ttd / 12)**1.3))``.  It has no identity-specific
-        physicality or global referee-CPR term; those are intentionally absent
-        from this role-relative toy abstraction.
+        The current rules use a linear factor in pre-failure ST, a stretched
+        TTD decay, and a TTD-derived effective referee burden.  Legacy rulesets
+        retain the earlier cubic dose curve for artifact reproducibility.
         """
 
         if dose_units >= self.load_cap_units or prior_ttd + dose_units > self.load_cap_units:
             return 0.0
-        dose_factor = 1.0 - (dose_units / self.load_cap_units) ** self.dose_curve_exponent
+        if self.revival_model_kind == LEGACY_REVIVAL_MODEL:
+            dose_factor = 1.0 - (dose_units / self.load_cap_units) ** self.dose_curve_exponent
+            referee_factor = 1.0
+        else:
+            pre_failure_st = dose_units - self.failed_check_penalty_units
+            survivable_st_span = self.load_cap_units - self.failed_check_penalty_units
+            dose_factor = 1.0 - pre_failure_st / survivable_st_span
+            effective_deaths = prior_ttd / self.failed_check_penalty_units
+            referee_factor = max(
+                self.referee_floor,
+                self.referee_decay_per_death_dose**effective_deaths,
+            )
         ttd_factor = 2.0 ** (-(prior_ttd / self.ttd_half_life_units) ** self.ttd_curve_exponent)
-        return float(np.clip(self.revival_baseline * dose_factor * ttd_factor, 0.0, 1.0))
+        return float(
+            np.clip(
+                self.revival_baseline * dose_factor * ttd_factor * referee_factor,
+                0.0,
+                1.0,
+            )
+        )
 
     def expand_joint_action(self, state: AbstractState, drop: int, check: int) -> tuple[AbstractBranch, ...]:
         legal_drop = self.legal_drop_actions(state)
@@ -239,8 +284,46 @@ def Bucket12TTDCurve95Rules() -> AbstractRuleset:
     )
 
 
+def Bucket6Unified80Rules() -> AbstractRuleset:
+    """Ten-second formulation of the unified two-variable revival model."""
+
+    return AbstractRuleset(
+        ruleset_id="bucket6_unified80",
+        action_values=tuple(range(1, 7)),
+        bucket_seconds=10,
+        load_cap_units=30,
+        failed_check_penalty_units=6,
+        revival_model_kind=UNIFIED_REVIVAL_MODEL,
+        revival_baseline=0.80,
+        ttd_half_life_units=12.0,
+        ttd_curve_exponent=1.3,
+        referee_decay_per_death_dose=0.88,
+        referee_floor=0.40,
+    )
+
+
+def Bucket12Unified80Rules() -> AbstractRuleset:
+    """Five-second formulation physically equivalent to bucket6_unified80."""
+
+    return AbstractRuleset(
+        ruleset_id="bucket12_unified80",
+        action_values=tuple(range(1, 13)),
+        bucket_seconds=5,
+        load_cap_units=60,
+        failed_check_penalty_units=12,
+        revival_model_kind=UNIFIED_REVIVAL_MODEL,
+        revival_baseline=0.80,
+        ttd_half_life_units=24.0,
+        ttd_curve_exponent=1.3,
+        referee_decay_per_death_dose=0.88,
+        referee_floor=0.40,
+    )
+
+
 def ruleset_for_name(name: str) -> AbstractRuleset:
     factories = {
+        "bucket6_unified80": Bucket6Unified80Rules,
+        "bucket12_unified80": Bucket12Unified80Rules,
         "bucket6_ttd_curve95": Bucket6TTDCurve95Rules,
         "bucket12_ttd_curve95": Bucket12TTDCurve95Rules,
     }

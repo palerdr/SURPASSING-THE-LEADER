@@ -44,6 +44,14 @@ Revival calculations use IEEE-754 binary64. Cross-language absolute error must
 be at most `1e-15` per branch probability. Probability mass must sum to one
 within `1e-12`.
 
+The `abstract-packed-parity-v2` contract covers both versioned probability
+models. Production rules use
+`linear_st_ttd_effective_referee_v1`; Python and Rust must agree on the linear
+pre-failure-ST factor, stretched TTD factor, TTD-derived referee floor/decay,
+and fatality guards. Legacy cubic rules remain parity-covered only for
+reproducibility. The ruleset model discriminator is part of every checkpoint
+configuration digest and artifact manifest.
+
 ## Reachability parity
 
 From packed root index zero, Rust must produce exactly the same bitset
@@ -86,7 +94,8 @@ and every state routed to LP in the sample.
 
 ## Artifact and resume parity
 
-The artifact schema is `abstract.packed-tablebase.v2`. Required arrays, shapes,
+The artifact schema is `abstract.packed-tablebase.v3` and the resumable
+checkpoint schema is `abstract.packed-tablebase-build.v2`. Required arrays, shapes,
 dtypes, packed ordering, SHA-256 file digests, metadata, and lookup results must
 match the Python build. Per-state SHA IDs are forbidden in hot arrays and are
 derived from `ruleset_id|state_fields` only at lookup/export.

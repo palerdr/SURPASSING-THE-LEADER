@@ -13,11 +13,11 @@ from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_H
 
 def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
     if args.buckets == 5:
-        ruleset_id = "bucket12_ttd_curve95"
+        ruleset_id = "bucket12_unified80"
         default = Path("abstract/outputs") / ruleset_id
     else:
-        ruleset_id = "bucket6_ttd_curve95"
-        default = Path("abstract/outputs") / ruleset_id / "tablebase.npz"
+        ruleset_id = "bucket6_unified80"
+        default = Path("abstract/outputs") / ruleset_id
     return (
         Path(args.abstract_tablebase) if args.abstract_tablebase else default,
         ruleset_id,
@@ -42,7 +42,8 @@ def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
 def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
     if args.hal_agent == "abstract":
         tablebase_path, ruleset_id = _abstract_artifact(args)
-        if args.buckets == 5:
+        packed_artifact = tablebase_path.is_dir() or tablebase_path.suffix != ".npz"
+        if packed_artifact:
             artifact_dir = (
                 tablebase_path.parent
                 if tablebase_path.name == "tablebase.json"
@@ -70,7 +71,7 @@ def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
                 "--output-dir",
                 str(output_dir),
             ]
-            if args.buckets == 5:
+            if packed_artifact:
                 command.extend(("--backend", args.abstract_backend))
             result = abstract_main(command)
             if result != 0:
@@ -144,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         choices=(5, 10),
         default=10,
-        help="abstract bucket width in seconds; use 5 for the packed tablebase",
+        help="abstract tablebase bucket width in seconds",
     )
     play.add_argument(
         "--abstract-tablebase",
@@ -155,7 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--abstract-backend",
         choices=("auto", "python", "rust"),
         default="auto",
-        help="backend used only when a missing 5-second tablebase must be built",
+        help="backend used when a missing abstract tablebase must be built",
     )
     play.add_argument("--checkpoint")
     play.add_argument("--iterations", type=int, default=200)
