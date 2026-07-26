@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import sys
 
 
 COMMANDS = {
     "dataset": "dth.generate_dataset",
+    "exact": "dth.exact_agent",
     "train": "dth.train",
     "self-play": "dth.self_play",
     "mcts-audit": "dth.mcts",
@@ -25,10 +27,12 @@ def main() -> None:
     except KeyError as exc:
         raise SystemExit(f"unknown DTH command {command!r}") from exc
     module = importlib.import_module(module_name)
-    sys.argv[0] = module_name
+    # Hydra resolves a relative config path from the executable module file,
+    # not a dotted import name.  This keeps all DTH subcommands reproducible
+    # through the common router.
+    sys.argv[0] = str(Path(module.__file__).resolve())
     module.main()
 
 
 if __name__ == "__main__":
     main()
-

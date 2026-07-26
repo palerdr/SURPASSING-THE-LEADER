@@ -1,0 +1,12 @@
+defaults:
+  - train_value_only_bellman_composition_v4
+  - _self_
+
+# V5 keeps V4's root-CVaR aggregation and adds action-wise protection inside
+# each root. The full 3,600-cell mean remains the Bellman anchor; the fixed
+# symmetric action CVaR exposes the worst checker columns and Dropper rows.
+output_dir: dth/checkpoints/value_only_bellman_composition_v5
+
+decision_loss:
+  matrix_aggregation: full_plus_action_cvar
+  action_cvar_alpha: 0.25

@@ -9,6 +9,7 @@ from dth.solver import (
     solve_matrix,
     solve,
     payoff,
+    payoff_from_value_lookup,
     transition,
 )
 from dth.network import DTHNetworkConfig, DTHPolicyValueNet
@@ -243,23 +244,7 @@ def payoff_from_exact_targets(
 ) -> np.ndarray:
     """Reconstruct one exact matrix from certified child values."""
 
-    matrix = np.empty((len(DROPPER_ACTIONS), len(CHECKER_ACTIONS)))
-    for drop_index, drop in enumerate(DROPPER_ACTIONS):
-        for check_index, check in enumerate(CHECKER_ACTIONS):
-            action_total = 0.0
-            for probability, child in transition(state, drop, check):
-                if isinstance(child, TState):
-                    branch_value = float(reward(child))
-                elif horizon == 1:
-                    branch_value = 0.0
-                else:
-                    key = (child, horizon - 1)
-                    if key not in targets.values:
-                        raise KeyError(key)
-                    branch_value = -targets.values[key]
-                action_total += probability * branch_value
-            matrix[drop_index, check_index] = action_total
-    return matrix
+    return payoff_from_value_lookup(state, horizon, targets.values)
 
 
 class ExactValueEvaluator:

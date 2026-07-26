@@ -1,0 +1,37 @@
+defaults:
+  - train
+  - _self_
+
+# This model sees only the primary side of each pair.  The mirror artifact is
+# loaded after checkpoint selection and is never a training or selection input.
+dataset: dth/artifacts/paired_boundary_orientation_v1_primary.npz
+output_dir: dth/checkpoints/paired_boundary_orientation_v1_primary
+seed: 4
+device: cuda
+
+model:
+  hidden_width: 64
+  hidden_layers: 2
+  horizon_scale: 3.0
+  feature_lift: boundary_v2
+
+training:
+  epochs: 1800
+  batch_size: 24
+  learning_rate: 0.001
+  weight_decay: 0.0
+  validation_fraction: 0.25
+  policy_weight: 0.5
+  patience: 400
+  minimum_delta: 0.000001
+  log_every: 100
+
+audit:
+  max_rows_per_horizon: 32
+
+generalization_audit:
+  dataset: dth/artifacts/paired_boundary_orientation_v1_mirror.npz
+  # Exact stored values/policies are scored for every held-out row.  Full
+  # payoff-matrix reconstruction is intentionally disabled here: it is a
+  # separate expensive solver audit, not needed to test target generalization.
+  max_saddle_rows_per_horizon: 0

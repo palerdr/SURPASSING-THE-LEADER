@@ -1,0 +1,154 @@
+defaults:
+  - train_matrix_policy_boundary_lift_v21
+  - _self_
+
+# Direct product-fit experiment: the eight frozen readiness roots are now
+# optimized and selected alongside the existing development roots. This is
+# not a held-out generalization run.
+output_dir: dth/checkpoints/strategic_matrix_policy_boundary_lift_product_v22
+initial_checkpoint: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
+
+decision_loss:
+  exact_targets: dth/artifacts/readiness_product_roots_v1.npz
+  roots:
+    - state: [239, 0, 0, 240]
+      horizon: 5
+      saddle_gap_weight: 5.0
+    - state: [0, 240, 239, 0]
+      horizon: 5
+      saddle_gap_weight: 5.0
+    - state: [239, 0, 0, 240]
+      horizon: 4
+      saddle_gap_weight: 5.0
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [180, 0, 180, 61]
+      horizon: 3
+    - state: [180, 61, 180, 0]
+      horizon: 3
+    - state: [179, 60, 180, 60]
+      horizon: 3
+    - state: [180, 60, 179, 60]
+      horizon: 3
+    - state: [59, 0, 219, 0]
+      horizon: 3
+    - state: [219, 0, 59, 0]
+      horizon: 3
+    - state: [119, 120, 179, 120]
+      horizon: 3
+    - state: [179, 120, 119, 120]
+      horizon: 3
+    - state: [60, 180, 241, 0]
+      horizon: 3
+    - state: [241, 0, 60, 180]
+      horizon: 3
+    - state: [0, 0, 240, 0]
+      horizon: 4
+    - state: [240, 0, 0, 0]
+      horizon: 4
+    - state: [180, 0, 180, 61]
+      horizon: 4
+    - state: [180, 61, 180, 0]
+      horizon: 4
+    - state: [179, 60, 180, 60]
+      horizon: 4
+    - state: [180, 60, 179, 60]
+      horizon: 4
+    - state: [59, 0, 219, 0]
+      horizon: 4
+    - state: [219, 0, 59, 0]
+      horizon: 4
+    - state: [119, 120, 179, 120]
+      horizon: 4
+    - state: [179, 120, 119, 120]
+      horizon: 4
+    - state: [60, 180, 241, 0]
+      horizon: 4
+    - state: [241, 0, 60, 180]
+      horizon: 4
+    - state: [238, 0, 1, 240]
+      horizon: 4
+    - state: [1, 240, 238, 0]
+      horizon: 4
+    - state: [179, 60, 59, 180]
+      horizon: 4
+    - state: [59, 180, 179, 60]
+      horizon: 4
+    - state: [219, 0, 19, 240]
+      horizon: 3
+    - state: [19, 240, 219, 0]
+      horizon: 3
+    - state: [119, 120, 179, 60]
+      horizon: 3
+    - state: [179, 60, 119, 120]
+      horizon: 3
+
+decision_selection:
+  exact_targets: dth/artifacts/readiness_product_roots_v1.npz
+  roots:
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [180, 0, 180, 61]
+      horizon: 3
+    - state: [180, 61, 180, 0]
+      horizon: 3
+    - state: [179, 60, 180, 60]
+      horizon: 3
+    - state: [180, 60, 179, 60]
+      horizon: 3
+    - state: [59, 0, 219, 0]
+      horizon: 3
+    - state: [219, 0, 59, 0]
+      horizon: 3
+    - state: [119, 120, 179, 120]
+      horizon: 3
+    - state: [179, 120, 119, 120]
+      horizon: 3
+    - state: [60, 180, 241, 0]
+      horizon: 3
+    - state: [241, 0, 60, 180]
+      horizon: 3
+    - state: [0, 0, 240, 0]
+      horizon: 4
+    - state: [240, 0, 0, 0]
+      horizon: 4
+    - state: [180, 0, 180, 61]
+      horizon: 4
+    - state: [180, 61, 180, 0]
+      horizon: 4
+    - state: [179, 60, 180, 60]
+      horizon: 4
+    - state: [180, 60, 179, 60]
+      horizon: 4
+    - state: [59, 0, 219, 0]
+      horizon: 4
+    - state: [219, 0, 59, 0]
+      horizon: 4
+    - state: [119, 120, 179, 120]
+      horizon: 4
+    - state: [179, 120, 119, 120]
+      horizon: 4
+    - state: [60, 180, 241, 0]
+      horizon: 4
+    - state: [241, 0, 60, 180]
+      horizon: 4
+    - state: [238, 0, 1, 240]
+      horizon: 4
+    - state: [1, 240, 238, 0]
+      horizon: 4
+    - state: [179, 60, 59, 180]
+      horizon: 4
+    - state: [59, 180, 179, 60]
+      horizon: 4
+    - state: [219, 0, 19, 240]
+      horizon: 3
+    - state: [19, 240, 219, 0]
+      horizon: 3
+    - state: [119, 120, 179, 60]
+      horizon: 3
+    - state: [179, 60, 119, 120]
+      horizon: 3

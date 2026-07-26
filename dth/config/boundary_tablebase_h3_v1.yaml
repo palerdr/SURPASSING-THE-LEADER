@@ -1,0 +1,50 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Persistent exact closure for the six known failure-boundary families.  Each
+# primary state is expanded mechanically into its role-swapped orientation.
+# Every root is included directly at H1, H2, and H3; each root's complete live
+# successor closure is emitted down to H1.
+dataset_version: boundary_tablebase_h3_v1
+emission: boundary_tablebase_closure
+output: dth/artifacts/boundary_tablebase_h3_v1.npz
+report_output: dth/artifacts/boundary_tablebase_h3_v1_report.json
+progress_every: 1000
+
+pairs:
+  # ST=240 dose switch
+  - state: [239, 0, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [240, 0, 0, 0]
+    horizons: [1, 2, 3]
+  # strict ST + TTD = 240 revival boundary
+  - state: [200, 40, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [200, 41, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [179, 61, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [179, 62, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [60, 180, 0, 0]
+    horizons: [1, 2, 3]
+  - state: [60, 181, 0, 0]
+    horizons: [1, 2, 3]
+  # both role-local surfaces active together
+  - state: [240, 0, 200, 40]
+    horizons: [1, 2, 3]
+  - state: [200, 41, 240, 0]
+    horizons: [1, 2, 3]
+  - state: [239, 1, 179, 61]
+    horizons: [1, 2, 3]
+  - state: [239, 2, 179, 62]
+    horizons: [1, 2, 3]
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

@@ -1,0 +1,13 @@
+defaults:
+  - train_value_only_bellman_composition_v3
+  - _self_
+
+# V4 fixes root-gradient starvation exposed by the c=60 coverage audit. V3's
+# hard maximum backpropagated through only one of eight training roots. CVaR
+# averages the worst four root losses, so every currently poor root contributes
+# without changing the data, matrix target, induced-gap term, or evaluation.
+output_dir: dth/checkpoints/value_only_bellman_composition_v4
+
+decision_loss:
+  root_aggregation: cvar
+  root_cvar_alpha: 0.5

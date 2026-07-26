@@ -1,255 +1,73 @@
-# DTH build and experiment workflows
+# DTH workflows
 
-`dth/solver.py` is the complete mathematical implementation of the first
-no-leap game. Keep it compact and import-only: rules, exact transition
-expansion, finite-horizon recursion, and the matrix LP solve remain there.
+All commands run from the repository root. Generated databases and JSON reports
+remain under ignored `dth/artifacts/`.
 
-`dth/generate_dataset.py` owns reachable-state enumeration and NPZ writing.
-`dth/config/dataset.yaml` is its Hydra configuration. Dataset concerns must
-not move back into the solver.
+## Exact census and solve
 
-`dth/docs/GAME_AND_SOLVER.md` is the mathematical specification. Code and documentation must
-change together whenever a rule changes. The canonical engine remains separate.
-
-## Frozen rules
-
-- Both simultaneous action sets are exactly `1..60`.
-- There is no action zero, pass, or no-check action.
-- A check succeeds iff `check >= drop`.
-- Successful ST is `check - drop + 1`, so every success adds at least one ST.
-- The cylinder stores exact integer ST from `0` through `299`.
-- Reaching or exceeding 300 accumulated ST on a successful check immediately
-  dumps the cylinder.
-- The injected overflow dose is capped at 300 and is inclusively fatal.
-- A failed check creates dose `current_st + 60`.
-- Failed-check revival is impossible when the dose is at least 300 or prior TTD
-  plus the dose is greater than 300. Resulting total TTD exactly 300 remains
-  revival-eligible.
-- Otherwise:
-
-  ```text
-  p_revive = (1 - (dose / 300)^3) * 2^(-prior_ttd / 240)
-  ```
-
-- Revival resets the failed Checker's ST to zero and adds the dose to their TTD.
-- Every surviving half-turn swaps Checker and Dropper roles.
-- There is no leap second, absolute clock, physicality, or referee fatigue.
-
-The old `-1` fatal-on-next-failure sentinel is forbidden. ST values `240..299`
-cannot be merged because they differ in how much additional successful ST is
-needed to dump the cylinder.
-
-## State and value
-
-The role-canonical live state is:
-
-```python
-(checker_st, checker_ttd, dropper_st, dropper_ttd)
-```
-
-The value is always from the current Dropper's perspective:
-
-- permanent current-Checker death: `+1`;
-- current-Dropper loss: `-1`;
-- live horizon cutoff: `0`.
-
-Because roles swap after a live transition, continuation values are negated.
-The remaining horizon indexes the dynamic-programming layer and is not stored
-inside the physical state tuple.
-
-## Exact solve
-
-For every live state and positive horizon:
-
-1. build the full `60 x 60` matrix with Dropper rows and Checker columns;
-2. expand deterministic or revival-chance branches exactly;
-3. use terminal reward or `-V(child, horizon - 1)`;
-4. solve Dropper-maximizing and Checker-minimizing LPs with SciPy HiGHS;
-5. normalize both marginals and reject saddle gap above `1e-6`;
-6. memoize the value and both policies.
-
-Do not add MCTS, neural-network, canonical-engine, Hydra, or artifact-writing
-dependencies to `dth/solver.py`.
-
-## Reachable shallow targets
-
-Run the dedicated Hydra entry point from the repository root:
+There is one current Hydra entry point and one generic config:
 
 ```powershell
-uv run python -m dth.generate_dataset
+uv run python -m dth exact
 ```
 
-The default parameters live in `dth/config/dataset.yaml`. Any field can be
-overridden without editing code, for example:
+Override roots, the shared database, report path, census bounds, solve bounds,
+batches, and workers through Hydra:
 
 ```powershell
-uv run python -m dth.generate_dataset horizon=2 output=dth/artifacts/exact_h2.npz
-uv run python -m dth.generate_dataset horizon=1 root_states='[[239,0,0,0],[240,0,0,0]]' output=dth/artifacts/boundary_h1.npz
+uv run python -m dth exact `
+  database_path=dth/artifacts/exact.sqlite `
+  report_path=dth/artifacts/exact_report.json `
+  'roots=[{state:[240,0,240,0]}]' `
+  census.max_expansions=5000 census.max_states=10000 census.max_seconds=30 `
+  solve.max_new_solutions=10000 solve.max_seconds=120 `
+  solve.batch_size=64 solve.workers=1
 ```
 
-The first strategically informative root-only fixture has its own frozen
-configuration and command:
+At least one census bound is mandatory. Enabling solve also requires a state or
+time bound. The report embeds the fully resolved Hydra configuration. Census
+and exact values use the same database so queue completion and value commit are
+atomic. Policies are reconstructed and optionally cached only for queried
+roots.
+
+For a census-only run:
 
 ```powershell
-uv run python -m dth.generate_dataset --config-name strategic_exact_v1
+uv run python -m dth exact solve.enabled=false
 ```
 
-Unlike the opening plumbing fixture, this emits only the configured stratified
-roots. Recursive children are solved as dependencies but are not allowed to
-swamp the training rows with horizon-1 states.
+## Current exact results
 
-Train the compact exact-target policy/value network with:
+| Root | Status | Reachable identity count | Evidence |
+|---|---:|---:|---|
+| `(239,241,299,300)` | exact closure | 61 | exhausted persisted frontier |
+| `(240,0,240,0)` | exact quotient closure | 3,541 | checker-turn bitset and persisted census |
+| boundary roots | not rerun on current schema | — | no projection |
+| frozen development roots | not rerun on current schema | — | no projection |
+| `(0,0,0,0)` | not run on current schema | — | no complete-game claim |
+
+Full rank, branching, deduplication, timing, memory, storage, profiling, and
+interval detail belongs in the generated JSON report.
+
+## Existing finite data and training workflows
 
 ```powershell
-uv run python -m dth.train
+uv run python -m dth dataset
+uv run python -m dth train
+uv run python -m dth self-play
+uv run python -m dth mcts-audit
 ```
 
-The default parameters live in `dth/config/train.yaml`. Training uses a
-physical-state-grouped 80/20 split, horizon-balanced losses, a scalar
-current-Dropper value head, and independent 60-action Dropper and Checker
-policy heads. The best checkpoint and deterministic report are written under
-`dth/checkpoints/strategic_exact_v1/`.
+Those workflows remain separate from exact authority. Neural, RL, self-play,
+CFR, or MCTS outputs may order future selective expansion, but they cannot
+provide leaf values or certification bounds.
 
-The richer horizon-3 follow-up is reproducible with:
+## Validation
 
 ```powershell
-uv run python -m dth.generate_dataset --config-name strategic_exact_v2
-uv run python -m dth.train dataset=dth/artifacts/strategic_exact_v2.npz output_dir=dth/checkpoints/strategic_exact_v2
+uv run python -m pytest dth/tests -q
+uv run python -m pytest --collect-only -q
+uv run python -m pytest -q
+cargo test --workspace
+graphify update .
 ```
-
-The default config starts from `(0,0,0,0)`, uses transition-equivalent
-representatives to enumerate every distinct live successor, and writes:
-
-```text
-dth/artifacts/exact_h3.npz
-```
-
-The artifact contains the opening at horizon 3, its live successors at horizon
-2, and their live successors at horizon 1. Its schema is
-`dth-v1-ttd-strict-overflow`.
-
-Horizon 3 is intentionally only a plumbing fixture. From an empty opening, it
-cannot expose the eventual cost of repeatedly choosing `check=60`: the initial
-Checker can act as Checker only twice and accumulate at most 120 ST. The first
-possible five-check, 300-ST overflow for that player occurs on half-turn 9.
-Do not treat the horizon-3 equilibrium as a long-horizon strategy claim.
-
-## Matrix-induced policy experiment
-
-The v13 experiment directly supervises the policy induced by matrices rebuilt
-from learned child values:
-
-```powershell
-uv run python -m dth.train --config-name train_matrix_policy_cfr_v13
-```
-
-`dth/torch_cfr.py` unrolls a fixed, differentiable CFR+ budget over the three
-approximate root matrices.  The resulting policies are evaluated on exact LP
-target matrices, and checkpoint selection minimizes their worst exact saddle
-gap across both H5 roots and the H4 guard root.  The H4 gap and induced value
-error also have baseline-relative hinge losses and hard promotion guards.
-Exact-corpus value/policy loss and repeated H4/H5 frontier rows remain
-supporting supervision.  The unrolled solver is not an exact target generator;
-LP targets remain authoritative.
-
-The seed-4, 64x2 warm start in
-`dth/checkpoints/strategic_matrix_policy_cfr_v13/` selected epoch 200.  With 64
-CFR+ iterations, worst exact induced-policy gap improved from `0.119546` to
-`0.096643`.  The H4 guard gap improved from `0.119546` to `0.096643`, and its
-value error improved from `0.029139` to `0.024856`.  A separate LP solve of each
-learned approximate matrix also improved the worst exact gap from `0.130042` to
-`0.106001`.  NumPy CFR+ at the same iteration budget matches the Torch audit;
-it is an audit/runtime approximation only and is not used for gradients.
-
-## Matrix-policy generalization readiness v2
-
-The v2 readiness sprint keeps the eight roots in
-`readiness_exact_h3_v1.yaml` and `readiness_exact_h4_v1.yaml` frozen. Its
-development pack uses six asymmetric boundary families, both role
-orientations, and both horizons 3 and 4: 24 root identities in total. The H4
-closure is generated in two bounded batches and merged into
-`dth/artifacts/readiness_development_v2.npz`.
-
-Three 64x2 configurations were run. The final v19 configuration adds a
-per-root saddle-gap weight for the three retained guards and performs 16
-unrolled decision updates per epoch. It improved the development worst CFR
-gap from `0.476041` to `0.421691`, but did not pass the unchanged frozen gate:
-the exact LP worst-anchor improvement was `2.12%`, evaluation median
-improvement was `0.86%`, and evaluation maximum gap regressed from `0.235416`
-to `0.240992`. The machine report is
-`dth/artifacts/self_play_readiness_v2_report.json`; its recommendation is
-`no-promote`. Do not use v19 as the self-play champion.
-
-## Regression requirements
-
-At minimum, tests must pin:
-
-1. `drop=1, check=1` succeeds for one ST;
-2. successful accumulation to 299 remains live;
-3. successful accumulation to exactly 300 is terminal;
-4. successful accumulation above 300 is terminal and the physical dose remains
-   capped at 300 by the rule contract;
-5. a failed-check dose of exactly 300 is terminal;
-6. prior TTD plus current failed-check dose of exactly 300 remains
-   revival-eligible;
-7. prior TTD plus current failed-check dose above 300 is terminal;
-8. live successful and revived transitions swap role coordinates;
-9. horizon zero returns value zero;
-10. a known matrix game has normalized minimax marginals and a small saddle gap;
-11. target artifacts contain only ST values `0..299`, live TTD values `0..300`,
-    legal policies, value bounds, schema `dth-v1-ttd-strict-overflow`, and
-    horizons `1..3`.
-
-## Next learning step
-
-After the contract tests and artifact audit pass, train a small network with:
-
-- input `(sC, tC, sD, tD, remaining_horizon)`;
-- one current-Dropper value output;
-- one 60-action Dropper marginal;
-- one 60-action Checker marginal.
-
-For strategically informative exact pretraining, either extend the opening
-horizon far enough to expose overflow or add shallow exact roots already near
-the cylinder boundary. Keep those datasets explicitly distinguished from the
-compact horizon-3 plumbing artifact.
-
-Plan:
-Generate exact reachable targets for horizons 1–3.
-Supervise a tiny network on those targets.
-Validate MCTS against the exact solver.
-Use that network as the MCTS leaf evaluator.
-Run capped MCTS self-play.
-Train the next network on MCTS policies and terminal/truncated outcomes.
-
-## Boundary-lift v21 portability and readiness
-
-The v21 boundary experiment is restored from
-`dth/artifacts/boundary_lift_v21_portable.zip`. On another clone, check out
-the v21 source branch, copy the archive to `dth/artifacts/`, and extract it at
-the repository root so its `dth/` paths are preserved:
-
-```powershell
-Get-FileHash dth/artifacts/boundary_lift_v21_portable.zip -Algorithm SHA256
-Expand-Archive -LiteralPath dth/artifacts/boundary_lift_v21_portable.zip -DestinationPath . -Force
-```
-
-Use `dth/config/boundary_lift_v21_artifacts.yaml` to verify every listed file's
-size and SHA256 after extraction. The readiness report can be rerun without
-retraining:
-
-```powershell
-uv run python -m dth.readiness `
-  --baseline dth/artifacts/mcts_readiness_v19_v1.json `
-  --candidate dth/artifacts/mcts_readiness_boundary_lift_v21_v1.json `
-  --checkpoint dth/checkpoints/strategic_matrix_policy_boundary_lift_v21/best.pt `
-  --exact-targets dth/artifacts/self_play_readiness_reference_v1.npz `
-  --replay-a dth/artifacts/self_play_readiness_boundary_lift_v21_run1.json `
-  --replay-b dth/artifacts/self_play_readiness_boundary_lift_v21_run2.json `
-  --output dth/artifacts/boundary_lift_v21_readiness.json
-```
-
-The current self-play champion remains
-`dth/checkpoints/strategic_mixed_v7/best.pt`; v21 was `no-promote` because the
-unchanged frozen gates failed. The v21 selected checkpoint is retained for
-reproduction and analysis, not promotion.

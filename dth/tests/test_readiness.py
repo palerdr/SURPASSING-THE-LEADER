@@ -79,3 +79,27 @@ def test_v2_development_roots_are_mirrored_and_frozen_disjoint() -> None:
         ((state[2], state[3], state[0], state[1]), horizon) in configured
         for state, horizon in configured
     )
+
+
+def test_value_only_selection_roots_are_disjoint_from_training_and_frozen_roots() -> None:
+    config = OmegaConf.load("dth/config/train_value_only_bellman_composition_v2.yaml")
+    frozen_config = OmegaConf.load("dth/config/mcts_readiness_mixed_v7_v1.yaml")
+    selected = {
+        (tuple(root.state), int(root.horizon))
+        for root in config.decision_selection.roots
+    }
+    guarded = {
+        (tuple(root.state), int(root.horizon))
+        for root in config.decision_selection.guard_roots
+    }
+    trained = {
+        (tuple(root.state), int(root.horizon)) for root in config.decision_loss.roots
+    }
+    frozen = {
+        (tuple(root.state), int(root.horizon)) for root in frozen_config.roots
+    }
+
+    assert selected == guarded
+    assert len(selected) == 12
+    assert selected.isdisjoint(trained)
+    assert selected.isdisjoint(frozen)

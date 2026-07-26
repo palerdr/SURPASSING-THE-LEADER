@@ -1,15 +1,20 @@
 from pathlib import Path
+import json
 
 import numpy as np
 import pytest
 
 from dth.generate_dataset import (
     TARGET_SCHEMA,
+    boundary_tablebase_identities,
     failure_margin_class,
+    generate_boundary_tablebase,
     generate_exact_targets,
+    generate_paired_orientation_targets,
     generate_strategic_targets,
     live_successors,
     merge_exact_target_artifacts,
+    mirror_state,
     reachable_layers,
     sample_strategic_roots,
 )
@@ -91,6 +96,96 @@ def test_generate_strategic_artifact_emits_only_requested_roots(tmp_path: Path) 
         )
         assert str(artifact["dataset_version"]) == "strategic_exact_v1"
         assert str(artifact["emission"]) == "roots_only"
+
+
+def test_paired_orientation_targets_hold_out_only_exact_mirrors(
+    tmp_path: Path,
+) -> None:
+    train, holdout = generate_paired_orientation_targets(
+        train_output=tmp_path / "train.npz",
+        holdout_output=tmp_path / "holdout.npz",
+        pairs=[
+            {"state": [240, 0, 0, 0], "horizons": [1, 2]},
+            {"state": [200, 41, 60, 180], "horizons": [1]},
+        ],
+        train_orientation="primary",
+        progress_every=0,
+        dataset_version="paired-test",
+    )
+
+    with np.load(train) as train_artifact, np.load(holdout) as holdout_artifact:
+        train_rows = {
+            (tuple(int(value) for value in state), int(horizon))
+            for state, horizon in zip(
+                train_artifact["states"], train_artifact["horizons"], strict=True
+            )
+        }
+        holdout_rows = {
+            (tuple(int(value) for value in state), int(horizon))
+            for state, horizon in zip(
+                holdout_artifact["states"],
+                holdout_artifact["horizons"],
+                strict=True,
+            )
+        }
+
+        assert str(train_artifact["emission"]) == "paired_mirror_roots"
+        assert str(holdout_artifact["paired_role"]) == "heldout_mirror"
+
+    assert train_rows.isdisjoint(holdout_rows)
+    assert {
+        (mirror_state(state), horizon) for state, horizon in train_rows
+    } == holdout_rows
+
+
+def test_paired_orientation_targets_reject_self_mirrors(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="self-mirrored"):
+        generate_paired_orientation_targets(
+            train_output=tmp_path / "train.npz",
+            holdout_output=tmp_path / "holdout.npz",
+            pairs=[{"state": [0, 0, 0, 0], "horizons": [1]}],
+            train_orientation="primary",
+            progress_every=0,
+        )
+
+
+def test_boundary_tablebase_materializes_paired_full_closure(tmp_path: Path) -> None:
+    pairs = [{"state": [240, 0, 0, 0], "horizons": [1, 2]}]
+    output = tmp_path / "tablebase.npz"
+    report_output = tmp_path / "tablebase_report.json"
+
+    roots, expected = boundary_tablebase_identities(pairs)
+    generated = generate_boundary_tablebase(
+        output=output,
+        report_output=report_output,
+        pairs=pairs,
+        progress_every=0,
+        dataset_version="tablebase-test",
+    )
+
+    with np.load(generated) as artifact:
+        rows = {
+            (tuple(int(value) for value in state), int(horizon))
+            for state, horizon in zip(
+                artifact["states"], artifact["horizons"], strict=True
+            )
+        }
+        assert rows == expected
+        assert str(artifact["dataset_version"]) == "tablebase-test"
+        assert str(artifact["emission"]) == "boundary_tablebase_closure"
+        assert str(artifact["schema_version"]) == TARGET_SCHEMA
+        assert set(artifact["root_orientations"].tolist()) == {"primary", "mirror"}
+        assert artifact["root_states"].shape == (len(roots), 4)
+
+    report = json.loads(report_output.read_text(encoding="utf-8"))
+    assert report["artifact"]["rows"] == len(expected)
+    assert report["artifact"]["bytes"] == output.stat().st_size
+    assert report["roots"]["primary_rows"] == 2
+    assert report["roots"]["mirror_rows"] == 2
+    assert report["coverage_by_remaining_horizon"] == {
+        str(horizon): sum(1 for _, current in expected if current == horizon)
+        for horizon in (1, 2)
+    }
 
 
 def test_merge_exact_artifacts_deduplicates_state_horizon_rows(tmp_path: Path) -> None:

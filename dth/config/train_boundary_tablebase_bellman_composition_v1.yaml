@@ -1,0 +1,123 @@
+defaults:
+  - train
+  - _self_
+
+# One exact composition test.  These four H3 roots receive no direct policy or
+# value supervision, while every configured H1/H2 tablebase row remains usable.
+dataset: dth/artifacts/boundary_tablebase_h3_v1.npz
+output_dir: dth/checkpoints/boundary_tablebase_bellman_composition_v1
+initial_checkpoint: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+seed: 4
+device: cuda
+
+model:
+  hidden_width: 64
+  hidden_layers: 2
+  horizon_scale: 3.0
+  feature_lift: boundary_v2
+
+training:
+  epochs: 120
+  batch_size: 60
+  learning_rate: 0.00001
+  weight_decay: 0.00001
+  validation_fraction: 0.2
+  policy_weight: 0.1
+  patience: 120
+  minimum_delta: 0.000001
+  log_every: 10
+  horizon_batch:
+    counts:
+      1: 20
+      2: 20
+      3: 20
+    # One epoch performs a modest randomized H1/H2 sweep while every visible
+    # H3 root is included once in each batch.
+    batches_per_epoch: 16
+  exclude_exact_identities:
+    - state: [239, 1, 179, 61]
+      horizons: [3]
+    - state: [179, 61, 239, 1]
+      horizons: [3]
+    - state: [239, 2, 179, 62]
+      horizons: [3]
+    - state: [179, 62, 239, 2]
+      horizons: [3]
+
+audit:
+  max_rows_per_horizon: 24
+
+# This report is audit-only: the candidate is never selected on these rows.
+generalization_audit:
+  dataset: dth/artifacts/boundary_tablebase_h3_v1.npz
+  include_exact_identities:
+    - state: [239, 1, 179, 61]
+      horizons: [3]
+    - state: [179, 61, 239, 1]
+      horizons: [3]
+    - state: [239, 2, 179, 62]
+      horizons: [3]
+    - state: [179, 62, 239, 2]
+      horizons: [3]
+  max_saddle_rows_per_horizon: 4
+
+# Existing matrix-induced policy objective, applied only to the 20 visible H3
+# roots.  It differentiates through learned H2 child values and fixed CFR+;
+# it does not expose a held-out H3 direct target.
+decision_loss:
+  exact_targets: dth/artifacts/boundary_tablebase_h3_v1.npz
+  repeats: 1
+  solver_iterations: 64
+  solver_averaging_delay: 0
+  saddle_gap_weight: 1.0
+  matrix_weight: 0.1
+  matrix_top_k: 128
+  guard_hinge_weight: 4.0
+  roots:
+    - state: [239, 0, 0, 0]
+      horizon: 3
+    - state: [0, 0, 239, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [200, 40, 0, 0]
+      horizon: 3
+    - state: [0, 0, 200, 40]
+      horizon: 3
+    - state: [200, 41, 0, 0]
+      horizon: 3
+    - state: [0, 0, 200, 41]
+      horizon: 3
+    - state: [179, 61, 0, 0]
+      horizon: 3
+    - state: [0, 0, 179, 61]
+      horizon: 3
+    - state: [179, 62, 0, 0]
+      horizon: 3
+    - state: [0, 0, 179, 62]
+      horizon: 3
+    - state: [60, 180, 0, 0]
+      horizon: 3
+    - state: [0, 0, 60, 180]
+      horizon: 3
+    - state: [60, 181, 0, 0]
+      horizon: 3
+    - state: [0, 0, 60, 181]
+      horizon: 3
+    - state: [240, 0, 200, 40]
+      horizon: 3
+    - state: [200, 40, 240, 0]
+      horizon: 3
+    - state: [200, 41, 240, 0]
+      horizon: 3
+    - state: [240, 0, 200, 41]
+      horizon: 3
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

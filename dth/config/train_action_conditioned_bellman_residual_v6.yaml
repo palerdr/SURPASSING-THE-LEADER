@@ -1,0 +1,17 @@
+defaults:
+  - train_value_only_bellman_composition_v5
+  - _self_
+
+# V6 is the direct local-action-geometry test.  It keeps V5's data, splits,
+# full-matrix anchor, action-CVaR, and induced-gap term, but lets each root
+# matrix receive a zero-initialized action-conditioned residual.  The direct
+# equilibrium-policy CE and all mirror objectives remain absent.
+output_dir: dth/checkpoints/action_conditioned_bellman_residual_v6
+
+model:
+  continuation_residual: true
+
+decision_loss:
+  # L2 keeps the correction conservative; it must earn every deviation from
+  # the real-transition scalar Bellman matrix through all-cell exact targets.
+  residual_weight: 10.0
