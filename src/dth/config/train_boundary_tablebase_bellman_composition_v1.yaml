@@ -4,9 +4,9 @@ defaults:
 
 # One exact composition test.  These four H3 roots receive no direct policy or
 # value supervision, while every configured H1/H2 tablebase row remains usable.
-dataset: dth/artifacts/boundary_tablebase_h3_v1.npz
-output_dir: dth/checkpoints/boundary_tablebase_bellman_composition_v1
-initial_checkpoint: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+dataset: src/dth/artifacts/boundary_tablebase_h3_v1.npz
+output_dir: src/dth/checkpoints/boundary_tablebase_bellman_composition_v1
+initial_checkpoint: src/dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
 seed: 4
 device: cuda
 
@@ -49,7 +49,7 @@ audit:
 
 # This report is audit-only: the candidate is never selected on these rows.
 generalization_audit:
-  dataset: dth/artifacts/boundary_tablebase_h3_v1.npz
+  dataset: src/dth/artifacts/boundary_tablebase_h3_v1.npz
   include_exact_identities:
     - state: [239, 1, 179, 61]
       horizons: [3]
@@ -65,7 +65,7 @@ generalization_audit:
 # roots.  It differentiates through learned H2 child values and fixed CFR+;
 # it does not expose a held-out H3 direct target.
 decision_loss:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v1.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v1.npz
   repeats: 1
   solver_iterations: 64
   solver_averaging_delay: 0

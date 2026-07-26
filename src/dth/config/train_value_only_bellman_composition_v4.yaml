@@ -6,7 +6,7 @@ defaults:
 # hard maximum backpropagated through only one of eight training roots. CVaR
 # averages the worst four root losses, so every currently poor root contributes
 # without changing the data, matrix target, induced-gap term, or evaluation.
-output_dir: dth/checkpoints/value_only_bellman_composition_v4
+output_dir: src/dth/checkpoints/value_only_bellman_composition_v4
 
 decision_loss:
   root_aggregation: cvar

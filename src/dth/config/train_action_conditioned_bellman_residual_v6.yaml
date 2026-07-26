@@ -6,7 +6,7 @@ defaults:
 # full-matrix anchor, action-CVaR, and induced-gap term, but lets each root
 # matrix receive a zero-initialized action-conditioned residual.  The direct
 # equilibrium-policy CE and all mirror objectives remain absent.
-output_dir: dth/checkpoints/action_conditioned_bellman_residual_v6
+output_dir: src/dth/checkpoints/action_conditioned_bellman_residual_v6
 
 model:
   continuation_residual: true

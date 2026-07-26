@@ -5,11 +5,11 @@ defaults:
 # Direct product-fit experiment: the eight frozen readiness roots are now
 # optimized and selected alongside the existing development roots. This is
 # not a held-out generalization run.
-output_dir: dth/checkpoints/strategic_matrix_policy_boundary_lift_product_v22
-initial_checkpoint: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
+output_dir: src/dth/checkpoints/strategic_matrix_policy_boundary_lift_product_v22
+initial_checkpoint: src/dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
 
 decision_loss:
-  exact_targets: dth/artifacts/readiness_product_roots_v1.npz
+  exact_targets: src/dth/artifacts/readiness_product_roots_v1.npz
   roots:
     - state: [239, 0, 0, 240]
       horizon: 5
@@ -86,7 +86,7 @@ decision_loss:
       horizon: 3
 
 decision_selection:
-  exact_targets: dth/artifacts/readiness_product_roots_v1.npz
+  exact_targets: src/dth/artifacts/readiness_product_roots_v1.npz
   roots:
     - state: [0, 0, 240, 0]
       horizon: 3

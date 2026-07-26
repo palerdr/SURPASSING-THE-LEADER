@@ -5,7 +5,7 @@ defaults:
 # V3 holds V2's exact data, split, value-only policy treatment, and full
 # transition-matrix Bellman supervision fixed. The sole training change is an
 # induced exact saddle-gap term on the eight disjoint H3 training roots.
-output_dir: dth/checkpoints/value_only_bellman_composition_v3
+output_dir: src/dth/checkpoints/value_only_bellman_composition_v3
 
 decision_loss:
   # The fixed-CFR calculation differentiates through the induced strategy.

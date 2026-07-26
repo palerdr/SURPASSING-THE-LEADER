@@ -9,8 +9,8 @@ defaults:
 # successor closure is emitted down to H1.
 dataset_version: boundary_tablebase_h3_v1
 emission: boundary_tablebase_closure
-output: dth/artifacts/boundary_tablebase_h3_v1.npz
-report_output: dth/artifacts/boundary_tablebase_h3_v1_report.json
+output: src/dth/artifacts/boundary_tablebase_h3_v1.npz
+report_output: src/dth/artifacts/boundary_tablebase_h3_v1_report.json
 progress_every: 1000
 
 pairs:

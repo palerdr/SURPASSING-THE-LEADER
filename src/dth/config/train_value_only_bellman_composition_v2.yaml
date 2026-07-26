@@ -5,9 +5,9 @@ defaults:
 # Clean composition ablation: H1/H2 successor values are supervised directly;
 # every H3 root label is excluded from row training and policies come only from
 # solving the reconstructed matrix.
-dataset: dth/artifacts/boundary_tablebase_h3_v1.npz
-output_dir: dth/checkpoints/value_only_bellman_composition_v2
-initial_checkpoint: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+dataset: src/dth/artifacts/boundary_tablebase_h3_v1.npz
+output_dir: src/dth/checkpoints/value_only_bellman_composition_v2
+initial_checkpoint: src/dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
 seed: 4
 device: cuda
 
@@ -45,7 +45,7 @@ audit:
 # policy-label or policy-mapping loss. One update per row batch matches the
 # removed regularizer's update count without changing row-data exposure.
 decision_loss:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v1.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v1.npz
   repeats: 24
   saddle_gap_weight: 0.0
   matrix_weight: 1.0
@@ -65,8 +65,8 @@ decision_loss:
 # every root is also a hard non-regression guard. Frozen readiness roots appear
 # nowhere in this configuration.
 decision_selection:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v1.npz
-  baseline_checkpoint: dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v1.npz
+  baseline_checkpoint: src/dth/checkpoints/strategic_matrix_policy_generalization_balanced_v19/best.pt
   solver_iterations: null
   solver_averaging_delay: 0
   ranking: cvar_saddle_gap
@@ -95,7 +95,7 @@ decision_selection:
 # Kept wholly audit-only. The report records individual high-error cells,
 # exact support membership, and which induced best response exposes each cell.
 matrix_diagnosis:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v1.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v1.npz
   top_cells: 12
   support_tolerance: 0.000001
   roots:

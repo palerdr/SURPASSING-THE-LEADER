@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 dataset_version: readiness_product_roots_v1
-output: dth/artifacts/readiness_product_roots_v1.npz
+output: src/dth/artifacts/readiness_product_roots_v1.npz
 emission: reachable_layers
 horizon: 4
 root_states:
@@ -17,7 +17,7 @@ root_states:
   - [119, 120, 179, 60]
   - [179, 60, 119, 120]
 base_datasets:
-  - dth/artifacts/readiness_training_reference_v2.npz
+  - src/dth/artifacts/readiness_training_reference_v2.npz
 progress_every: 250
 
 hydra:

@@ -5,8 +5,8 @@ defaults:
 
 # One current exact architecture. Override roots, database/report paths, and
 # explicit bounds from Hydra; the fully resolved config is embedded in JSON.
-database_path: dth/artifacts/exact.sqlite
-report_path: dth/artifacts/exact_report.json
+database_path: src/dth/artifacts/exact.sqlite
+report_path: src/dth/artifacts/exact_report.json
 roots:
   - state: [239, 241, 299, 300]
 parity_horizons: [1, 2]

@@ -2,8 +2,8 @@ defaults:
   - train_matrix_policy_generalization_balanced_v19
   - _self_
 
-output_dir: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21
-initial_checkpoint: dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
+output_dir: src/dth/checkpoints/strategic_matrix_policy_boundary_lift_v21
+initial_checkpoint: src/dth/checkpoints/strategic_matrix_policy_boundary_lift_v21_initial/migrated.pt
 
 model:
   feature_lift: boundary_v1

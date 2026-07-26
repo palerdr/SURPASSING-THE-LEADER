@@ -210,7 +210,7 @@ def reward(x: State):
         return -1
     else:
         return 0
-    
+
 def transition(x: NTState, d: int, c: int) -> Distribution:
     """From a state and given actions, give the distribution of child states"""
     sc, tc, sd, td = x
@@ -504,11 +504,11 @@ def payoff(x: NTState, horizon: int) -> np.ndarray:
         (len(DROPPER_ACTIONS), len(CHECKER_ACTIONS)),
         dtype=np.float64
     )
-    
+
     for i, d in enumerate(DROPPER_ACTIONS):
         for j, c in enumerate(CHECKER_ACTIONS):
             matrix[i, j] = action_value(state, d, c, horizon)
-    
+
     return matrix
 
 
@@ -625,7 +625,7 @@ def solve_matrix(matrix: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
     check_policy = np.clip(check_result.x[:-1], 0.0, None)
     drop_policy /= drop_policy.sum()
     check_policy /= check_policy.sum()
-    
+
     lower_bound = np.min(matrix.T @ drop_policy)
     upper_bound = np.max(matrix @ check_policy)
     saddle_gap = max(0.0, upper_bound - lower_bound)

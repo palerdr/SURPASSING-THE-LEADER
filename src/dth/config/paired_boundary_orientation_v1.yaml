@@ -8,8 +8,8 @@ defaults:
 dataset_version: paired_boundary_orientation_v1
 emission: paired_mirror_roots
 train_orientation: primary
-train_output: dth/artifacts/paired_boundary_orientation_v1_primary.npz
-holdout_output: dth/artifacts/paired_boundary_orientation_v1_mirror.npz
+train_output: src/dth/artifacts/paired_boundary_orientation_v1_primary.npz
+holdout_output: src/dth/artifacts/paired_boundary_orientation_v1_mirror.npz
 progress_every: 25
 
 # Every primary state is paired mechanically with

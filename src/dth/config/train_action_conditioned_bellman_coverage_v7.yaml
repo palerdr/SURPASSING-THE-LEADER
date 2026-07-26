@@ -4,11 +4,11 @@ defaults:
 
 # V7 changes only exact coverage.  The V6 residual architecture and every
 # objective/selection/guard setting are intentionally inherited unchanged.
-dataset: dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
-output_dir: dth/checkpoints/action_conditioned_bellman_coverage_v7
+dataset: src/dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
+output_dir: src/dth/checkpoints/action_conditioned_bellman_coverage_v7
 
 decision_loss:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
   roots:
     - {state: [239, 0, 0, 0], horizon: 3}
     - {state: [0, 0, 239, 0], horizon: 3}
@@ -28,7 +28,7 @@ decision_loss:
     - {state: [0, 0, 180, 61], horizon: 3}
 
 decision_selection:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
 
 matrix_diagnosis:
-  exact_targets: dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
+  exact_targets: src/dth/artifacts/boundary_tablebase_h3_v2_coverage.npz

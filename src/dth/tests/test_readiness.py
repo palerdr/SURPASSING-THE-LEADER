@@ -82,8 +82,8 @@ def test_v2_development_roots_are_mirrored_and_frozen_disjoint() -> None:
 
 
 def test_value_only_selection_roots_are_disjoint_from_training_and_frozen_roots() -> None:
-    config = OmegaConf.load("dth/config/train_value_only_bellman_composition_v2.yaml")
-    frozen_config = OmegaConf.load("dth/config/mcts_readiness_mixed_v7_v1.yaml")
+    config = OmegaConf.load("src/dth/config/train_value_only_bellman_composition_v2.yaml")
+    frozen_config = OmegaConf.load("src/dth/config/mcts_readiness_mixed_v7_v1.yaml")
     selected = {
         (tuple(root.state), int(root.horizon))
         for root in config.decision_selection.roots

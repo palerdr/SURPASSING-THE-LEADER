@@ -8,8 +8,8 @@ defaults:
 # orientations.  All roots emit their H1/H2/H3 successor closure.
 dataset_version: boundary_tablebase_h3_v2_coverage
 emission: boundary_tablebase_closure
-output: dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
-report_output: dth/artifacts/boundary_tablebase_h3_v2_coverage_report.json
+output: src/dth/artifacts/boundary_tablebase_h3_v2_coverage.npz
+report_output: src/dth/artifacts/boundary_tablebase_h3_v2_coverage_report.json
 progress_every: 1000
 
 pairs:
