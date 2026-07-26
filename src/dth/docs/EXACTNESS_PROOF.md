@@ -1,29 +1,81 @@
-# DTH finite-horizon exactness proof
+# Pure DTH exactness boundary
 
-## Claim
+## Damage DAG
 
-For every represented DTH state and finite horizon `h`, `dth.solver.solve`
-returns the value and role marginals of the declared simultaneous stochastic
-zero-sum game, up to the numerical tolerance of the matrix LP.
+For every live transition in `dth.solver.transition`, raw damage
 
-## Base case
+\[
+R(x)=s_c+t_c+s_d+t_d
+\]
 
-At horizon zero, terminal states return their fixed utility and live states
-return the declared cutoff value. No action is silently selected.
+strictly increases. A successful live transition increases it by the inclusive
+lag \(c-d+1\). A revived failed check increases it by 60. Therefore the
+complete-game dependency graph is acyclic, and descending-rank dynamic
+programming is valid.
 
-## Inductive step
+`complete_game_dependencies` enumerates the unique live children represented
+by the 61 Bellman transition classes. Census expansion never solves an LP.
+Solving begins only after the reachable frontier is exhausted, and a state is
+eligible only after every greater-rank child has an exact committed value.
 
-Assume every successor at horizon `h-1` is solved exactly. DTH has finite legal
-action sets `{1, ..., 60}` for both roles. For every joint action, the transition
-function enumerates the complete success/failure outcome and every revival
-chance branch. Weighting the exact successor values constructs the exact stage
-matrix. The zero-sum LP returns that matrix's minimax value and equilibrium
-marginals. Therefore the result at horizon `h` is exact.
+## Failure-dead quotient
 
-## Boundary of the proof
+If both ST coordinates are at least 240, every future failed check is fatal.
+TTD can never affect another transition. Define remaining capacities
 
-The proof covers the no-leap rules and state described in
-`GAME_AND_SOLVER.md`. It does not establish an infinite-horizon solution, STL
-private-information behavior, or correctness of learned leaf values. LP
-residual and saddle-gap tests cover numerical certification.
+\[
+(a,b)=(300-s_c,300-s_d),\qquad 1\le a,b\le60.
+\]
 
+All states with the same \((a,b)\) are behaviorally equivalent. A successful
+lag \(\ell\) is live exactly when \(1\le\ell<a\), with quotient child
+
+\[
+(a,b)\to(b,a-\ell).
+\]
+
+Failures and lags \(\ell\ge a\) are terminal. This proves the quotient without
+using a value approximation.
+
+The persistent key gives quotient classes a disjoint negative ID range. Since
+entering the quotient erases dead TTD, its scheduling ranks occupy a disjoint
+band above every raw-state rank; successful lags strictly increase rank inside
+that band. A checker-turn bitset stores reachable \(b\) values for each \(a\).
+For root `(240,0,240,0)`, the bitset recurrence yields exactly
+
+\[
+1+59+59^2=3541
+\]
+
+reachable equivalence classes.
+
+## Certified value intervals
+
+An unknown live child begins at the mathematical bound \([-1,1]\). If a child
+has interval \([L,U]\), role reversal contributes \([-U,-L]\). Expected branch
+bounds produce elementwise lower and upper matrices \(M^-\le M^+\).
+Monotonicity of zero-sum game value gives
+
+\[
+\operatorname{val}(M^-)\le V(x)\le\operatorname{val}(M^+).
+\]
+
+Interval refinement may narrow these bounds but may never widen them. An
+interval midpoint is not an authoritative child value. Exact rank solving
+requires every live child to have an exact committed float64 value.
+
+## Persistence and replay
+
+One fail-closed SQLite schema owns roots, census rows, rank layers, value
+intervals, exact scalar certificates, optional queried-root policy caches, and
+queue status. Exact value insertion and queue completion occur in one
+transaction. Internal states do not store policies.
+
+A queried root policy is reconstructed from certified child values, checked
+against the stored root value, and optionally cached. Reopening verifies table
+shape, metadata, rule/schema hashes, interval digests, cached policy digests,
+and the \(10^{-6}\) saddle-gap bound. Legacy schemas are rejected; there is no
+silent migration.
+
+No complete-game solution claim is valid until the requested root has an exact
+committed value and its reconstructed policy passes Bellman recertification.

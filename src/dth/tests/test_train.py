@@ -3,24 +3,38 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
+import dth.train as train_module
 from dth.mcts import Evaluation
-from dth.generate_dataset import TARGET_SCHEMA
+from dth.generate_dataset import TARGET_SCHEMA, generate_exact_targets
 from dth.network import DTHNetworkConfig, DTHPolicyValueNet
 from dth.self_play import SelfPlayConfig, generate_self_play, write_self_play
-from dth.solver import CHECKER_ACTIONS, DROPPER_ACTIONS, payoff, solve, solve_matrix
+from dth.solver import (
+    CHECKER_ACTIONS,
+    DROPPER_ACTIONS,
+    payoff,
+    solve,
+    solve_matrix,
+    transition,
+)
 from dth.train import (
     DecisionRoot,
     ExactTargets,
+    HorizonBalancedBatchSampler,
     SelfPlayTargets,
     TargetRows,
     _batch_loss,
     decision_checkpoint_better,
     decision_guard_passes,
     decision_training_objective,
+    configured_exact_identities,
+    decision_selection_score,
+    diagnose_decision_roots,
+    exact_target_indices,
     evaluate_decision_roots,
     exact_frontier_indices,
     exact_frontier_replay_indices,
     grouped_state_split,
+    load_initial_checkpoint,
     load_self_play_targets,
     prepare_decision_loss_roots,
     soft_cross_entropy,
@@ -53,6 +67,117 @@ def test_grouped_split_prevents_physical_state_leakage():
     validation_states = {tuple(row) for row in states[validation]}
     assert train_states.isdisjoint(validation_states)
     assert sorted(np.concatenate((train, validation)).tolist()) == list(range(5))
+
+
+def test_exact_identity_selection_fails_closed_and_keeps_requested_rows():
+    targets = ExactTargets(
+        states=np.asarray([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int16),
+        horizons=np.asarray([1, 3], dtype=np.uint8),
+        values=np.zeros(2, dtype=np.float32),
+        drop_policies=_policy_targets(2),
+        check_policies=_policy_targets(2),
+        value_weights=np.ones(2, dtype=np.float32),
+        dataset_version="test",
+        schema_version="test",
+    )
+    identities = configured_exact_identities(
+        [{"state": [5, 6, 7, 8], "horizons": [3]}],
+        name="test.identities",
+    )
+
+    assert exact_target_indices(targets, identities, name="test.identities").tolist() == [1]
+    with pytest.raises(ValueError, match="missing exact target"):
+        exact_target_indices(
+            targets,
+            {(2, (5, 6, 7, 8))},
+            name="test.identities",
+        )
+
+
+def test_horizon_balanced_sampler_emits_configured_counts_every_batch():
+    sampler = HorizonBalancedBatchSampler(
+        torch.tensor([1, 1, 1, 2, 2, 3], dtype=torch.int64),
+        counts={1: 2, 2: 1, 3: 1},
+        batches_per_epoch=3,
+        seed=4,
+    )
+    source_horizons = [1, 1, 1, 2, 2, 3]
+
+    for batch in sampler:
+        assert len(batch) == 4
+        observed = [source_horizons[index] for index in batch]
+        assert observed.count(1) == 2
+        assert observed.count(2) == 1
+        assert observed.count(3) == 1
+
+
+def test_transition_bellman_matrix_uses_actual_updated_child():
+    """A Bellman continuation is the updated child, not a coordinate swap."""
+
+    state = (239, 1, 179, 61)
+    child = (179, 61, 299, 1)
+    assert transition(state, 1, 60) == ((1.0, child),)
+    assert child != (179, 61, 239, 1)
+
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    for parameter in model.parameters():
+        torch.nn.init.zeros_(parameter)
+    with torch.no_grad():
+        model.value_head.bias.fill_(0.25)
+    matrix = train_module.approximate_payoff_from_network(
+        model, state, 2, device=torch.device("cpu")
+    )
+    assert matrix[0, 59] == pytest.approx(-float(torch.tanh(torch.tensor(0.25))))
+
+    root = DecisionRoot(state, 2, 0.0, payoff(state, 2))
+    prepared = prepare_decision_loss_roots(model, [root], device=torch.device("cpu"))
+    loss, metrics = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=0.0,
+        matrix_weight=1.0,
+        matrix_top_k=60 * 60,
+    )
+    loss.backward()
+    assert metrics["mean_matrix_top_k_error"].item() > 0.0
+    assert model.value_head.weight.grad is not None
+    assert torch.isfinite(model.value_head.weight.grad).all()
+
+
+def test_decision_selection_score_supports_cvar_tail_ranking():
+    metrics = {
+        "max_saddle_gap": 0.5,
+        "roots": [
+            {"saddle_gap": 0.1},
+            {"saddle_gap": 0.2},
+            {"saddle_gap": 0.4},
+            {"saddle_gap": 0.5},
+        ],
+    }
+    assert decision_selection_score(
+        metrics, ranking="worst_saddle_gap", cvar_alpha=1.0
+    ) == 0.5
+    assert decision_selection_score(
+        metrics, ranking="cvar_saddle_gap", cvar_alpha=0.5
+    ) == pytest.approx(0.45)
+
+
+def test_matrix_diagnosis_reports_support_and_best_response_exposure():
+    state = (239, 0, 0, 0)
+    exact = solve(state, 1)
+    root = DecisionRoot(state, 1, exact.value, payoff(state, 1))
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    report = diagnose_decision_roots(
+        model,
+        [root],
+        device=torch.device("cpu"),
+        top_cells=3,
+        support_tolerance=1e-6,
+    )
+    record = report["roots"][0]
+    assert len(record["largest_cell_errors"]) == 3
+    assert "dropper_best_response_actions" in record
+    assert "exposed_by_checker_best_response" in record["largest_cell_errors"][0]
 
 
 def test_soft_cross_entropy_prefers_matching_logits():
@@ -386,6 +511,63 @@ def test_decision_loss_uses_the_worst_root_instead_of_the_mean():
     assert loss.item() > metrics["mean_saddle_gap"].item()
 
 
+def test_decision_loss_cvar_aggregates_the_worst_root_tail():
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    for parameter in model.parameters():
+        torch.nn.init.zeros_(parameter)
+    hard_matrix = np.zeros((60, 60), dtype=np.float64)
+    hard_matrix[0, :] = 1.0
+    easier_matrix = 0.5 * hard_matrix
+    roots = [
+        DecisionRoot((0, 0, 0, 0), 1, 1.0, hard_matrix),
+        DecisionRoot((1, 0, 0, 0), 1, 0.5, easier_matrix),
+    ]
+    prepared = prepare_decision_loss_roots(model, roots, device=torch.device("cpu"))
+
+    loss, metrics = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=1.0,
+        matrix_weight=0.0,
+        matrix_top_k=16,
+        root_aggregation="cvar",
+        root_cvar_alpha=1.0,
+    )
+
+    assert loss.item() == pytest.approx(metrics["mean_root_loss"].item())
+    assert metrics["worst_root_loss"].item() > loss.item()
+
+
+def test_decision_loss_action_cvar_exposes_a_bad_checker_column():
+    model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
+    for parameter in model.parameters():
+        torch.nn.init.zeros_(parameter)
+    exact_matrix = np.zeros((60, 60), dtype=np.float64)
+    exact_matrix[:, 59] = 1.0
+    root = DecisionRoot((0, 0, 0, 0), 1, 0.0, exact_matrix)
+    prepared = prepare_decision_loss_roots(model, [root], device=torch.device("cpu"))
+
+    cell_loss, _ = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=0.0,
+        matrix_weight=1.0,
+        matrix_top_k=60 * 60,
+    )
+    action_loss, metrics = decision_training_objective(
+        model,
+        prepared,
+        saddle_gap_weight=0.0,
+        matrix_weight=1.0,
+        matrix_top_k=60 * 60,
+        matrix_aggregation="full_plus_action_cvar",
+        action_cvar_alpha=0.1,
+    )
+
+    assert metrics["mean_matrix_action_cvar_error"].item() > cell_loss.item()
+    assert action_loss.item() > cell_loss.item()
+
+
 def test_decision_loss_supports_explicit_per_root_gap_weights():
     model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
     for parameter in model.parameters():
@@ -524,6 +706,173 @@ def test_decision_training_retains_epoch_zero_without_gap_improvement(tmp_path):
 
     assert report["best_epoch"] == 0
     assert not report["decision_selection"]["improved_from_epoch_zero"]
+
+
+def test_generalization_audit_is_disjoint_and_never_used_for_selection(tmp_path):
+    train_dataset = generate_exact_targets(
+        output=tmp_path / "train.npz",
+        horizon=1,
+        root_states=[(239, 0, 0, 0), (240, 0, 0, 0)],
+        progress_every=0,
+    )
+    heldout_dataset = generate_exact_targets(
+        output=tmp_path / "heldout.npz",
+        horizon=1,
+        root_states=[(0, 0, 239, 0), (0, 0, 240, 0)],
+        progress_every=0,
+    )
+    config = {
+        "dataset": str(train_dataset),
+        "output_dir": str(tmp_path / "checkpoint"),
+        "seed": 4,
+        "device": "cpu",
+        "model": {
+            "hidden_width": 4,
+            "hidden_layers": 1,
+            "horizon_scale": 3.0,
+        },
+        "training": {
+            "epochs": 1,
+            "batch_size": 2,
+            "learning_rate": 0.0,
+            "weight_decay": 0.0,
+            "validation_fraction": 0.5,
+            "policy_weight": 0.1,
+            "patience": 0,
+            "minimum_delta": 1e-6,
+            "log_every": 1,
+        },
+        "audit": {"max_rows_per_horizon": 2},
+        "generalization_audit": {
+            "dataset": str(heldout_dataset),
+            "max_saddle_rows_per_horizon": 0,
+        },
+    }
+
+    report = train_exact(config)
+
+    audit = report["generalization_audit"]
+    assert audit["selection_excluded"]
+    assert audit["rows"] == 2
+    assert audit["baseline"]["direct_target_metrics"]["total_loss"] >= 0.0
+    assert audit["selected"]["direct_target_metrics"]["total_loss"] >= 0.0
+    assert audit["selected"]["exact_matrix_audit"]["rows"] == 0
+
+    overlapping = dict(config)
+    overlapping["output_dir"] = str(tmp_path / "overlapping")
+    overlapping["generalization_audit"] = {
+        "dataset": str(train_dataset),
+        "max_saddle_rows_per_horizon": 0,
+    }
+    with pytest.raises(ValueError, match="disjoint"):
+        train_exact(overlapping)
+
+
+def test_generalization_audit_can_hold_out_rows_from_its_training_artifact(
+    tmp_path, monkeypatch
+):
+    dataset = generate_exact_targets(
+        output=tmp_path / "tablebase.npz",
+        horizon=1,
+        root_states=[(238, 0, 0, 0), (239, 0, 0, 0), (240, 0, 0, 0)],
+        progress_every=0,
+    )
+    heldout = {"state": [240, 0, 0, 0], "horizons": [1]}
+    observed_audit_indices: list[list[int]] = []
+    original_audit = train_module.audit_saddle_gaps
+
+    def capture_audit(*args, **kwargs):
+        observed_audit_indices.append(list(args[2]))
+        return original_audit(*args, **kwargs)
+
+    monkeypatch.setattr(train_module, "audit_saddle_gaps", capture_audit)
+    report = train_exact(
+        {
+            "dataset": str(dataset),
+            "output_dir": str(tmp_path / "checkpoint"),
+            "seed": 4,
+            "device": "cpu",
+            "model": {
+                "hidden_width": 4,
+                "hidden_layers": 1,
+                "horizon_scale": 3.0,
+            },
+            "training": {
+                "epochs": 1,
+                "batch_size": 1,
+                "learning_rate": 0.0,
+                "weight_decay": 0.0,
+                "validation_fraction": 0.5,
+                "policy_weight": 0.1,
+                "patience": 0,
+                "minimum_delta": 1e-6,
+                "log_every": 1,
+                "exclude_exact_identities": [heldout],
+            },
+            "audit": {"max_rows_per_horizon": 1},
+            "generalization_audit": {
+                "dataset": str(dataset),
+                "include_exact_identities": [heldout],
+                "max_saddle_rows_per_horizon": 0,
+            },
+        }
+    )
+
+    assert report["exact_row_filter"]["excluded_rows"] == 1
+    assert report["generalization_audit"]["source_rows"] == 3
+    assert report["generalization_audit"]["rows"] == 1
+    assert observed_audit_indices[-1] == [2]
+
+
+def test_identity_initial_checkpoint_expands_without_prediction_change(tmp_path):
+    torch.manual_seed(17)
+    source_config = DTHNetworkConfig(hidden_width=4, hidden_layers=1)
+    source = DTHPolicyValueNet(source_config).eval()
+    checkpoint = tmp_path / "identity.pt"
+    torch.save(
+        {
+            "state_dict": source.state_dict(),
+            "model_config": source_config.to_dict(),
+        },
+        checkpoint,
+    )
+
+    target_config = DTHNetworkConfig(
+        hidden_width=4,
+        hidden_layers=1,
+        feature_lift="boundary_v2",
+        continuation_residual=True,
+        continuation_residual_mode="action_mlp",
+    )
+    target = DTHPolicyValueNet(target_config).eval()
+    migration = load_initial_checkpoint(
+        target,
+        target_config,
+        checkpoint,
+        device=torch.device("cpu"),
+    )
+
+    features = torch.tensor(
+        [
+            [239 / 300, 0, 240 / 300, 0, 1 / 3],
+            [200 / 300, 41 / 300, 200 / 300, 41 / 300, 1 / 3],
+        ],
+        dtype=torch.float32,
+    )
+    with torch.no_grad():
+        source_output = source(features)
+        target_output = target(features)
+
+    for expected, actual in zip(source_output, target_output, strict=True):
+        torch.testing.assert_close(expected, actual)
+    assert migration["method"] == "identity_to_feature_lift_zero_init"
+    torch.testing.assert_close(target.trunk[0].weight[:, :5], source.trunk[0].weight)
+    torch.testing.assert_close(target.trunk[0].weight[:, 5:], torch.zeros((4, 4)))
+    torch.testing.assert_close(
+        target.continuation_residual_matrix(features),
+        torch.zeros((2, 60, 60)),
+    )
+    assert migration["added_continuation_residual"] is True
 
 
 def test_decision_training_can_retain_different_width_baseline(tmp_path):

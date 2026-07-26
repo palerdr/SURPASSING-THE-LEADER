@@ -66,6 +66,32 @@ def test_boundary_v1_features_at_and_around_both_240_boundaries():
     assert model.trunk[0].in_features == 9
 
 
+def test_boundary_v2_features_encode_inclusive_dose_and_strict_ttd_boundaries():
+    states = torch.tensor(
+        [
+            [239, 0, 239, 0],
+            [240, 0, 240, 0],
+            [241, 0, 241, 0],
+            [200, 40, 200, 40],
+            [200, 41, 200, 41],
+        ],
+        dtype=torch.float32,
+    )
+    features = encode_features(states, torch.ones(5), horizon_scale=3.0)
+    model = DTHPolicyValueNet(
+        DTHNetworkConfig(hidden_width=8, feature_lift="boundary_v2")
+    )
+    lifted = model.apply_feature_lift(features)
+
+    assert lifted.shape == (5, 9)
+    torch.testing.assert_close(lifted[0, 5:], torch.zeros(4))
+    torch.testing.assert_close(lifted[1, 5:], torch.tensor([1.0, 0.0, 1.0, 0.0]))
+    torch.testing.assert_close(lifted[2, 5:], torch.ones(4))
+    torch.testing.assert_close(lifted[3, 5:], torch.zeros(4))
+    torch.testing.assert_close(lifted[4, 5:], torch.tensor([0.0, 1.0, 0.0, 1.0]))
+    assert model.trunk[0].in_features == 9
+
+
 def test_boundary_columns_receive_finite_nonzero_gradients():
     model = DTHPolicyValueNet(
         DTHNetworkConfig(hidden_width=4, hidden_layers=1, feature_lift="boundary_v1")
@@ -105,3 +131,51 @@ def test_old_checkpoint_without_feature_lift_field_loads_as_identity():
 def test_unknown_feature_lift_fails_closed():
     with pytest.raises(ValueError, match="unknown feature lift"):
         DTHPolicyValueNet(DTHNetworkConfig(feature_lift="unknown"))
+
+
+def test_continuation_residual_starts_as_an_exact_zero_matrix():
+    model = DTHPolicyValueNet(
+        DTHNetworkConfig(
+            hidden_width=4,
+            hidden_layers=1,
+            continuation_residual=True,
+        )
+    )
+    features = torch.rand((3, 5), dtype=torch.float32)
+
+    residual = model.continuation_residual_matrix(features)
+
+    assert residual.shape == (3, 60, 60)
+    torch.testing.assert_close(residual, torch.zeros_like(residual))
+
+
+def test_action_mlp_residual_receives_the_literal_action_pair():
+    model = DTHPolicyValueNet(
+        DTHNetworkConfig(
+            hidden_width=4,
+            hidden_layers=1,
+            continuation_residual=True,
+            continuation_residual_mode="action_mlp",
+        )
+    )
+    with torch.no_grad():
+        model.continuation_action_hidden.weight.zero_()
+        model.continuation_action_hidden.bias.zero_()
+        model.continuation_action_hidden.weight[0, -2] = 1.0
+        model.continuation_action_out.weight.zero_()
+        model.continuation_action_out.bias.zero_()
+        model.continuation_action_out.weight[0, 0] = 1.0
+
+    residual = model.continuation_residual_matrix(torch.zeros((1, 5)))
+
+    assert residual.shape == (1, 60, 60)
+    assert residual[0, 0, 0].item() == pytest.approx(1 / 60)
+    assert residual[0, 59, 0].item() == pytest.approx(1.0)
+    assert residual[0, 0, 0].item() == residual[0, 0, 59].item()
+
+
+def test_unknown_continuation_residual_mode_fails_closed():
+    with pytest.raises(ValueError, match="unknown continuation residual mode"):
+        DTHPolicyValueNet(
+            DTHNetworkConfig(continuation_residual_mode="unknown")
+        )

@@ -1,0 +1,12 @@
+defaults:
+  - train_action_conditioned_bellman_coverage_v7
+  - _self_
+
+# V8 holds V7's expanded exact corpus, losses, selection, and guards fixed.
+# Unlike V6/V7's position-indexed residual matrix, its correction is a genuine
+# Q(s, d, c) MLP with literal normalized action inputs.
+output_dir: dth/checkpoints/action_input_bellman_residual_v8
+
+model:
+  continuation_residual: true
+  continuation_residual_mode: action_mlp

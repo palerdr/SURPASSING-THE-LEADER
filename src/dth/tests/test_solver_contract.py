@@ -1,6 +1,13 @@
 import pytest
 
-from dth.solver import TState, revival_model, transition
+from dth.solver import (
+    TState,
+    clear_solver_cache,
+    horizon_one_cache_info,
+    revival_model,
+    solve,
+    transition,
+)
 
 
 def test_successful_check_below_cylinder_cap_remains_live() -> None:
@@ -42,3 +49,21 @@ def test_resulting_total_ttd_exactly_300_remains_revival_eligible() -> None:
 def test_resulting_total_ttd_above_300_is_fatal() -> None:
     assert revival_model(0, 241) == 0.0
     assert transition((0, 241, 0, 0), 2, 1) == ((1.0, TState.W),)
+
+
+def test_horizon_one_does_not_memoize_cutoff_children() -> None:
+    clear_solver_cache()
+    solve((0, 0, 0, 0), 1)
+
+    info = solve.cache_info()
+    assert info.misses == 1
+    assert info.currsize == 1
+
+
+def test_horizon_one_reuses_exact_checker_equivalence_class() -> None:
+    clear_solver_cache()
+    first = solve((179, 60, 0, 0), 1)
+    second = solve((179, 60, 241, 300), 1)
+
+    assert first == second
+    assert horizon_one_cache_info().misses == 1

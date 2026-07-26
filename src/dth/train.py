@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
 from torch import Tensor
 from torch.optim import Adam
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 from dth.generate_dataset import TARGET_SCHEMA, live_successors
 from dth.network import FEATURE_SCHEMA, DTHNetworkConfig, DTHPolicyValueNet
@@ -73,6 +73,7 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
         indices: np.ndarray,
         *,
         horizon_scale: float,
+        balance_horizons: bool = True,
     ) -> None:
         states = torch.from_numpy(targets.states[indices].astype(np.float32))
         horizons = torch.from_numpy(targets.horizons[indices].astype(np.float32))
@@ -95,14 +96,17 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
             targets.value_weights[indices].astype(np.float32)
         )
 
-        counts = defaultdict(int)
-        for horizon in self.horizons.tolist():
-            counts[int(horizon)] += 1
-        weights = np.asarray(
-            [1.0 / counts[int(horizon)] for horizon in self.horizons.tolist()],
-            dtype=np.float32,
-        )
-        weights /= weights.mean()
+        if balance_horizons:
+            counts = defaultdict(int)
+            for horizon in self.horizons.tolist():
+                counts[int(horizon)] += 1
+            weights = np.asarray(
+                [1.0 / counts[int(horizon)] for horizon in self.horizons.tolist()],
+                dtype=np.float32,
+            )
+            weights /= weights.mean()
+        else:
+            weights = np.ones(len(self.horizons), dtype=np.float32)
         self.weights = torch.from_numpy(weights)
 
     def __len__(self) -> int:
@@ -118,6 +122,64 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
             self.value_weights[index],
             self.horizons[index],
         )
+
+
+class HorizonBalancedBatchSampler(Sampler[list[int]]):
+    """Deterministically draw every configured horizon into each SGD batch."""
+
+    def __init__(
+        self,
+        horizons: Tensor,
+        *,
+        counts: dict[int, int],
+        batches_per_epoch: int,
+        seed: int,
+    ) -> None:
+        if horizons.ndim != 1:
+            raise ValueError("horizon sampler requires a rank-one horizon tensor")
+        if batches_per_epoch <= 0:
+            raise ValueError("horizon sampler batches_per_epoch must be positive")
+        if not counts or any(count <= 0 for count in counts.values()):
+            raise ValueError("horizon sampler counts must be positive and non-empty")
+
+        available: dict[int, np.ndarray] = {}
+        horizon_values = horizons.detach().cpu().numpy().astype(np.int64, copy=False)
+        for horizon in sorted(set(int(value) for value in horizon_values)):
+            members = np.flatnonzero(horizon_values == horizon).astype(np.int64)
+            if len(members):
+                available[horizon] = members
+        configured = {int(horizon): int(count) for horizon, count in counts.items()}
+        if set(configured) != set(available):
+            raise ValueError(
+                "horizon sampler counts must cover exactly the training horizons: "
+                f"configured={sorted(configured)}, available={sorted(available)}"
+            )
+
+        self._members = available
+        self._counts = configured
+        self._batches_per_epoch = batches_per_epoch
+        self._seed = seed
+        self._epoch = 0
+
+    def __len__(self) -> int:
+        return self._batches_per_epoch
+
+    def __iter__(self):
+        rng = np.random.default_rng(self._seed + self._epoch)
+        self._epoch += 1
+        for _ in range(self._batches_per_epoch):
+            parts = [
+                rng.choice(
+                    members,
+                    size=count,
+                    replace=count > len(members),
+                )
+                for horizon, members in sorted(self._members.items())
+                for count in (self._counts[horizon],)
+            ]
+            batch = np.concatenate(parts)
+            rng.shuffle(batch)
+            yield [int(index) for index in batch]
 
 
 def _scalar(array: np.ndarray) -> str:
@@ -325,6 +387,82 @@ def grouped_state_split(
     )
 
 
+def configured_exact_identities(
+    raw: object,
+    *,
+    name: str,
+) -> set[tuple[int, NTState]]:
+    """Parse explicit state/horizon rows used for an exact split or audit."""
+
+    if raw is None:
+        return set()
+    if not isinstance(raw, list):
+        raise TypeError(f"{name} must resolve to a list")
+
+    identities: set[tuple[int, NTState]] = set()
+    for item_index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise TypeError(f"{name}[{item_index}] must resolve to a mapping")
+        if "state" not in item or "horizons" not in item:
+            raise ValueError(f"{name}[{item_index}] needs state and horizons")
+        state_raw = item["state"]
+        horizons_raw = item["horizons"]
+        if not isinstance(state_raw, list) or len(state_raw) != 4:
+            raise ValueError(f"{name}[{item_index}].state must have four integers")
+        if not isinstance(horizons_raw, list) or not horizons_raw:
+            raise ValueError(f"{name}[{item_index}].horizons must be non-empty")
+        state = tuple(int(value) for value in state_raw)
+        for horizon_raw in horizons_raw:
+            horizon = int(horizon_raw)
+            if not 1 <= horizon <= 255:
+                raise ValueError(
+                    f"{name}[{item_index}] horizon must be in 1..255, got {horizon}"
+                )
+            identity = (horizon, state)
+            if identity in identities:
+                raise ValueError(f"{name} contains duplicate identity {identity!r}")
+            identities.add(identity)
+    return identities
+
+
+def exact_target_indices(
+    targets: ExactTargets,
+    identities: Iterable[tuple[int, NTState]],
+    *,
+    name: str,
+) -> np.ndarray:
+    """Resolve explicit state/horizon identities, failing closed on absence."""
+
+    lookup: dict[tuple[int, NTState], int] = {}
+    for index, (state, horizon) in enumerate(
+        zip(targets.states, targets.horizons, strict=True)
+    ):
+        identity = (int(horizon), tuple(int(value) for value in state))
+        if identity in lookup:
+            raise ValueError(f"exact target artifact contains duplicate {identity!r}")
+        lookup[identity] = index
+    requested = set(identities)
+    missing = requested.difference(lookup)
+    if missing:
+        raise ValueError(f"{name} is missing exact target rows: {sorted(missing)!r}")
+    return np.asarray(sorted(lookup[identity] for identity in requested), dtype=np.int64)
+
+
+def exact_target_identities(
+    targets: ExactTargets,
+    indices: Iterable[int],
+) -> set[tuple[int, NTState]]:
+    """Return the canonical state/horizon identities at selected artifact rows."""
+
+    return {
+        (
+            int(targets.horizons[index]),
+            tuple(int(value) for value in targets.states[index]),
+        )
+        for index in indices
+    }
+
+
 def exact_frontier_indices(
     targets: ExactTargets,
     roots: Iterable[dict[str, object]],
@@ -478,6 +616,100 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def load_initial_checkpoint(
+    model: DTHPolicyValueNet,
+    model_config: DTHNetworkConfig,
+    checkpoint_path: str | Path,
+    *,
+    device: torch.device,
+) -> dict[str, Any]:
+    """Load a checkpoint, expanding an identity input layer for a feature lift when safe."""
+
+    path = Path(checkpoint_path)
+    payload = torch.load(path, map_location=device, weights_only=False)
+    source_values = dict(payload["model_config"])
+    source_values.setdefault("feature_lift", "identity")
+    source_values.setdefault("continuation_residual", False)
+    source_values.setdefault("continuation_residual_mode", "matrix_head")
+    source_config = DTHNetworkConfig(**source_values)
+    source_dict = source_config.to_dict()
+    target_dict = model_config.to_dict()
+
+    if source_dict == target_dict:
+        model.load_state_dict(payload["state_dict"], strict=True)
+        return {
+            "method": "none",
+            "source_checkpoint": str(path),
+            "source_checkpoint_sha256": _sha256(path),
+            "source_model_config": source_dict,
+            "target_model_config": target_dict,
+        }
+
+    source_core = {
+        key: value
+        for key, value in source_dict.items()
+        if key
+        not in {
+            "feature_lift",
+            "continuation_residual",
+            "continuation_residual_mode",
+        }
+    }
+    target_core = {
+        key: value
+        for key, value in target_dict.items()
+        if key
+        not in {
+            "feature_lift",
+            "continuation_residual",
+            "continuation_residual_mode",
+        }
+    }
+    supported_lifts = {"boundary_v1", "boundary_v2"}
+    if (
+        source_core == target_core
+        and source_config.feature_lift == "identity"
+        and model_config.feature_lift in supported_lifts
+        and not source_config.continuation_residual
+    ):
+        source_state = payload["state_dict"]
+        target_state = model.state_dict()
+        first_layer = "trunk.0.weight"
+        source_weight = source_state[first_layer]
+        target_weight = target_state[first_layer]
+        source_width = len(FEATURE_SCHEMA)
+        if source_weight.shape[1] != source_width:
+            raise ValueError(
+                "identity checkpoint first layer width does not match the external feature schema"
+            )
+        if source_weight.shape[0] != target_weight.shape[0] or target_weight.shape[1] <= source_width:
+            raise ValueError("feature-lift checkpoint expansion has incompatible first-layer shapes")
+        with torch.no_grad():
+            target_weight.zero_()
+            target_weight[:, :source_width].copy_(source_weight)
+            for name, value in source_state.items():
+                if name != first_layer:
+                    target_state[name].copy_(value)
+        model.load_state_dict(target_state, strict=True)
+        return {
+            "method": "identity_to_feature_lift_zero_init",
+            "source_checkpoint": str(path),
+            "source_checkpoint_sha256": _sha256(path),
+            "source_model_config": source_dict,
+            "target_model_config": target_dict,
+            "preserved_input_width": source_width,
+            "added_input_width": int(target_weight.shape[1] - source_width),
+            "added_continuation_residual": bool(
+                model_config.continuation_residual
+            ),
+        }
+
+    raise ValueError(
+        "initial checkpoint model configuration is incompatible with the requested model: "
+        f"source={source_dict}, target={target_dict}"
+    )
 
 
 def _json_safe(value: Any) -> Any:
@@ -711,6 +943,11 @@ def decision_training_objective(
     solver_averaging_delay: int = 0,
     guard_limits: dict[tuple[NTState, int], tuple[float, float]] | None = None,
     guard_hinge_weight: float = 1.0,
+    root_aggregation: str = "max",
+    root_cvar_alpha: float = 1.0,
+    matrix_aggregation: str = "cell_mean",
+    action_cvar_alpha: float = 1.0,
+    residual_weight: float = 0.0,
 ) -> tuple[Tensor, dict[str, Tensor]]:
     """Supervise policies induced by learned matrices against exact matrices.
 
@@ -718,10 +955,25 @@ def decision_training_objective(
     Exact matrices and LP values remain detached target authority.
     """
 
-    if saddle_gap_weight < 0.0 or matrix_weight < 0.0 or guard_hinge_weight < 0.0:
+    if (
+        saddle_gap_weight < 0.0
+        or matrix_weight < 0.0
+        or guard_hinge_weight < 0.0
+        or residual_weight < 0.0
+    ):
         raise ValueError("decision loss weights must be nonnegative")
     if matrix_top_k <= 0:
         raise ValueError("matrix top-k must be positive")
+    if root_aggregation not in {"max", "cvar"}:
+        raise ValueError("root aggregation must be max or cvar")
+    if not 0.0 < root_cvar_alpha <= 1.0:
+        raise ValueError("root CVaR alpha must be in (0, 1]")
+    if matrix_aggregation not in {"cell_mean", "full_plus_action_cvar"}:
+        raise ValueError(
+            "matrix aggregation must be cell_mean or full_plus_action_cvar"
+        )
+    if not 0.0 < action_cvar_alpha <= 1.0:
+        raise ValueError("action CVaR alpha must be in (0, 1]")
 
     prepared_roots = tuple(roots)
     if not prepared_roots:
@@ -741,11 +993,22 @@ def decision_training_objective(
     )
     predicted_values, _, _ = model(torch.cat(feature_batches, dim=0))
 
+    root_residuals = (
+        model.continuation_residual_matrix(torch.cat(feature_batches[: len(prepared_roots)], dim=0))
+        if model.config.continuation_residual
+        else None
+    )
+    if residual_weight > 0.0 and root_residuals is None:
+        raise ValueError("residual weight requires continuation_residual=true")
+
     approximate_matrices: list[Tensor] = []
     top_k_errors: list[Tensor] = []
+    action_cvar_errors: list[Tensor] = []
+    matrix_training_errors: list[Tensor] = []
+    residual_penalties: list[Tensor] = []
     max_errors: list[Tensor] = []
     child_offset = len(prepared_roots)
-    for root in prepared_roots:
+    for root_index, root in enumerate(prepared_roots):
         if root.child_features.shape[0] > 0:
             child_count = int(root.child_features.shape[0])
             child_values = predicted_values[
@@ -758,12 +1021,34 @@ def decision_training_objective(
         else:
             approximate_flat = root.matrix_base
         approximate_matrix = approximate_flat.reshape(root.exact_matrix.shape)
+        root_residual = (
+            root_residuals[root_index]
+            if root_residuals is not None
+            else torch.zeros_like(approximate_matrix)
+        )
+        approximate_matrix = approximate_matrix + root_residual
         approximate_matrices.append(approximate_matrix)
-        cell_errors = torch.abs(approximate_matrix - root.exact_matrix).reshape(-1)
+        matrix_errors = torch.abs(approximate_matrix - root.exact_matrix)
+        cell_errors = matrix_errors.reshape(-1)
         top_k = min(matrix_top_k, int(cell_errors.numel()))
         root_top_k_error = torch.topk(cell_errors, top_k).values.mean()
+        action_errors = torch.cat(
+            (matrix_errors.mean(dim=1), matrix_errors.mean(dim=0))
+        )
+        action_tail = max(
+            1, int(np.ceil(float(action_cvar_alpha) * int(action_errors.numel())))
+        )
+        root_action_cvar_error = torch.topk(action_errors, action_tail).values.mean()
+        root_matrix_training_error = (
+            root_top_k_error
+            if matrix_aggregation == "cell_mean"
+            else 0.5 * (root_top_k_error + root_action_cvar_error)
+        )
         root_max_error = torch.max(cell_errors)
         top_k_errors.append(root_top_k_error)
+        action_cvar_errors.append(root_action_cvar_error)
+        matrix_training_errors.append(root_matrix_training_error)
+        residual_penalties.append(root_residual.square().mean())
         max_errors.append(root_max_error)
 
     approximate_batch = torch.stack(approximate_matrices)
@@ -800,19 +1085,27 @@ def decision_training_objective(
             float(saddle_gap_weight)
             * float(root.saddle_gap_weight)
             * exact_gaps[root_index]
-            + float(matrix_weight) * top_k_errors[root_index]
+            + float(matrix_weight) * matrix_training_errors[root_index]
+            + float(residual_weight) * residual_penalties[root_index]
             + float(root.value_preservation_weight) * root_value_error
             + float(guard_hinge_weight) * (gap_violation + value_violation)
         )
+
+    root_loss_tensor = torch.stack(root_losses)
+    if root_aggregation == "max":
+        total = root_loss_tensor.max()
+    else:
+        tail = max(1, int(np.ceil(float(root_cvar_alpha) * len(prepared_roots))))
+        total = torch.topk(root_loss_tensor, tail).values.mean()
 
     mean_gap = exact_gaps.mean()
     mean_top_k = torch.stack(top_k_errors).mean()
     mean_max = torch.stack(max_errors).mean()
     mean_value_error = torch.stack(value_errors).mean()
-    total = torch.stack(root_losses).max()
     return total, {
         "total_loss": total,
-        "worst_root_loss": total,
+        "worst_root_loss": root_loss_tensor.max(),
+        "mean_root_loss": root_loss_tensor.mean(),
         "worst_saddle_gap": exact_gaps.max(),
         "worst_induced_exact_saddle_gap": exact_gaps.max(),
         "worst_approximate_solver_saddle_gap": induced.saddle_gap.max(),
@@ -825,8 +1118,14 @@ def decision_training_objective(
         "mean_induced_exact_saddle_gap": mean_gap,
         "mean_approximate_solver_saddle_gap": induced.saddle_gap.mean(),
         "mean_matrix_top_k_error": mean_top_k,
+        "mean_matrix_action_cvar_error": torch.stack(action_cvar_errors).mean(),
+        "worst_matrix_action_cvar_error": torch.stack(action_cvar_errors).max(),
+        "mean_matrix_training_error": torch.stack(matrix_training_errors).mean(),
+        "worst_matrix_training_error": torch.stack(matrix_training_errors).max(),
         "mean_matrix_max_error": mean_max,
         "mean_root_value_error": mean_value_error,
+        "mean_continuation_residual_l2": torch.stack(residual_penalties).mean(),
+        "worst_continuation_residual_l2": torch.stack(residual_penalties).max(),
     }
 
 
@@ -842,6 +1141,11 @@ def evaluate_decision_training_objective(
     solver_averaging_delay: int = 0,
     guard_limits: dict[tuple[NTState, int], tuple[float, float]] | None = None,
     guard_hinge_weight: float = 1.0,
+    root_aggregation: str = "max",
+    root_cvar_alpha: float = 1.0,
+    matrix_aggregation: str = "cell_mean",
+    action_cvar_alpha: float = 1.0,
+    residual_weight: float = 0.0,
 ) -> dict[str, float]:
     model.eval()
     _, metrics = decision_training_objective(
@@ -854,6 +1158,11 @@ def evaluate_decision_training_objective(
         solver_averaging_delay=solver_averaging_delay,
         guard_limits=guard_limits,
         guard_hinge_weight=guard_hinge_weight,
+        root_aggregation=root_aggregation,
+        root_cvar_alpha=root_cvar_alpha,
+        matrix_aggregation=matrix_aggregation,
+        action_cvar_alpha=action_cvar_alpha,
+        residual_weight=residual_weight,
     )
     return {name: float(value.item()) for name, value in metrics.items()}
 
@@ -899,6 +1208,13 @@ def approximate_payoff_from_network(
                     branch_value = -child_values[child]
                 total += probability * branch_value
             matrix[drop_index, check_index] = total
+    if model.config.continuation_residual:
+        root_states = torch.tensor([state], dtype=torch.float32, device=device)
+        root_horizons = torch.tensor([horizon], dtype=torch.float32, device=device)
+        residual = model.continuation_residual_matrix(
+            model.encode(root_states, root_horizons)
+        )[0]
+        matrix += residual.cpu().numpy()
     return matrix
 
 
@@ -965,6 +1281,102 @@ def evaluate_decision_roots(
     }
 
 
+@torch.no_grad()
+def diagnose_decision_roots(
+    model: DTHPolicyValueNet,
+    roots: Iterable[DecisionRoot],
+    *,
+    device: torch.device,
+    top_cells: int,
+    support_tolerance: float,
+) -> dict[str, Any]:
+    """Locate continuation-matrix errors and the exact best responses they expose."""
+
+    if top_cells <= 0:
+        raise ValueError("matrix diagnosis top_cells must be positive")
+    if support_tolerance < 0.0:
+        raise ValueError("matrix diagnosis support_tolerance must be nonnegative")
+    records: list[dict[str, Any]] = []
+    for root in roots:
+        predicted = approximate_payoff_from_network(
+            model, root.state, root.horizon, device=device
+        )
+        _, predicted_drop, predicted_check = solve_matrix(predicted)
+        _, exact_drop, exact_check = solve_matrix(root.exact_matrix)
+        signed_error = predicted - root.exact_matrix
+        absolute_error = np.abs(signed_error)
+        flat = np.argsort(absolute_error.ravel())[::-1][:top_cells]
+        drop_payoffs = root.exact_matrix @ predicted_check
+        check_payoffs = root.exact_matrix.T @ predicted_drop
+        drop_best = np.flatnonzero(
+            np.isclose(drop_payoffs, np.max(drop_payoffs), atol=1e-12)
+        )
+        check_best = np.flatnonzero(
+            np.isclose(check_payoffs, np.min(check_payoffs), atol=1e-12)
+        )
+        cells = []
+        for flat_index in flat:
+            drop_index, check_index = np.unravel_index(flat_index, absolute_error.shape)
+            cells.append(
+                {
+                    "drop_action": int(DROPPER_ACTIONS[drop_index]),
+                    "check_action": int(CHECKER_ACTIONS[check_index]),
+                    "predicted": float(predicted[drop_index, check_index]),
+                    "exact": float(root.exact_matrix[drop_index, check_index]),
+                    "signed_error": float(signed_error[drop_index, check_index]),
+                    "absolute_error": float(absolute_error[drop_index, check_index]),
+                    "dropper_support": bool(exact_drop[drop_index] > support_tolerance),
+                    "checker_support": bool(exact_check[check_index] > support_tolerance),
+                    "on_equilibrium_support": bool(
+                        exact_drop[drop_index] > support_tolerance
+                        and exact_check[check_index] > support_tolerance
+                    ),
+                    "exposed_by_dropper_best_response": bool(drop_index in drop_best),
+                    "exposed_by_checker_best_response": bool(check_index in check_best),
+                }
+            )
+        exact_value = float(root.exact_value)
+        records.append(
+            {
+                "state": list(root.state),
+                "horizon": root.horizon,
+                "matrix_max_abs_error": float(absolute_error.max()),
+                "matrix_mean_abs_error": float(absolute_error.mean()),
+                "dropper_best_response_actions": [
+                    int(DROPPER_ACTIONS[index]) for index in drop_best
+                ],
+                "checker_best_response_actions": [
+                    int(CHECKER_ACTIONS[index]) for index in check_best
+                ],
+                "dropper_best_response_regret": float(np.max(drop_payoffs) - exact_value),
+                "checker_best_response_regret": float(exact_value - np.min(check_payoffs)),
+                "largest_cell_errors": cells,
+            }
+        )
+    return {"roots": records, "top_cells": top_cells, "support_tolerance": support_tolerance}
+
+
+def decision_selection_score(
+    metrics: dict[str, Any],
+    *,
+    ranking: str,
+    cvar_alpha: float,
+) -> float:
+    """Return a worst-root or upper-tail (CVaR) exact saddle-gap score."""
+
+    if ranking == "worst_saddle_gap":
+        return float(metrics["max_saddle_gap"])
+    if ranking != "cvar_saddle_gap":
+        raise ValueError("decision ranking must be worst_saddle_gap or cvar_saddle_gap")
+    if not 0.0 < cvar_alpha <= 1.0:
+        raise ValueError("decision cvar_alpha must be in (0, 1]")
+    gaps = np.asarray([record["saddle_gap"] for record in metrics["roots"]], dtype=np.float64)
+    if not len(gaps):
+        raise ValueError("decision selection needs at least one root")
+    tail = max(1, int(np.ceil(cvar_alpha * len(gaps))))
+    return float(np.sort(gaps)[-tail:].mean())
+
+
 def decision_guard_passes(
     candidate: dict[str, Any],
     baseline: dict[str, Any],
@@ -1007,19 +1419,25 @@ def decision_checkpoint_better(
     incumbent_validation_loss: float,
     minimum_gap_improvement: float,
     tie_tolerance: float,
+    ranking: str = "worst_saddle_gap",
+    cvar_alpha: float = 1.0,
 ) -> bool:
-    """Gap-first ranking with an epoch-zero minimum-improvement floor."""
+    """Development-root ranking with an epoch-zero minimum-improvement floor."""
 
-    if (
-        candidate["max_saddle_gap"]
-        > baseline["max_saddle_gap"] - minimum_gap_improvement
-    ):
+    baseline_score = decision_selection_score(
+        baseline, ranking=ranking, cvar_alpha=cvar_alpha
+    )
+    candidate_score = decision_selection_score(
+        candidate, ranking=ranking, cvar_alpha=cvar_alpha
+    )
+    incumbent_score = decision_selection_score(
+        incumbent, ranking=ranking, cvar_alpha=cvar_alpha
+    )
+    if candidate_score > baseline_score - minimum_gap_improvement:
         return False
-    candidate_gap = float(candidate["max_saddle_gap"])
-    incumbent_gap = float(incumbent["max_saddle_gap"])
-    if candidate_gap < incumbent_gap - tie_tolerance:
+    if candidate_score < incumbent_score - tie_tolerance:
         return True
-    if abs(candidate_gap - incumbent_gap) > tie_tolerance:
+    if abs(candidate_score - incumbent_score) > tie_tolerance:
         return False
     candidate_error = float(candidate["max_value_error"])
     incumbent_error = float(incumbent["max_value_error"])
@@ -1041,6 +1459,39 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     targets = load_exact_targets(dataset_path)
+    training = config["training"]
+    if not isinstance(training, dict):
+        raise TypeError("training config must resolve to a mapping")
+    excluded_identities = configured_exact_identities(
+        training.get("exclude_exact_identities"),
+        name="training.exclude_exact_identities",
+    )
+    excluded_indices = exact_target_indices(
+        targets,
+        excluded_identities,
+        name="training.exclude_exact_identities",
+    )
+    raw_excluded_horizons = training.get("exclude_horizons", [])
+    if not isinstance(raw_excluded_horizons, list):
+        raise TypeError("training.exclude_horizons must resolve to a list")
+    excluded_horizons = {int(horizon) for horizon in raw_excluded_horizons}
+    if any(horizon <= 0 for horizon in excluded_horizons):
+        raise ValueError("training.exclude_horizons must contain positive horizons")
+    if excluded_horizons:
+        excluded_indices = np.union1d(
+            excluded_indices,
+            np.flatnonzero(np.isin(targets.horizons, list(excluded_horizons))).astype(
+                np.int64
+            ),
+        )
+    source_indices = np.setdiff1d(
+        np.arange(len(targets), dtype=np.int64),
+        excluded_indices,
+        assume_unique=True,
+    )
+    if len(source_indices) == 0:
+        raise ValueError("training exclusions removed every exact target row")
+    source_identities = exact_target_identities(targets, source_indices)
 
     model_values = config["model"]
     model_config = DTHNetworkConfig(
@@ -1049,33 +1500,112 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         action_count=len(DROPPER_ACTIONS),
         horizon_scale=float(model_values["horizon_scale"]),
         feature_lift=str(model_values.get("feature_lift", "identity")),
+        continuation_residual=bool(model_values.get("continuation_residual", False)),
+        continuation_residual_mode=str(
+            model_values.get("continuation_residual_mode", "matrix_head")
+        ),
     )
     model = DTHPolicyValueNet(model_config)
     device = torch.device(str(config["device"]))
     model.to(device)
     initial_checkpoint = config.get("initial_checkpoint")
+    initial_checkpoint_migration = None
     if initial_checkpoint:
-        initial = torch.load(
-            Path(initial_checkpoint),
-            map_location=device,
-            weights_only=False,
+        initial_checkpoint_migration = load_initial_checkpoint(
+            model,
+            model_config,
+            initial_checkpoint,
+            device=device,
         )
-        initial_config = dict(initial["model_config"])
-        initial_config.setdefault("feature_lift", "identity")
-        if initial_config != model_config.to_dict():
-            raise ValueError("initial checkpoint model configuration does not match")
-        model.load_state_dict(initial["state_dict"])
 
-    training = config["training"]
-    train_indices, validation_indices = grouped_state_split(
-        targets.states,
+    generalization_values = config.get("generalization_audit")
+    generalization_targets = None
+    generalization_path = None
+    generalization_loader = None
+    generalization_batch_size = None
+    generalization_max_saddle_rows = None
+    baseline_generalization_direct_metrics = None
+    baseline_generalization_saddle_audit = None
+    if generalization_values:
+        if not isinstance(generalization_values, dict):
+            raise TypeError("generalization_audit must resolve to a mapping")
+        generalization_path = Path(generalization_values["dataset"])
+        generalization_targets = load_exact_targets(generalization_path)
+        included_identities = configured_exact_identities(
+            generalization_values.get("include_exact_identities"),
+            name="generalization_audit.include_exact_identities",
+        )
+        generalization_indices = (
+            exact_target_indices(
+                generalization_targets,
+                included_identities,
+                name="generalization_audit.include_exact_identities",
+            )
+            if included_identities
+            else np.arange(len(generalization_targets), dtype=np.int64)
+        )
+        generalization_identities = exact_target_identities(
+            generalization_targets,
+            generalization_indices,
+        )
+        if source_identities.intersection(generalization_identities):
+            raise ValueError(
+                "generalization audit must be disjoint from training target identities"
+            )
+        generalization_batch_size = int(
+            generalization_values.get(
+                "batch_size",
+                config["training"]["batch_size"],
+            )
+        )
+        if generalization_batch_size <= 0:
+            raise ValueError("generalization audit batch_size must be positive")
+        generalization_loader = DataLoader(
+            TargetRows(
+                generalization_targets,
+                generalization_indices,
+                horizon_scale=model_config.horizon_scale,
+            ),
+            batch_size=generalization_batch_size,
+            shuffle=False,
+            num_workers=0,
+        )
+        generalization_max_saddle_rows = int(
+            generalization_values.get("max_saddle_rows_per_horizon", 0)
+        )
+        if generalization_max_saddle_rows < 0:
+            raise ValueError(
+                "generalization audit max_saddle_rows_per_horizon must be non-negative"
+            )
+        baseline_generalization_direct_metrics = evaluate(
+            model,
+            generalization_loader,
+            policy_weight=float(config["training"]["policy_weight"]),
+            device=device,
+        )
+        baseline_generalization_saddle_audit = audit_saddle_gaps(
+            model,
+            generalization_targets,
+            generalization_indices,
+            max_rows_per_horizon=generalization_max_saddle_rows,
+            device=device,
+        )
+
+    train_relative_indices, validation_relative_indices = grouped_state_split(
+        targets.states[source_indices],
         validation_fraction=float(training["validation_fraction"]),
         seed=seed,
     )
+    train_indices = source_indices[train_relative_indices]
+    validation_indices = source_indices[validation_relative_indices]
+    horizon_batch_values = training.get("horizon_batch")
+    if horizon_batch_values is not None and not isinstance(horizon_batch_values, dict):
+        raise TypeError("training.horizon_batch must resolve to a mapping")
     train_rows = TargetRows(
         targets,
         train_indices,
         horizon_scale=model_config.horizon_scale,
+        balance_horizons=horizon_batch_values is None,
     )
     validation_rows = TargetRows(
         targets,
@@ -1083,12 +1613,50 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         horizon_scale=model_config.horizon_scale,
     )
     batch_size = int(training["batch_size"])
-    generator = torch.Generator().manual_seed(seed)
-    train_loader = DataLoader(
+    if batch_size <= 0:
+        raise ValueError("training.batch_size must be positive")
+    if horizon_batch_values is None:
+        train_loader = DataLoader(
+            train_rows,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=torch.Generator().manual_seed(seed),
+            num_workers=0,
+        )
+        train_sampling_summary: dict[str, Any] = {
+            "mode": "shuffled_rows",
+            "horizon_loss_balancing": True,
+        }
+    else:
+        raw_counts = horizon_batch_values.get("counts")
+        if not isinstance(raw_counts, dict):
+            raise TypeError("training.horizon_batch.counts must resolve to a mapping")
+        counts = {int(horizon): int(count) for horizon, count in raw_counts.items()}
+        if sum(counts.values()) != batch_size:
+            raise ValueError(
+                "training.horizon_batch counts must sum to training.batch_size"
+            )
+        batches_per_epoch = int(horizon_batch_values["batches_per_epoch"])
+        train_loader = DataLoader(
+            train_rows,
+            batch_sampler=HorizonBalancedBatchSampler(
+                train_rows.horizons,
+                counts=counts,
+                batches_per_epoch=batches_per_epoch,
+                seed=seed,
+            ),
+            num_workers=0,
+        )
+        train_sampling_summary = {
+            "mode": "horizon_balanced_batches",
+            "counts": counts,
+            "batches_per_epoch": batches_per_epoch,
+            "horizon_loss_balancing": False,
+        }
+    train_evaluation_loader = DataLoader(
         train_rows,
         batch_size=batch_size,
-        shuffle=True,
-        generator=generator,
+        shuffle=False,
         num_workers=0,
     )
     validation_loader = DataLoader(
@@ -1189,6 +1757,23 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             decision_store,
             decision_values["guard_roots"],
         )
+    matrix_diagnosis_values = config.get("matrix_diagnosis")
+    matrix_diagnosis_roots = None
+    matrix_diagnosis_top_cells = None
+    matrix_diagnosis_support_tolerance = None
+    if matrix_diagnosis_values is not None:
+        if not isinstance(matrix_diagnosis_values, dict):
+            raise TypeError("matrix_diagnosis must resolve to a mapping")
+        diagnosis_store = ExactTargetStore.load(
+            matrix_diagnosis_values.get("exact_targets", dataset_path)
+        )
+        matrix_diagnosis_roots = build_decision_roots(
+            diagnosis_store, matrix_diagnosis_values["roots"]
+        )
+        matrix_diagnosis_top_cells = int(matrix_diagnosis_values.get("top_cells", 12))
+        matrix_diagnosis_support_tolerance = float(
+            matrix_diagnosis_values.get("support_tolerance", 1e-6)
+        )
     decision_loss_values = config.get("decision_loss")
     decision_loss_roots = None
     decision_loss_repeats = 0
@@ -1196,6 +1781,11 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     decision_loss_solver_iterations = 64
     decision_loss_solver_averaging_delay = 0
     decision_guard_hinge_weight = 1.0
+    decision_loss_root_aggregation = "max"
+    decision_loss_root_cvar_alpha = 1.0
+    decision_matrix_aggregation = "cell_mean"
+    decision_action_cvar_alpha = 1.0
+    decision_residual_weight = 0.0
     if decision_loss_values:
         decision_loss_solver_iterations = int(
             decision_loss_values.get("solver_iterations", 64)
@@ -1205,6 +1795,21 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         )
         decision_guard_hinge_weight = float(
             decision_loss_values.get("guard_hinge_weight", 1.0)
+        )
+        decision_loss_root_aggregation = str(
+            decision_loss_values.get("root_aggregation", "max")
+        )
+        decision_loss_root_cvar_alpha = float(
+            decision_loss_values.get("root_cvar_alpha", 1.0)
+        )
+        decision_matrix_aggregation = str(
+            decision_loss_values.get("matrix_aggregation", "cell_mean")
+        )
+        decision_action_cvar_alpha = float(
+            decision_loss_values.get("action_cvar_alpha", 1.0)
+        )
+        decision_residual_weight = float(
+            decision_loss_values.get("residual_weight", 0.0)
         )
         decision_loss_store = (
             decision_store
@@ -1236,6 +1841,11 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             solver_iterations=decision_loss_solver_iterations,
             solver_averaging_delay=decision_loss_solver_averaging_delay,
             guard_hinge_weight=decision_guard_hinge_weight,
+            root_aggregation=decision_loss_root_aggregation,
+            root_cvar_alpha=decision_loss_root_cvar_alpha,
+            matrix_aggregation=decision_matrix_aggregation,
+            action_cvar_alpha=decision_action_cvar_alpha,
+            residual_weight=decision_residual_weight,
         )
     best_loss = float("inf")
     best_epoch = 0
@@ -1288,6 +1898,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 "self_play": self_play_summary,
                 "exact_frontiers": exact_frontier_summary,
                 "initial_checkpoint": initial_checkpoint,
+                "initial_checkpoint_migration": initial_checkpoint_migration,
                 "diagnostic_only": diagnostic_only,
             },
             destination,
@@ -1308,6 +1919,10 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     best_attempt_gap = float("inf")
     decision_selection_solver_iterations = None
     decision_selection_solver_averaging_delay = 0
+    decision_ranking = "worst_saddle_gap"
+    decision_cvar_alpha = 1.0
+    decision_evaluation_interval = 1
+    baseline_matrix_diagnosis = None
     if selection_metric == "decision":
         decision_selection_solver_iterations = (
             int(decision_values["solver_iterations"])
@@ -1316,6 +1931,20 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         )
         decision_selection_solver_averaging_delay = int(
             decision_values.get("solver_averaging_delay", 0)
+        )
+        decision_ranking = str(
+            decision_values.get("ranking", "worst_saddle_gap")
+        )
+        decision_cvar_alpha = float(decision_values.get("cvar_alpha", 1.0))
+        decision_evaluation_interval = int(
+            decision_values.get("evaluation_interval", 1)
+        )
+        if decision_evaluation_interval <= 0:
+            raise ValueError("decision evaluation_interval must be positive")
+        decision_selection_score(
+            {"max_saddle_gap": 0.0, "roots": [{"saddle_gap": 0.0}]},
+            ranking=decision_ranking,
+            cvar_alpha=decision_cvar_alpha,
         )
         baseline_model = model
         if baseline_checkpoint is not None:
@@ -1399,6 +2028,15 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 solver_averaging_delay=decision_loss_solver_averaging_delay,
                 guard_limits=decision_guard_limits,
                 guard_hinge_weight=decision_guard_hinge_weight,
+                root_aggregation=decision_loss_root_aggregation,
+                root_cvar_alpha=decision_loss_root_cvar_alpha,
+                matrix_aggregation=decision_matrix_aggregation,
+                action_cvar_alpha=decision_action_cvar_alpha,
+                residual_weight=(
+                    decision_residual_weight
+                    if baseline_model.config.continuation_residual
+                    else 0.0
+                ),
             )
             if decision_loss_roots is not None
             else None
@@ -1406,10 +2044,14 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         best_decision_metrics = baseline_decision_metrics
         best_guard_metrics = baseline_guard_metrics
         best_validation_loss = baseline_validation["total_loss"]
-        best_loss = baseline_decision_metrics["max_saddle_gap"]
+        best_loss = decision_selection_score(
+            baseline_decision_metrics,
+            ranking=decision_ranking,
+            cvar_alpha=decision_cvar_alpha,
+        )
         best_attempt_metrics = baseline_decision_metrics
         best_attempt_guard_metrics = baseline_guard_metrics
-        best_attempt_gap = float(baseline_decision_metrics["max_saddle_gap"])
+        best_attempt_gap = best_loss
         history.append(
             {
                 "epoch": 0,
@@ -1423,6 +2065,17 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 "equilibrium_loss": baseline_equilibrium_loss,
                 "selection_loss": best_loss,
             }
+        )
+        baseline_matrix_diagnosis = (
+            diagnose_decision_roots(
+                baseline_model,
+                matrix_diagnosis_roots,
+                device=device,
+                top_cells=matrix_diagnosis_top_cells,
+                support_tolerance=matrix_diagnosis_support_tolerance,
+            )
+            if matrix_diagnosis_roots is not None
+            else None
         )
         if baseline_checkpoint is not None:
             shutil.copyfile(baseline_checkpoint, checkpoint_path)
@@ -1491,13 +2144,18 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                     solver_averaging_delay=decision_loss_solver_averaging_delay,
                     guard_limits=decision_guard_limits,
                     guard_hinge_weight=decision_guard_hinge_weight,
+                    root_aggregation=decision_loss_root_aggregation,
+                    root_cvar_alpha=decision_loss_root_cvar_alpha,
+                    matrix_aggregation=decision_matrix_aggregation,
+                    action_cvar_alpha=decision_action_cvar_alpha,
+                    residual_weight=decision_residual_weight,
                 )
                 loss.backward()
                 optimizer.step()
 
         train_metrics = evaluate(
             model,
-            train_loader,
+            train_evaluation_loader,
             policy_weight=policy_weight,
             device=device,
         )
@@ -1527,6 +2185,11 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             if self_play_loader is not None
             else None
         )
+        decision_selection_due = selection_metric == "decision" and (
+            epoch == 1
+            or epoch == epochs
+            or epoch % decision_evaluation_interval == 0
+        )
         decision_metrics = (
             evaluate_decision_roots(
                 model,
@@ -1535,7 +2198,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 solver_iterations=decision_selection_solver_iterations,
                 solver_averaging_delay=decision_selection_solver_averaging_delay,
             )
-            if decision_roots is not None
+            if decision_roots is not None and decision_selection_due
             else None
         )
         guard_metrics = (
@@ -1546,7 +2209,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 solver_iterations=decision_selection_solver_iterations,
                 solver_averaging_delay=decision_selection_solver_averaging_delay,
             )
-            if decision_guard_roots is not None
+            if decision_guard_roots is not None and decision_selection_due
             else None
         )
         guard_passed = (
@@ -1571,12 +2234,25 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 solver_averaging_delay=decision_loss_solver_averaging_delay,
                 guard_limits=decision_guard_limits,
                 guard_hinge_weight=decision_guard_hinge_weight,
+                root_aggregation=decision_loss_root_aggregation,
+                root_cvar_alpha=decision_loss_root_cvar_alpha,
+                matrix_aggregation=decision_matrix_aggregation,
+                action_cvar_alpha=decision_action_cvar_alpha,
+                residual_weight=decision_residual_weight,
             )
             if decision_loss_roots is not None
             else None
         )
         if selection_metric == "decision":
-            selection_loss = decision_metrics["max_saddle_gap"]
+            selection_loss = (
+                decision_selection_score(
+                    decision_metrics,
+                    ranking=decision_ranking,
+                    cvar_alpha=decision_cvar_alpha,
+                )
+                if decision_metrics is not None
+                else best_loss
+            )
         elif selection_metric == "exact_frontier":
             selection_loss = exact_frontier_metrics["total_loss"]
         elif selection_metric == "self_play":
@@ -1607,14 +2283,15 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
 
         if (
             selection_metric == "decision"
-            and decision_metrics["max_saddle_gap"]
+            and decision_metrics is not None
+            and selection_loss
             < best_attempt_gap - float(decision_values["tie_tolerance"])
         ):
             best_attempt_epoch = epoch
             best_attempt_metrics = decision_metrics
             best_attempt_guard_metrics = guard_metrics
             best_attempt_guard_passed = bool(guard_passed)
-            best_attempt_gap = float(decision_metrics["max_saddle_gap"])
+            best_attempt_gap = selection_loss
             save_checkpoint(
                 epoch=epoch,
                 validation_metrics=validation_metrics,
@@ -1630,7 +2307,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             )
 
         if selection_metric == "decision":
-            improved = bool(guard_passed) and decision_checkpoint_better(
+            improved = decision_metrics is not None and bool(guard_passed) and decision_checkpoint_better(
                 decision_metrics,
                 best_decision_metrics,
                 baseline_decision_metrics,
@@ -1640,6 +2317,8 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                     decision_values["minimum_gap_improvement"]
                 ),
                 tie_tolerance=float(decision_values["tie_tolerance"]),
+                ranking=decision_ranking,
+                cvar_alpha=decision_cvar_alpha,
             )
         else:
             improved = selection_loss < best_loss - float(training["minimum_delta"])
@@ -1683,7 +2362,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     selected_model.to(device)
     final_train = evaluate(
         selected_model,
-        train_loader,
+        train_evaluation_loader,
         policy_weight=policy_weight,
         device=device,
     )
@@ -1704,8 +2383,28 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             solver_averaging_delay=decision_loss_solver_averaging_delay,
             guard_limits=decision_guard_limits,
             guard_hinge_weight=decision_guard_hinge_weight,
+            root_aggregation=decision_loss_root_aggregation,
+            root_cvar_alpha=decision_loss_root_cvar_alpha,
+            matrix_aggregation=decision_matrix_aggregation,
+            action_cvar_alpha=decision_action_cvar_alpha,
+            residual_weight=(
+                decision_residual_weight
+                if selected_model.config.continuation_residual
+                else 0.0
+            ),
         )
         if decision_loss_roots is not None
+        else None
+    )
+    selected_matrix_diagnosis = (
+        diagnose_decision_roots(
+            selected_model,
+            matrix_diagnosis_roots,
+            device=device,
+            top_cells=matrix_diagnosis_top_cells,
+            support_tolerance=matrix_diagnosis_support_tolerance,
+        )
+        if matrix_diagnosis_roots is not None
         else None
     )
     audit = audit_saddle_gaps(
@@ -1715,6 +2414,28 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         max_rows_per_horizon=int(config["audit"]["max_rows_per_horizon"]),
         device=device,
     )
+    selected_generalization_direct_metrics = (
+        evaluate(
+            selected_model,
+            generalization_loader,
+            policy_weight=policy_weight,
+            device=device,
+        )
+        if generalization_loader is not None
+        else None
+    )
+    selected_generalization_saddle_audit = (
+        audit_saddle_gaps(
+            selected_model,
+            generalization_targets,
+            generalization_indices,
+            max_rows_per_horizon=generalization_max_saddle_rows,
+            device=device,
+        )
+        if generalization_targets is not None
+        and generalization_max_saddle_rows is not None
+        else None
+    )
 
     report = {
         "dataset": str(dataset_path),
@@ -1722,6 +2443,16 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         "dataset_version": targets.dataset_version,
         "target_schema": targets.schema_version,
         "rows": len(targets),
+        "exact_row_filter": {
+            "source_rows": len(source_indices),
+            "excluded_rows": len(excluded_indices),
+            "excluded_horizons": sorted(excluded_horizons),
+            "excluded_identities": [
+                {"state": list(state), "horizon": horizon}
+                for horizon, state in sorted(excluded_identities)
+            ],
+        },
+        "train_sampling": train_sampling_summary,
         "train_rows": len(train_indices),
         "validation_rows": len(validation_indices),
         "seed": seed,
@@ -1768,6 +2499,31 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         "train_metrics": final_train,
         "validation_metrics": final_validation,
         "exact_matrix_audit": audit,
+        "generalization_audit": (
+            {
+                "dataset": str(generalization_path),
+                "dataset_sha256": _sha256(generalization_path),
+                "dataset_version": generalization_targets.dataset_version,
+                "target_schema": generalization_targets.schema_version,
+                "source_rows": len(generalization_targets),
+                "rows": len(generalization_indices),
+                "batch_size": generalization_batch_size,
+                "max_saddle_rows_per_horizon": generalization_max_saddle_rows,
+                "selection_excluded": True,
+                "baseline": {
+                    "direct_target_metrics": baseline_generalization_direct_metrics,
+                    "exact_matrix_audit": baseline_generalization_saddle_audit,
+                },
+                "selected": {
+                    "direct_target_metrics": selected_generalization_direct_metrics,
+                    "exact_matrix_audit": selected_generalization_saddle_audit,
+                },
+            }
+            if generalization_targets is not None
+            and generalization_path is not None
+            and generalization_max_saddle_rows is not None
+            else None
+        ),
         "self_play": self_play_summary,
         "exact_frontiers": exact_frontier_summary,
         "decision_loss": (
@@ -1779,7 +2535,17 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             if decision_loss_values
             else None
         ),
+        "matrix_diagnosis": (
+            {
+                "config": dict(matrix_diagnosis_values),
+                "baseline": baseline_matrix_diagnosis,
+                "selected": selected_matrix_diagnosis,
+            }
+            if matrix_diagnosis_roots is not None
+            else None
+        ),
         "initial_checkpoint": initial_checkpoint,
+        "initial_checkpoint_migration": initial_checkpoint_migration,
         "checkpoint": str(checkpoint_path),
         "checkpoint_sha256": _sha256(checkpoint_path),
         "history": history,

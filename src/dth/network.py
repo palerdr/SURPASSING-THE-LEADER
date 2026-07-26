@@ -16,7 +16,8 @@ FEATURE_SCHEMA = (
     "remaining_horizon/horizon_scale",
 )
 
-FEATURE_LIFTS = ("identity", "boundary_v1")
+FEATURE_LIFTS = ("identity", "boundary_v1", "boundary_v2")
+CONTINUATION_RESIDUAL_MODES = ("matrix_head", "action_mlp")
 
 
 @dataclass(frozen=True)
@@ -26,8 +27,10 @@ class DTHNetworkConfig:
     action_count: int = 60
     horizon_scale: float = 3.0
     feature_lift: str = "identity"
+    continuation_residual: bool = False
+    continuation_residual_mode: str = "matrix_head"
 
-    def to_dict(self) -> dict[str, int | float | str]:
+    def to_dict(self) -> dict[str, int | float | str | bool]:
         return asdict(self)
 
 
@@ -67,6 +70,11 @@ class DTHPolicyValueNet(nn.Module):
             raise ValueError("action count must be positive")
         if self.config.feature_lift not in FEATURE_LIFTS:
             raise ValueError(f"unknown feature lift {self.config.feature_lift!r}")
+        if self.config.continuation_residual_mode not in CONTINUATION_RESIDUAL_MODES:
+            raise ValueError(
+                "unknown continuation residual mode "
+                f"{self.config.continuation_residual_mode!r}"
+            )
 
         layers: list[nn.Module] = []
         input_width = self._lifted_width
@@ -83,10 +91,44 @@ class DTHPolicyValueNet(nn.Module):
         self.value_head = nn.Linear(input_width, 1)
         self.drop_head = nn.Linear(input_width, self.config.action_count)
         self.check_head = nn.Linear(input_width, self.config.action_count)
+        self.continuation_residual_head = (
+            nn.Linear(input_width, self.config.action_count**2)
+            if (
+                self.config.continuation_residual
+                and self.config.continuation_residual_mode == "matrix_head"
+            )
+            else None
+        )
+        self.continuation_action_hidden = (
+            nn.Linear(input_width + 2, self.config.hidden_width)
+            if (
+                self.config.continuation_residual
+                and self.config.continuation_residual_mode == "action_mlp"
+            )
+            else None
+        )
+        self.continuation_action_out = (
+            nn.Linear(self.config.hidden_width, 1)
+            if self.continuation_action_hidden is not None
+            else None
+        )
+        if self.continuation_residual_head is not None:
+            # Preserve the scalar Bellman model exactly at initialization.  The
+            # residual only acquires a correction when exact matrix targets
+            # justify one.
+            nn.init.zeros_(self.continuation_residual_head.weight)
+            nn.init.zeros_(self.continuation_residual_head.bias)
+        if self.continuation_action_out is not None:
+            # The action MLP is a genuine Q(s, d, c) model, but its final layer
+            # starts at zero so migration preserves the scalar Bellman matrix.
+            nn.init.zeros_(self.continuation_action_out.weight)
+            nn.init.zeros_(self.continuation_action_out.bias)
 
     @property
     def _lifted_width(self) -> int:
-        return len(FEATURE_SCHEMA) + (4 if self.config.feature_lift == "boundary_v1" else 0)
+        return len(FEATURE_SCHEMA) + (
+            4 if self.config.feature_lift in {"boundary_v1", "boundary_v2"} else 0
+        )
 
     @staticmethod
     def _boundary_features(features: Tensor) -> Tensor:
@@ -106,6 +148,24 @@ class DTHPolicyValueNet(nn.Module):
             dim=1,
         )
 
+    @staticmethod
+    def _boundary_v2_features(features: Tensor) -> Tensor:
+        """Return exact indicators for the inclusive dose and strict TTD boundaries."""
+
+        checker_st = features[:, 0] * 300.0
+        checker_ttd = features[:, 1] * 300.0
+        dropper_st = features[:, 2] * 300.0
+        dropper_ttd = features[:, 3] * 300.0
+        return torch.stack(
+            (
+                (checker_st >= 240.0).to(dtype=features.dtype),
+                (checker_st + checker_ttd > 240.0).to(dtype=features.dtype),
+                (dropper_st >= 240.0).to(dtype=features.dtype),
+                (dropper_st + dropper_ttd > 240.0).to(dtype=features.dtype),
+            ),
+            dim=1,
+        )
+
     def apply_feature_lift(self, features: Tensor) -> Tensor:
         """Apply the configured deterministic lift to the five external inputs."""
 
@@ -118,12 +178,53 @@ class DTHPolicyValueNet(nn.Module):
             return features
         if self.config.feature_lift == "boundary_v1":
             return torch.cat((features, self._boundary_features(features)), dim=1)
+        if self.config.feature_lift == "boundary_v2":
+            return torch.cat((features, self._boundary_v2_features(features)), dim=1)
         raise ValueError(f"unknown feature lift {self.config.feature_lift!r}")
 
     def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         hidden = self.trunk(self.apply_feature_lift(features))
         value = torch.tanh(self.value_head(hidden)).squeeze(-1)
         return value, self.drop_head(hidden), self.check_head(hidden)
+
+    def continuation_residual_matrix(self, features: Tensor) -> Tensor:
+        """Return an action-conditioned correction to a Bellman root matrix."""
+
+        if not self.config.continuation_residual:
+            raise ValueError("continuation residual is disabled for this model")
+        hidden = self.trunk(self.apply_feature_lift(features))
+        if self.continuation_residual_head is not None:
+            return self.continuation_residual_head(hidden).reshape(
+                -1, self.config.action_count, self.config.action_count
+            )
+        if self.continuation_action_hidden is None or self.continuation_action_out is None:
+            raise RuntimeError("action-conditioned continuation residual is incomplete")
+        action_values = torch.arange(
+            1,
+            self.config.action_count + 1,
+            dtype=features.dtype,
+            device=features.device,
+        ) / float(self.config.action_count)
+        drop_actions, check_actions = torch.meshgrid(
+            action_values,
+            action_values,
+            indexing="ij",
+        )
+        action_features = torch.stack(
+            (drop_actions.reshape(-1), check_actions.reshape(-1)), dim=1
+        )
+        pair_count = int(action_features.shape[0])
+        repeated_hidden = hidden.unsqueeze(1).expand(-1, pair_count, -1)
+        repeated_actions = action_features.unsqueeze(0).expand(
+            hidden.shape[0], -1, -1
+        )
+        inputs = torch.cat((repeated_hidden, repeated_actions), dim=-1)
+        residual = self.continuation_action_out(
+            torch.relu(self.continuation_action_hidden(inputs))
+        ).squeeze(-1)
+        return residual.reshape(
+            -1, self.config.action_count, self.config.action_count
+        )
 
     def encode(self, states: Tensor, horizons: Tensor) -> Tensor:
         return encode_features(

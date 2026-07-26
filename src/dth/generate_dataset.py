@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import hashlib
 from itertools import product
+import json
 from pathlib import Path
+import time
 from typing import Iterable, Mapping, Sequence
 
 import hydra
@@ -16,12 +19,12 @@ from dth.solver import (
     DROPPER_ACTIONS,
     NTState,
     Solution,
+    TARGET_SCHEMA,
+    clear_solver_cache,
+    horizon_one_cache_info,
     solve,
     transition,
 )
-
-
-TARGET_SCHEMA = "dth-v1-ttd-strict-overflow"
 
 
 def _normalize_state(raw: Sequence[int]) -> NTState:
@@ -35,6 +38,13 @@ def _normalize_state(raw: Sequence[int]) -> NTState:
     if not (0 <= checker_ttd <= 300 and 0 <= dropper_ttd <= 300):
         raise ValueError(f"root TTD coordinates must be in 0..300, got {state!r}")
     return state
+
+
+def mirror_state(raw: Sequence[int]) -> NTState:
+    """Swap Checker and Dropper coordinates for a role-orientation pair."""
+
+    checker_st, checker_ttd, dropper_st, dropper_ttd = _normalize_state(raw)
+    return dropper_st, dropper_ttd, checker_st, checker_ttd
 
 
 def live_successors(state: NTState) -> set[NTState]:
@@ -160,6 +170,191 @@ def reachable_layers(
     return layers
 
 
+def _boundary_tablebase_roots(
+    pairs: Sequence[Mapping[str, object]],
+) -> tuple[tuple[NTState, int, str], ...]:
+    """Expand declared boundary roots into both mechanical role orientations."""
+
+    if not pairs:
+        raise ValueError("boundary tablebase requires at least one paired root")
+
+    roots: list[tuple[NTState, int, str]] = []
+    for pair_index, pair in enumerate(pairs):
+        if "state" not in pair or "horizons" not in pair:
+            raise ValueError(
+                f"boundary tablebase pair {pair_index} needs state and horizons"
+            )
+        primary = _normalize_state(pair["state"])
+        mirrored = mirror_state(primary)
+        if primary == mirrored:
+            raise ValueError(
+                f"boundary tablebase pair {pair_index} is self-mirrored: {primary!r}"
+            )
+        horizons = tuple(int(value) for value in pair["horizons"])
+        if not horizons:
+            raise ValueError(f"boundary tablebase pair {pair_index} has no horizons")
+        for horizon in horizons:
+            if not 1 <= horizon <= 255:
+                raise ValueError(
+                    f"boundary tablebase horizon must be in 1..255, got {horizon}"
+                )
+            roots.append((primary, horizon, "primary"))
+            roots.append((mirrored, horizon, "mirror"))
+
+    identities = [(state, horizon) for state, horizon, _ in roots]
+    if len(set(identities)) != len(identities):
+        raise ValueError("boundary tablebase roots contain duplicate state/horizon rows")
+    return tuple(roots)
+
+
+def boundary_tablebase_identities(
+    pairs: Sequence[Mapping[str, object]],
+) -> tuple[tuple[tuple[NTState, int, str], ...], set[tuple[NTState, int]]]:
+    """Return paired roots and their complete positive-horizon live closure."""
+
+    roots = _boundary_tablebase_roots(pairs)
+    identities: set[tuple[NTState, int]] = set()
+    for state, horizon, _ in roots:
+        for depth, layer in enumerate(reachable_layers((state,), horizon)):
+            remaining = horizon - depth
+            identities.update((child, remaining) for child in layer)
+    return roots, identities
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def generate_boundary_tablebase(
+    *,
+    output: str | Path,
+    report_output: str | Path,
+    pairs: Sequence[Mapping[str, object]],
+    progress_every: int = 1_000,
+    dataset_version: str = "boundary_tablebase_v1",
+) -> Path:
+    """Materialize a reusable exact closure for paired boundary roots.
+
+    This is a tablebase artifact, not a sampled corpus: every live state needed
+    to evaluate each configured root at its configured horizon is emitted with
+    exact LP value and policy targets.  The paired root declaration ensures both
+    role orientations are included without assuming that they are symmetric.
+    """
+
+    if progress_every < 0:
+        raise ValueError("progress_every must be non-negative")
+
+    roots, identities = boundary_tablebase_identities(pairs)
+    clear_solver_cache()
+    started = time.monotonic()
+    solutions: dict[tuple[NTState, int], Solution] = {}
+    solve_order = sorted(identities, key=lambda item: (-item[1], item[0]))
+    total = len(solve_order)
+    for index, (state, horizon) in enumerate(solve_order, start=1):
+        solutions[(state, horizon)] = solve(state, horizon)
+        if progress_every and index % progress_every == 0:
+            print(f"Solved {index}/{total} tablebase states", flush=True)
+
+    rows = [
+        (state, horizon, solutions[(state, horizon)])
+        for state, horizon in sorted(identities, key=lambda item: (item[1], item[0]))
+    ]
+    coverage_horizons = sorted({horizon for _, horizon in identities})
+    coverage_counts = [
+        sum(1 for _, horizon in identities if horizon == remaining)
+        for remaining in coverage_horizons
+    ]
+    cache_info = solve.cache_info()
+    horizon_one_info = horizon_one_cache_info()
+
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        destination,
+        states=np.asarray([row[0] for row in rows], dtype=np.int16),
+        horizons=np.asarray([row[1] for row in rows], dtype=np.uint8),
+        values=np.asarray([row[2].value for row in rows], dtype=np.float32),
+        drop_policies=np.asarray(
+            [row[2].drop_policy for row in rows], dtype=np.float32
+        ),
+        check_policies=np.asarray(
+            [row[2].check_policy for row in rows], dtype=np.float32
+        ),
+        saddle_gaps=np.asarray(
+            [row[2].saddle_gap for row in rows], dtype=np.float32
+        ),
+        drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+        check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+        dataset_version=np.asarray(dataset_version),
+        emission=np.asarray("boundary_tablebase_closure"),
+        root_states=np.asarray([state for state, _, _ in roots], dtype=np.int16),
+        root_horizons=np.asarray([horizon for _, horizon, _ in roots], dtype=np.uint8),
+        root_orientations=np.asarray(
+            [orientation for _, _, orientation in roots], dtype=np.str_
+        ),
+        coverage_horizons=np.asarray(coverage_horizons, dtype=np.uint8),
+        coverage_counts=np.asarray(coverage_counts, dtype=np.int64),
+        solver_cache_hits=np.asarray(cache_info.hits, dtype=np.int64),
+        solver_cache_misses=np.asarray(cache_info.misses, dtype=np.int64),
+        horizon_one_equivalence_hits=np.asarray(horizon_one_info.hits, dtype=np.int64),
+        horizon_one_equivalence_misses=np.asarray(
+            horizon_one_info.misses, dtype=np.int64
+        ),
+        schema_version=np.asarray(TARGET_SCHEMA),
+    )
+
+    report_path = Path(report_output)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "schema_version": "dth-boundary-tablebase-report-v1",
+        "dataset_version": dataset_version,
+        "emission": "boundary_tablebase_closure",
+        "artifact": {
+            "path": str(destination),
+            "bytes": destination.stat().st_size,
+            "sha256": _sha256(destination),
+            "target_schema": TARGET_SCHEMA,
+            "rows": len(rows),
+        },
+        "roots": {
+            "rows": len(roots),
+            "primary_rows": sum(orientation == "primary" for _, _, orientation in roots),
+            "mirror_rows": sum(orientation == "mirror" for _, _, orientation in roots),
+        },
+        "coverage_by_remaining_horizon": {
+            str(horizon): count
+            for horizon, count in zip(coverage_horizons, coverage_counts, strict=True)
+        },
+        "solver_cache": {
+            "state_horizon": {
+                "hits": cache_info.hits,
+                "misses": cache_info.misses,
+                "currsize": cache_info.currsize,
+            },
+            "horizon_one_equivalence": {
+                "hits": horizon_one_info.hits,
+                "misses": horizon_one_info.misses,
+                "currsize": horizon_one_info.currsize,
+            },
+        },
+        "elapsed_seconds": time.monotonic() - started,
+    }
+    report_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"Wrote {len(rows)} exact tablebase targets to {destination} "
+        f"and coverage report to {report_path}",
+        flush=True,
+    )
+    return destination
+
+
 def generate_exact_targets(
     *,
     output: str | Path,
@@ -176,7 +371,7 @@ def generate_exact_targets(
 
     layers = reachable_layers(root_states, horizon)
     rows: list[tuple[NTState, int, Solution]] = []
-    solve.cache_clear()
+    clear_solver_cache()
 
     # Solve deepest states first so shallower solves reuse the memoized values.
     for depth in range(horizon - 1, -1, -1):
@@ -308,7 +503,7 @@ def generate_strategic_targets(
     if len(identities) != len(requested):
         raise ValueError("strategic target sets contain duplicate state/horizon rows")
 
-    solve.cache_clear()
+    clear_solver_cache()
     solved: list[tuple[NTState, int, Solution]] = []
     solve_order = sorted(identities, key=lambda item: (-item[1], item[0]))
     total = len(solve_order)
@@ -348,6 +543,126 @@ def generate_strategic_targets(
     return destination
 
 
+def generate_paired_orientation_targets(
+    *,
+    train_output: str | Path,
+    holdout_output: str | Path,
+    pairs: Sequence[Mapping[str, object]],
+    train_orientation: str,
+    progress_every: int = 100,
+    dataset_version: str = "paired_orientation_v1",
+) -> tuple[Path, Path]:
+    """Write exact root-only targets for one orientation and its held-out mirror.
+
+    Each pair declares the primary orientation through ``state`` and one or more
+    horizons.  The opposite role orientation is derived mechanically, which
+    prevents a hand-written holdout from drifting away from its training pair.
+    """
+
+    if train_orientation not in {"primary", "mirror"}:
+        raise ValueError("train_orientation must be 'primary' or 'mirror'")
+    if progress_every < 0:
+        raise ValueError("progress_every must be non-negative")
+    if not pairs:
+        raise ValueError("paired orientation targets require at least one pair")
+
+    primary_rows: list[tuple[NTState, int]] = []
+    mirror_rows: list[tuple[NTState, int]] = []
+    for pair_index, pair in enumerate(pairs):
+        if "state" not in pair or "horizons" not in pair:
+            raise ValueError(
+                f"paired orientation pair {pair_index} needs state and horizons"
+            )
+        primary = _normalize_state(pair["state"])
+        mirrored = mirror_state(primary)
+        if primary == mirrored:
+            raise ValueError(
+                f"paired orientation pair {pair_index} is self-mirrored: {primary!r}"
+            )
+        horizons = tuple(int(value) for value in pair["horizons"])
+        if not horizons:
+            raise ValueError(f"paired orientation pair {pair_index} has no horizons")
+        for horizon in horizons:
+            if not 1 <= horizon <= 255:
+                raise ValueError(
+                    f"paired orientation horizon must be in 1..255, got {horizon}"
+                )
+            primary_rows.append((primary, horizon))
+            mirror_rows.append((mirrored, horizon))
+
+    primary_identities = set(primary_rows)
+    mirror_identities = set(mirror_rows)
+    if len(primary_identities) != len(primary_rows):
+        raise ValueError("paired orientation primary rows contain duplicates")
+    if len(mirror_identities) != len(mirror_rows):
+        raise ValueError("paired orientation mirror rows contain duplicates")
+    if primary_identities.intersection(mirror_identities):
+        raise ValueError("paired orientation train and holdout identities overlap")
+
+    train_identities, holdout_identities = (
+        (primary_identities, mirror_identities)
+        if train_orientation == "primary"
+        else (mirror_identities, primary_identities)
+    )
+    clear_solver_cache()
+    solve_order = sorted(
+        train_identities.union(holdout_identities),
+        key=lambda item: (-item[1], item[0]),
+    )
+    solutions: dict[tuple[NTState, int], Solution] = {}
+    total = len(solve_order)
+    for index, (state, horizon) in enumerate(solve_order, start=1):
+        solutions[(state, horizon)] = solve(state, horizon)
+        if progress_every and index % progress_every == 0:
+            print(f"Solved {index}/{total} paired orientation roots", flush=True)
+
+    def write_artifact(
+        destination: str | Path,
+        identities: set[tuple[NTState, int]],
+        *,
+        role: str,
+    ) -> Path:
+        ordered = sorted(identities, key=lambda item: (item[1], item[0]))
+        rows = [(state, horizon, solutions[(state, horizon)]) for state, horizon in ordered]
+        path = Path(destination)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            path,
+            states=np.asarray([row[0] for row in rows], dtype=np.int16),
+            horizons=np.asarray([row[1] for row in rows], dtype=np.uint8),
+            values=np.asarray([row[2].value for row in rows], dtype=np.float32),
+            drop_policies=np.asarray(
+                [row[2].drop_policy for row in rows], dtype=np.float32
+            ),
+            check_policies=np.asarray(
+                [row[2].check_policy for row in rows], dtype=np.float32
+            ),
+            saddle_gaps=np.asarray(
+                [row[2].saddle_gap for row in rows], dtype=np.float32
+            ),
+            drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+            check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+            dataset_version=np.asarray(f"{dataset_version}_{role}"),
+            emission=np.asarray("paired_mirror_roots"),
+            paired_role=np.asarray(role),
+            schema_version=np.asarray(TARGET_SCHEMA),
+        )
+        return path
+
+    train_path = write_artifact(train_output, train_identities, role="train")
+    holdout_path = write_artifact(
+        holdout_output,
+        holdout_identities,
+        role="heldout_mirror",
+    )
+    print(
+        f"Wrote {len(train_identities)} training and {len(holdout_identities)} "
+        f"held-out paired targets",
+        flush=True,
+    )
+    return train_path, holdout_path
+
+
 @hydra.main(version_base="1.3", config_path="config", config_name="dataset")
 def main(config: DictConfig) -> None:
     values = OmegaConf.to_container(config, resolve=True)
@@ -377,6 +692,31 @@ def main(config: DictConfig) -> None:
             ttd_values=sampler["ttd_values"],
             forced_roots=sampler["forced_roots"],
             seed=int(values["seed"]),
+            progress_every=int(values["progress_every"]),
+            dataset_version=str(values["dataset_version"]),
+        )
+        return
+    if emission == "paired_mirror_roots":
+        pairs = values["pairs"]
+        if not isinstance(pairs, list):
+            raise TypeError("paired orientation pairs must resolve to a list")
+        generate_paired_orientation_targets(
+            train_output=str(values["train_output"]),
+            holdout_output=str(values["holdout_output"]),
+            pairs=pairs,
+            train_orientation=str(values["train_orientation"]),
+            progress_every=int(values["progress_every"]),
+            dataset_version=str(values["dataset_version"]),
+        )
+        return
+    if emission == "boundary_tablebase_closure":
+        pairs = values["pairs"]
+        if not isinstance(pairs, list):
+            raise TypeError("boundary tablebase pairs must resolve to a list")
+        generate_boundary_tablebase(
+            output=str(values["output"]),
+            report_output=str(values["report_output"]),
+            pairs=pairs,
             progress_every=int(values["progress_every"]),
             dataset_version=str(values["dataset_version"]),
         )

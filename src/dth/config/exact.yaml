@@ -1,0 +1,34 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# One current exact architecture. Override roots, database/report paths, and
+# explicit bounds from Hydra; the fully resolved config is embedded in JSON.
+database_path: dth/artifacts/exact.sqlite
+report_path: dth/artifacts/exact_report.json
+roots:
+  - state: [239, 241, 299, 300]
+parity_horizons: [1, 2]
+
+census:
+  max_expansions: 1000
+  max_states: 10000
+  max_seconds: 30.0
+
+solve:
+  enabled: true
+  max_new_solutions: 1000
+  max_seconds: 30.0
+  batch_size: 32
+  workers: 1
+
+policy_cache:
+  enabled: true
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
