@@ -31,7 +31,7 @@ def project_to_abstract_state(
 ) -> AbstractState:
     """Floor canonical seconds to the tablebase's role-relative bucket state."""
 
-    rules = ruleset_for_name("bucket6_unified80") if rules is None else rules
+    rules = ruleset_for_name("bucket6_frozen95") if rules is None else rules
     bucket_seconds = rules.bucket_seconds
     maximum_load = rules.load_cap_units - 1
     maximum_ttd = rules.load_cap_units
@@ -82,9 +82,9 @@ class AbstractTablebasePolicyProvider:
         if self.bucket_seconds not in (5, 10):
             raise ValueError("abstract bucket width must be 5 or 10 seconds")
         ruleset_id = (
-            "bucket12_unified80"
+            "bucket12_frozen95"
             if self.bucket_seconds == 5
-            else "bucket6_unified80"
+            else "bucket6_frozen95"
         )
         self._rules = ruleset_for_name(ruleset_id)
         self.tablebase_path = Path(self.tablebase_path)

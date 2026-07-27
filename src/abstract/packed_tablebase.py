@@ -17,6 +17,7 @@ from abstract.matrix import saddle_gap as matrix_saddle_gap
 from abstract.matrix import solve_matrix
 from abstract.packed import PackedStateCodec, packed_live_successors
 from abstract.rules import (
+    FROZEN_REVIVAL_MODEL,
     LEGACY_REVIVAL_MODEL,
     UNIFIED_REVIVAL_MODEL,
     AbstractRuleset,
@@ -46,6 +47,7 @@ def _rust_revival_model_code(rules: AbstractRuleset) -> int:
     return {
         LEGACY_REVIVAL_MODEL: 0,
         UNIFIED_REVIVAL_MODEL: 1,
+        FROZEN_REVIVAL_MODEL: 2,
     }[rules.revival_model_kind]
 
 
@@ -568,6 +570,7 @@ class PackedTablebaseBuilder:
             self.rules.dose_curve_exponent,
             self.rules.ttd_half_life_units,
             self.rules.ttd_curve_exponent,
+            self.rules.ttd_decay_per_death_dose,
             self.rules.referee_decay_per_death_dose,
             self.rules.referee_floor,
         )
@@ -838,6 +841,7 @@ class PackedTablebaseBuilder:
                     self.rules.dose_curve_exponent,
                     self.rules.ttd_half_life_units,
                     self.rules.ttd_curve_exponent,
+                    self.rules.ttd_decay_per_death_dose,
                     self.rules.referee_decay_per_death_dose,
                     self.rules.referee_floor,
                 )
@@ -964,8 +968,11 @@ class PackedTablebase:
             revival_model_kind=str(revival["kind"]),
             revival_baseline=float(revival["baseline"]),
             dose_curve_exponent=float(revival.get("dose_curve_exponent", 3.0)),
-            ttd_half_life_units=float(revival["ttd_half_life_units"]),
-            ttd_curve_exponent=float(revival["ttd_curve_exponent"]),
+            ttd_half_life_units=float(revival.get("ttd_half_life_units", 12.0)),
+            ttd_curve_exponent=float(revival.get("ttd_curve_exponent", 1.3)),
+            ttd_decay_per_death_dose=float(
+                revival.get("ttd_decay_per_death_dose", 0.75)
+            ),
             referee_decay_per_death_dose=float(
                 revival.get("referee_decay_per_death_dose", 1.0)
             ),

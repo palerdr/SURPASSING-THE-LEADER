@@ -7,10 +7,19 @@ This is the sole repository authority for action seconds and Squandered Time
 
 The sources establish that ST cannot be zero and that the narrated immediate
 “0 seconds” check produces one second of ST. See
-[E-ST-NONZERO](../papers/game-sources/EVIDENCE.md#L8-L12) and
-[E-INSTANT-CHECK](../papers/game-sources/EVIDENCE.md#L14-L19).
+[E-ST-NONZERO](game-sources/EVIDENCE.md#e-st-nonzero) and
+[E-INSTANT-CHECK](game-sources/EVIDENCE.md#e-instant-check).
 The narrative zero is therefore immediate action in the first second, not a
 literal solver action.
+
+The canonical match ledger corroborates the inclusive convention independently:
+twelve successful checks all reproduce their stated accumulation only under
+`ST = c - d + 1`, and the maximum single half-round contribution observed is
+exactly 60 seconds. See
+[E-ST-INCLUSIVE-LEDGER](game-sources/EVIDENCE.md#e-st-inclusive-ledger) and
+[E-MAX-ST](game-sources/EVIDENCE.md#e-max-st). The 60-second failed-check
+penalty is confirmed five times by
+[E-DOSE-COMPOSITION](game-sources/EVIDENCE.md#e-dose-composition).
 
 <!-- canon:C-ACTION-NORMAL -->
 ## Literal-second convention

@@ -2,9 +2,12 @@ import numpy as np
 import pytest
 
 from abstract.rules import (
+    FROZEN_REVIVAL_MODEL,
     UNIFIED_REVIVAL_MODEL,
+    Bucket6Frozen95Rules,
     Bucket6TTDCurve95Rules,
     Bucket6Unified80Rules,
+    Bucket12Frozen95Rules,
     Bucket12TTDCurve95Rules,
     Bucket12Unified80Rules,
     ruleset_for_name,
@@ -83,11 +86,35 @@ def test_overflow_is_terminal_and_nonterminal_children_increase_potential() -> N
                     assert branch.state.potential > 0
 
 
+def test_frozen_revival_surface_is_geometric_and_seconds_invariant() -> None:
+    ten = Bucket6Frozen95Rules()
+    five = Bucket12Frozen95Rules()
+    assert ten.revival_model_kind == FROZEN_REVIVAL_MODEL
+    assert ten.expand_joint_action(AbstractState(), 2, 1)[0].probability == pytest.approx(0.95)
+    assert ten.revival_probability(24, 6) == pytest.approx(0.95 * 0.75**4)
+    assert ten.revival_probability(25, 6) == 0.0
+    assert ten.revival_probability(0, 30) == 0.0
+
+    for st_seconds, ttd_seconds in ((0, 0), (60, 0), (0, 120), (120, 120), (230, 0)):
+        assert ten.revival_probability(
+            ttd_seconds // 10,
+            (st_seconds + 60) // 10,
+        ) == pytest.approx(
+            five.revival_probability(
+                ttd_seconds // 5,
+                (st_seconds + 60) // 5,
+            ),
+            abs=1e-15,
+        )
+
+
 def test_ruleset_name_is_closed_and_role_relative_domain_is_known() -> None:
     rules = ruleset_for_name("bucket6_unified80")
     assert rules.physical_state_upper_bound == 30 * 31 * 30 * 31
     assert ruleset_for_name("bucket12_unified80") == Bucket12Unified80Rules()
     assert ruleset_for_name("bucket6_ttd_curve95") == Bucket6TTDCurve95Rules()
     assert ruleset_for_name("bucket12_ttd_curve95") == Bucket12TTDCurve95Rules()
+    assert ruleset_for_name("bucket6_frozen95") == Bucket6Frozen95Rules()
+    assert ruleset_for_name("bucket12_frozen95") == Bucket12Frozen95Rules()
     with pytest.raises(ValueError, match="bucket6_unified80.*bucket12_unified80"):
         ruleset_for_name("bucket12_fixed50")

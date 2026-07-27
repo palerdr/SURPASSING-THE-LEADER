@@ -1,7 +1,10 @@
 # Solver Foundations
 
 This file owns shared solver mathematics. It does not redefine game rules;
-those are frozen in `ACTION_TIMING.md` and `CANONICAL_EXTENSIVE_FORM.md`.
+those are frozen in [`ACTION_TIMING.md`](ACTION_TIMING.md),
+[`CANONICAL_EXTENSIVE_FORM.md`](CANONICAL_EXTENSIVE_FORM.md), and
+[`REVIVAL_MODEL.md`](REVIVAL_MODEL.md). Which games are claimed at all is frozen
+in [`FORMULATION_LADDER.md`](FORMULATION_LADDER.md).
 
 ## Simultaneous zero-sum decision
 
@@ -33,7 +36,11 @@ exploitability evidence, and any declared policy-drift/readability gates.
 
 ## Claim boundary
 
-The current STL solver is a fully observed public-state baseline. It does not
-claim to solve a private-information game with hidden leap knowledge, memory
-loss, signaling, or unobserved within-turn information. DTH and abstract make still
-smaller explicit abstractions, documented locally.
+The current STL solver is a fully observed public-state baseline at ladder rung
+L2. It does not claim to solve a private-information game with hidden leap
+knowledge, memory loss, signaling, or unobserved within-turn information — those
+are rungs L3 and L4, and neither is implemented. DTH (L1) and abstract (L0) make
+still smaller explicit abstractions, documented locally.
+
+Every rung shares one revival surface. A solver may not compensate for a rung it
+cannot represent by altering revival constants.

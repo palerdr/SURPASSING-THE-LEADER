@@ -64,6 +64,7 @@ fn revival_probability(
     dose_exponent: f64,
     half_life: f64,
     ttd_exponent: f64,
+    ttd_decay_per_death_dose: f64,
     referee_decay: f64,
     referee_floor: f64,
 ) -> f64 {
@@ -81,9 +82,18 @@ fn revival_probability(
                 referee_floor.max(referee_decay.powf(effective_deaths)),
             )
         }
+        2 => {
+            let pre_failure_st = dose - penalty;
+            let survivable_st_span = cap - penalty;
+            (1.0 - pre_failure_st as f64 / survivable_st_span as f64, 1.0)
+        }
         _ => return f64::NAN,
     };
-    let ttd_factor = 2.0_f64.powf(-((prior_ttd as f64 / half_life).powf(ttd_exponent)));
+    let ttd_factor = if model_kind == 2 {
+        ttd_decay_per_death_dose.powf(prior_ttd as f64 / penalty as f64)
+    } else {
+        2.0_f64.powf(-((prior_ttd as f64 / half_life).powf(ttd_exponent)))
+    };
     (baseline * dose_factor * ttd_factor * referee_factor).clamp(0.0, 1.0)
 }
 
@@ -189,6 +199,7 @@ fn backup_chunk_rs<'py>(
     dose_exponent: f64,
     half_life: f64,
     ttd_exponent: f64,
+    ttd_decay_per_death_dose: f64,
     referee_decay: f64,
     referee_floor: f64,
 ) -> PyResult<(
@@ -235,6 +246,7 @@ fn backup_chunk_rs<'py>(
             dose_exponent,
             half_life,
             ttd_exponent,
+            ttd_decay_per_death_dose,
             referee_decay,
             referee_floor,
         );
@@ -362,13 +374,29 @@ mod tests {
 
     #[test]
     fn unified_revival_model_matches_seconds_equivalent_buckets() {
-        let ten_second = revival_probability(12, 18, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.88, 0.4);
-        let five_second = revival_probability(24, 36, 60, 12, 1, 0.8, 3.0, 24.0, 1.3, 0.88, 0.4);
+        let ten_second =
+            revival_probability(12, 18, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4);
+        let five_second =
+            revival_probability(24, 36, 60, 12, 1, 0.8, 3.0, 24.0, 1.3, 0.75, 0.88, 0.4);
         assert!((ten_second - 0.15488).abs() < 1e-12);
         assert!((ten_second - five_second).abs() < 1e-12);
         assert_eq!(
-            revival_probability(0, 6, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.88, 0.4),
+            revival_probability(0, 6, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4),
             0.8
+        );
+    }
+
+    #[test]
+    fn frozen_revival_model_matches_seconds_equivalent_buckets() {
+        let ten_second =
+            revival_probability(12, 18, 30, 6, 2, 0.95, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4);
+        let five_second =
+            revival_probability(24, 36, 60, 12, 2, 0.95, 3.0, 24.0, 1.3, 0.75, 0.88, 0.4);
+        assert!((ten_second - (0.95 * 0.5 * 0.75_f64.powi(2))).abs() < 1e-12);
+        assert!((ten_second - five_second).abs() < 1e-12);
+        assert_eq!(
+            revival_probability(0, 6, 30, 6, 2, 0.95, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4),
+            0.95
         );
     }
 }

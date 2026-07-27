@@ -1,4 +1,5 @@
 import pytest
+import dth.solver as solver_module
 
 from dth.solver import (
     TState,
@@ -8,6 +9,29 @@ from dth.solver import (
     solve,
     transition,
 )
+
+
+def test_solver_schema_hash_binds_rule_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    before = solver_module.solver_schema_hash()
+    original = solver_module.revival_model
+
+    def replacement_revival_model(st, ttd):
+        return original(st, ttd)
+
+    monkeypatch.setattr(solver_module, "revival_model", replacement_revival_model)
+    assert solver_module.solver_schema_hash() != before
+
+
+def test_solver_schema_hash_binds_failure_dead_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = solver_module.solver_schema_hash()
+    monkeypatch.setattr(
+        solver_module,
+        "_FAILURE_DEAD_MIN_ST",
+        solver_module._FAILURE_DEAD_MIN_ST + 1,
+    )
+    assert solver_module.solver_schema_hash() != before
 
 
 def test_successful_check_below_cylinder_cap_remains_live() -> None:
@@ -33,6 +57,9 @@ def test_successful_check_dumps_at_cylinder_cap(
 
 
 def test_failed_check_dose_threshold_is_inclusive() -> None:
+    assert revival_model(0, 0) == pytest.approx(0.95)
+    assert revival_model(0, 60) == pytest.approx(0.95 * 0.75)
+    assert revival_model(239, 0) == pytest.approx(0.95 / 240.0)
     assert revival_model(240, 0) == 0.0
     assert transition((240, 0, 0, 0), 2, 1) == ((1.0, TState.W),)
 

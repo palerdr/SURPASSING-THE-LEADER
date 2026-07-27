@@ -44,13 +44,13 @@ Revival calculations use IEEE-754 binary64. Cross-language absolute error must
 be at most `1e-15` per branch probability. Probability mass must sum to one
 within `1e-12`.
 
-The `abstract-packed-parity-v2` contract covers both versioned probability
-models. Production rules use
-`linear_st_ttd_effective_referee_v1`; Python and Rust must agree on the linear
-pre-failure-ST factor, stretched TTD factor, TTD-derived referee floor/decay,
-and fatality guards. Legacy cubic rules remain parity-covered only for
-reproducibility. The ruleset model discriminator is part of every checkpoint
-configuration digest and artifact manifest.
+The `abstract-packed-parity-v2` contract covers all versioned probability
+models. Production `*_frozen95` rules use
+`linear_st_geometric_ttd_v1`; Python and Rust must agree on the linear
+pre-failure-ST factor, geometric `0.75^(ttd / failed_check_penalty)` factor,
+and fatality guards. The superseded effective-referee and cubic rules remain
+parity-covered only for reproducibility. The ruleset model discriminator is
+part of every checkpoint configuration digest and artifact manifest.
 
 ## Reachability parity
 

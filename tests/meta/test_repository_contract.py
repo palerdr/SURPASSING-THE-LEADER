@@ -39,11 +39,11 @@ def test_readmes_are_owned_by_root_or_an_implementation():
 
 
 def test_markdown_is_owned_by_an_approved_context_root():
-    approved_roots = {"docs", "papers", "src", "arena", ".codex"}
+    approved_roots = {"docs", "src", "arena", ".codex"}
     for path in _source_files(".md"):
         relative = path.relative_to(ROOT)
         if len(relative.parts) == 1:
-            assert relative.name in {"README.md", "AGENTS.md"}
+            assert relative.name in {"README.md", "AGENTS.md", "CLAUDE.md"}
         else:
             assert relative.parts[0] in approved_roots, relative
             if relative.parts[0] == "src":
@@ -51,18 +51,51 @@ def test_markdown_is_owned_by_an_approved_context_root():
                 assert relative.parts[1] in IMPLEMENTATIONS, relative
 
 
-def test_evidence_line_links_resolve_and_include_their_marker():
-    pattern = re.compile(r"\((?P<path>[^)]+\.md)#L(?P<start>\d+)-L(?P<end>\d+)\)")
+EVIDENCE = ROOT / "docs" / "game-sources" / "EVIDENCE.md"
+
+
+def _declared_evidence_ids() -> set[str]:
+    text = EVIDENCE.read_text(encoding="utf-8")
+    return set(re.findall(r"<!-- evidence:(E-[A-Z-]+) -->", text))
+
+
+def test_every_evidence_id_has_a_matching_anchor():
+    text = EVIDENCE.read_text(encoding="utf-8")
+    anchors = set(re.findall(r'<a id="([a-z-]+)"></a>', text))
+    declared = _declared_evidence_ids()
+    assert declared, "the evidence ledger declares no evidence IDs"
+    assert {identifier.lower() for identifier in declared} == anchors
+
+
+def test_evidence_links_resolve_to_a_declared_id():
+    """Docs must cite evidence by stable ID anchor, never by line number.
+
+    Line-number links rot on every edit to the ledger; the previous contract
+    enforced them and they had already broken.
+    """
+    declared = {identifier.lower() for identifier in _declared_evidence_ids()}
+    anchor_link = re.compile(r"\((?P<path>[^()\[\]\s]*EVIDENCE\.md)#(?P<anchor>[a-z-]+)\)")
+    line_link = re.compile(r"\([^()\[\]\s]*\.md#L\d+-L\d+\)")
     links = []
-    for document in (ROOT / "docs").glob("*.md"):
-        for match in pattern.finditer(document.read_text(encoding="utf-8")):
+    for document in (ROOT / "docs").rglob("*.md"):
+        text = document.read_text(encoding="utf-8")
+        assert not line_link.search(text), f"{document} uses a forbidden line-number link"
+        for match in anchor_link.finditer(text):
             target = (document.parent / match.group("path")).resolve()
-            start, end = int(match.group("start")), int(match.group("end"))
-            lines = target.read_text(encoding="utf-8").splitlines()
-            assert 1 <= start <= end <= len(lines)
-            assert "evidence:" in "\n".join(lines[start - 1 : end])
-            links.append((document, target, start, end))
-    assert len(links) == 5
+            assert target == EVIDENCE.resolve(), f"{document} -> {target}"
+            assert match.group("anchor") in declared, f"{document} -> #{match.group('anchor')}"
+            links.append((document, match.group("anchor")))
+    assert links, "no document cites the evidence ledger"
+
+
+def test_claude_md_imports_every_agents_file():
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    imported = set(re.findall(r"^@(\S*AGENTS\.md)\s*$", claude, flags=re.MULTILINE))
+    on_disk = {
+        path.relative_to(ROOT).as_posix()
+        for path in _source_files("AGENTS.md")
+    }
+    assert imported == on_disk, f"missing {on_disk - imported}, stale {imported - on_disk}"
 
 
 def test_solver_projects_do_not_import_each_other():

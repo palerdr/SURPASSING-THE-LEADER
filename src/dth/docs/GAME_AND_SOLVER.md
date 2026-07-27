@@ -40,13 +40,26 @@ If \(s'_c \ge 300\), the current Dropper wins. Otherwise roles swap:
 \]
 
 On failure, the injection dose is \(q=s_c+60\). Revival is impossible if
-\(q\ge300\) or \(t_c+q>300\). Otherwise
+\(q\ge300\) or \(t_c+q>300\); equivalently, revival is possible exactly when
+\(s_c\le239\) and \(s_c+t_c\le240\). Otherwise the revival probability is the
+repository-wide frozen surface from
+[`docs/REVIVAL_MODEL.md`](../../../docs/REVIVAL_MODEL.md):
 
 \[
-p_{\mathrm{revive}}
+p_{\mathrm{revive}}(s_c,t_c)
 =
-\left(1-\left(\frac{q}{300}\right)^3\right)2^{-t_c/240}.
+0.95\left(1-\frac{s_c}{240}\right)\cdot 0.75^{\,t_c/60}.
 \]
+
+The dose factor reaches zero exactly at the documentary lethal dose \(q=300\)
+and nowhere else; the largest survivable injection is \(s_c=239\), where the
+probability is \(0.95/240=0.003958\). The TTD factor has a 144.3-second
+half-life. STL's referee floor is omitted because it cannot bind while
+eligibility forces \(t_c\le240\).
+
+DTH does not own these constants and must not diverge from them. The surface is
+bucket-invariant, so `abstract`'s 10-second and 5-second rulesets and the
+leap-aware STL engine evaluate identically at the same physical \((s,t)\).
 
 Death gives the current Dropper payoff \(+1\). Revival swaps roles and yields
 
@@ -57,8 +70,11 @@ Death gives the current Dropper payoff \(+1\). Revival swaps roles and yields
 All live children have strictly greater raw damage
 \(s_c+t_c+s_d+t_d\).
 
-`dth.solver.transition` is the executable rule authority. Persistent artifacts
-bind to its schema hash and fail closed after any rule change.
+`dth.solver.transition` is the executable rule authority for ladder rung L1
+(see [`docs/FORMULATION_LADDER.md`](../../../docs/FORMULATION_LADDER.md)).
+Persistent artifacts bind to a source-derived schema hash and fail closed after
+any rule change, including changes to `revival_model` or the failure-dead
+quotient threshold.
 
 ## Bellman matrix
 

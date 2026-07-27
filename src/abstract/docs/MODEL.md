@@ -4,16 +4,22 @@
 no neural evaluator, MCTS, self-play, CFR, private information, leap rule, or
 identity-specific parameters.
 
-Two production discretizations implement the same rules:
+These are ladder rung L0; see
+[`docs/FORMULATION_LADDER.md`](../../../docs/FORMULATION_LADDER.md). Two
+production discretizations implement the same rules:
 
 | Ruleset | Bucket | Actions | Load cap | Failed-check dose | TTD half-life |
 |---|---:|---:|---:|---:|---:|
-| `bucket6_unified80` | 10 seconds | `1..6` | 30 units | 6 units | 12 units |
-| `bucket12_unified80` | 5 seconds | `1..12` | 60 units | 12 units | 24 units |
+| `bucket6_frozen95` | 10 seconds | `1..6` | 30 units | 6 units | 14.43 units |
+| `bucket12_frozen95` | 5 seconds | `1..12` | 60 units | 12 units | 28.86 units |
 
-The prior `bucket6_ttd_curve95` and `bucket12_ttd_curve95` rulesets remain
-addressable only to reproduce old experiments. They are not CLI defaults and
-their artifacts are not interchangeable with the production rulesets.
+The half-life is the frozen 144.3 seconds expressed in bucket units; it is a
+derived quantity, not a free parameter.
+
+The prior `bucket6_unified80`, `bucket12_unified80`, `bucket6_ttd_curve95`, and
+`bucket12_ttd_curve95` rulesets remain addressable only to reproduce old
+experiments. They are not CLI defaults and their artifacts are not
+interchangeable with the production rulesets.
 
 Actions are positive ordinal buckets and action zero is illegal. An action maps
 to seconds only in artifact metadata. A check succeeds iff `check >= drop`, and
@@ -34,7 +40,11 @@ On every live transition, the current roles swap. Values are always from the
 current Dropper's perspective, so a live child's value is negated during
 backup.
 
-## Unified two-variable revival model
+## Frozen two-variable revival model
+
+The revival surface is **not owned here**. It is frozen for the whole repository
+in [`docs/REVIVAL_MODEL.md`](../../../docs/REVIVAL_MODEL.md); this section
+restates it so the abstraction is readable on its own.
 
 Let \(s\) be the ST already in the current Checker's vial immediately before a
 failed check, and let \(t\) be that player's accrued TTD from prior survived
@@ -43,27 +53,36 @@ so \(q=s+60\). For an eligible death:
 
 \[
 P_{\mathrm{rev}}(s,t)
-=0.80\left(1-\frac{s}{240}\right)
-\times 2^{-\left(t/120\right)^{1.3}}
-\times \max\left(0.40,\;0.88^{\,t/60}\right).
+=0.95\left(1-\frac{s}{240}\right)\times 0.75^{\,t/60}.
 \]
 
-Thus \(P_{\mathrm{rev}}(0,0)=0.80\). Current ST acts linearly on the potency of
-the impending dose. Prior TTD weakens revival nonlinearly and also supplies an
-effective referee-fatigue burden, keeping the state role-relative and a
-function of exactly two variables. This last factor is a modeling bridge: it
-does not claim that accrued TTD is a literal observed CPR count.
+Thus \(P_{\mathrm{rev}}(0,0)=0.95\). Current ST acts linearly on the potency of
+the impending dose, reaching zero exactly at the documentary lethal dose
+\(q=300\) and nowhere else: the largest survivable injection is \(s=239\), where
+the probability is \(0.95/240=0.003958\). Prior TTD decays geometrically at a
+quarter per accrued death-minute, a 144.3-second half-life, keeping the state
+role-relative and a function of exactly two variables.
 
-In bucket units, let \(C=300/B\), \(F=60/B\), and \(H=120/B\), where \(B\) is
-the bucket width. If \(\ell=s/B\) and \(\tau=t/B\), the identical calculation
-is:
+`0.75` is a rounding of \(0.85\times0.88\), the product of `CARDIAC_DECAY` and
+`REFEREE_DECAY` from the STL engine; the unified model is STL's own surface with
+the dose term linearized and per-player physicality folded into the `0.95`
+baseline. STL's `max(0.40, ...)` referee floor is omitted because it requires
+more than 7.17 death-minutes while eligibility caps TTD at 4.0, so it can never
+bind. Folding referee fatigue into accrued TTD is a modeling bridge: it does not
+claim that accrued TTD is a literal observed CPR count.
+
+In bucket units, let \(C=300/B\) and \(F=60/B\), where \(B\) is the bucket
+width. If \(\ell=s/B\) and \(\tau=t/B\), the identical calculation is:
 
 \[
 P_{\mathrm{rev}}(\ell,\tau)
-=0.80\left(1-\frac{\ell}{C-F}\right)
-\times 2^{-\left(\tau/H\right)^{1.3}}
-\times \max\left(0.40,\;0.88^{\,\tau/F}\right).
+=0.95\left(1-\frac{\ell}{C-F}\right)\times 0.75^{\,\tau/F}.
 \]
+
+Because \(s/240=\ell/(C-F)\) and \(t/60=\tau/F\) identically, the surface is
+**exactly** bucket-invariant: the same physical \((s,t)\) gives bit-identical
+probabilities at \(B=10\), \(B=5\), and \(B=1\). This is what allows one play
+interface to span every rung of the ladder.
 
 A current dose of `C` units or more is fatal; `ttd + dose > C` is fatal; and
 equality at `C` remains eligible. A survival resets the old Checker's vial and
@@ -73,7 +92,7 @@ The source record fixes the 300-second capacity and strict cumulative boundary,
 but does not identify a numerical revival-probability surface. The shape and
 parameters above are therefore an explicit solver model, not a transcription
 of documentary odds. See the repository
-[`EVIDENCE.md`](../../papers/game-sources/EVIDENCE.md).
+[`EVIDENCE.md`](../../../docs/game-sources/EVIDENCE.md).
 
 ## Exact acyclic solution
 
@@ -93,14 +112,14 @@ saddle-gap tolerance. There is no depth horizon or approximate leaf value.
 The production 10-second tablebase uses the packed, resumable builder:
 
 ```powershell
-uv run python -m abstract exact --ruleset bucket6_unified80
+uv run python -m abstract exact --ruleset bucket6_frozen95
 ```
 
 The full 5-second tablebase uses the same packed, resumable v3 builder:
 
 ```powershell
 uv run python -m abstract exact `
-  --ruleset bucket12_unified80 `
+  --ruleset bucket12_frozen95 `
   --checkpoint-states 10000
 ```
 
@@ -113,7 +132,7 @@ cd src/crates/abstract_solver
 uv run --project ../.. maturin develop --release
 cd ../..
 uv run python -m abstract exact `
-  --ruleset bucket12_unified80 `
+  --ruleset bucket12_frozen95 `
   --backend rust
 ```
 
@@ -122,8 +141,8 @@ batches. It returns only genuinely mixed payoff matrices to Python's persistent
 HiGHS LP, so the Rust path cannot silently substitute a different matrix
 solver.
 
-The default outputs are `src/abstract/outputs/bucket6_unified80/` and
-`src/abstract/outputs/bucket12_unified80/`. Re-running either command resumes from
+The default outputs are `src/abstract/outputs/bucket6_frozen95/` and
+`src/abstract/outputs/bucket12_frozen95/`. Re-running either command resumes from
 `build-progress.json`. Reachability uses a bitset and a preallocated `uint32`
 queue. Reachable packed indices are counting-sorted by potential; values,
 policies, probabilities, and the packed-index-to-row map are contiguous
@@ -138,21 +157,28 @@ State IDs are derived only at lookup or export:
 
 ```powershell
 uv run python -m abstract lookup `
-  src/abstract/outputs/bucket12_unified80 0 0 0 0
+  src/abstract/outputs/bucket12_frozen95 0 0 0 0
 ```
 
 The regenerated production artifacts certify:
 
 | Ruleset | Reachable states | Pure saddles | Mixed LP states | Initial Dropper value | Maximum persisted gap |
 |---|---:|---:|---:|---:|---:|
-| `bucket6_unified80` | 576,270 | 94,652 | 481,618 | 0.10400516101482249 | \(3.6476064058099666\times10^{-8}\) |
-| `bucket12_unified80` | 8,870,160 | 737,594 | 8,132,566 | 0.0994671264374008 | \(4.3575783592597617\times10^{-8}\) |
+| `bucket6_frozen95` | 576,270 | 95,294 | 480,976 | 0.09681321477839212 | \(3.579177532131439\times10^{-8}\) |
+| `bucket12_frozen95` | 8,870,160 | 740,134 | 8,130,026 | 0.0927809531537424 | \(4.3575783537086465\times10^{-8}\) |
 
 The physical transition graph is unchanged from the earlier probability
 formulation. The 5-second closure occupies 8,870,160 of 13,395,600 physical
 packed indices. Both persisted-policy gaps remain below the frozen
 \(2\times10^{-7}\) gate; full per-array hashes and build digests remain in each
-generated artifact manifest.
+generated artifact manifest. Both production artifacts now bind
+`linear_st_geometric_ttd_v1` with baseline `0.95` and TTD decay `0.75`.
+
+The eligibility predicate is unchanged by the freeze, so the reachable counts
+remain the same while values, policies, and saddle gaps are regenerated under
+the frozen surface. The bucket6 reachable-state count was verified at exactly
+576,270 before accepting the production artifact; bucket12 was regenerated at
+exactly 8,870,160 reachable states.
 
 The byte-level state, transition, numeric, and checkpoint contract that must be
 satisfied before replacing a Python hot loop with Rust is specified in

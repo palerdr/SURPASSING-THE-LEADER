@@ -48,7 +48,7 @@ def test_five_second_provider_uses_packed_lookup_and_lifts_actions(
     tmp_path,
 ) -> None:
     class _Packed:
-        manifest = {"metadata": {"ruleset_id": "bucket12_unified80"}}
+        manifest = {"metadata": {"ruleset_id": "bucket12_frozen95"}}
 
         def __init__(self, artifact_dir) -> None:
             assert artifact_dir == tmp_path
@@ -71,12 +71,12 @@ def test_bucket_flag_selects_bucket_specific_default_artifact() -> None:
     five = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "5"])
     ten = parser.parse_args(["play", "--hal-agent", "abstract", "--buckets", "10"])
     assert cli._abstract_artifact(five) == (
-        Path("src/abstract/outputs/bucket12_unified80"),
-        "bucket12_unified80",
+        Path("src/abstract/outputs/bucket12_frozen95"),
+        "bucket12_frozen95",
     )
     assert cli._abstract_artifact(ten) == (
-        Path("src/abstract/outputs/bucket6_unified80"),
-        "bucket6_unified80",
+        Path("src/abstract/outputs/bucket6_frozen95"),
+        "bucket6_frozen95",
     )
 
 

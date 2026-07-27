@@ -24,7 +24,13 @@ def command_exact(args: argparse.Namespace) -> int:
     rules = ruleset_for_name(args.ruleset)
     packed = (
         args.packed
-        or rules.ruleset_id in {"bucket6_unified80", "bucket12_unified80"}
+        or rules.ruleset_id
+        in {
+            "bucket6_unified80",
+            "bucket12_unified80",
+            "bucket6_frozen95",
+            "bucket12_frozen95",
+        }
         or rules.action_size > 6
     )
     if packed:
@@ -84,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m abstract")
     subparsers = parser.add_subparsers(dest="command", required=True)
     exact = subparsers.add_parser("exact", help="build the exhaustive role-relative terminal tablebase")
-    exact.add_argument("--ruleset", default="bucket6_unified80")
+    exact.add_argument("--ruleset", default="bucket6_frozen95")
     exact.add_argument("--output-dir")
     exact.add_argument(
         "--packed",

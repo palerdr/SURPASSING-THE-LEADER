@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Callable, Mapping, Sequence, Tuple
 from enum import IntEnum
 import hashlib
-import json
+import inspect
 import numpy as np
 from functools import cache
 from scipy.optimize import linprog
@@ -33,10 +33,7 @@ def survive_injection(st, ttd):
 def revival_model(st, ttd):
     if not survive_injection(st, ttd):
         return 0.0
-    q = st + 60
-    st_term = 1.0 - (q / 300.0) ** 3
-    ttd_term = 2.0 ** (-ttd / 240.0)
-    return st_term * ttd_term
+    return 0.95 * (1.0 - st / 240.0) * 0.75 ** (ttd / 60.0)
 
 type NTState = Tuple[int, int, int, int]
 class TState(IntEnum):
@@ -185,22 +182,22 @@ def canonical_damage_rank(raw: Sequence[int]) -> int:
 def solver_schema_hash() -> str:
     """Stable hash of every rule that affects exact persistent solutions."""
 
-    schema = {
-        "actions": {"checker": [1, 60], "dropper": [1, 60]},
-        "complete_game_horizon": COMPLETE_GAME_HORIZON,
-        "failure": {
-            "dose": "checker_st + 60",
-            "fatal_dose": ">= 300",
-            "fatal_total_ttd": "> 300",
-            "revival": "(1 - (dose / 300)^3) * 2^(-ttd / 240)",
-        },
-        "role_orientation": "current_dropper",
-        "schema": TARGET_SCHEMA,
-        "success": {"condition": "checker >= dropper", "st": "checker-dropper+1"},
-        "terminal_st": ">= 300",
-    }
-    encoded = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    digest = hashlib.sha256()
+    for rule in (
+        revival_model,
+        survive_injection,
+        transition,
+        failed_check_dose,
+        overflow,
+        st,
+        successful_check,
+    ):
+        source = inspect.getsource(rule).encode("utf-8")
+        digest.update(len(source).to_bytes(8, byteorder="big"))
+        digest.update(source)
+    digest.update(b"_FAILURE_DEAD_MIN_ST")
+    digest.update(str(_FAILURE_DEAD_MIN_ST).encode("ascii"))
+    return digest.hexdigest()
 
 
 def reward(x: State):

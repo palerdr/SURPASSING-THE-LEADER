@@ -22,16 +22,29 @@
 Read the nearest nested `AGENTS.md` only when working in that subtree. Do not
 place subsystem status, plans, or invariants in the repository root.
 
+`CLAUDE.md` at the repository root imports every `AGENTS.md` so Claude Code
+loads them all as instruction files. Adding a subtree with its own `AGENTS.md`
+means adding an import line there.
+
 ## Frozen global rules
 
 - Actions are literal seconds beginning at 1; action 0 is illegal.
 - A successful check uses inclusive elapsed time: `ST = check - drop + 1`.
 - Normal action sets are 1..60.
+- The injected dose is vial contents plus a fixed 60-second penalty, `q = s + 60`.
+- Capacity is 300 seconds; `t + q > 300` is fatal and `t + q == 300` stays
+  revival-eligible when `q < 300`.
+- One revival-probability surface is frozen for the whole repository in
+  `docs/REVIVAL_MODEL.md`. No project may carry its own revival constants, and
+  none may reintroduce an explicit CPR count or per-player physicality below
+  ladder rung L2.
 - In STL's leap window only Baku as Dropper may choose 61; Checker remains
   capped at 60. Both players know the leap rule from game initialization.
 - DTH and abstract do not inherit STL-only leap or information-state mechanics.
 - The `ocaml` project implements the leap-aware STL public game and follows the
   STL rule above.
+- `docs/FORMULATION_LADDER.md` fixes which games are claimed at all. Work that
+  does not sit on a rung is not a supported claim.
 
 Any rules change must update canonical docs, evidence citations, schemas, and
 tests together. Do not weaken solver firewalls, gates, tolerances, or artifact

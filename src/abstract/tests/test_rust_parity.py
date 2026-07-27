@@ -8,8 +8,10 @@ import pytest
 from abstract.packed import PackedStateCodec, packed_live_successors
 from abstract.packed_tablebase import PackedTablebase, PackedTablebaseBuilder
 from abstract.rules import (
+    FROZEN_REVIVAL_MODEL,
     UNIFIED_REVIVAL_MODEL,
     AbstractRuleset,
+    Bucket12Frozen95Rules,
     Bucket12Unified80Rules,
 )
 from abstract.state import AbstractState
@@ -44,9 +46,28 @@ def _tiny_unified_rules() -> AbstractRuleset:
     )
 
 
+def _tiny_frozen_rules() -> AbstractRuleset:
+    return AbstractRuleset(
+        ruleset_id="test_bucket2_frozen_rust_parity",
+        action_values=(1, 2),
+        bucket_seconds=5,
+        load_cap_units=4,
+        failed_check_penalty_units=2,
+        revival_model_kind=FROZEN_REVIVAL_MODEL,
+        revival_baseline=0.95,
+        ttd_decay_per_death_dose=0.75,
+    )
+
+
 def test_rust_contract_version_and_successor_parity() -> None:
     assert rust.PARITY_CONTRACT_VERSION == "abstract-packed-parity-v2"
-    for rules in (_tiny_rules(), _tiny_unified_rules(), Bucket12Unified80Rules()):
+    for rules in (
+        _tiny_rules(),
+        _tiny_unified_rules(),
+        _tiny_frozen_rules(),
+        Bucket12Unified80Rules(),
+        Bucket12Frozen95Rules(),
+    ):
         codec = PackedStateCodec(rules.load_cap_units)
         indices = range(codec.state_count) if codec.state_count < 1_000 else (
             codec.encode(0, 0, 0, 0),
@@ -65,8 +86,16 @@ def test_rust_contract_version_and_successor_parity() -> None:
             assert tuple(actual) == expected
 
 
-def test_rust_and_python_builds_have_exact_closure_and_numeric_parity(tmp_path) -> None:
-    rules = _tiny_unified_rules()
+@pytest.mark.parametrize(
+    "rules_factory",
+    [_tiny_unified_rules, _tiny_frozen_rules],
+    ids=["unified", "frozen"],
+)
+def test_rust_and_python_builds_have_exact_closure_and_numeric_parity(
+    tmp_path,
+    rules_factory,
+) -> None:
+    rules = rules_factory()
     python_dir = tmp_path / "python"
     rust_dir = tmp_path / "rust"
     assert PackedTablebaseBuilder(

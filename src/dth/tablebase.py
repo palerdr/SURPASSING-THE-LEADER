@@ -33,7 +33,7 @@ from dth.solver import (
 )
 
 
-TABLEBASE_SCHEMA_VERSION = "dth-certified-interval-tablebase-v1"
+TABLEBASE_SCHEMA_VERSION = "dth-certified-interval-tablebase-v2"
 COMPLETE_NAMESPACE = "complete-game"
 FINITE_NAMESPACE = "finite-horizon"
 Scope = Literal["complete-game-exact", "finite-horizon-exact"]
@@ -45,6 +45,7 @@ _EXPECTED_TABLES = {
     "states",
     "rank_layers",
 }
+_EXPECTED_INDEXES = {"ix_frontier"}
 
 
 class TablebaseError(RuntimeError):
@@ -231,12 +232,27 @@ class CertifiedTablebase:
             )
         }
 
+    def _index_names(self) -> set[str]:
+        return {
+            str(row[0])
+            for row in self.connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+
     def _assert_existing_artifact_shape(self) -> None:
         tables = self._table_names()
         if tables != _EXPECTED_TABLES:
             raise TablebaseSchemaError(
                 "existing SQLite artifact is not the current exact DTH schema "
                 f"(tables={sorted(tables)!r})"
+            )
+        indexes = self._index_names()
+        if indexes != _EXPECTED_INDEXES:
+            raise TablebaseSchemaError(
+                "existing SQLite artifact is missing the current exact DTH indexes "
+                f"(indexes={sorted(indexes)!r})"
             )
 
     def _initialize_schema(self) -> None:
@@ -301,6 +317,9 @@ class CertifiedTablebase:
                 new_unique_states INTEGER,
                 solve_status INTEGER NOT NULL CHECK(solve_status IN (0, 1, 2))
             ) WITHOUT ROWID;
+
+            CREATE INDEX ix_frontier
+                ON states(census_status, damage_rank, state_id);
 
             CREATE TABLE rank_layers (
                 damage_rank INTEGER PRIMARY KEY NOT NULL,
@@ -785,8 +804,7 @@ class CertifiedTablebase:
         try:
             if self.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise TablebaseCorruptionError("SQLite integrity check failed")
-            if self._table_names() != _EXPECTED_TABLES:
-                raise TablebaseSchemaError("table set changed after initialization")
+            self._assert_existing_artifact_shape()
             exact = 0
             intervals = 0
             maximum_gap = 0.0

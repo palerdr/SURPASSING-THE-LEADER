@@ -164,6 +164,13 @@ def test_unified_census_is_policy_free_and_matches_bitset_count(tmp_path) -> Non
             )
         }
         assert {"values", "states", "rank_layers", "policy_cache"} <= tables
+        indexes = {
+            row[0]
+            for row in tablebase.connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        assert "ix_frontier" in indexes
 
 
 def test_rank_solver_commits_values_and_queue_atomically_then_caches_one_root_policy(

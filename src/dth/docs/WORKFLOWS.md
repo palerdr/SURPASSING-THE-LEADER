@@ -42,6 +42,7 @@ uv run python -m dth exact solve.enabled=false
 |---|---:|---:|---|
 | `(239,241,299,300)` | exact closure | 61 | exhausted persisted frontier |
 | `(240,0,240,0)` | exact quotient closure | 3,541 | checker-turn bitset and persisted census |
+| `(0,0,0,0)` | bounded census | 757,337 persisted states; 183,647 expanded | `exact_opening_consolidated_v1_report.json`, frozen schema and frontier index |
 | boundary roots | not rerun on current schema | — | no projection |
 | frozen development roots | not rerun on current schema | — | no projection |
 | `(0,0,0,0)` | not run on current schema | — | no complete-game claim |
