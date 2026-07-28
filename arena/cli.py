@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from arena.abstract_adapter import AbstractTablebasePolicyProvider
@@ -105,30 +106,111 @@ def command_play(args: argparse.Namespace) -> int:
     human = Player(name=args.human_name, physicality=PHYSICALITY_BAKU)
     game = Game(player1=hal, player2=human, referee=Referee(), rng=__import__("random").Random(args.seed))
     game.game_clock = args.start_clock
-    print(f"Playing canonical STL: Hal uses {args.hal_agent}; you are {human.name}.")
+
+    view = None
+    show_outcome = None
+    show_victory = None
+    if args.tui:
+        from arena.tui import (
+            Layout,
+            SceneArt,
+            draw,
+            enable_ansi,
+            render_frame,
+            render_outcome,
+            render_victory,
+        )
+
+        enable_ansi()
+        layout = Layout.detect(args.frame_width, args.frame_height)
+        art = SceneArt.load()
+        colour = not args.no_colour
+
+        def view():  # noqa: F811
+            draw(
+                render_frame(
+                    game,
+                    art=art,
+                    human_name=human.name,
+                    frame=view.frame,
+                    layout=layout,
+                    colour=colour,
+                    glyphs=args.glyphs,
+                )
+            )
+            view.frame += 1
+
+        view.frame = 0
+
+        def show_outcome(record):  # noqa: F811
+            draw(
+                render_outcome(
+                    record,
+                    game,
+                    human_name=human.name,
+                    layout=layout,
+                    colour=colour,
+                )
+            )
+            # Pausing reads stdin, which in a scripted run holds the next
+            # action. Only wait when a human is actually at the terminal.
+            if args.no_pause or not sys.stdin.isatty():
+                return
+            try:
+                input()
+            except (EOFError, KeyboardInterrupt):
+                pass
+
+        def show_victory():  # noqa: F811
+            # One still frame of the winner — the first of the idle sheet.
+            draw(
+                render_victory(
+                    game,
+                    art=art,
+                    human_name=human.name,
+                    layout=layout,
+                    colour=colour,
+                    glyphs=args.glyphs,
+                )
+            )
+    else:
+        print(f"Playing canonical STL: Hal uses {args.hal_agent}; you are {human.name}.")
+
     half_rounds = 0
     while not game.game_over and (args.max_half_rounds is None or half_rounds < args.max_half_rounds):
-        _print_state(game)
+        if view is not None:
+            view()
+        else:
+            _print_state(game)
         dropper, checker = game.get_roles_for_half(game.current_half)
         turn_duration = game.get_turn_duration()
         if dropper is hal:
             drop = hal_agent.choose_action(game, "dropper", turn_duration)
-            print("Hal has selected a drop time.")
+            if view is None:
+                print("Hal has selected a drop time.")
         else:
             from stl.engine.actions import legal_seconds
             drop = _human_action(actor=dropper.name, role="dropper", legal=legal_seconds(dropper.name, "dropper", turn_duration))
+        # The Dropper's second stays hidden until the half-round resolves; only
+        # the Checker's own selection is echoed back while choosing.
         if checker is hal:
             check = hal_agent.choose_action(game, "checker", turn_duration)
-            print(f"Hal checks at second {check}.")
+            if view is None:
+                print(f"Hal checks at second {check}.")
         else:
             from stl.engine.actions import legal_seconds
             check = _human_action(actor=checker.name, role="checker", legal=legal_seconds(checker.name, "checker", turn_duration))
         validate_action(drop, actor=dropper.name, role="dropper", turn_duration=turn_duration)
         validate_action(check, actor=checker.name, role="checker", turn_duration=turn_duration)
         result = game.play_half_round(drop, check)
-        print(f"{dropper.name} dropped at {drop}; {checker.name} checked at {check}; {result.result.value}.")
+        if show_outcome is not None:
+            show_outcome(result)
+        else:
+            print(f"{dropper.name} dropped at {drop}; {checker.name} checked at {check}; {result.result.value}.")
         half_rounds += 1
     if game.game_over:
+        if show_victory is not None and game.winner is not None:
+            show_victory()
         print(f"Game over: {game.winner.name} wins.")
     else:
         print(f"Session stopped after {half_rounds} half-rounds.")
@@ -164,6 +246,37 @@ def build_parser() -> argparse.ArgumentParser:
     play.add_argument("--seed", type=int, default=0)
     play.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
     play.add_argument("--max-half-rounds", type=int, default=None, help="stop after this many half-rounds")
+    play.add_argument("--tui", action="store_true", help="render the terminal interface instead of plain text")
+    play.add_argument(
+        "--no-colour",
+        action="store_true",
+        help="render sprites as ASCII density instead of truecolor glyph cells",
+    )
+    play.add_argument(
+        "--glyphs",
+        choices=("sextant", "quadrant"),
+        default="sextant",
+        help="sprite glyph set: sextant (2x3 pixels per cell, needs Symbols for "
+        "Legacy Computing — Windows Terminal and current Cascadia fonts have it) "
+        "or quadrant (2x2, universal Block Elements)",
+    )
+    play.add_argument(
+        "--frame-width",
+        type=int,
+        default=None,
+        help="override the auto-detected frame width in columns",
+    )
+    play.add_argument(
+        "--frame-height",
+        type=int,
+        default=None,
+        help="override the auto-detected terminal height in lines",
+    )
+    play.add_argument(
+        "--no-pause",
+        action="store_true",
+        help="do not wait for input on the half-round outcome screen",
+    )
     play.set_defaults(function=command_play)
     return parser
 

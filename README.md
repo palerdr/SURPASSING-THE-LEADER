@@ -7,14 +7,14 @@ This repository contains deliberately separate game-solving projects:
 | `src/stl/` | Full Surpassing the Leader engine, exact solver, search, learning, and play surface | Leap-aware public game; only Baku as Dropper may use second 61 |
 | `src/dth/` | Pure Drop the Handkerchief solver | Literal seconds 1..60; no leap second or STL-only rules |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
-| `src/ocaml/` | OCaml engine, solver foundation, and TUI | Frozen STL timing parity and unified two-variable revival model |
+| `src/ocaml/` | Minimal exact OCaml solver | Literal DTH seconds and the repository-wide frozen revival model |
 | `src/crates/` | Shared Rust acceleration workspace | Python remains behavioral authority until explicit parity contracts |
 | `arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
 
 Repository-wide game contracts live in [`docs/`](docs/). The whitepaper,
 primary game evidence, and cited research are kept separately in
-[`papers/`](papers/). The OCaml project retains its upstream authorship and
-import record in [`src/ocaml/PROVENANCE.md`](src/ocaml/PROVENANCE.md).
+[`papers/`](papers/). The OCaml project records its authorship in
+[`src/ocaml/AUTHORS.md`](src/ocaml/AUTHORS.md).
 
 ## Setup
 

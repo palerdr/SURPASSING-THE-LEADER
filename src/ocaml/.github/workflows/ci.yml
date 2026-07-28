@@ -10,7 +10,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: stl_src
+        working-directory: src/ocaml
 
     steps:
       - name: Check out repository

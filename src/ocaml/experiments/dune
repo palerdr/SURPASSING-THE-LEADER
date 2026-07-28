@@ -1,3 +1,0 @@
-(executables
- (names eval_baselines sweep_revival)
- (libraries dth_engine dth_solver))

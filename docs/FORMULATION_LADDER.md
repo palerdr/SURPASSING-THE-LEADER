@@ -74,7 +74,7 @@ doses, or revival work. Everything above adds information or an extra action.
 
 ### L2 — leap-aware public game
 
-Owner: `src/stl/`, `src/ocaml/`. Adds one mechanic: within the leap window, the
+Owner: `src/stl/`. Adds one mechanic: within the leap window, the
 Dropper may additionally choose second 61; the Checker stays capped at 60, so
 `(drop = 61, check ≤ 60)` always fails.
 

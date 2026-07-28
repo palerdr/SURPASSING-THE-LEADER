@@ -1,20 +1,20 @@
-# OCaml Engine Instructions
+# OCaml exact solver instructions
 
-This subtree is a standalone Dune project imported from the authorized Cornell
-course repository. Preserve the upstream architecture and authorship recorded
-in `PROVENANCE.md`.
+This subtree is a standalone Dune project. Its only library is
+`lib/solver/exact.ml` with interface `exact.mli`; keep it independent of the
+Python and Rust peer projects.
 
-- Do not import Python or Rust peer projects.
-- Keep literal action seconds, inclusive successful-check ST, and leap legality
-  aligned with the repository root frozen rules.
-- Revival probability is identity-neutral and depends on exactly two state
-  variables: ST in the vial and accrued TTD.
-- Update engine interfaces, TUI display, solver legality, documentation, and
-  Alcotest coverage together for rule changes.
+- Actions are literal seconds `1..60`.
+- Successful-check ST is inclusive: `check - drop + 1`.
+- Revival is identity-neutral and depends only on pre-failure ST and accrued
+  TTD.
+- Use the repository-wide frozen revival model in `docs/REVIVAL_MODEL.md`:
+  `0.95 * (1 - s / 240) * 0.75^(t / 60)` when the dose is eligible.
 
 Validate with:
 
 ```sh
 opam exec --switch=stl-dth-ocaml -- dune build --root src/ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/ocaml
+opam exec --switch=stl-dth-ocaml -- dune fmt --root src/ocaml
 ```

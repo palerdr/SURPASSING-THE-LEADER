@@ -69,9 +69,9 @@ per-player physicality multiplier below ladder rung L2.
 - `src/abstract/rules.py` owns only the enumerated role-relative 10-second and
   5-second bucket abstractions (ladder rung L0); their shared exact contract is
   documented in `src/abstract/docs/MODEL.md`.
-- `src/ocaml/lib/engine/` owns the imported leap-aware OCaml engine (ladder rung
-  L2). It already uses the two-variable revival surface as a parity target; this
-  does not silently reclassify older STL/DTH checkpoints.
+- `src/ocaml/lib/solver/exact.ml` is a minimal OCaml exact-solver arm for the
+  pure DTH formulation. It is not an owner of the leap-aware public-game rung
+  and does not reclassify older STL/DTH checkpoints.
 - `arena/` owns no game rules; it adapts solver policies to the canonical STL
   referee for live play.
 
