@@ -1,0 +1,29 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Expert-iteration generation one (docs/AGENT_GOAL.md open problems): the
+# strongest current leaves play self-play from the canonical opening, and
+# every unlabeled trajectory state triggers one depth-three resolve whose
+# interior solutions all become depth-amplified training rows.
+dataset_version: resolve_labeled_gen1
+output: src/dth/artifacts/resolve_labeled_gen1.npz
+report_output: src/dth/artifacts/resolve_labeled_gen1_report.json
+emission: resolve_labeled
+checkpoint: src/dth/checkpoints/class_head_v1/best.pt
+tablebase: src/dth/artifacts/exact_band_v1.sqlite
+games: 12
+max_half_rounds: 120
+seed: 4
+label_depth: 3
+label_deadline_seconds: 60.0
+max_resolves: 120
+leaf_horizon: 4
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

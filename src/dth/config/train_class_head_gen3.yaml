@@ -1,0 +1,9 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# Generation three of the expert-iteration loop, continued from generation
+# two on the anchor-seeded accumulated corpus.
+dataset: src/dth/artifacts/class_head_gen3_corpus.npz
+output_dir: src/dth/checkpoints/class_head_gen3
+initial_checkpoint: src/dth/checkpoints/class_head_gen2/best.pt

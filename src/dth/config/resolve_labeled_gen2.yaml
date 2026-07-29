@@ -1,0 +1,13 @@
+defaults:
+  - resolve_labeled_gen1
+  - _self_
+
+# Generation two: the generation-one checkpoint teaches, with broader
+# self-play coverage and a fresh seed.
+dataset_version: resolve_labeled_gen2
+output: src/dth/artifacts/resolve_labeled_gen2.npz
+report_output: src/dth/artifacts/resolve_labeled_gen2_report.json
+checkpoint: src/dth/checkpoints/class_head_gen1/best.pt
+games: 16
+seed: 5
+max_resolves: 200

@@ -211,3 +211,48 @@ def test_merge_exact_artifacts_deduplicates_state_horizon_rows(tmp_path: Path) -
         assert artifact["states"].shape == (2, 4)
         assert str(artifact["dataset_version"]) == "merged_test"
         assert str(artifact["emission"]) == "merged_reachable"
+
+
+def test_resolve_labeled_emission_writes_play_coverage_rows(tmp_path):
+    from dataclasses import dataclass
+
+    import numpy as np
+
+    from dth.agent import BoundedResolveAgent, ResolveBudget
+    from dth.generate_dataset import generate_resolve_labeled_targets
+
+    @dataclass(frozen=True)
+    class _StubConfig:
+        transition_class_head: bool = False
+
+    class _ZeroNetwork:
+        config = _StubConfig()
+
+        def values(self, states, horizon):
+            del horizon
+            return np.zeros(len(states), dtype=np.float64)
+
+    agent = BoundedResolveAgent(
+        network=_ZeroNetwork(),
+        budget=ResolveBudget(deadline_seconds=30.0, max_depth=2, leaf_horizon=4),
+    )
+    output = tmp_path / "resolve_labeled.npz"
+    generate_resolve_labeled_targets(
+        output=output,
+        report_output=tmp_path / "resolve_labeled.json",
+        games=1,
+        max_half_rounds=3,
+        seed=4,
+        label_depth=2,
+        label_deadline_seconds=30.0,
+        max_resolves=4,
+        leaf_horizon=4,
+        agent=agent,
+    )
+
+    with np.load(output, allow_pickle=False) as artifact:
+        assert str(np.asarray(artifact["emission"]).item()) == "resolve_labeled"
+        assert len(artifact["states"]) > 1
+        assert set(artifact["horizons"].tolist()) == {4}
+        drop = artifact["drop_policies"]
+        assert np.allclose(drop.sum(axis=1), 1.0, atol=1e-5)

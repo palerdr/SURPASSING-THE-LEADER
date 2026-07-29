@@ -1,0 +1,10 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# Generation one of the expert-iteration loop: the class-head recipe
+# unchanged, continued from the strongest candidate on the corpus that adds
+# resolve-labeled play coverage to the exact closures.
+dataset: src/dth/artifacts/class_head_gen1_corpus.npz
+output_dir: src/dth/checkpoints/class_head_gen1
+initial_checkpoint: src/dth/checkpoints/class_head_v1/best.pt

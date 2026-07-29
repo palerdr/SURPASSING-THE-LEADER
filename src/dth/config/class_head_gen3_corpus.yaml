@@ -1,0 +1,20 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+dataset_version: class_head_gen3_corpus
+output: src/dth/artifacts/class_head_gen3_corpus.npz
+emission: merge
+inputs:
+  - src/dth/artifacts/resolve_labeled_gen1.npz
+  - src/dth/artifacts/resolve_labeled_gen2.npz
+  - src/dth/artifacts/resolve_labeled_gen3.npz
+  - src/dth/artifacts/readiness_training_reference_v2.npz
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

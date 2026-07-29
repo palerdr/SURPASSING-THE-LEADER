@@ -1,0 +1,20 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Generation-one training corpus: play-coverage rows first, exact closures
+# last, so any state/horizon collision resolves to the exact row.
+dataset_version: class_head_gen1_corpus
+output: src/dth/artifacts/class_head_gen1_corpus.npz
+emission: merge
+inputs:
+  - src/dth/artifacts/resolve_labeled_gen1.npz
+  - src/dth/artifacts/readiness_training_reference_v2.npz
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

@@ -1,0 +1,25 @@
+defaults:
+  - resolve_labeled_gen1
+  - _self_
+
+# Generation three: coverage seeded from the promotion anchors and their
+# mirrored neighbourhood as well as the opening, because generations one and
+# two showed anchor-region labels arrive only incidentally from
+# opening-seeded play while the anchor value-error gate keeps failing.
+dataset_version: resolve_labeled_gen3
+output: src/dth/artifacts/resolve_labeled_gen3.npz
+report_output: src/dth/artifacts/resolve_labeled_gen3_report.json
+checkpoint: src/dth/checkpoints/class_head_gen2/best.pt
+games: 18
+seed: 6
+max_resolves: 200
+starts:
+  - [0, 0, 0, 0]
+  - [239, 0, 0, 240]
+  - [0, 240, 239, 0]
+  - [238, 0, 1, 240]
+  - [1, 240, 238, 0]
+  - [179, 60, 59, 180]
+  - [59, 180, 179, 60]
+  - [219, 0, 19, 240]
+  - [19, 240, 219, 0]

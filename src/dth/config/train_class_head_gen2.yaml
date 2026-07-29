@@ -1,0 +1,9 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# Generation two of the expert-iteration loop, continued from generation one
+# on the accumulated corpus.
+dataset: src/dth/artifacts/class_head_gen2_corpus.npz
+output_dir: src/dth/checkpoints/class_head_gen2
+initial_checkpoint: src/dth/checkpoints/class_head_gen1/best.pt

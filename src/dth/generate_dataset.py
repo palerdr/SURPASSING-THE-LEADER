@@ -663,6 +663,158 @@ def generate_paired_orientation_targets(
     return train_path, holdout_path
 
 
+def generate_resolve_labeled_targets(
+    *,
+    output: str | Path,
+    report_output: str | Path,
+    games: int,
+    max_half_rounds: int,
+    seed: int,
+    label_depth: int,
+    label_deadline_seconds: float,
+    max_resolves: int,
+    leaf_horizon: int,
+    dataset_version: str = "resolve_labeled_v1",
+    starts: Sequence[Sequence[int]] | None = None,
+    agent=None,
+    checkpoint: str | Path | None = None,
+    tablebase: str | Path | None = None,
+) -> Path:
+    """Expert-iteration coverage: label self-play states with the resolve.
+
+    Self-play trajectories run under the bounded-resolve agent itself; every
+    unlabeled state met on a trajectory triggers one depth-limited resolve
+    whose interior solutions all become training rows.  Rows carry the
+    agent's query horizon, because their values are depth-amplified play
+    estimates, not finite-horizon certificates; merges must therefore list
+    this artifact before exact closures so exact rows win collisions.
+    """
+
+    if games <= 0 or max_half_rounds <= 0:
+        raise ValueError("games and max_half_rounds must be positive")
+    if label_depth <= 0 or label_deadline_seconds <= 0.0:
+        raise ValueError("label depth and deadline must be positive")
+    if max_resolves <= 0:
+        raise ValueError("max_resolves must be positive")
+
+    if agent is None:
+        from dth.agent import BoundedResolveAgent, NetworkLeafModel, ResolveBudget
+
+        if checkpoint is None:
+            raise ValueError("resolve labelling needs a checkpoint or an agent")
+        agent = BoundedResolveAgent(
+            tablebase_path=tablebase,
+            network=NetworkLeafModel(checkpoint),
+            budget=ResolveBudget(
+                deadline_seconds=label_deadline_seconds,
+                max_depth=label_depth,
+                leaf_horizon=leaf_horizon,
+            ),
+        )
+
+    started = time.monotonic()
+    rng = np.random.default_rng(seed)
+    labeled: dict[NTState, tuple[float, np.ndarray, np.ndarray, float]] = {}
+    resolves = 0
+    trajectory_states = 0
+
+    def sample_policy(policy: np.ndarray) -> int:
+        weights = np.clip(np.asarray(policy, dtype=np.float64), 0.0, None)
+        weights /= weights.sum()
+        return int(rng.choice(60, p=weights)) + 1
+
+    start_states = (
+        tuple(_normalize_state(start) for start in starts)
+        if starts
+        else ((0, 0, 0, 0),)
+    )
+    with agent:
+        for game_index in range(games):
+            state: NTState = start_states[game_index % len(start_states)]
+            for _ in range(max_half_rounds):
+                trajectory_states += 1
+                if state not in labeled and resolves < max_resolves:
+                    harvest = agent.resolve_labels(
+                        state,
+                        depth=label_depth,
+                        deadline_seconds=label_deadline_seconds,
+                    )
+                    resolves += 1
+                    for child, row in harvest.items():
+                        labeled.setdefault(child, row)
+                row = labeled.get(state)
+                if row is not None:
+                    drop = sample_policy(row[1])
+                    check = sample_policy(row[2])
+                else:
+                    decision = agent.decide(state)
+                    drop = sample_policy(np.asarray(decision.drop_policy))
+                    check = sample_policy(np.asarray(decision.check_policy))
+                branches = transition(state, drop, check)
+                probabilities = np.asarray(
+                    [probability for probability, _ in branches]
+                )
+                child = branches[
+                    int(rng.choice(len(branches), p=probabilities))
+                ][1]
+                if not isinstance(child, tuple):
+                    break
+                state = child
+
+    ordered = sorted(labeled.items(), key=lambda item: item[0])
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        destination,
+        states=np.asarray([state for state, _ in ordered], dtype=np.int16),
+        horizons=np.full(len(ordered), leaf_horizon, dtype=np.uint8),
+        values=np.asarray([row[0] for _, row in ordered], dtype=np.float32),
+        drop_policies=np.asarray([row[1] for _, row in ordered], dtype=np.float32),
+        check_policies=np.asarray(
+            [row[2] for _, row in ordered], dtype=np.float32
+        ),
+        saddle_gaps=np.asarray([row[3] for _, row in ordered], dtype=np.float32),
+        drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+        check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+        dataset_version=np.asarray(dataset_version),
+        emission=np.asarray("resolve_labeled"),
+        label_depth=np.asarray(label_depth, dtype=np.int64),
+        leaf_horizon=np.asarray(leaf_horizon, dtype=np.int64),
+        seed=np.asarray(seed, dtype=np.int64),
+        schema_version=np.asarray(TARGET_SCHEMA),
+    )
+    report_path = Path(report_output)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "schema_version": "dth-resolve-labeled-report-v1",
+        "dataset_version": dataset_version,
+        "emission": "resolve_labeled",
+        "artifact": {
+            "path": str(destination),
+            "bytes": destination.stat().st_size,
+            "sha256": _sha256(destination),
+            "rows": len(ordered),
+        },
+        "games": games,
+        "trajectory_states": trajectory_states,
+        "resolves": resolves,
+        "max_resolves": max_resolves,
+        "label_depth": label_depth,
+        "leaf_horizon": leaf_horizon,
+        "elapsed_seconds": time.monotonic() - started,
+    }
+    report_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"Wrote {len(ordered)} resolve-labeled targets from {resolves} resolves "
+        f"to {destination}",
+        flush=True,
+    )
+    return destination
+
+
 @hydra.main(version_base="1.3", config_path="config", config_name="dataset")
 def main(config: DictConfig) -> None:
     values = OmegaConf.to_container(config, resolve=True)
@@ -719,6 +871,33 @@ def main(config: DictConfig) -> None:
             pairs=pairs,
             progress_every=int(values["progress_every"]),
             dataset_version=str(values["dataset_version"]),
+        )
+        return
+    if emission == "merge":
+        inputs = values["inputs"]
+        if not isinstance(inputs, list) or not inputs:
+            raise TypeError("merge emission requires a non-empty inputs list")
+        merge_exact_target_artifacts(
+            [str(path) for path in inputs],
+            str(values["output"]),
+            dataset_version=str(values["dataset_version"]),
+        )
+        return
+    if emission == "resolve_labeled":
+        generate_resolve_labeled_targets(
+            output=str(values["output"]),
+            report_output=str(values["report_output"]),
+            games=int(values["games"]),
+            max_half_rounds=int(values["max_half_rounds"]),
+            seed=int(values["seed"]),
+            label_depth=int(values["label_depth"]),
+            label_deadline_seconds=float(values["label_deadline_seconds"]),
+            max_resolves=int(values["max_resolves"]),
+            leaf_horizon=int(values["leaf_horizon"]),
+            dataset_version=str(values["dataset_version"]),
+            starts=values.get("starts"),
+            checkpoint=values.get("checkpoint"),
+            tablebase=values.get("tablebase"),
         )
         return
     raise ValueError(f"unsupported emission mode {emission!r}")
