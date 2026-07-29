@@ -36,6 +36,7 @@ from dth.train import (
     exact_frontier_indices,
     exact_frontier_replay_indices,
     grouped_state_split,
+    load_exact_targets,
     load_initial_checkpoint,
     load_self_play_targets,
     prepare_decision_loss_roots,
@@ -79,6 +80,7 @@ def test_exact_identity_selection_fails_closed_and_keeps_requested_rows():
         drop_policies=_policy_targets(2),
         check_policies=_policy_targets(2),
         value_weights=np.ones(2, dtype=np.float32),
+        value_semantics=np.zeros(2, dtype=np.uint8),
         dataset_version="test",
         schema_version="test",
     )
@@ -239,6 +241,7 @@ def test_both_h5_orientations_have_122_unique_h4_frontier_rows():
         drop_policies=_policy_targets(rows),
         check_policies=_policy_targets(rows),
         value_weights=np.ones(rows, dtype=np.float32),
+        value_semantics=np.zeros(rows, dtype=np.uint8),
         dataset_version="test",
         schema_version="test",
     )
@@ -272,6 +275,7 @@ def test_dual_frontier_groups_preserve_independent_repeat_counts():
         drop_policies=_policy_targets(rows),
         check_policies=_policy_targets(rows),
         value_weights=np.ones(rows, dtype=np.float32),
+        value_semantics=np.zeros(rows, dtype=np.uint8),
         dataset_version="test",
         schema_version="test",
     )
@@ -304,6 +308,7 @@ def test_truncated_rows_keep_policy_loss_but_mask_value_loss():
         drop_policies=_policy_targets(1),
         check_policies=_policy_targets(1),
         value_weights=np.zeros(1, dtype=np.float32),
+        value_semantics=np.zeros(1, dtype=np.uint8),
     )
     rows = TargetRows(targets, np.asarray([0]), horizon_scale=3.0)
     loader = DataLoader(rows, batch_size=1)
@@ -337,6 +342,7 @@ def test_terminal_rows_keep_full_value_loss():
         drop_policies=_policy_targets(1),
         check_policies=_policy_targets(1),
         value_weights=np.ones(1, dtype=np.float32),
+        value_semantics=np.zeros(1, dtype=np.uint8),
     )
     rows = TargetRows(targets, np.asarray([0]), horizon_scale=3.0)
     model = DTHPolicyValueNet(DTHNetworkConfig(hidden_width=4, hidden_layers=1))
@@ -981,6 +987,7 @@ def test_build_class_targets_supervises_h1_and_masks_missing_children():
         drop_policies=_policy_targets(2),
         check_policies=_policy_targets(2),
         value_weights=np.ones(2, dtype=np.float32),
+        value_semantics=np.zeros(2, dtype=np.uint8),
         dataset_version="test",
         schema_version="test",
     )
@@ -1027,6 +1034,258 @@ def test_class_head_migration_preserves_scalar_predictions(tmp_path):
     assert migration["method"] == "add_zero_init_transition_class_head"
     assert target_value.numpy() == pytest.approx(source_value.numpy())
     assert class_values.abs().max().item() == 0.0
+
+
+def test_play_head_migration_starts_as_a_copy_of_the_value_head(tmp_path):
+    source_config = DTHNetworkConfig(
+        hidden_width=8, hidden_layers=1, transition_class_head=True
+    )
+    source = DTHPolicyValueNet(source_config)
+    checkpoint = tmp_path / "playless.pt"
+    torch.save(
+        {
+            "state_dict": source.state_dict(),
+            "model_config": source_config.to_dict(),
+        },
+        checkpoint,
+    )
+
+    target_config = DTHNetworkConfig(
+        hidden_width=8,
+        hidden_layers=1,
+        transition_class_head=True,
+        play_value_head=True,
+    )
+    target = DTHPolicyValueNet(target_config)
+    migration = load_initial_checkpoint(
+        target, target_config, checkpoint, device=torch.device("cpu")
+    )
+
+    features = target.encode(
+        torch.tensor([[10, 240, 20, 240]], dtype=torch.float32),
+        torch.tensor([2], dtype=torch.float32),
+    )
+    with torch.no_grad():
+        source_value, _, _ = source(features)
+        target_value, _, _ = target(features)
+        play_value = target.play_values(features)
+    assert migration["method"] == "add_play_value_head_copy_of_value_head"
+    assert target_value.numpy() == pytest.approx(source_value.numpy())
+    assert play_value.numpy() == pytest.approx(source_value.numpy())
+
+
+def test_batch_loss_routes_play_rows_to_the_play_head():
+    targets = ExactTargets(
+        states=np.asarray([[0, 0, 0, 0], [1, 0, 0, 0]], dtype=np.int16),
+        horizons=np.full(2, 4, dtype=np.uint8),
+        values=np.asarray([0.25, -0.25], dtype=np.float32),
+        drop_policies=_policy_targets(2),
+        check_policies=_policy_targets(2),
+        value_weights=np.ones(2, dtype=np.float32),
+        value_semantics=np.asarray([0, 1], dtype=np.uint8),
+        dataset_version="test",
+        schema_version="test",
+    )
+    rows = TargetRows(targets, np.asarray([0, 1]), horizon_scale=3.0)
+    config = DTHNetworkConfig(hidden_width=4, hidden_layers=1, play_value_head=True)
+
+    play_only = TargetRows(targets, np.asarray([1]), horizon_scale=3.0)
+    model = DTHPolicyValueNet(config)
+    loss = _batch_loss(
+        model,
+        next(iter(DataLoader(play_only, batch_size=1))),
+        policy_weight=0.0,
+        device=torch.device("cpu"),
+    )
+    loss.backward()
+    assert model.play_value_head.weight.grad.abs().max().item() > 0.0
+    assert model.value_head.weight.grad.abs().max().item() == 0.0
+
+    finite_only = TargetRows(targets, np.asarray([0]), horizon_scale=3.0)
+    model = DTHPolicyValueNet(config)
+    loss = _batch_loss(
+        model,
+        next(iter(DataLoader(finite_only, batch_size=1))),
+        policy_weight=0.0,
+        device=torch.device("cpu"),
+    )
+    loss.backward()
+    assert model.value_head.weight.grad.abs().max().item() > 0.0
+    assert model.play_value_head.weight.grad is None
+
+    playless = DTHPolicyValueNet(
+        DTHNetworkConfig(hidden_width=4, hidden_layers=1)
+    )
+    with pytest.raises(ValueError, match="play_value_head"):
+        _batch_loss(
+            playless,
+            next(iter(DataLoader(rows, batch_size=2))),
+            policy_weight=0.0,
+            device=torch.device("cpu"),
+        )
+
+
+def test_build_class_targets_refuses_play_valued_children():
+    from dth.generate_dataset import live_successors
+
+    parent = (0, 0, 0, 0)
+    children = sorted(live_successors(parent))
+    states = [parent] + children
+    horizons = [2] + [1] * len(children)
+    rows = len(states)
+
+    def targets_with(child_semantics: int) -> ExactTargets:
+        return ExactTargets(
+            states=np.asarray(states, dtype=np.int16),
+            horizons=np.asarray(horizons, dtype=np.uint8),
+            values=np.zeros(rows, dtype=np.float32),
+            drop_policies=_policy_targets(rows),
+            check_policies=_policy_targets(rows),
+            value_weights=np.ones(rows, dtype=np.float32),
+            value_semantics=np.asarray(
+                [0] + [child_semantics] * len(children), dtype=np.uint8
+            ),
+            dataset_version="test",
+            schema_version="test",
+        )
+
+    _, finite_masks = train_module.build_class_targets(
+        targets_with(0), np.asarray([0], dtype=np.int64)
+    )
+    _, play_masks = train_module.build_class_targets(
+        targets_with(1), np.asarray([0], dtype=np.int64)
+    )
+
+    assert finite_masks.tolist() == [1.0]
+    assert play_masks.tolist() == [0.0]
+
+
+def test_play_headless_baseline_is_scored_on_finite_rows_only(tmp_path):
+    states = [(240, 0, 0, 0), (0, 0, 0, 0), (239, 0, 0, 0), (1, 0, 0, 0)]
+    train_relative, validation_relative = grouped_state_split(
+        np.asarray(states, dtype=np.int16), validation_fraction=0.5, seed=4
+    )
+    assert len(validation_relative) >= 2
+    semantics = np.zeros(len(states), dtype=np.uint8)
+    semantics[validation_relative[0]] = 1
+    solutions = [solve(state, 1) for state in states]
+    dataset = tmp_path / "mixed.npz"
+    np.savez_compressed(
+        dataset,
+        states=np.asarray(states, dtype=np.int16),
+        horizons=np.ones(len(states), dtype=np.uint8),
+        values=np.asarray([item.value for item in solutions], dtype=np.float32),
+        drop_policies=np.asarray(
+            [item.drop_policy for item in solutions], dtype=np.float32
+        ),
+        check_policies=np.asarray(
+            [item.check_policy for item in solutions], dtype=np.float32
+        ),
+        saddle_gaps=np.zeros(len(states), dtype=np.float32),
+        value_semantics=semantics,
+        drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+        check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+        dataset_version=np.asarray("mixed-baseline-test"),
+        schema_version=np.asarray(TARGET_SCHEMA),
+    )
+    headless_config = DTHNetworkConfig(hidden_width=4, hidden_layers=1)
+    headless = DTHPolicyValueNet(headless_config)
+    baseline_checkpoint = tmp_path / "baseline.pt"
+    torch.save(
+        {
+            "state_dict": headless.state_dict(),
+            "model_config": headless_config.to_dict(),
+        },
+        baseline_checkpoint,
+    )
+
+    report = train_exact(
+        {
+            "dataset": str(dataset),
+            "output_dir": str(tmp_path / "checkpoint"),
+            "seed": 4,
+            "device": "cpu",
+            "model": {
+                "hidden_width": 4,
+                "hidden_layers": 1,
+                "horizon_scale": 3.0,
+                "play_value_head": True,
+            },
+            "training": {
+                "epochs": 1,
+                "batch_size": 4,
+                "learning_rate": 0.0,
+                "weight_decay": 0.0,
+                "validation_fraction": 0.5,
+                "policy_weight": 0.1,
+                "selection_metric": "decision",
+                "patience": 0,
+                "minimum_delta": 1e-6,
+                "log_every": 1,
+            },
+            "decision_selection": {
+                "baseline_checkpoint": str(baseline_checkpoint),
+                "roots": [
+                    {"state": list(states[train_relative[0]]), "horizon": 1}
+                ],
+                "guard_roots": [
+                    {"state": list(states[train_relative[1]]), "horizon": 1}
+                ],
+                "guard_tolerance": 1e-6,
+                "minimum_gap_improvement": 1e-6,
+                "tie_tolerance": 1e-6,
+            },
+            "audit": {"max_rows_per_horizon": 1},
+        }
+    )
+
+    epoch_zero = report["history"][0]["validation"]
+    candidate = report["history"][1]["validation"]
+    assert epoch_zero["finite_rows_only"] is True
+    assert "play_value_mse" not in epoch_zero
+    assert candidate["play_value_mse"] >= 0.0
+    assert candidate["effective_play_value_weight"] > 0.0
+
+
+def test_load_exact_targets_derives_value_semantics(tmp_path):
+    state = (240, 0, 0, 0)
+    solution = solve(state, 1)
+
+    def write(path, **extra):
+        np.savez_compressed(
+            path,
+            states=np.asarray([state], dtype=np.int16),
+            horizons=np.ones(1, dtype=np.uint8),
+            values=np.asarray([solution.value], dtype=np.float32),
+            drop_policies=np.asarray([solution.drop_policy], dtype=np.float32),
+            check_policies=np.asarray([solution.check_policy], dtype=np.float32),
+            drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+            check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+            dataset_version=np.asarray("semantics-test"),
+            schema_version=np.asarray(TARGET_SCHEMA),
+            **extra,
+        )
+
+    exact_path = tmp_path / "exact.npz"
+    write(exact_path)
+    assert load_exact_targets(exact_path).value_semantics.tolist() == [0]
+
+    resolve_path = tmp_path / "resolve.npz"
+    write(resolve_path, emission=np.asarray("resolve_labeled"))
+    assert load_exact_targets(resolve_path).value_semantics.tolist() == [1]
+
+    explicit_path = tmp_path / "explicit.npz"
+    write(
+        explicit_path,
+        emission=np.asarray("resolve_labeled"),
+        value_semantics=np.asarray([0], dtype=np.uint8),
+    )
+    assert load_exact_targets(explicit_path).value_semantics.tolist() == [0]
+
+    invalid_path = tmp_path / "invalid.npz"
+    write(invalid_path, value_semantics=np.asarray([2], dtype=np.uint8))
+    with pytest.raises(ValueError, match="value_semantics"):
+        load_exact_targets(invalid_path)
 
 
 def test_class_head_owns_the_decision_and_audit_matrices():

@@ -33,11 +33,14 @@ from dth.torch_cfr import solve_matrix_cfr_plus_torch
 from dth.solver import (
     CHECKER_ACTIONS,
     DROPPER_ACTIONS,
+    VALUE_SEMANTICS_FINITE,
+    VALUE_SEMANTICS_PLAY,
     NTState,
     TState,
     continuation_class_values,
     payoff,
     reconstruct_transition_class_matrix,
+    resolve_value_semantics,
     reward,
     solve,
     solve_matrix,
@@ -53,6 +56,7 @@ class ExactTargets:
     drop_policies: np.ndarray
     check_policies: np.ndarray
     value_weights: np.ndarray
+    value_semantics: np.ndarray
     dataset_version: str
     schema_version: str
 
@@ -68,6 +72,9 @@ class SelfPlayTargets:
     drop_policies: np.ndarray
     check_policies: np.ndarray
     value_weights: np.ndarray
+    # Audited self-play outcome rows keep their historical value-head routing;
+    # only resolve-labeled artifacts carry play semantics.
+    value_semantics: np.ndarray
 
     def __len__(self) -> int:
         return int(self.states.shape[0])
@@ -83,13 +90,21 @@ def build_class_targets(
     closure artifact contains them, a roots-only artifact does not.  Rows with
     a missing child are masked out instead of guessed.  Horizon-one rows are
     always computable because their classes are pure terminal expectations.
+    Play-valued rows are excluded from the child lookup: class targets are
+    finite-horizon authority, and a depth-amplified play estimate must not
+    pass as an exact child value.
     """
 
     lookup = {
         (tuple(int(value) for value in state), int(horizon)): float(row_value)
-        for state, horizon, row_value in zip(
-            targets.states, targets.horizons, targets.values, strict=True
+        for state, horizon, row_value, semantics in zip(
+            targets.states,
+            targets.horizons,
+            targets.values,
+            targets.value_semantics,
+            strict=True,
         )
+        if int(semantics) == VALUE_SEMANTICS_FINITE
     }
     class_values = np.zeros((len(indices), TRANSITION_CLASS_COUNT), dtype=np.float32)
     class_masks = np.zeros(len(indices), dtype=np.float32)
@@ -145,6 +160,9 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
         self.value_weights = torch.from_numpy(
             targets.value_weights[indices].astype(np.float32)
         )
+        self.value_semantics = torch.from_numpy(
+            targets.value_semantics[indices].astype(np.float32)
+        )
         if with_class_targets:
             if not isinstance(targets, ExactTargets):
                 raise ValueError("class targets require an exact target artifact")
@@ -184,6 +202,7 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
             self.horizons[index],
             self.class_values[index],
             self.class_masks[index],
+            self.value_semantics[index],
         )
 
 
@@ -279,6 +298,16 @@ def load_exact_targets(path: str | Path) -> ExactTargets:
             if "dataset_version" in artifact.files
             else source.stem
         )
+        emission = (
+            _scalar(artifact["emission"]) if "emission" in artifact.files else ""
+        )
+        value_semantics = resolve_value_semantics(
+            emission,
+            artifact["value_semantics"]
+            if "value_semantics" in artifact.files
+            else None,
+            len(states),
+        )
 
     rows = len(states)
     if states.shape != (rows, 4):
@@ -313,6 +342,7 @@ def load_exact_targets(path: str | Path) -> ExactTargets:
         drop_policies=drop_policies,
         check_policies=check_policies,
         value_weights=np.ones(rows, dtype=np.float32),
+        value_semantics=value_semantics,
         dataset_version=dataset_version,
         schema_version=schema_version,
     )
@@ -396,6 +426,9 @@ def load_self_play_targets(
         drop_policies=arrays["drop_policy"][accepted].astype(np.float32, copy=True),
         check_policies=arrays["check_policy"][accepted].astype(np.float32, copy=True),
         value_weights=(~accepted_truncated).astype(np.float32, copy=True),
+        value_semantics=np.full(
+            int(accepted.sum()), VALUE_SEMANTICS_FINITE, dtype=np.uint8
+        ),
     )
     accepted_values = arrays["outcome"][accepted]
     summary = {
@@ -625,8 +658,19 @@ def _batch_loss(
         _,
         class_targets,
         class_masks,
+        value_semantics,
     ) = (tensor.to(device) for tensor in batch)
     predicted_values, drop_logits, check_logits = model(features)
+    play_mask = value_semantics > 0.5
+    if bool(play_mask.any()):
+        if model.play_value_head is None:
+            raise ValueError(
+                "batch contains play-valued rows; the model needs "
+                "play_value_head=true"
+            )
+        predicted_values = torch.where(
+            play_mask, model.play_values(features), predicted_values
+        )
     value_mse = _weighted_mean(
         (predicted_values - values) ** 2,
         weights * value_weights,
@@ -658,6 +702,7 @@ def evaluate(
     policy_weight_total = 0.0
     value_weight_total = 0.0
     class_weight_total = 0.0
+    play_weight_total = 0.0
     for batch in loader:
         (
             features,
@@ -669,12 +714,28 @@ def evaluate(
             _,
             class_targets,
             class_masks,
+            value_semantics,
         ) = (tensor.to(device) for tensor in batch)
         predicted_values, drop_logits, check_logits = model(features)
+        play_mask = value_semantics > 0.5
+        if bool(play_mask.any()):
+            if model.play_value_head is None:
+                raise ValueError(
+                    "batch contains play-valued rows; the model needs "
+                    "play_value_head=true"
+                )
+            predicted_values = torch.where(
+                play_mask, model.play_values(features), predicted_values
+            )
         value_loss_weights = weights * value_weights
         numerators["value_mse"] += float(
             (((predicted_values - values) ** 2) * value_loss_weights).sum().item()
         )
+        play_loss_weights = value_loss_weights * play_mask.to(value_loss_weights.dtype)
+        numerators["play_value_mse"] += float(
+            (((predicted_values - values) ** 2) * play_loss_weights).sum().item()
+        )
+        play_weight_total += float(play_loss_weights.sum().item())
         numerators["drop_ce"] += float(
             (soft_cross_entropy(drop_logits, drop_targets) * weights).sum().item()
         )
@@ -709,6 +770,18 @@ def evaluate(
     result["total_loss"] = result["value_mse"] + float(policy_weight) * 0.5 * (
         result["drop_ce"] + result["check_ce"]
     )
+    if play_weight_total > 0.0:
+        finite_weight_total = value_weight_total - play_weight_total
+        result["play_value_mse"] = (
+            numerators["play_value_mse"] / play_weight_total
+        )
+        result["finite_value_mse"] = (
+            (numerators["value_mse"] - numerators["play_value_mse"])
+            / finite_weight_total
+            if finite_weight_total > 0.0
+            else 0.0
+        )
+        result["effective_play_value_weight"] = play_weight_total
     if class_weight > 0.0:
         result["class_mse"] = (
             numerators["class_mse"] / class_weight_total
@@ -744,6 +817,7 @@ def load_initial_checkpoint(
     source_values.setdefault("continuation_residual", False)
     source_values.setdefault("continuation_residual_mode", "matrix_head")
     source_values.setdefault("transition_class_head", False)
+    source_values.setdefault("play_value_head", False)
     source_config = DTHNetworkConfig(**source_values)
     source_dict = source_config.to_dict()
     target_dict = model_config.to_dict()
@@ -752,6 +826,39 @@ def load_initial_checkpoint(
         model.load_state_dict(payload["state_dict"], strict=True)
         return {
             "method": "none",
+            "source_checkpoint": str(path),
+            "source_checkpoint_sha256": _sha256(path),
+            "source_model_config": source_dict,
+            "target_model_config": target_dict,
+        }
+
+    source_except_play = {
+        key: value for key, value in source_dict.items() if key != "play_value_head"
+    }
+    target_except_play = {
+        key: value for key, value in target_dict.items() if key != "play_value_head"
+    }
+    if (
+        source_except_play == target_except_play
+        and not source_config.play_value_head
+        and model_config.play_value_head
+    ):
+        # The play head starts as a copy of the finite value head: at
+        # migration both semantics agree with the previous single-head model,
+        # and training separates them only where labels disagree.
+        target_state = model.state_dict()
+        with torch.no_grad():
+            for name, value in payload["state_dict"].items():
+                target_state[name].copy_(value)
+            target_state["play_value_head.weight"].copy_(
+                target_state["value_head.weight"]
+            )
+            target_state["play_value_head.bias"].copy_(
+                target_state["value_head.bias"]
+            )
+        model.load_state_dict(target_state, strict=True)
+        return {
+            "method": "add_play_value_head_copy_of_value_head",
             "source_checkpoint": str(path),
             "source_checkpoint_sha256": _sha256(path),
             "source_model_config": source_dict,
@@ -1680,7 +1787,15 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         transition_class_head=bool(
             model_values.get("transition_class_head", False)
         ),
+        play_value_head=bool(model_values.get("play_value_head", False)),
     )
+    if (
+        bool((targets.value_semantics == VALUE_SEMANTICS_PLAY).any())
+        and not model_config.play_value_head
+    ):
+        raise ValueError(
+            "dataset contains play-valued rows; set model.play_value_head=true"
+        )
     model = DTHPolicyValueNet(model_config)
     device = torch.device(str(config["device"]))
     model.to(device)
@@ -1850,6 +1965,38 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         shuffle=False,
         num_workers=0,
     )
+
+    def evaluation_loader_for(
+        evaluated_model: DTHPolicyValueNet,
+        indices: np.ndarray,
+        full_loader: DataLoader,
+    ) -> tuple[DataLoader, bool]:
+        """Restrict evaluation to finite rows for models without a play head."""
+
+        if evaluated_model.play_value_head is not None:
+            return full_loader, False
+        finite = indices[
+            targets.value_semantics[indices] == VALUE_SEMANTICS_FINITE
+        ]
+        if len(finite) == len(indices):
+            return full_loader, False
+        if len(finite) == 0:
+            raise ValueError(
+                "model has no play head and the evaluation split has no "
+                "finite-horizon rows to score it on"
+            )
+        loader = DataLoader(
+            TargetRows(
+                targets,
+                finite,
+                horizon_scale=model_config.horizon_scale,
+            ),
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+        )
+        return loader, True
+
     self_play_loader = None
     self_play_summary = None
     self_play_values = config.get("self_play")
@@ -2152,22 +2299,36 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             baseline_model = DTHPolicyValueNet(baseline_model_config)
             baseline_model.load_state_dict(baseline_payload["state_dict"])
             baseline_model.to(device)
+        # A baseline without a play head can only be scored on rows whose
+        # values are finite-horizon-exact; its direct metrics say so.
+        baseline_validation_loader, baseline_validation_finite_only = (
+            evaluation_loader_for(baseline_model, validation_indices, validation_loader)
+        )
         baseline_validation = evaluate(
             baseline_model,
-            validation_loader,
+            baseline_validation_loader,
             policy_weight=policy_weight,
             device=device,
         )
-        baseline_frontier = (
-            evaluate(
+        if baseline_validation_finite_only:
+            baseline_validation["finite_rows_only"] = True
+        baseline_frontier = None
+        if exact_frontier_loader is not None:
+            baseline_frontier_loader, baseline_frontier_finite_only = (
+                evaluation_loader_for(
+                    baseline_model,
+                    repeated_frontier_indices,
+                    exact_frontier_loader,
+                )
+            )
+            baseline_frontier = evaluate(
                 baseline_model,
-                exact_frontier_loader,
+                baseline_frontier_loader,
                 policy_weight=policy_weight,
                 device=device,
             )
-            if exact_frontier_loader is not None
-            else None
-        )
+            if baseline_frontier_finite_only:
+                baseline_frontier["finite_rows_only"] = True
         baseline_self_play = (
             evaluate(
                 baseline_model,
@@ -2548,18 +2709,28 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
     selected_model = DTHPolicyValueNet(selected_model_config)
     selected_model.load_state_dict(checkpoint["state_dict"])
     selected_model.to(device)
+    final_train_loader, final_train_finite_only = evaluation_loader_for(
+        selected_model, train_indices, train_evaluation_loader
+    )
     final_train = evaluate(
         selected_model,
-        train_evaluation_loader,
+        final_train_loader,
         policy_weight=policy_weight,
         device=device,
+    )
+    if final_train_finite_only:
+        final_train["finite_rows_only"] = True
+    final_validation_loader, final_validation_finite_only = evaluation_loader_for(
+        selected_model, validation_indices, validation_loader
     )
     final_validation = evaluate(
         selected_model,
-        validation_loader,
+        final_validation_loader,
         policy_weight=policy_weight,
         device=device,
     )
+    if final_validation_finite_only:
+        final_validation["finite_rows_only"] = True
     final_equilibrium_loss = (
         evaluate_decision_training_objective(
             selected_model,

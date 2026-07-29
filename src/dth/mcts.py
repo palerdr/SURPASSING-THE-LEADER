@@ -1,10 +1,12 @@
 from dth.solver import (
     CHECKER_ACTIONS,
     DROPPER_ACTIONS,
+    VALUE_SEMANTICS_FINITE,
     Distribution,
     NTState,
     State,
     TState,
+    resolve_value_semantics,
     reward,
     solve_matrix,
     solve,
@@ -207,10 +209,27 @@ class ExactTargetStore:
                 len(states) == len(horizons) == len(target_values)
             ):
                 raise ValueError("exact target arrays must have equal lengths")
+            emission = (
+                str(np.asarray(artifact["emission"]).item())
+                if "emission" in artifact.files
+                else ""
+            )
+            # Play-valued rows are depth-amplified resolve estimates, not
+            # certificates; a store of exact authority must drop them so a
+            # missing child fails loudly instead of passing as exact.
+            semantics = resolve_value_semantics(
+                emission,
+                artifact["value_semantics"]
+                if "value_semantics" in artifact.files
+                else None,
+                len(states),
+            )
             values: dict[tuple[NTState, int], float] = {}
-            for state_row, horizon, value in zip(
-                states, horizons, target_values, strict=True
+            for state_row, horizon, value, row_semantics in zip(
+                states, horizons, target_values, semantics, strict=True
             ):
+                if int(row_semantics) != VALUE_SEMANTICS_FINITE:
+                    continue
                 state = tuple(int(item) for item in state_row)
                 key = (state, int(horizon))
                 if key in values:

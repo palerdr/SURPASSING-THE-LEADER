@@ -133,6 +133,26 @@ def test_unknown_feature_lift_fails_closed():
         DTHPolicyValueNet(DTHNetworkConfig(feature_lift="unknown"))
 
 
+def test_play_value_head_is_optional_and_independent():
+    with pytest.raises(ValueError, match="play value head is disabled"):
+        DTHPolicyValueNet(
+            DTHNetworkConfig(hidden_width=4, hidden_layers=1)
+        ).play_values(torch.rand((2, 5), dtype=torch.float32))
+
+    model = DTHPolicyValueNet(
+        DTHNetworkConfig(hidden_width=4, hidden_layers=1, play_value_head=True)
+    )
+    features = torch.rand((3, 5), dtype=torch.float32)
+    values, _, _ = model(features)
+    play_values = model.play_values(features)
+
+    assert play_values.shape == (3,)
+    with torch.no_grad():
+        model.play_value_head.bias.add_(1.0)
+    shifted_values, _, _ = model(features)
+    torch.testing.assert_close(shifted_values, values)
+
+
 def test_continuation_residual_starts_as_an_exact_zero_matrix():
     model = DTHPolicyValueNet(
         DTHNetworkConfig(

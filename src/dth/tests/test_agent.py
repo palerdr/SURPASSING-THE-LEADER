@@ -259,3 +259,42 @@ def test_resolve_labels_skips_certified_band_states(tmp_path) -> None:
         )
 
     assert labels == {}
+
+
+def test_network_leaf_model_answers_from_the_play_head_when_present(
+    tmp_path,
+) -> None:
+    import torch
+
+    from dth.agent import NetworkLeafModel
+    from dth.network import DTHNetworkConfig, DTHPolicyValueNet
+
+    def checkpoint_with(config: DTHNetworkConfig, path) -> None:
+        model = DTHPolicyValueNet(config)
+        with torch.no_grad():
+            for parameter in model.parameters():
+                parameter.zero_()
+            model.value_head.bias.fill_(-0.3)
+            if model.play_value_head is not None:
+                model.play_value_head.bias.fill_(0.7)
+        torch.save(
+            {"state_dict": model.state_dict(), "model_config": config.to_dict()},
+            path,
+        )
+
+    playless_path = tmp_path / "playless.pt"
+    checkpoint_with(
+        DTHNetworkConfig(hidden_width=4, hidden_layers=1), playless_path
+    )
+    play_path = tmp_path / "play.pt"
+    checkpoint_with(
+        DTHNetworkConfig(hidden_width=4, hidden_layers=1, play_value_head=True),
+        play_path,
+    )
+
+    states = [(0, 0, 0, 0)]
+    playless_values = NetworkLeafModel(playless_path).values(states, 4)
+    play_values = NetworkLeafModel(play_path).values(states, 4)
+
+    assert playless_values[0] == pytest.approx(float(np.tanh(-0.3)))
+    assert play_values[0] == pytest.approx(float(np.tanh(0.7)))

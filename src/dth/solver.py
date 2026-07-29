@@ -15,6 +15,39 @@ ST_SUPPORT = list(range(300))
 # artifacts bind to both it and ``solver_schema_hash`` below, so a tablebase
 # cannot silently survive a rules change.
 TARGET_SCHEMA = "dth-v1-ttd-strict-overflow"
+
+# Per-row meaning of a target artifact's ``values`` column.  Finite rows are
+# exact values at the row's literal horizon; play rows are depth-amplified
+# complete-game estimates a resolve emitted at its query horizon.  The two
+# must never share a supervised head or pass as exact authority.
+VALUE_SEMANTICS_FINITE = 0
+VALUE_SEMANTICS_PLAY = 1
+
+
+def resolve_value_semantics(
+    emission: str,
+    value_semantics: "np.ndarray | None",
+    rows: int,
+) -> "np.ndarray":
+    """Return the per-row value semantics of a target artifact.
+
+    An explicit ``value_semantics`` array wins.  Without one, a
+    ``resolve_labeled`` artifact is play-valued by construction, and every
+    other emission predates play values and is finite-horizon-exact.
+    """
+
+    if value_semantics is not None:
+        semantics = np.asarray(value_semantics).astype(np.uint8, copy=True)
+        if semantics.shape != (rows,):
+            raise ValueError(
+                f"value_semantics must have shape ({rows},), got {semantics.shape}"
+            )
+        if not np.isin(semantics, (VALUE_SEMANTICS_FINITE, VALUE_SEMANTICS_PLAY)).all():
+            raise ValueError("value_semantics entries must be 0 (finite) or 1 (play)")
+        return semantics
+    if emission == "resolve_labeled":
+        return np.full(rows, VALUE_SEMANTICS_PLAY, dtype=np.uint8)
+    return np.full(rows, VALUE_SEMANTICS_FINITE, dtype=np.uint8)
 SOLVER_VERSION = "dth-complete-game-current"
 COMPLETE_GAME_HORIZON = -1
 SADDLE_GAP_TOLERANCE = 1e-6

@@ -159,6 +159,7 @@ class NetworkLeafModel:
         )
         config_values = dict(payload["model_config"])
         config_values.setdefault("transition_class_head", False)
+        config_values.setdefault("play_value_head", False)
         self.config = DTHNetworkConfig(**config_values)
         self.model = DTHPolicyValueNet(self.config)
         self.model.load_state_dict(payload["state_dict"])
@@ -166,6 +167,13 @@ class NetworkLeafModel:
         self.model.eval()
 
     def values(self, states: list[NTState], horizon: int) -> np.ndarray:
+        """Estimate leaf continuation values at the agent's query horizon.
+
+        Resolve leaves stand in for complete-game continuations, so a
+        checkpoint with a dedicated play head answers from it; the finite
+        value head remains the fallback for older checkpoints.
+        """
+
         torch = self._torch
         state_tensor = torch.tensor(states, dtype=torch.float32, device=self.device)
         horizon_tensor = torch.full(
@@ -173,7 +181,10 @@ class NetworkLeafModel:
         )
         with torch.inference_mode():
             features = self.model.encode(state_tensor, horizon_tensor)
-            values, _, _ = self.model(features)
+            if self.config.play_value_head:
+                values = self.model.play_values(features)
+            else:
+                values, _, _ = self.model(features)
         return values.cpu().numpy().astype(np.float64)
 
     def class_matrix_values(self, states: list[NTState], horizon: int) -> np.ndarray:

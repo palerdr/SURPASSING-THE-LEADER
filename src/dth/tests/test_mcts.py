@@ -93,6 +93,36 @@ def test_exact_target_store_loads_state_horizon_values(tmp_path) -> None:
     assert store.values[((1, 2, 3, 4), 2)] == pytest.approx(-0.25)
 
 
+def test_exact_target_store_refuses_play_valued_rows(tmp_path) -> None:
+    path = tmp_path / "mixed_targets.npz"
+    np.savez_compressed(
+        path,
+        states=np.asarray([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int16),
+        horizons=np.asarray([2, 2], dtype=np.uint8),
+        values=np.asarray([-0.25, 0.5], dtype=np.float32),
+        value_semantics=np.asarray([0, 1], dtype=np.uint8),
+    )
+
+    store = ExactTargetStore.load(path)
+
+    assert store.values == {((1, 2, 3, 4), 2): pytest.approx(-0.25)}
+
+
+def test_exact_target_store_treats_resolve_labeled_artifacts_as_play(tmp_path) -> None:
+    path = tmp_path / "resolve_targets.npz"
+    np.savez_compressed(
+        path,
+        states=np.asarray([[1, 2, 3, 4]], dtype=np.int16),
+        horizons=np.asarray([4], dtype=np.uint8),
+        values=np.asarray([0.5], dtype=np.float32),
+        emission=np.asarray("resolve_labeled"),
+    )
+
+    store = ExactTargetStore.load(path)
+
+    assert store.values == {}
+
+
 def test_exact_target_store_reconstructs_horizon_one_payoff() -> None:
     state = (0, 0, 0, 0)
 

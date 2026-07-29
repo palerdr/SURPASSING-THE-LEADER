@@ -17,11 +17,13 @@ from omegaconf import DictConfig, OmegaConf
 from dth.solver import (
     CHECKER_ACTIONS,
     DROPPER_ACTIONS,
+    VALUE_SEMANTICS_PLAY,
     NTState,
     Solution,
     TARGET_SCHEMA,
     clear_solver_cache,
     horizon_one_cache_info,
+    resolve_value_semantics,
     solve,
     transition,
 )
@@ -424,9 +426,16 @@ def merge_exact_target_artifacts(
     *,
     dataset_version: str,
 ) -> Path:
-    """Merge exact artifacts by state/horizon identity, keeping later rows."""
+    """Merge exact artifacts by state/horizon identity, keeping later rows.
 
-    records: dict[tuple[int, NTState], tuple[float, np.ndarray, np.ndarray, float]] = {}
+    Each row keeps its source's value semantics, so listing play-valued
+    resolve artifacts before exact closures lets exact rows win collisions
+    while the merged artifact still names every surviving play row.
+    """
+
+    records: dict[
+        tuple[int, NTState], tuple[float, np.ndarray, np.ndarray, float, int]
+    ] = {}
     for source in inputs:
         with np.load(Path(source), allow_pickle=False) as artifact:
             if str(np.asarray(artifact["schema_version"]).item()) != TARGET_SCHEMA:
@@ -437,6 +446,18 @@ def merge_exact_target_artifacts(
             drop_policies = artifact["drop_policies"]
             check_policies = artifact["check_policies"]
             saddle_gaps = artifact["saddle_gaps"]
+            emission = (
+                str(np.asarray(artifact["emission"]).item())
+                if "emission" in artifact.files
+                else ""
+            )
+            semantics = resolve_value_semantics(
+                emission,
+                artifact["value_semantics"]
+                if "value_semantics" in artifact.files
+                else None,
+                len(states),
+            )
             for index in range(len(states)):
                 state = tuple(int(value) for value in states[index])
                 key = (int(horizons[index]), state)
@@ -445,6 +466,7 @@ def merge_exact_target_artifacts(
                     drop_policies[index].astype(np.float32, copy=True),
                     check_policies[index].astype(np.float32, copy=True),
                     float(saddle_gaps[index]),
+                    int(semantics[index]),
                 )
 
     ordered = sorted(records.items(), key=lambda item: (item[0][0], item[0][1]))
@@ -458,6 +480,7 @@ def merge_exact_target_artifacts(
         drop_policies=np.asarray([value[1] for _, value in ordered], dtype=np.float32),
         check_policies=np.asarray([value[2] for _, value in ordered], dtype=np.float32),
         saddle_gaps=np.asarray([value[3] for _, value in ordered], dtype=np.float32),
+        value_semantics=np.asarray([value[4] for _, value in ordered], dtype=np.uint8),
         drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
         check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
         dataset_version=np.asarray(dataset_version),
@@ -686,8 +709,10 @@ def generate_resolve_labeled_targets(
     unlabeled state met on a trajectory triggers one depth-limited resolve
     whose interior solutions all become training rows.  Rows carry the
     agent's query horizon, because their values are depth-amplified play
-    estimates, not finite-horizon certificates; merges must therefore list
-    this artifact before exact closures so exact rows win collisions.
+    estimates, not finite-horizon certificates; every row is marked
+    ``value_semantics=1`` so training routes it to the play head, and merges
+    must list this artifact before exact closures so exact rows win
+    collisions.
     """
 
     if games <= 0 or max_half_rounds <= 0:
@@ -774,6 +799,7 @@ def generate_resolve_labeled_targets(
             [row[2] for _, row in ordered], dtype=np.float32
         ),
         saddle_gaps=np.asarray([row[3] for _, row in ordered], dtype=np.float32),
+        value_semantics=np.full(len(ordered), VALUE_SEMANTICS_PLAY, dtype=np.uint8),
         drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
         check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
         dataset_version=np.asarray(dataset_version),

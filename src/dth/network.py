@@ -34,6 +34,7 @@ class DTHNetworkConfig:
     continuation_residual: bool = False
     continuation_residual_mode: str = "matrix_head"
     transition_class_head: bool = False
+    play_value_head: bool = False
 
     def to_dict(self) -> dict[str, int | float | str | bool]:
         return asdict(self)
@@ -99,6 +100,9 @@ class DTHPolicyValueNet(nn.Module):
 
         self.trunk = nn.Sequential(*layers)
         self.value_head = nn.Linear(input_width, 1)
+        self.play_value_head = (
+            nn.Linear(input_width, 1) if self.config.play_value_head else None
+        )
         self.drop_head = nn.Linear(input_width, self.config.action_count)
         self.check_head = nn.Linear(input_width, self.config.action_count)
         self.transition_class_head = (
@@ -201,6 +205,20 @@ class DTHPolicyValueNet(nn.Module):
         hidden = self.trunk(self.apply_feature_lift(features))
         value = torch.tanh(self.value_head(hidden)).squeeze(-1)
         return value, self.drop_head(hidden), self.check_head(hidden)
+
+    def play_values(self, features: Tensor) -> Tensor:
+        """Predict complete-game play values, distinct from finite-horizon values.
+
+        Resolve-labeled rows carry depth-amplified complete-game estimates at
+        the resolve's query horizon.  Those must not supervise ``value_head``,
+        whose meaning is the exact value at the row's literal horizon, so play
+        estimates get their own scalar head over the shared trunk.
+        """
+
+        if self.play_value_head is None:
+            raise ValueError("play value head is disabled for this model")
+        hidden = self.trunk(self.apply_feature_lift(features))
+        return torch.tanh(self.play_value_head(hidden)).squeeze(-1)
 
     def transition_class_values(self, features: Tensor) -> Tensor:
         """Predict the 61 bounded continuation-class values in one pass.

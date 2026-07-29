@@ -4,6 +4,7 @@ import json
 import numpy as np
 import pytest
 
+from dth.solver import CHECKER_ACTIONS, DROPPER_ACTIONS
 from dth.generate_dataset import (
     TARGET_SCHEMA,
     boundary_tablebase_identities,
@@ -211,6 +212,59 @@ def test_merge_exact_artifacts_deduplicates_state_horizon_rows(tmp_path: Path) -
         assert artifact["states"].shape == (2, 4)
         assert str(artifact["dataset_version"]) == "merged_test"
         assert str(artifact["emission"]) == "merged_reachable"
+        assert artifact["value_semantics"].tolist() == [0, 0]
+
+
+def test_merge_keeps_play_semantics_and_lets_exact_rows_win_collisions(
+    tmp_path: Path,
+) -> None:
+    exact = generate_exact_targets(
+        output=tmp_path / "exact.npz",
+        horizon=1,
+        root_states=[(239, 0, 0, 0)],
+        progress_every=0,
+    )
+    with np.load(exact, allow_pickle=False) as artifact:
+        exact_value = float(artifact["values"][0])
+        drop_policy = artifact["drop_policies"][0]
+        check_policy = artifact["check_policies"][0]
+    play = tmp_path / "play.npz"
+    np.savez_compressed(
+        play,
+        states=np.asarray([[239, 0, 0, 0], [240, 0, 0, 0]], dtype=np.int16),
+        horizons=np.ones(2, dtype=np.uint8),
+        values=np.asarray([0.5, 0.5], dtype=np.float32),
+        drop_policies=np.asarray([drop_policy, drop_policy], dtype=np.float32),
+        check_policies=np.asarray([check_policy, check_policy], dtype=np.float32),
+        saddle_gaps=np.zeros(2, dtype=np.float32),
+        drop_actions=np.asarray(DROPPER_ACTIONS, dtype=np.int16),
+        check_actions=np.asarray(CHECKER_ACTIONS, dtype=np.int16),
+        dataset_version=np.asarray("play-test"),
+        emission=np.asarray("resolve_labeled"),
+        schema_version=np.asarray(TARGET_SCHEMA),
+    )
+
+    output = merge_exact_target_artifacts(
+        [play, exact],
+        tmp_path / "merged.npz",
+        dataset_version="merged_mixed_test",
+    )
+
+    with np.load(output) as artifact:
+        rows = {
+            tuple(int(value) for value in state): (
+                float(row_value),
+                int(semantics),
+            )
+            for state, row_value, semantics in zip(
+                artifact["states"],
+                artifact["values"],
+                artifact["value_semantics"],
+                strict=True,
+            )
+        }
+    assert rows[(239, 0, 0, 0)] == (pytest.approx(exact_value), 0)
+    assert rows[(240, 0, 0, 0)] == (pytest.approx(0.5), 1)
 
 
 def test_resolve_labeled_emission_writes_play_coverage_rows(tmp_path):
@@ -254,5 +308,6 @@ def test_resolve_labeled_emission_writes_play_coverage_rows(tmp_path):
         assert str(np.asarray(artifact["emission"]).item()) == "resolve_labeled"
         assert len(artifact["states"]) > 1
         assert set(artifact["horizons"].tolist()) == {4}
+        assert set(artifact["value_semantics"].tolist()) == {1}
         drop = artifact["drop_policies"]
         assert np.allclose(drop.sum(axis=1), 1.0, atol=1e-5)
