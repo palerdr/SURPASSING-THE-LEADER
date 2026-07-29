@@ -19,6 +19,10 @@ FEATURE_SCHEMA = (
 FEATURE_LIFTS = ("identity", "boundary_v1", "boundary_v2")
 CONTINUATION_RESIDUAL_MODES = ("matrix_head", "action_mlp")
 
+# 60 successful-lag classes plus one failed-check class: the complete stage
+# game has exactly these degrees of freedom (docs/GAME_AND_SOLVER.md).
+TRANSITION_CLASS_COUNT = 61
+
 
 @dataclass(frozen=True)
 class DTHNetworkConfig:
@@ -29,6 +33,7 @@ class DTHNetworkConfig:
     feature_lift: str = "identity"
     continuation_residual: bool = False
     continuation_residual_mode: str = "matrix_head"
+    transition_class_head: bool = False
 
     def to_dict(self) -> dict[str, int | float | str | bool]:
         return asdict(self)
@@ -75,6 +80,11 @@ class DTHPolicyValueNet(nn.Module):
                 "unknown continuation residual mode "
                 f"{self.config.continuation_residual_mode!r}"
             )
+        if self.config.transition_class_head and self.config.continuation_residual:
+            raise ValueError(
+                "transition class head and continuation residual both own the "
+                "root matrix; enable at most one"
+            )
 
         layers: list[nn.Module] = []
         input_width = self._lifted_width
@@ -91,6 +101,11 @@ class DTHPolicyValueNet(nn.Module):
         self.value_head = nn.Linear(input_width, 1)
         self.drop_head = nn.Linear(input_width, self.config.action_count)
         self.check_head = nn.Linear(input_width, self.config.action_count)
+        self.transition_class_head = (
+            nn.Linear(input_width, TRANSITION_CLASS_COUNT)
+            if self.config.transition_class_head
+            else None
+        )
         self.continuation_residual_head = (
             nn.Linear(input_width, self.config.action_count**2)
             if (
@@ -186,6 +201,22 @@ class DTHPolicyValueNet(nn.Module):
         hidden = self.trunk(self.apply_feature_lift(features))
         value = torch.tanh(self.value_head(hidden)).squeeze(-1)
         return value, self.drop_head(hidden), self.check_head(hidden)
+
+    def transition_class_values(self, features: Tensor) -> Tensor:
+        """Predict the 61 bounded continuation-class values in one pass.
+
+        Indices ``0..59`` are the successful lags ``check - drop + 1`` in
+        order; index ``60`` is the action-independent failed-check class.
+        ``reconstruct_transition_class_matrix`` expands these to the literal
+        stage matrix, so network error enters the matrix through exactly 61
+        numbers and the whitepaper's matrix-accuracy saddle-gap bound applies
+        to the quantity a class loss optimizes.
+        """
+
+        if self.transition_class_head is None:
+            raise ValueError("transition class head is disabled for this model")
+        hidden = self.trunk(self.apply_feature_lift(features))
+        return torch.tanh(self.transition_class_head(hidden))
 
     def continuation_residual_matrix(self, features: Tensor) -> Tensor:
         """Return an action-conditioned correction to a Bellman root matrix."""

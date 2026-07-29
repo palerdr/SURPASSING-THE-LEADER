@@ -11,7 +11,9 @@ from dth.self_play import SelfPlayConfig, generate_self_play, write_self_play
 from dth.solver import (
     CHECKER_ACTIONS,
     DROPPER_ACTIONS,
+    continuation_class_values,
     payoff,
+    reconstruct_transition_class_matrix,
     solve,
     solve_matrix,
     transition,
@@ -953,3 +955,97 @@ def test_decision_training_can_retain_different_width_baseline(tmp_path):
     assert report["decision_selection"]["baseline_checkpoint"] == str(
         baseline_checkpoint
     )
+
+
+def test_transition_class_cell_index_matches_solver_reconstruction():
+    rng = np.random.default_rng(11)
+    successful = rng.uniform(-1.0, 1.0, size=60)
+    failed = float(rng.uniform(-1.0, 1.0))
+    reference = reconstruct_transition_class_matrix(successful, failed)
+
+    class_values = torch.tensor(
+        np.concatenate((successful, [failed])), dtype=torch.float64
+    )
+    gathered = class_values[train_module.transition_class_cell_index()].reshape(60, 60)
+
+    assert np.max(np.abs(gathered.numpy() - reference)) == 0.0
+
+
+def test_build_class_targets_supervises_h1_and_masks_missing_children():
+    states = np.asarray([[0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int16)
+    horizons = np.asarray([1, 2], dtype=np.uint8)
+    targets = ExactTargets(
+        states=states,
+        horizons=horizons,
+        values=np.zeros(2, dtype=np.float32),
+        drop_policies=_policy_targets(2),
+        check_policies=_policy_targets(2),
+        value_weights=np.ones(2, dtype=np.float32),
+        dataset_version="test",
+        schema_version="test",
+    )
+
+    class_values, class_masks = train_module.build_class_targets(
+        targets, np.asarray([0, 1], dtype=np.int64)
+    )
+
+    successful, failed = continuation_class_values((0, 0, 0, 0), lambda child: 0.0)
+    assert class_masks.tolist() == [1.0, 0.0]
+    assert class_values[0, :60] == pytest.approx(np.asarray(successful), abs=1e-7)
+    assert class_values[0, 60] == pytest.approx(failed, abs=1e-7)
+    assert np.all(class_values[1] == 0.0)
+
+
+def test_class_head_migration_preserves_scalar_predictions(tmp_path):
+    source_config = DTHNetworkConfig(hidden_width=8, hidden_layers=1)
+    source = DTHPolicyValueNet(source_config)
+    checkpoint = tmp_path / "headless.pt"
+    torch.save(
+        {
+            "state_dict": source.state_dict(),
+            "model_config": source_config.to_dict(),
+        },
+        checkpoint,
+    )
+
+    target_config = DTHNetworkConfig(
+        hidden_width=8, hidden_layers=1, transition_class_head=True
+    )
+    target = DTHPolicyValueNet(target_config)
+    migration = load_initial_checkpoint(
+        target, target_config, checkpoint, device=torch.device("cpu")
+    )
+
+    features = target.encode(
+        torch.tensor([[10, 240, 20, 240]], dtype=torch.float32),
+        torch.tensor([2], dtype=torch.float32),
+    )
+    with torch.no_grad():
+        source_value, _, _ = source(features)
+        target_value, _, _ = target(features)
+        class_values = target.transition_class_values(features)
+    assert migration["method"] == "add_zero_init_transition_class_head"
+    assert target_value.numpy() == pytest.approx(source_value.numpy())
+    assert class_values.abs().max().item() == 0.0
+
+
+def test_class_head_owns_the_decision_and_audit_matrices():
+    config = DTHNetworkConfig(
+        hidden_width=8, hidden_layers=1, transition_class_head=True
+    )
+    model = DTHPolicyValueNet(config)
+    state = (0, 0, 0, 0)
+    features = model.encode(
+        torch.tensor([state], dtype=torch.float32),
+        torch.tensor([2], dtype=torch.float32),
+    )
+    class_values = model.transition_class_values(features)[0].detach().numpy()
+    expected = reconstruct_transition_class_matrix(
+        class_values[:60].astype(np.float64), float(class_values[60])
+    )
+
+    audited = train_module.approximate_payoff_from_network(
+        model, state, 2, device=torch.device("cpu")
+    )
+
+    assert np.max(np.abs(audited - expected)) < 1e-6

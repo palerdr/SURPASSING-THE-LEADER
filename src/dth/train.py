@@ -21,7 +21,12 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from dth.generate_dataset import TARGET_SCHEMA, live_successors
-from dth.network import FEATURE_SCHEMA, DTHNetworkConfig, DTHPolicyValueNet
+from dth.network import (
+    FEATURE_SCHEMA,
+    TRANSITION_CLASS_COUNT,
+    DTHNetworkConfig,
+    DTHPolicyValueNet,
+)
 from dth.self_play import validate_replay
 from dth.mcts import ExactTargetStore, payoff_from_exact_targets
 from dth.torch_cfr import solve_matrix_cfr_plus_torch
@@ -30,7 +35,9 @@ from dth.solver import (
     DROPPER_ACTIONS,
     NTState,
     TState,
+    continuation_class_values,
     payoff,
+    reconstruct_transition_class_matrix,
     reward,
     solve,
     solve_matrix,
@@ -66,6 +73,48 @@ class SelfPlayTargets:
         return int(self.states.shape[0])
 
 
+def build_class_targets(
+    targets: ExactTargets,
+    indices: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Derive exact 61-class continuation targets for the selected rows.
+
+    A row's class targets need every live child value at ``horizon - 1``; a
+    closure artifact contains them, a roots-only artifact does not.  Rows with
+    a missing child are masked out instead of guessed.  Horizon-one rows are
+    always computable because their classes are pure terminal expectations.
+    """
+
+    lookup = {
+        (tuple(int(value) for value in state), int(horizon)): float(row_value)
+        for state, horizon, row_value in zip(
+            targets.states, targets.horizons, targets.values, strict=True
+        )
+    }
+    class_values = np.zeros((len(indices), TRANSITION_CLASS_COUNT), dtype=np.float32)
+    class_masks = np.zeros(len(indices), dtype=np.float32)
+    for row_index, target_index in enumerate(indices):
+        state = tuple(int(value) for value in targets.states[target_index])
+        horizon = int(targets.horizons[target_index])
+
+        def child_value(child: NTState) -> float:
+            if horizon == 1:
+                return 0.0
+            value = lookup.get((child, horizon - 1))
+            if value is None:
+                raise KeyError(child)
+            return value
+
+        try:
+            successful, failed = continuation_class_values(state, child_value)
+        except KeyError:
+            continue
+        class_values[row_index, :60] = successful
+        class_values[row_index, 60] = failed
+        class_masks[row_index] = 1.0
+    return class_values, class_masks
+
+
 class TargetRows(Dataset[tuple[Tensor, ...]]):
     def __init__(
         self,
@@ -74,6 +123,7 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
         *,
         horizon_scale: float,
         balance_horizons: bool = True,
+        with_class_targets: bool = False,
     ) -> None:
         states = torch.from_numpy(targets.states[indices].astype(np.float32))
         horizons = torch.from_numpy(targets.horizons[indices].astype(np.float32))
@@ -95,6 +145,17 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
         self.value_weights = torch.from_numpy(
             targets.value_weights[indices].astype(np.float32)
         )
+        if with_class_targets:
+            if not isinstance(targets, ExactTargets):
+                raise ValueError("class targets require an exact target artifact")
+            class_values, class_masks = build_class_targets(targets, indices)
+        else:
+            class_values = np.zeros(
+                (len(indices), TRANSITION_CLASS_COUNT), dtype=np.float32
+            )
+            class_masks = np.zeros(len(indices), dtype=np.float32)
+        self.class_values = torch.from_numpy(class_values)
+        self.class_masks = torch.from_numpy(class_masks)
 
         if balance_horizons:
             counts = defaultdict(int)
@@ -121,6 +182,8 @@ class TargetRows(Dataset[tuple[Tensor, ...]]):
             self.weights[index],
             self.value_weights[index],
             self.horizons[index],
+            self.class_values[index],
+            self.class_masks[index],
         )
 
 
@@ -550,10 +613,19 @@ def _batch_loss(
     *,
     policy_weight: float,
     device: torch.device,
+    class_weight: float = 0.0,
 ) -> Tensor:
-    features, values, drop_targets, check_targets, weights, value_weights, _ = (
-        tensor.to(device) for tensor in batch
-    )
+    (
+        features,
+        values,
+        drop_targets,
+        check_targets,
+        weights,
+        value_weights,
+        _,
+        class_targets,
+        class_masks,
+    ) = (tensor.to(device) for tensor in batch)
     predicted_values, drop_logits, check_logits = model(features)
     value_mse = _weighted_mean(
         (predicted_values - values) ** 2,
@@ -561,7 +633,15 @@ def _batch_loss(
     )
     drop_ce = _weighted_mean(soft_cross_entropy(drop_logits, drop_targets), weights)
     check_ce = _weighted_mean(soft_cross_entropy(check_logits, check_targets), weights)
-    return value_mse + float(policy_weight) * 0.5 * (drop_ce + check_ce)
+    loss = value_mse + float(policy_weight) * 0.5 * (drop_ce + check_ce)
+    if class_weight > 0.0:
+        predicted_classes = model.transition_class_values(features)
+        class_mse = _weighted_mean(
+            ((predicted_classes - class_targets) ** 2).mean(dim=-1),
+            weights * class_masks,
+        )
+        loss = loss + float(class_weight) * class_mse
+    return loss
 
 
 @torch.no_grad()
@@ -571,15 +651,25 @@ def evaluate(
     *,
     policy_weight: float,
     device: torch.device,
+    class_weight: float = 0.0,
 ) -> dict[str, float]:
     model.eval()
     numerators = defaultdict(float)
     policy_weight_total = 0.0
     value_weight_total = 0.0
+    class_weight_total = 0.0
     for batch in loader:
-        features, values, drop_targets, check_targets, weights, value_weights, _ = (
-            tensor.to(device) for tensor in batch
-        )
+        (
+            features,
+            values,
+            drop_targets,
+            check_targets,
+            weights,
+            value_weights,
+            _,
+            class_targets,
+            class_masks,
+        ) = (tensor.to(device) for tensor in batch)
         predicted_values, drop_logits, check_logits = model(features)
         value_loss_weights = weights * value_weights
         numerators["value_mse"] += float(
@@ -593,6 +683,18 @@ def evaluate(
         )
         policy_weight_total += float(weights.sum().item())
         value_weight_total += float(value_loss_weights.sum().item())
+        if class_weight > 0.0:
+            predicted_classes = model.transition_class_values(features)
+            class_loss_weights = weights * class_masks
+            numerators["class_mse"] += float(
+                (
+                    ((predicted_classes - class_targets) ** 2).mean(dim=-1)
+                    * class_loss_weights
+                )
+                .sum()
+                .item()
+            )
+            class_weight_total += float(class_loss_weights.sum().item())
     result = {
         "value_mse": (
             numerators["value_mse"] / value_weight_total
@@ -607,6 +709,14 @@ def evaluate(
     result["total_loss"] = result["value_mse"] + float(policy_weight) * 0.5 * (
         result["drop_ce"] + result["check_ce"]
     )
+    if class_weight > 0.0:
+        result["class_mse"] = (
+            numerators["class_mse"] / class_weight_total
+            if class_weight_total > 0.0
+            else 0.0
+        )
+        result["effective_class_weight"] = class_weight_total
+        result["total_loss"] += float(class_weight) * result["class_mse"]
     return result
 
 
@@ -633,6 +743,7 @@ def load_initial_checkpoint(
     source_values.setdefault("feature_lift", "identity")
     source_values.setdefault("continuation_residual", False)
     source_values.setdefault("continuation_residual_mode", "matrix_head")
+    source_values.setdefault("transition_class_head", False)
     source_config = DTHNetworkConfig(**source_values)
     source_dict = source_config.to_dict()
     target_dict = model_config.to_dict()
@@ -647,26 +758,43 @@ def load_initial_checkpoint(
             "target_model_config": target_dict,
         }
 
+    adapter_keys = {
+        "feature_lift",
+        "continuation_residual",
+        "continuation_residual_mode",
+        "transition_class_head",
+    }
     source_core = {
-        key: value
-        for key, value in source_dict.items()
-        if key
-        not in {
-            "feature_lift",
-            "continuation_residual",
-            "continuation_residual_mode",
-        }
+        key: value for key, value in source_dict.items() if key not in adapter_keys
     }
     target_core = {
-        key: value
-        for key, value in target_dict.items()
-        if key
-        not in {
-            "feature_lift",
-            "continuation_residual",
-            "continuation_residual_mode",
-        }
+        key: value for key, value in target_dict.items() if key not in adapter_keys
     }
+    if (
+        source_core == target_core
+        and source_config.feature_lift == model_config.feature_lift
+        and not source_config.continuation_residual
+        and not model_config.continuation_residual
+        and not source_config.transition_class_head
+        and model_config.transition_class_head
+    ):
+        # Adding the 61-class head keeps every shared parameter and starts the
+        # new head at zero, so migrated scalar predictions are unchanged.
+        target_state = model.state_dict()
+        with torch.no_grad():
+            for name, value in payload["state_dict"].items():
+                target_state[name].copy_(value)
+            target_state["transition_class_head.weight"].zero_()
+            target_state["transition_class_head.bias"].zero_()
+        model.load_state_dict(target_state, strict=True)
+        return {
+            "method": "add_zero_init_transition_class_head",
+            "source_checkpoint": str(path),
+            "source_checkpoint_sha256": _sha256(path),
+            "source_model_config": source_dict,
+            "target_model_config": target_dict,
+        }
+
     supported_lifts = {"boundary_v1", "boundary_v2"}
     if (
         source_core == target_core
@@ -932,6 +1060,29 @@ def prepare_decision_loss_roots(
     return tuple(prepared)
 
 
+def transition_class_cell_index() -> Tensor:
+    """Map each flat Dropper-row/Checker-column cell to its class index.
+
+    The mapping mirrors ``reconstruct_transition_class_matrix``: successful
+    cells use ``check_index - drop_index`` and every failed cell shares index
+    ``60``.  A differentiable gather through this index turns 61 predicted
+    class values into the literal stage matrix.
+    """
+
+    index = torch.empty(
+        len(DROPPER_ACTIONS) * len(CHECKER_ACTIONS), dtype=torch.long
+    )
+    for drop_index in range(len(DROPPER_ACTIONS)):
+        for check_index in range(len(CHECKER_ACTIONS)):
+            flat = drop_index * len(CHECKER_ACTIONS) + check_index
+            index[flat] = (
+                check_index - drop_index
+                if check_index >= drop_index
+                else TRANSITION_CLASS_COUNT - 1
+            )
+    return index
+
+
 def decision_training_objective(
     model: DTHPolicyValueNet,
     roots: Iterable[DecisionLossRoot],
@@ -1000,6 +1151,13 @@ def decision_training_objective(
     )
     if residual_weight > 0.0 and root_residuals is None:
         raise ValueError("residual weight requires continuation_residual=true")
+    root_class_values = None
+    class_cell_index = None
+    if model.config.transition_class_head:
+        root_class_values = model.transition_class_values(
+            torch.cat(feature_batches[: len(prepared_roots)], dim=0)
+        )
+        class_cell_index = transition_class_cell_index().to(root_class_values.device)
 
     approximate_matrices: list[Tensor] = []
     top_k_errors: list[Tensor] = []
@@ -1020,6 +1178,9 @@ def decision_training_objective(
             )
         else:
             approximate_flat = root.matrix_base
+        if root_class_values is not None and class_cell_index is not None:
+            # The class head owns the whole stage matrix in one prediction.
+            approximate_flat = root_class_values[root_index][class_cell_index]
         approximate_matrix = approximate_flat.reshape(root.exact_matrix.shape)
         root_residual = (
             root_residuals[root_index]
@@ -1179,6 +1340,18 @@ def approximate_payoff_from_network(
 
     if horizon <= 0:
         raise ValueError("decision roots must have positive horizon")
+    if model.config.transition_class_head:
+        root_states = torch.tensor([state], dtype=torch.float32, device=device)
+        root_horizons = torch.tensor([horizon], dtype=torch.float32, device=device)
+        class_values = (
+            model.transition_class_values(model.encode(root_states, root_horizons))[0]
+            .cpu()
+            .numpy()
+            .astype(np.float64)
+        )
+        return reconstruct_transition_class_matrix(
+            class_values[:60], float(class_values[60])
+        )
     children = sorted(live_successors(state)) if horizon > 1 else []
     child_values: dict[NTState, float] = {}
     if children:
@@ -1504,10 +1677,20 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         continuation_residual_mode=str(
             model_values.get("continuation_residual_mode", "matrix_head")
         ),
+        transition_class_head=bool(
+            model_values.get("transition_class_head", False)
+        ),
     )
     model = DTHPolicyValueNet(model_config)
     device = torch.device(str(config["device"]))
     model.to(device)
+    class_weight = float(training.get("class_weight", 0.0))
+    if class_weight < 0.0:
+        raise ValueError("training.class_weight must be nonnegative")
+    if class_weight > 0.0 and not model_config.transition_class_head:
+        raise ValueError(
+            "training.class_weight requires model.transition_class_head=true"
+        )
     initial_checkpoint = config.get("initial_checkpoint")
     initial_checkpoint_migration = None
     if initial_checkpoint:
@@ -1606,11 +1789,13 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
         train_indices,
         horizon_scale=model_config.horizon_scale,
         balance_horizons=horizon_batch_values is None,
+        with_class_targets=class_weight > 0.0,
     )
     validation_rows = TargetRows(
         targets,
         validation_indices,
         horizon_scale=model_config.horizon_scale,
+        with_class_targets=class_weight > 0.0,
     )
     batch_size = int(training["batch_size"])
     if batch_size <= 0:
@@ -2104,6 +2289,7 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
                 batch,
                 policy_weight=policy_weight,
                 device=device,
+                class_weight=class_weight,
             )
             loss.backward()
             optimizer.step()
@@ -2158,12 +2344,14 @@ def train_exact(config: dict[str, Any]) -> dict[str, Any]:
             train_evaluation_loader,
             policy_weight=policy_weight,
             device=device,
+            class_weight=class_weight,
         )
         validation_metrics = evaluate(
             model,
             validation_loader,
             policy_weight=policy_weight,
             device=device,
+            class_weight=class_weight,
         )
         exact_frontier_metrics = (
             evaluate(

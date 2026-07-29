@@ -1,0 +1,76 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# One recorded iteration on the M2 candidate: the first promotion run
+# (src/dth/artifacts/promotion_v1.json) improved the evaluation median gap
+# by 94.7% but regressed the three protected anchors past the 0.01 gate at
+# depth-2 resolve.  This continuation raises anchor pressure five-fold and
+# lowers the learning rate; everything else is inherited unchanged.
+output_dir: src/dth/checkpoints/class_head_v2
+initial_checkpoint: src/dth/checkpoints/class_head_v1/best.pt
+
+training:
+  learning_rate: 0.00003
+  epochs: 60
+  patience: 60
+
+decision_loss:
+  roots:
+    - state: [239, 0, 0, 240]
+      horizon: 5
+      saddle_gap_weight: 25.0
+    - state: [0, 240, 239, 0]
+      horizon: 5
+      saddle_gap_weight: 25.0
+    - state: [239, 0, 0, 240]
+      horizon: 4
+      saddle_gap_weight: 25.0
+    - state: [0, 0, 240, 0]
+      horizon: 3
+    - state: [240, 0, 0, 0]
+      horizon: 3
+    - state: [180, 0, 180, 61]
+      horizon: 3
+    - state: [180, 61, 180, 0]
+      horizon: 3
+    - state: [179, 60, 180, 60]
+      horizon: 3
+    - state: [180, 60, 179, 60]
+      horizon: 3
+    - state: [59, 0, 219, 0]
+      horizon: 3
+    - state: [219, 0, 59, 0]
+      horizon: 3
+    - state: [119, 120, 179, 120]
+      horizon: 3
+    - state: [179, 120, 119, 120]
+      horizon: 3
+    - state: [60, 180, 241, 0]
+      horizon: 3
+    - state: [241, 0, 60, 180]
+      horizon: 3
+    - state: [0, 0, 240, 0]
+      horizon: 4
+    - state: [240, 0, 0, 0]
+      horizon: 4
+    - state: [180, 0, 180, 61]
+      horizon: 4
+    - state: [180, 61, 180, 0]
+      horizon: 4
+    - state: [179, 60, 180, 60]
+      horizon: 4
+    - state: [180, 60, 179, 60]
+      horizon: 4
+    - state: [59, 0, 219, 0]
+      horizon: 4
+    - state: [219, 0, 59, 0]
+      horizon: 4
+    - state: [119, 120, 179, 120]
+      horizon: 4
+    - state: [179, 120, 119, 120]
+      horizon: 4
+    - state: [60, 180, 241, 0]
+      horizon: 4
+    - state: [241, 0, 60, 180]
+      horizon: 4

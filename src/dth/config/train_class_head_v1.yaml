@@ -1,0 +1,24 @@
+defaults:
+  - train_depth_baseline_v1
+  - _self_
+
+# M2 candidate (docs/AGENT_GOAL.md): the 61-output transition-class head,
+# trained on the closure reference corpus so class targets are derivable for
+# nearly every row.  The head is fresh zero-init capacity, so the learning
+# rate returns to the v13-era level, and decision selection must beat the
+# frozen M1 baseline checkpoint rather than epoch zero.
+dataset: src/dth/artifacts/readiness_training_reference_v2.npz
+output_dir: src/dth/checkpoints/class_head_v1
+initial_checkpoint: src/dth/checkpoints/depth_baseline_v1/best.pt
+
+model:
+  transition_class_head: true
+
+training:
+  learning_rate: 0.0001
+  epochs: 100
+  patience: 100
+  class_weight: 1.0
+
+decision_selection:
+  baseline_checkpoint: src/dth/checkpoints/depth_baseline_v1/best.pt
