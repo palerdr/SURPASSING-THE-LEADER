@@ -1,0 +1,36 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# The flagship agent's read-only exact anchor (docs/AGENT_GOAL.md M3): the
+# complete failure-dead quotient band, whose 3,541 classes make every state
+# with both ST coordinates at or above 240 a certified tablebase hit.  One
+# root, one manifest; the play-time agent never writes to this artifact.
+database_path: src/dth/artifacts/exact_band_v1.sqlite
+report_path: src/dth/artifacts/exact_band_v1_report.json
+roots:
+  - state: [240, 0, 240, 0]
+parity_horizons: [1, 2]
+
+census:
+  max_expansions: 10000
+  max_states: 10000
+  max_seconds: 600.0
+
+solve:
+  enabled: true
+  max_new_solutions: 10000
+  max_seconds: 1200.0
+  batch_size: 64
+  workers: 1
+
+policy_cache:
+  enabled: true
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
