@@ -12,6 +12,7 @@ IMPLEMENTATIONS = (*PROJECTS, "crates", "ocaml")
 IGNORED_PARTS = {
     ".git",
     ".venv",
+    ".tools",
     ".pytest_cache",
     ".ruff_cache",
     "graphify-out",

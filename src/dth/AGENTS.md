@@ -22,4 +22,5 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
   contract.
 
 Read `docs/GAME_AND_SOLVER.md` for the model and `docs/EXACTNESS_PROOF.md` for
-the proof boundary. Run `uv run python -m pytest src/dth/tests -q`.
+the proof boundary. `docs/AGENT_GOAL.md` owns the sub-project's end goal,
+gates, and milestone order. Run `uv run python -m pytest src/dth/tests -q`.
