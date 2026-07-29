@@ -1,5 +1,5 @@
 module E = Dth_solver.Exact
-module L = Dth_solver.Lp
+module M = Dth_solver.Matrix_game
 
 let fail name detail = failwith (name ^ ": " ^ detail)
 let check name condition = if not condition then fail name "condition failed"
@@ -88,14 +88,106 @@ let test_payoff_matrix_and_lp () =
   for index = 0 to 59 do
     matching_identity.(index).(index) <- 1.0
   done;
-  check_approx "nontrivial LP value" (-58.0 /. 60.0) (L.solve matching_identity);
+  check_approx "nontrivial LP value" (-58.0 /. 60.0) (M.solve matching_identity);
+  let rock_paper_scissors =
+    Array.init 60 (fun row ->
+        Array.init 60 (fun column ->
+            match (row - column + 3) mod 3 with
+            | 0 -> 0.0
+            | 1 -> 1.0
+            | _ -> -1.0))
+  in
+  check_approx "cyclic game value" 0.0 (M.solve rock_paper_scissors);
   expect_exception "invalid LP matrix"
     (Invalid_argument "payoff matrix must be 60x60") (fun () ->
-      L.solve (Array.make_matrix 59 60 0.0))
+      M.solve (Array.make_matrix 59 60 0.0));
+  let invalid_payoffs = Array.make_matrix 60 60 0.0 in
+  invalid_payoffs.(0).(0) <- 2.0;
+  expect_exception "payoff outside game range"
+    (Invalid_argument "matrix payoffs must be finite values in [-1, 1]")
+    (fun () -> M.solve invalid_payoffs)
+
+(* Both games above are symmetric and solved by the uniform mixture, so they
+   pass even for a solver that stops at the wrong vertex. These do not: their
+   values are fixed by antisymmetry and by a saddle point, and each needs a
+   pivot the previous hand-rolled tableau could not make. *)
+let test_asymmetric_known_values () =
+  let raw i j =
+    (float_of_int (((i * 37) + (j * 11)) mod 101) /. 101.0) -. 0.5
+  in
+  let skew_symmetric =
+    Array.init 60 (fun i ->
+        Array.init 60 (fun j -> (raw i j -. raw j i) /. 2.0))
+  in
+  (* A = -A^T means either player can steal the other's mixture, so the value is
+     exactly zero. *)
+  check_approx "skew-symmetric game is fair" 0.0 (M.solve skew_symmetric);
+  (* [[1; 0]; [0; -1]] has a pure saddle at (row 0, column 1) worth 0. The
+     padding rows are strictly dominated and the padding columns hand the
+     Dropper 1, so the padded game keeps that value. *)
+  let padded_saddle =
+    Array.init 60 (fun i ->
+        Array.init 60 (fun j ->
+            if i >= 2 then -1.0
+            else if j >= 2 then 1.0
+            else if i = 0 && j = 0 then 1.0
+            else if i = 1 && j = 1 then -1.0
+            else 0.0))
+  in
+  check_approx "padded saddle point" 0.0 (M.solve padded_saddle)
+
+(* A matrix with the shape Exact.payoff_matrix actually produces: a constant
+   failed-check block below the diagonal, and a value that depends only on
+   inclusive squandered time on and above it. *)
+let transition_class_matrix failed successes =
+  Array.init 60 (fun drop ->
+      Array.init 60 (fun check ->
+          if check >= drop then successes.(check - drop + 1) else failed))
+
+let test_certificate () =
+  let successes =
+    Array.init 61 (fun st -> cos (float_of_int st /. 7.0) *. 0.9)
+  in
+  let matrix = transition_class_matrix (-0.25) successes in
+  let solution = M.solve_certified matrix in
+  check "saddle gap within the gate"
+    (solution.M.saddle_gap <= M.saddle_gap_tolerance);
+  let mass policy = Array.fold_left ( +. ) 0.0 policy in
+  check_approx "dropper policy is a distribution" 1.0 (mass solution.M.dropper);
+  check_approx "checker policy is a distribution" 1.0 (mass solution.M.checker);
+  check "policies are nonnegative"
+    (Array.for_all (fun p -> p >= 0.0) solution.M.dropper
+    && Array.for_all (fun p -> p >= 0.0) solution.M.checker);
+  (* The certified value must be bracketed by what each policy achieves
+     unilaterally, which is what makes it a certificate rather than a report. *)
+  let lower =
+    Array.fold_left min infinity
+      (Array.init 60 (fun check ->
+           let total = ref 0.0 in
+           for drop = 0 to 59 do
+             total :=
+               !total +. (solution.M.dropper.(drop) *. matrix.(drop).(check))
+           done;
+           !total))
+  in
+  let upper =
+    Array.fold_left max neg_infinity
+      (Array.init 60 (fun drop ->
+           let total = ref 0.0 in
+           for check = 0 to 59 do
+             total :=
+               !total +. (solution.M.checker.(check) *. matrix.(drop).(check))
+           done;
+           !total))
+  in
+  check "value is bracketed by both policies"
+    (lower -. 1e-9 <= solution.M.value && solution.M.value <= upper +. 1e-9)
 
 let () =
   test_revival_surface ();
   test_action_primitives ();
   test_successful_transition ();
   test_failed_transition ();
-  test_payoff_matrix_and_lp ()
+  test_payoff_matrix_and_lp ();
+  test_asymmetric_known_values ();
+  test_certificate ()

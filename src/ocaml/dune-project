@@ -21,10 +21,14 @@
  (description "OCaml types and the frozen revival model for Drop The Handkerchief.")
  (depends
   dune
-  lp
-  lp-highs
+  bisect_ppx
   ocaml
-  ocamlformat)
+  ocamlformat
+  ; Matrix values come from GLPK; this project does not implement a simplex.
+  ; lp-glpk links GLPK in process, so a system GLPK must be installed --
+  ; conf-glpk provides no Windows depext, see README.md.
+  lp
+  lp-glpk)
  (tags
   (game ocaml solver)))
 

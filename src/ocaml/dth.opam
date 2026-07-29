@@ -8,10 +8,11 @@ authors: ["James Cenawood" "Orion Hoch" "Emily Wei" "Max Masleyev"]
 tags: ["game" "ocaml" "solver"]
 depends: [
   "dune" {>= "3.21"}
-  "lp"
-  "lp-highs"
+  "bisect_ppx"
   "ocaml"
   "ocamlformat"
+  "lp"
+  "lp-glpk"
   "odoc" {with-doc}
 ]
 build: [

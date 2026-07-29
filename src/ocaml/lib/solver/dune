@@ -1,5 +1,5 @@
 (library
  (name dth_solver)
  (public_name dth.solver)
- (libraries lp lp-highs)
- (modules exact lp matrix_lp))
+ (libraries lp lp-glpk)
+ (modules exact matrix_game))

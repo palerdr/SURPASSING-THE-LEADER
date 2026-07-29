@@ -2,8 +2,11 @@
 
 This project defines the pure role-relative DTH state and chance-branch types
 and the repository-wide revival-probability function. It does not carry
-STL-only leap-window or player-identity mechanics, and it does not implement a
-transition engine or matrix solver.
+STL-only leap-window or player-identity mechanics.
+
+Simultaneous matrices are solved by GLPK through `lib/solver/matrix_game.ml`,
+which certifies a saddle gap of at most `1e-6` before reporting a value. This
+project does not implement a simplex method of its own.
 
 ## Actions and successful checks
 

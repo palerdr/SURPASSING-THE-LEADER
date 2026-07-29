@@ -93,7 +93,7 @@ let rec value (x : state) : float =
   match Hashtbl.find_opt value_cache x with
   | Some result -> result
   | None ->
-      let result = Matrix_lp.solve (payoff_matrix x) in
+      let result = Matrix_game.solve (payoff_matrix x) in
       Hashtbl.add value_cache x result;
       result
 

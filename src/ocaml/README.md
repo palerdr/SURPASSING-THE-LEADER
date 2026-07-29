@@ -1,9 +1,23 @@
 # OCaml DTH solver types
 
-This Dune project is intentionally small. The only library is
-`lib/solver/exact.ml` with its interface in `lib/solver/exact.mli`; it owns the
-role-relative state and chance-branch types plus the frozen revival model. It
-does not contain a transition engine or matrix-game implementation.
+This Dune project is intentionally small. `lib/solver/exact.ml` owns the
+role-relative state and chance-branch types, the transition expansion, and the
+frozen revival model. `lib/solver/matrix_game.ml` turns one simultaneous 60x60
+payoff matrix into a certified value.
+
+## Matrix values come from GLPK
+
+`matrix_game.ml` does not implement a simplex method. It builds both players'
+linear programs and hands them to GLPK through `lp-glpk`, then certifies the
+returned pair: each policy must be a probability distribution, and the saddle
+gap `max_d (Mq)_d - min_c (M^T p)_c` must not exceed `1e-6` — the same bound
+`src/dth/docs/GAME_AND_SOLVER.md` publishes for the peer Python solver. A
+matrix that fails either check raises `Matrix_game.Uncertified` rather than
+returning a number.
+
+This makes GLPK a build prerequisite. `conf-glpk` carries no Windows depext,
+so opam cannot provision it there; see [`INSTALL.md`](INSTALL.md) for how to
+get a mingw-targeted `libglpk` in place before `opam install lp-glpk`.
 
 The OCaml solver follows the repository-wide model in
 [`docs/REVIVAL_MODEL.md`](../../docs/REVIVAL_MODEL.md):
