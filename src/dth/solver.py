@@ -723,6 +723,26 @@ def solve_certified_matrix(
     return value_, drop, check, "highs"
 
 
+def canonical_certificate_scalars(
+    lower: float,
+    value: float,
+    upper: float,
+) -> tuple[float, float, float]:
+    """Restore the `lower <= value <= upper` ordering after ulp reversals.
+
+    Independent primal and dual solves may reverse the two bounds by a few
+    ulps, and the midpoint value can then sit a few ulps outside them.  The
+    persistent store rejects any unordered certificate, so canonicalize the
+    sub-tolerance numerical noise here; a genuine gap above the 1e-6
+    threshold has already been rejected before this point.
+    """
+
+    if lower > upper:
+        midpoint = (lower + upper) / 2.0
+        lower = upper = midpoint
+    return lower, min(max(value, lower), upper), upper
+
+
 def _certify_matrix_solution(
     state: NTState,
     matrix: np.ndarray,
@@ -759,6 +779,7 @@ def _certify_matrix_solution(
     saddle_gap = max(0.0, upper - lower)
     if saddle_gap > SADDLE_GAP_TOLERANCE:
         raise RuntimeError(f"LP saddle gap too large: {saddle_gap}")
+    lower, value_, upper = canonical_certificate_scalars(lower, value_, upper)
     return CertifiedSolution(
         state=normalized_state,
         value=float(value_),

@@ -94,3 +94,16 @@ def test_horizon_one_reuses_exact_checker_equivalence_class() -> None:
 
     assert first == second
     assert horizon_one_cache_info().misses == 1
+
+
+def test_certificate_scalars_canonicalize_ulp_reversals() -> None:
+    from dth.solver import canonical_certificate_scalars
+
+    lower, value, upper = canonical_certificate_scalars(
+        0.5000000000000002, 0.5, 0.4999999999999999
+    )
+    assert lower == upper
+    assert lower <= value <= upper
+
+    ordered = canonical_certificate_scalars(-0.25, 0.0, 0.25)
+    assert ordered == (-0.25, 0.0, 0.25)
