@@ -625,6 +625,28 @@ def test_idle_frames_share_one_canvas_after_preparation(tmp_path: Path) -> None:
     assert {(frame.width, frame.height) for frame in frames} == {(2, 4)}
 
 
+def test_yakou_stands_a_step_back_from_the_players() -> None:
+    """The referee is not on the players' line: feet higher, slightly smaller."""
+    assert POSE_SCALE["standing"] < POSE_SCALE["dropping"]
+    pale = _tall_block((220, 220, 220, 255))
+    # Bright enough that only Yakou's interior cells map to the densest glyph.
+    marker = _tall_block((250, 250, 250, 255))
+    art = SceneArt(
+        {
+            ("hal", "dropping"): (pale,),
+            ("baku", "seated"): (pale,),
+            ("yakou", "standing"): (marker,),
+        }
+    )
+    layout = Layout(100, 24)
+    lines = render_frame(_game(), art=art, layout=layout, colour=False)
+    scene = lines[5 : 5 + layout.scene_rows]
+    marker_rows = [index for index, line in enumerate(scene) if "@" in line]
+    lit_rows = [index for index, line in enumerate(scene) if line[2:-2].strip()]
+    assert marker_rows, "the marker figure must be visible"
+    assert max(marker_rows) < max(lit_rows), "Yakou's feet must sit above the floor line"
+
+
 def test_figures_share_a_common_floor_line() -> None:
     pale = _tall_block((220, 220, 220, 255))
     seated = _sprite_block(pale, "x", 12, 16, pose="seated", colour=False)

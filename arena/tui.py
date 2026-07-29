@@ -60,7 +60,14 @@ SCENE_FILL = 0.4
 # Relative figure heights. Derived from the pose, never from the prepared pixel
 # height: the sources have different canvas aspects (Baku 1254x1254, Hal
 # 1024x1536), so measured heights describe the canvas rather than the character.
-POSE_SCALE = {"dropping": 1.0, "standing": 1.0, "idle": 1.0, "seated": 0.80}
+# Standing is Yakou's pose: he is drawn slightly smaller because he stands a
+# step behind the players, not on their line.
+POSE_SCALE = {"dropping": 1.0, "standing": 0.9, "idle": 1.0, "seated": 0.80}
+
+# How far a pose floats above the common floor line, as a fraction of the band.
+# Depth cue for the same step back: Yakou's feet sit a little higher than the
+# players', as the panel stages him.
+POSE_LIFT = {"standing": 0.1}
 
 # Longest edge used when preparing a fixture, with headroom for large layouts.
 _WORK_EDGE = 320
@@ -470,12 +477,14 @@ def _sprite_block(
     pose: str,
     colour: bool,
     glyphs: str = "sextant",
+    lift: int = 0,
 ) -> list[str]:
     """Render one figure into a block of the scene field.
 
     The figure is scaled to ``POSE_SCALE[pose]`` of the block height and
     bottom-anchored, so a seated player is genuinely shorter than a standing one
-    and all three stand on a common floor line.
+    and all three stand on a common floor line. ``lift`` raises the figure that
+    many rows off the floor — the depth cue that sets Yakou a step back.
     """
     if sprite is None:
         body = [_background_run(columns, colour)] * scene_rows
@@ -496,8 +505,10 @@ def _sprite_block(
         prescaled=True,
         glyphs=glyphs,
     )
-    pad = scene_rows - len(lines)
-    return [_background_run(columns, colour)] * pad + lines
+    lift = max(0, min(lift, scene_rows - len(lines)))
+    pad = scene_rows - len(lines) - lift
+    ground = _background_run(columns, colour)
+    return [ground] * pad + lines + [ground] * lift
 
 
 def _scene(
@@ -575,9 +586,10 @@ def _scene(
     blocks = []
     for (sprite, label, pose), slot in zip(cast, widths):
         rows = max(1, round(band_rows * POSE_SCALE.get(pose, 1.0)))
+        lift = round(band_rows * POSE_LIFT.get(pose, 0.0))
         width = min(slot, figure_width(sprite, label, rows))
         block = _sprite_block(
-            sprite, label, width, band_rows, pose=pose, colour=colour, glyphs=glyphs
+            sprite, label, width, band_rows, pose=pose, colour=colour, glyphs=glyphs, lift=lift
         )
         # The current occupant is centred inside its fixed slot, never
         # stretched to fill it — slot width is layout, not figure shape.
