@@ -1,0 +1,23 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Reconstruction of a producer that never had a versioned config: the
+# readiness-ladder reference covers the three retained anchors and the eight
+# frozen evaluation roots with their complete positive-horizon closures.
+# Regenerate the inputs first (readiness_exact_h3_v1 -> readiness_exact_h4_v1
+# and strategic_exact_v1..v6).
+dataset_version: self_play_readiness_reference_v1
+output: src/dth/artifacts/self_play_readiness_reference_v1.npz
+emission: merge
+inputs:
+  - src/dth/artifacts/self_play_readiness_exact_v1.npz
+  - src/dth/artifacts/strategic_exact_v6.npz
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

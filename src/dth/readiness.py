@@ -150,6 +150,185 @@ def compare_ladders(
     }
 
 
+def depth_gate(
+    reports: list[dict[str, Any]], *, cvar_alpha: float = 0.5
+) -> dict[str, Any]:
+    """Compare one checkpoint's resolve ladders across increasing max_depth.
+
+    This is the G1 search-effectiveness gate: at a fixed evaluator, deeper
+    full-width resolve must strictly improve the upper-tail (CVaR) exact
+    saddle gap over the root pack without worsening the maximum.  The first
+    measured ladder showed the raw median is zero-inflated — several roots
+    sit at exactly zero gap at depth one, and deeper resolve spreads
+    sub-0.03 gaps onto them while every materially wrong root improves — so
+    the tail mean, this repository's existing selection vocabulary, is the
+    gated aggregate and the median stays report-only.  Reports whose records
+    do not carry ``lp_fallbacks`` are invalid, because an uncounted silent
+    LP fallback could fake a healthy ladder.
+    """
+
+    if len(reports) < 2:
+        raise ValueError("depth gate needs at least two ladder reports")
+    checkpoints = {str(report["checkpoint"]) for report in reports}
+    if len(checkpoints) != 1:
+        raise ValueError("depth gate reports must share one checkpoint")
+
+    depths: list[int] = []
+    roots_reference: list[tuple[NTState, int]] | None = None
+    per_depth: list[dict[str, Any]] = []
+    for report in reports:
+        raw_depth = report["config"]["mcts"].get("max_depth")
+        if raw_depth is None:
+            raise ValueError("depth gate reports must declare a finite max_depth")
+        depth = int(raw_depth)
+        network_records = [
+            row for row in report["records"] if row["evaluator"] == "network"
+        ]
+        if not network_records:
+            raise ValueError("depth gate reports need network-evaluator records")
+        for row in network_records:
+            if "lp_fallbacks" not in row:
+                raise ValueError(
+                    "ladder records lack lp_fallbacks; uncounted fallbacks are invalid"
+                )
+        roots = list(dict.fromkeys(_key(row) for row in network_records))
+        if roots_reference is None:
+            roots_reference = roots
+        elif roots != roots_reference:
+            raise ValueError("depth gate reports must share one root pack")
+        budget = max(int(row["budget"]) for row in network_records)
+        means = _root_means(report, budget)
+        gaps = [means[key]["saddle_gap"] for key in roots]
+        value_errors = [means[key]["value_error"] for key in roots]
+        tail = max(1, int(np.ceil(cvar_alpha * len(gaps))))
+        depths.append(depth)
+        per_depth.append(
+            {
+                "max_depth": depth,
+                "budget": budget,
+                "cvar_gap": float(np.mean(np.sort(gaps)[-tail:])),
+                "median_gap": float(np.median(gaps)),
+                "max_gap": float(np.max(gaps)),
+                "median_value_error": float(np.median(value_errors)),
+                "max_value_error": float(np.max(value_errors)),
+                "total_lp_fallbacks": int(
+                    np.sum([row["lp_fallbacks"] for row in network_records])
+                ),
+                "roots": [
+                    {
+                        "state": list(key[0]),
+                        "horizon": key[1],
+                        "saddle_gap": means[key]["saddle_gap"],
+                        "value_error": means[key]["value_error"],
+                    }
+                    for key in roots
+                ],
+            }
+        )
+
+    if depths != sorted(depths) or len(set(depths)) != len(depths):
+        raise ValueError("depth gate reports must use strictly increasing depths")
+
+    cvar_decreasing = all(
+        per_depth[index + 1]["cvar_gap"] < per_depth[index]["cvar_gap"]
+        for index in range(len(per_depth) - 1)
+    )
+    max_no_increase = all(
+        per_depth[index + 1]["max_gap"] <= per_depth[index]["max_gap"] + 1e-12
+        for index in range(len(per_depth) - 1)
+    )
+    gates = {
+        "cvar_gap_strictly_decreasing": cvar_decreasing,
+        "max_gap_no_increase": max_no_increase,
+    }
+    return {
+        "schema_version": "dth-depth-gate-v1",
+        "checkpoint": checkpoints.pop(),
+        "depths": depths,
+        "cvar_alpha": cvar_alpha,
+        "per_depth": per_depth,
+        "gates": gates,
+        "recommendation": (
+            "depth-effective" if all(gates.values()) else "depth-ineffective"
+        ),
+    }
+
+
+def orientation_gate(
+    report: dict[str, Any],
+    *,
+    max_ratio: float = 1.5,
+    consistent_floor: float = 0.01,
+) -> dict[str, Any]:
+    """Compare learned gap quality across role-orientation mirror pairs.
+
+    No algebraic mirror-value identity holds (verified against 43,189 exact
+    pairs), so this is a generalization-balance audit, not a symmetry check:
+    mirrored roots of the same difficulty class should not be learned to
+    wildly different quality.  Pairs where both gaps are below
+    ``consistent_floor`` are consistent regardless of ratio.
+    """
+
+    network_records = [
+        row for row in report["records"] if row["evaluator"] == "network"
+    ]
+    if not network_records:
+        raise ValueError("orientation gate needs network-evaluator records")
+    for row in network_records:
+        if "lp_fallbacks" not in row:
+            raise ValueError(
+                "ladder records lack lp_fallbacks; uncounted fallbacks are invalid"
+            )
+    budget = max(int(row["budget"]) for row in network_records)
+    means = _root_means(report, budget)
+
+    def mirror(state: NTState) -> NTState:
+        return (state[2], state[3], state[0], state[1])
+
+    pairs = []
+    seen: set[tuple[NTState, int]] = set()
+    for state, horizon in means:
+        mirrored = (mirror(state), horizon)
+        if state == mirror(state) or (state, horizon) in seen:
+            continue
+        if mirrored in means:
+            seen.add((state, horizon))
+            seen.add(mirrored)
+            first = means[(state, horizon)]["saddle_gap"]
+            second = means[mirrored]["saddle_gap"]
+            low, high = sorted((first, second))
+            consistent = high <= consistent_floor or (
+                high <= max_ratio * max(low, 1e-9)
+            )
+            pairs.append(
+                {
+                    "state": list(state),
+                    "mirror": list(mirror(state)),
+                    "horizon": horizon,
+                    "saddle_gaps": [first, second],
+                    "ratio": (high / max(low, 1e-9)),
+                    "consistent": consistent,
+                }
+            )
+    if not pairs:
+        raise ValueError("orientation gate found no mirror pairs in the root pack")
+    gates = {"orientation_pairs_consistent": all(row["consistent"] for row in pairs)}
+    return {
+        "schema_version": "dth-orientation-gate-v1",
+        "checkpoint": str(report["checkpoint"]),
+        "budget": budget,
+        "max_ratio": max_ratio,
+        "consistent_floor": consistent_floor,
+        "pairs": pairs,
+        "gates": gates,
+        "recommendation": (
+            "orientation-consistent"
+            if all(gates.values())
+            else "orientation-inconsistent"
+        ),
+    }
+
+
 def _exact_gap(matrix: np.ndarray, drop: np.ndarray, check: np.ndarray) -> float:
     return max(0.0, float(np.max(matrix @ check) - np.min(matrix.T @ drop)))
 
@@ -224,16 +403,51 @@ def audit_replay(first: str | Path, second: str | Path) -> dict[str, Any]:
     }
 
 
+def run_depth_gate(report_paths: Iterable[str | Path], output: str | Path) -> None:
+    reports = [
+        json.loads(Path(path).read_text(encoding="utf-8")) for path in report_paths
+    ]
+    verdict = depth_gate(reports)
+    verdict["reports"] = [str(path) for path in report_paths]
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(verdict, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--baseline", required=True)
-    parser.add_argument("--candidate", required=True)
-    parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--exact-targets", required=True)
-    parser.add_argument("--replay-a", required=True)
-    parser.add_argument("--replay-b", required=True)
-    parser.add_argument("--output", required=True)
+    commands = parser.add_subparsers(dest="command", required=True)
+    promotion = commands.add_parser("promotion")
+    promotion.add_argument("--baseline", required=True)
+    promotion.add_argument("--candidate", required=True)
+    promotion.add_argument("--checkpoint", required=True)
+    promotion.add_argument("--exact-targets", required=True)
+    promotion.add_argument("--replay-a", required=True)
+    promotion.add_argument("--replay-b", required=True)
+    promotion.add_argument("--output", required=True)
+    depth = commands.add_parser("depth-gate")
+    depth.add_argument("--reports", nargs="+", required=True)
+    depth.add_argument("--output", required=True)
+    orientation = commands.add_parser("orientation-gate")
+    orientation.add_argument("--report", required=True)
+    orientation.add_argument("--output", required=True)
     args = parser.parse_args()
+    if args.command == "depth-gate":
+        run_depth_gate(args.reports, args.output)
+        return
+    if args.command == "orientation-gate":
+        verdict = orientation_gate(
+            json.loads(Path(args.report).read_text(encoding="utf-8"))
+        )
+        verdict["report"] = args.report
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            json.dumps(verdict, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return
     baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
     candidate = json.loads(Path(args.candidate).read_text(encoding="utf-8"))
     comparison = compare_ladders(baseline, candidate)

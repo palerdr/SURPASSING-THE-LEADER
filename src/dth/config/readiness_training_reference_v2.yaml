@@ -1,0 +1,22 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Reconstruction of a producer that never had a versioned config: the
+# v17-v19 decision-loss reference is the mirrored development closures plus
+# the retained anchor closures.  Regenerate the inputs first
+# (readiness_development_h3_v2 -> h4a_v2 -> h4_v2 and strategic_exact_v1..v6).
+dataset_version: readiness_training_reference_v2
+output: src/dth/artifacts/readiness_training_reference_v2.npz
+emission: merge
+inputs:
+  - src/dth/artifacts/readiness_development_v2.npz
+  - src/dth/artifacts/strategic_exact_v6.npz
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

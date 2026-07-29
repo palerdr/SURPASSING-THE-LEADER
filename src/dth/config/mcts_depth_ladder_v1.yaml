@@ -1,0 +1,71 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# G1 depth ladder (docs/AGENT_GOAL.md M1): full-width resolve on the frozen
+# 11-root readiness pack at budget zero, where max_depth is the only intended
+# override axis.  Root and internal warmup force every joint cell, so the
+# result is the deterministic depth-limited resolve, not sampled search:
+#   uv run python -m dth mcts-audit --config-name mcts_depth_ladder_v1
+#   uv run python -m dth mcts-audit --config-name mcts_depth_ladder_v1 \
+#     mcts.max_depth=2 'evaluators=[network]' \
+#     output=src/dth/artifacts/mcts_depth_ladder_v1_d2.json
+#   uv run python -m dth mcts-audit --config-name mcts_depth_ladder_v1 \
+#     mcts.max_depth=3 'evaluators=[network]' \
+#     output=src/dth/artifacts/mcts_depth_ladder_v1_d3.json
+checkpoint: src/dth/checkpoints/depth_baseline_v1/best.pt
+exact_targets: src/dth/artifacts/self_play_readiness_reference_v1.npz
+reference_targets: src/dth/artifacts/self_play_readiness_reference_v1.npz
+anchor_horizons: null
+device: cpu
+output: src/dth/artifacts/mcts_depth_ladder_v1_d1.json
+evaluators: [network, exact_leaf]
+budgets: [0]
+seeds: [0]
+warmup_cells: [3600]
+
+mcts:
+  confidence_constant: 1.5
+  exploration_scale: 1.0
+  prior_uniform_mix: 0.05
+  # Full-width resolve leaves nothing for periodic mid-warmup refreshes to
+  # learn; every node still gets its explicit end-of-warmup refresh.
+  policy_update_interval: 3600
+  root_warmup_cells: 3600
+  internal_warmup_cells: 3600
+  max_depth: 1
+
+roots:
+  # Training anchors.
+  - state: [239, 0, 0, 240]
+    horizon: 5
+  - state: [0, 240, 239, 0]
+    horizon: 5
+  - state: [239, 0, 0, 240]
+    horizon: 4
+  # Frozen evaluation-only H4 mirrored pairs.
+  - state: [238, 0, 1, 240]
+    horizon: 4
+  - state: [1, 240, 238, 0]
+    horizon: 4
+  - state: [179, 60, 59, 180]
+    horizon: 4
+  - state: [59, 180, 179, 60]
+    horizon: 4
+  # Frozen evaluation-only H3 mirrored pairs.
+  - state: [219, 0, 19, 240]
+    horizon: 3
+  - state: [19, 240, 219, 0]
+    horizon: 3
+  - state: [119, 120, 179, 60]
+    horizon: 3
+  - state: [179, 60, 119, 120]
+    horizon: 3
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

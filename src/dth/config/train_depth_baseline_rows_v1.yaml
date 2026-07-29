@@ -1,0 +1,11 @@
+defaults:
+  - train
+  - _self_
+
+# Stage A of the M1 depth-ladder baseline (docs/AGENT_GOAL.md).  The
+# strategic_mixed_v7 lineage has no recoverable checkpoint or self-play
+# corpus, so the baseline restarts row supervision from scratch on the
+# regenerated strategic corpus before the unchanged v19 decision fine-tune.
+dataset: src/dth/artifacts/strategic_exact_v6.npz
+output_dir: src/dth/checkpoints/depth_baseline_rows_v1
+device: cuda

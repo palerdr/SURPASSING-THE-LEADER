@@ -235,10 +235,55 @@ def test_exploration_lp_failure_falls_back_to_mean_policy(monkeypatch) -> None:
         return real_solve(matrix)
 
     monkeypatch.setattr(pure_mcts, "solve_matrix", fail_exploration)
-    refresh_policies(node, MCTSConfig(simulations=0, exploration_scale=0.0))
+    diagnostics = pure_mcts.SearchDiagnostics()
+    refresh_policies(
+        node, MCTSConfig(simulations=0, exploration_scale=0.0), diagnostics
+    )
 
     assert node.selection_drop == pytest.approx(node.mean_q_drop)
     assert node.selection_check == pytest.approx(node.mean_q_check)
+    assert diagnostics.lp_fallbacks == 2
+
+
+def test_ladder_results_report_zero_fallbacks_on_a_healthy_search() -> None:
+    result = mcts_search(
+        (0, 0, 0, 0),
+        1,
+        _ConstantEvaluator(),
+        MCTSConfig(simulations=8, root_warmup_cells=4),
+        np.random.default_rng(3),
+        np.random.default_rng(4),
+    )
+
+    assert result.lp_fallbacks == 0
+
+
+def test_internal_warmup_skips_exact_leaves() -> None:
+    state = (0, 0, 0, 0)
+    evaluator = ExactLeafEvaluator(state, 2)
+    node = make_node(state, 2)
+    table = {(state, 2): node}
+    config = MCTSConfig(
+        simulations=0,
+        internal_warmup_cells=2,
+        max_depth=2,
+    )
+    expand(node, evaluator, config)
+
+    simulate(
+        node,
+        table,
+        evaluator,
+        config,
+        np.random.default_rng(1),
+        np.random.default_rng(2),
+        forced_joint_action=(0, 0),
+    )
+
+    child_nodes = [child for key, child in table.items() if key != (state, 2)]
+    assert len(child_nodes) == 1
+    assert child_nodes[0].exact_value is not None
+    assert child_nodes[0].visits == 0
 
 
 def test_internal_warmup_is_scoped_below_the_root() -> None:
@@ -289,7 +334,31 @@ def test_internal_warmup_can_be_limited_by_remaining_horizon() -> None:
     assert child_nodes[0].visits == 0
 
 
-def test_audit_summary_tracks_mean_q_gap_and_coverage() -> None:
+def test_audit_summary_tracks_mean_q_gap_coverage_and_fallbacks() -> None:
+    record = {
+        "evaluator": "exact_leaf",
+        "budget": 0,
+        "warmup_cells": 3600,
+        "state": [240, 0, 0, 0],
+        "horizon": 1,
+        "mcts_value": 0.5,
+        "value_error": 0.0,
+        "saddle_gap": 0.02,
+        "mean_q_saddle_gap": 0.01,
+        "coverage_fraction": 1.0,
+        "unique_cells": 3600,
+        "lp_fallbacks": 3,
+    }
+
+    summary = summarize_audit([record])["exact_leaf"]["0"]
+
+    assert summary["median_mean_q_saddle_gap"] == pytest.approx(0.01)
+    assert summary["mean_coverage_fraction"] == pytest.approx(1.0)
+    assert summary["total_lp_fallbacks"] == 3
+    assert summary["max_lp_fallbacks"] == 3
+
+
+def test_audit_summary_rejects_records_without_fallback_counts() -> None:
     record = {
         "evaluator": "exact_leaf",
         "budget": 0,
@@ -304,7 +373,5 @@ def test_audit_summary_tracks_mean_q_gap_and_coverage() -> None:
         "unique_cells": 3600,
     }
 
-    summary = summarize_audit([record])["exact_leaf"]["0"]
-
-    assert summary["median_mean_q_saddle_gap"] == pytest.approx(0.01)
-    assert summary["mean_coverage_fraction"] == pytest.approx(1.0)
+    with pytest.raises(KeyError):
+        summarize_audit([record])

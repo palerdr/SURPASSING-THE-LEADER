@@ -135,6 +135,19 @@ class MCTSResult:
 
     warmup_visits: int
     search_visits: int
+    lp_fallbacks: int
+
+
+@dataclass
+class SearchDiagnostics:
+    """Per-search counters that keep silent solver degradation visible.
+
+    ``lp_fallbacks`` counts every optimistic-policy LP that failed its saddle
+    gap and was replaced by the mean policy inside ``refresh_policies``.  A
+    ladder without this count cannot certify that its search was healthy.
+    """
+
+    lp_fallbacks: int = 0
 
 class Evaluator(Protocol):
     def __call__(
@@ -306,7 +319,11 @@ def mean_q_matrix(node: Node) -> np.ndarray:
     )
     return matrix
 
-def refresh_policies(node: Node, config: MCTSConfig) -> None:
+def refresh_policies(
+    node: Node,
+    config: MCTSConfig,
+    diagnostics: SearchDiagnostics | None = None,
+) -> None:
     Q = mean_q_matrix(node)
     mean_value, mean_drop, mean_check = solve_matrix(Q)
 
@@ -325,12 +342,16 @@ def refresh_policies(node: Node, config: MCTSConfig) -> None:
     except RuntimeError as error:
         if "LP saddle gap too large" not in str(error):
             raise
+        if diagnostics is not None:
+            diagnostics.lp_fallbacks += 1
         optimistic_drop = mean_drop
     try:
         _, _, optimistic_check = solve_matrix(Q - bonus)
     except RuntimeError as error:
         if "LP saddle gap too large" not in str(error):
             raise
+        if diagnostics is not None:
+            diagnostics.lp_fallbacks += 1
         optimistic_check = mean_check
 
     node.mean_q_drop = mean_drop
@@ -373,6 +394,7 @@ def simulate(
         forced_joint_action: tuple[int, int] | None = None,
         record_policy: bool = True,
         depth: int = 0,
+        diagnostics: SearchDiagnostics | None = None,
 ) -> float:
     if node.remaining_horizon == 0:
         return 0.0
@@ -381,6 +403,9 @@ def simulate(
         if (
             depth > 0
             and config.internal_warmup_cells
+            # An exact evaluation is already a search leaf; warming it up
+            # would re-derive a certified value through its whole subgame.
+            and node.exact_value is None
             and (
                 config.internal_warmup_horizons is None
                 or node.remaining_horizon in config.internal_warmup_horizons
@@ -396,6 +421,7 @@ def simulate(
                 chance_rng,
                 cells=config.internal_warmup_cells,
                 depth=depth,
+                diagnostics=diagnostics,
             )
             value, _, _ = solve_matrix(mean_q_matrix(node))
         return value
@@ -408,7 +434,7 @@ def simulate(
         forced_joint_action is None
         and node.visits % config.policy_update_interval == 0
     ):
-        refresh_policies(node, config)
+        refresh_policies(node, config, diagnostics)
 
     drop_index = int(action_rng.choice(len(DROPPER_ACTIONS), p=node.selection_drop)) if forced_joint_action is None else forced_joint_action[0]
     check_index = int(action_rng.choice(len(CHECKER_ACTIONS), p=node.selection_check)) if forced_joint_action is None else forced_joint_action[1]
@@ -433,6 +459,7 @@ def simulate(
                 action_rng,
                 chance_rng,
                 depth=depth + 1,
+                diagnostics=diagnostics,
             )
         outcome += probability * branch_value
 
@@ -462,6 +489,7 @@ def warmup_node(
     *,
     cells: int,
     depth: int,
+    diagnostics: SearchDiagnostics | None = None,
 ) -> int:
     cell_count = len(DROPPER_ACTIONS) * len(CHECKER_ACTIONS)
     visits = 0
@@ -477,9 +505,10 @@ def warmup_node(
             forced_joint_action=(drop_index, check_index),
             record_policy=False,
             depth=depth,
+            diagnostics=diagnostics,
         )
         visits += 1
-    refresh_policies(node, config)
+    refresh_policies(node, config, diagnostics)
     return visits
 
 
@@ -488,6 +517,7 @@ def _result_from_root(
     *,
     warmup_visits: int,
     search_visits: int,
+    lp_fallbacks: int,
 ) -> MCTSResult:
     """Snapshot one root without mutating its accumulated search statistics."""
 
@@ -512,6 +542,7 @@ def _result_from_root(
         root_visits=root.visits,
         warmup_visits=warmup_visits,
         search_visits=search_visits,
+        lp_fallbacks=lp_fallbacks,
     )
 
 
@@ -536,6 +567,7 @@ def mcts_search_ladder(
     table: dict[tuple[NTState, int], Node] = {
         (state, remaining_horizon): root
     }
+    diagnostics = SearchDiagnostics()
 
     _ = expand(root, evaluator, config)
     if config.root_noise_epsilon > 0.0:
@@ -568,6 +600,7 @@ def mcts_search_ladder(
             chance_rng,
             cells=config.root_warmup_cells,
             depth=0,
+            diagnostics=diagnostics,
         )
 
     results: dict[int, MCTSResult] = {}
@@ -576,6 +609,7 @@ def mcts_search_ladder(
             root,
             warmup_visits=warmup_visits,
             search_visits=0,
+            lp_fallbacks=diagnostics.lp_fallbacks,
         )
 
     requested = set(ordered_budgets)
@@ -587,12 +621,14 @@ def mcts_search_ladder(
             config,
             action_rng,
             chance_rng,
+            diagnostics=diagnostics,
             )
         if completed in requested:
             results[completed] = _result_from_root(
                 root,
                 warmup_visits=warmup_visits,
                 search_visits=completed,
+                lp_fallbacks=diagnostics.lp_fallbacks,
             )
 
     return results
@@ -701,6 +737,10 @@ def summarize_audit(records: list[dict]) -> dict:
             coverage_fractions = np.asarray([
                 record["coverage_fraction"] for record in group
             ])
+            # Ladders with uncounted fallbacks are invalid; fail closed here.
+            lp_fallbacks = np.asarray([
+                record["lp_fallbacks"] for record in group
+            ])
 
             values_by_root = {}
             for record in group:
@@ -738,6 +778,8 @@ def summarize_audit(records: list[dict]) -> dict:
                     record["unique_cells"] for record in group
                 ])),
                 "mean_coverage_fraction": float(np.mean(coverage_fractions)),
+                "total_lp_fallbacks": int(np.sum(lp_fallbacks)),
+                "max_lp_fallbacks": int(np.max(lp_fallbacks)),
             }
 
     return summary
@@ -912,6 +954,11 @@ def run_convergence_audit(config: dict) -> dict:
                             "evaluator": evaluator_name,
                             "budget": budget,
                             "warmup_cells": warmup_cells,
+                            "max_depth": (
+                                None
+                                if mcts_values.get("max_depth") is None
+                                else int(mcts_values["max_depth"])
+                            ),
                             "seed": seed,
                             "exact_value": exact_value,
                             "mcts_value": result.value,
@@ -931,6 +978,7 @@ def run_convergence_audit(config: dict) -> dict:
                             "root_visits": result.root_visits,
                             "warmup_visits": result.warmup_visits,
                             "search_visits": result.search_visits,
+                            "lp_fallbacks": result.lp_fallbacks,
                             "unique_cells": result.unique_cells,
                             "coverage_fraction": result.unique_cells / (
                                 len(DROPPER_ACTIONS) * len(CHECKER_ACTIONS)

@@ -1,0 +1,17 @@
+defaults:
+  - train_matrix_policy_generalization_balanced_v19
+  - _self_
+
+# Stage B of the M1 depth-ladder baseline (docs/AGENT_GOAL.md): the v19
+# decision recipe unchanged, fine-tuned from the stage-A rows checkpoint
+# because the v18 initial checkpoint no longer exists.  The historical
+# strategic_exact_dth_full_v6.npz corpus has no surviving producer config;
+# the regenerable strategic_exact_v6.npz replaces it.
+dataset: src/dth/artifacts/strategic_exact_v6.npz
+output_dir: src/dth/checkpoints/depth_baseline_v1
+initial_checkpoint: src/dth/checkpoints/depth_baseline_rows_v1/best.pt
+
+decision_selection:
+  # The inherited baseline checkpoint no longer exists; select against the
+  # stage-A initial weights instead.
+  baseline_checkpoint: null
