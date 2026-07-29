@@ -161,6 +161,17 @@ Resolve-labeled rows are training data, never certification input: they
 carry the agent's query horizon and the resolve's measured gap, and their
 values are depth-amplified play estimates.
 
+From generation four onward the two value meanings are separated end to end:
+every row carries `value_semantics` (0 finite-horizon-exact, 1 resolve-play),
+play rows supervise the network's dedicated play head, `ExactTargetStore`
+refuses play rows as exact authority, and the agent's scalar resolve leaves
+answer from the play head.
+
+```powershell
+uv run python -m dth dataset --config-name class_head_gen4_corpus
+uv run python -m dth train --config-name train_class_head_gen4
+```
+
 ## Validation
 
 ```powershell

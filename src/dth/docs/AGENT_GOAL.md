@@ -218,6 +218,32 @@ improves. The next lever is separating the two value semantics — a distinct
 horizon channel or head for play values, or exact finite-horizon labels
 inside the anchor region — before spending further generations.
 
+### Generation four — value semantics separated, recorded 2026-07-29
+
+The first half of the lever is built and structural: every target row carries
+`value_semantics` (0 finite-horizon-exact, 1 resolve-play), play rows
+supervise a dedicated play head (migrated as a copy of the value head), the
+agent's scalar resolve leaves answer from the play head, `ExactTargetStore`
+refuses play rows as exact authority (so decision matrices and class targets
+can never compose a play value), and models without a play head are scored
+on finite rows only. Generation four retrained the generation-three
+coverage (484,950 rows: 268,344 play, 216,606 finite) under the split.
+
+The heads separated cleanly — validation finite value MSE 0.0043, play value
+MSE 0.0032 — and the evaluation roots posted the loop's best result: median
+gap 0.0837 → 0.0210 (74.9% improvement), max gap no-regression, seed-stable.
+Promotion still says no-promote (`promotion_gen4.json`): worst anchor gap
+0.0703 against the 0.0624 bar, and anchor value errors regressed
++0.017/+0.016/+0.027 against the 0.01 allowance. With the collision
+structurally removed, the anchor failure now has a cleaner reading: play
+rows had been giving the finite head incidental near-anchor coverage, and
+the shared trunk now also serves play values, so finite-head accuracy at the
+anchor leaf horizons is the binding constraint — a coverage problem, not a
+labeling conflict. The next lever is the second half of the recorded pair:
+exact finite-horizon closures generated inside the anchor neighbourhood
+(and/or heavier anchor frontier replay) so the finite head has literal
+supervision where the gates bind.
+
 ## Claim boundary
 
 - Nothing under this goal claims a complete-game L1 solution; the root

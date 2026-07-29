@@ -1,0 +1,15 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# Generation four of the expert-iteration loop: the same accumulated coverage
+# as generation three, retrained with separated value semantics.  Play rows
+# supervise the new play head; finite reference rows keep the value head; the
+# migration seeds the play head as a copy of generation three's value head.
+dataset: src/dth/artifacts/class_head_gen4_corpus.npz
+output_dir: src/dth/checkpoints/class_head_gen4
+initial_checkpoint: src/dth/checkpoints/class_head_gen3/best.pt
+
+model:
+  transition_class_head: true
+  play_value_head: true

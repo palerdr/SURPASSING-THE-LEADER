@@ -1,0 +1,23 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Generation four accumulates the same coverage as generation three, but the
+# merge now records per-row value semantics: resolve rows stay play-valued,
+# exact reference rows stay finite, and exact rows win every collision.
+dataset_version: class_head_gen4_corpus
+output: src/dth/artifacts/class_head_gen4_corpus.npz
+emission: merge
+inputs:
+  - src/dth/artifacts/resolve_labeled_gen1.npz
+  - src/dth/artifacts/resolve_labeled_gen2.npz
+  - src/dth/artifacts/resolve_labeled_gen3.npz
+  - src/dth/artifacts/readiness_training_reference_v2.npz
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
