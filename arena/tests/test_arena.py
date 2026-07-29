@@ -115,3 +115,126 @@ def test_cli_exits_cleanly_on_control_c(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr(cli, "command_play", interrupt)
     assert cli.main(["play"]) == 130
+
+
+def test_dth_projection_is_the_identity_with_defensive_clamps() -> None:
+    from arena.dth_adapter import project_to_dth_state
+
+    assert project_to_dth_state(_decision()) == (19, 120, 29, 70)
+    wide = CanonicalDecision(
+        role="checker",
+        actor_name="Hal",
+        turn_duration=60,
+        legal_seconds=tuple(range(1, 61)),
+        checker_cylinder_seconds=305.0,
+        checker_ttd_seconds=301.0,
+        dropper_cylinder_seconds=-2.0,
+        dropper_ttd_seconds=299.6,
+        native_state=object(),
+    )
+    assert project_to_dth_state(wide) == (299, 300, 0, 299)
+
+
+def test_dth_provider_serves_certified_policies_without_artifacts() -> None:
+    from arena.dth_adapter import DTHResolvePolicyProvider
+    from dth.agent import ResolveBudget
+
+    provider = DTHResolvePolicyProvider(
+        budget=ResolveBudget(deadline_seconds=10.0, finite_fallback_horizon=1)
+    )
+    try:
+        decision = _decision()
+        policy = provider.policy(decision)
+        assert policy
+        assert all(1 <= second <= 60 for second in policy)
+        assert all(weight > 0.0 for weight in policy.values())
+        assert provider.decisions[0].provenance == "finite-horizon-exact"
+        summary = provider.match_summary()
+        assert "certified 1/1" in summary
+        assert "latency p95" in summary
+    finally:
+        provider.close()
+
+
+def test_dth_cli_dispatch_builds_a_policy_driven_agent(tmp_path) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "play",
+            "--hal-agent",
+            "dth",
+            "--dth-tablebase",
+            str(tmp_path / "missing-but-default.sqlite"),
+        ]
+    )
+    with pytest.raises(FileNotFoundError):
+        cli._make_hal(args)
+
+    defaults = parser.parse_args(["play", "--hal-agent", "dth"])
+    defaults.dth_checkpoint = cli.DEFAULT_DTH_CHECKPOINT
+    defaults.dth_tablebase = cli.DEFAULT_DTH_TABLEBASE
+    if not Path(cli.DEFAULT_DTH_TABLEBASE).is_file():
+        agent = cli._make_hal(defaults)
+        assert isinstance(agent, PolicyDrivenAgent)
+    else:
+        agent = cli._make_hal(defaults)
+        assert isinstance(agent, PolicyDrivenAgent)
+        agent.provider.close()
+
+
+def test_match_series_pairs_seats_and_reports_sprt(tmp_path) -> None:
+    from arena.match import run_paired_series
+
+    class _Fixed:
+        def __init__(self, second: int) -> None:
+            self.second = second
+
+        def policy(self, decision: CanonicalDecision) -> dict[int, float]:
+            return {self.second: 1.0}
+
+    report = run_paired_series(
+        "late",
+        "early",
+        make_candidate=lambda: _Fixed(60),
+        make_opponent=lambda: _Fixed(1),
+        base_seeds=4,
+        start_clock=720,
+        max_half_rounds=120,
+        stop_early=False,
+    )
+
+    assert report["schema_version"] == "arena-match-report-v1"
+    assert len(report["games"]) == 8
+    first_seats = [game["first_seat_agent"] for game in report["games"]]
+    assert first_seats.count("late") == 4 and first_seats.count("early") == 4
+    sprt = report["sprt"]
+    assert sprt["decisive_games"] == sprt["wins"] + sprt["losses"]
+    assert sprt["decision"] in {"accept-h1", "accept-h0", "continue"}
+
+
+def test_sprt_thresholds_are_predeclared_and_reachable() -> None:
+    from arena.match import sprt_verdict
+
+    assert sprt_verdict(0, 0)["decision"] == "continue"
+    assert sprt_verdict(30, 2)["decision"] == "accept-h1"
+    assert sprt_verdict(2, 30)["decision"] == "accept-h0"
+
+
+def test_abstract_adapter_falls_back_to_uniform_outside_the_closure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    class _Packed:
+        manifest = {"metadata": {"ruleset_id": "bucket12_frozen95"}}
+
+        def __init__(self, artifact_dir) -> None:
+            del artifact_dir
+
+        def lookup(self, state):
+            raise LookupError("outside the root's reachable closure")
+
+    monkeypatch.setattr(abstract_adapter, "PackedTablebase", _Packed)
+    provider = AbstractTablebasePolicyProvider(tmp_path, bucket_seconds=5)
+    policy = provider.policy(_decision())
+    assert set(policy) == {5 * (index + 1) for index in range(12)}
+    assert all(weight == 1.0 for weight in policy.values())

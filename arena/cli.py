@@ -11,6 +11,9 @@ from arena.agent import PolicyDrivenAgent
 from stl.engine.actions import validate_action
 from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
+DEFAULT_DTH_TABLEBASE = "src/dth/artifacts/exact_band_v1.sqlite"
+DEFAULT_DTH_CHECKPOINT = "src/dth/checkpoints/depth_baseline_v1/best.pt"
+
 
 def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
     if args.buckets == 5:
@@ -40,8 +43,47 @@ def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
         print(f"Legal seconds: {allowed}")
 
 
-def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
-    if args.hal_agent == "abstract":
+def _make_dth_provider(args: argparse.Namespace):
+    from arena.dth_adapter import DTHResolvePolicyProvider
+    from dth.agent import ResolveBudget
+
+    tablebase_path = Path(args.dth_tablebase) if args.dth_tablebase else None
+    if tablebase_path is not None and not tablebase_path.is_file():
+        if args.dth_tablebase != DEFAULT_DTH_TABLEBASE:
+            raise FileNotFoundError(
+                f"requested DTH tablebase does not exist: {tablebase_path}"
+            )
+        print(
+            f"DTH band tablebase missing at {tablebase_path}; playing without "
+            "exact anchors. Build it with: uv run python -m dth exact "
+            "--config-name exact_band_v1",
+            flush=True,
+        )
+        tablebase_path = None
+    checkpoint_path = Path(args.dth_checkpoint) if args.dth_checkpoint else None
+    if checkpoint_path is not None and not checkpoint_path.is_file():
+        if args.dth_checkpoint != DEFAULT_DTH_CHECKPOINT:
+            raise FileNotFoundError(
+                f"requested DTH checkpoint does not exist: {checkpoint_path}"
+            )
+        print(
+            f"DTH checkpoint missing at {checkpoint_path}; playing on exact "
+            "and finite-horizon certificates only.",
+            flush=True,
+        )
+        checkpoint_path = None
+    return DTHResolvePolicyProvider(
+        tablebase_path=tablebase_path,
+        checkpoint_path=checkpoint_path,
+        budget=ResolveBudget(
+            deadline_seconds=args.dth_deadline,
+            max_depth=args.dth_max_depth,
+        ),
+    )
+
+
+def _make_provider(kind: str, args: argparse.Namespace):
+    if kind == "abstract":
         tablebase_path, ruleset_id = _abstract_artifact(args)
         packed_artifact = tablebase_path.is_dir() or tablebase_path.suffix != ".npz"
         if packed_artifact:
@@ -77,21 +119,29 @@ def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
             result = abstract_main(command)
             if result != 0:
                 raise RuntimeError(f"abstract tablebase build exited with status {result}")
-        provider = AbstractTablebasePolicyProvider(
+        return AbstractTablebasePolicyProvider(
             tablebase_path,
             bucket_seconds=args.buckets,
             tablebase_manifest=manifest_path,
         )
-    else:
+    if kind == "dth":
+        return _make_dth_provider(args)
+    if kind == "stl-mcts":
         if not args.checkpoint:
             raise ValueError("--checkpoint is required for --hal-agent stl-mcts")
         from arena.stl_adapter import STLSolverPolicyProvider
         from stl.play.agent import SolverAgent
 
-        provider = STLSolverPolicyProvider(
+        return STLSolverPolicyProvider(
             SolverAgent(args.checkpoint, player_name="Hal", iterations=args.iterations, seed=args.seed)
         )
-    return PolicyDrivenAgent(provider, player_name="Hal", seed=args.seed)
+    raise ValueError(f"unknown agent kind {kind!r}")
+
+
+def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
+    return PolicyDrivenAgent(
+        _make_provider(args.hal_agent, args), player_name="Hal", seed=args.seed
+    )
 
 
 def _print_state(game: Game) -> None:
@@ -214,6 +264,79 @@ def command_play(args: argparse.Namespace) -> int:
         print(f"Game over: {game.winner.name} wins.")
     else:
         print(f"Session stopped after {half_rounds} half-rounds.")
+    match_summary = getattr(hal_agent.provider, "match_summary", None)
+    if callable(match_summary):
+        print(match_summary())
+    return 0
+
+
+def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--buckets",
+        type=int,
+        choices=(5, 10),
+        default=10,
+        help="abstract tablebase bucket width in seconds",
+    )
+    parser.add_argument(
+        "--abstract-tablebase",
+        default=None,
+        help="override the bucket-specific abstract artifact path",
+    )
+    parser.add_argument(
+        "--abstract-backend",
+        choices=("auto", "python", "rust"),
+        default="auto",
+        help="backend used when a missing abstract tablebase must be built",
+    )
+    parser.add_argument("--checkpoint")
+    parser.add_argument("--iterations", type=int, default=200)
+    parser.add_argument(
+        "--dth-tablebase",
+        default=DEFAULT_DTH_TABLEBASE,
+        help="certified DTH band tablebase read by the dth agent",
+    )
+    parser.add_argument(
+        "--dth-checkpoint",
+        default=DEFAULT_DTH_CHECKPOINT,
+        help="DTH network checkpoint used for resolve leaves",
+    )
+    parser.add_argument(
+        "--dth-deadline",
+        type=float,
+        default=2.0,
+        help="per-move wall-clock budget in seconds for the dth agent",
+    )
+    parser.add_argument(
+        "--dth-max-depth",
+        type=int,
+        default=3,
+        help="maximum full-width resolve depth for the dth agent",
+    )
+
+
+def command_match(args: argparse.Namespace) -> int:
+    from arena.match import run_paired_series, write_report
+
+    report = run_paired_series(
+        args.candidate,
+        args.opponent,
+        make_candidate=lambda: _make_provider(args.candidate, args),
+        make_opponent=lambda: _make_provider(args.opponent, args),
+        base_seeds=args.games,
+        start_clock=args.start_clock,
+        max_half_rounds=args.max_half_rounds,
+    )
+    destination = write_report(report, args.output)
+    sprt = report["sprt"]
+    print(
+        f"{args.candidate} vs {args.opponent}: "
+        f"{sprt['wins']}-{sprt['losses']} decisive "
+        f"({report['stopped_games']} stopped), SPRT {sprt['decision']}; "
+        f"report {destination}"
+    )
+    for line in report["candidate_summaries"]:
+        print(line)
     return 0
 
 
@@ -221,27 +344,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m arena")
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser("play", help="play canonical STL against a pluggable Hal policy")
-    play.add_argument("--hal-agent", choices=("abstract", "stl-mcts"), default="abstract")
     play.add_argument(
-        "--buckets",
-        type=int,
-        choices=(5, 10),
-        default=10,
-        help="abstract tablebase bucket width in seconds",
+        "--hal-agent", choices=("abstract", "dth", "stl-mcts"), default="abstract"
     )
-    play.add_argument(
-        "--abstract-tablebase",
-        default=None,
-        help="override the bucket-specific abstract artifact path",
-    )
-    play.add_argument(
-        "--abstract-backend",
-        choices=("auto", "python", "rust"),
-        default="auto",
-        help="backend used when a missing abstract tablebase must be built",
-    )
-    play.add_argument("--checkpoint")
-    play.add_argument("--iterations", type=int, default=200)
+    _add_agent_arguments(play)
     play.add_argument("--human-name", default="Baku")
     play.add_argument("--seed", type=int, default=0)
     play.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
@@ -278,6 +384,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="do not wait for input on the half-round outcome screen",
     )
     play.set_defaults(function=command_play)
+
+    match = commands.add_parser(
+        "match",
+        help="paired-seat agent-versus-agent series with a predeclared SPRT",
+    )
+    match.add_argument("--candidate", choices=("abstract", "dth", "stl-mcts"), required=True)
+    match.add_argument("--opponent", choices=("abstract", "dth", "stl-mcts"), required=True)
+    _add_agent_arguments(match)
+    match.add_argument("--games", type=int, default=50, help="maximum base seeds; each is played in both seatings")
+    match.add_argument("--seed", type=int, default=0)
+    match.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
+    match.add_argument("--max-half-rounds", type=int, default=200)
+    match.add_argument(
+        "--output",
+        required=True,
+        help="JSON report path; keep it under the candidate project's artifacts",
+    )
+    match.set_defaults(function=command_match)
     return parser
 
 

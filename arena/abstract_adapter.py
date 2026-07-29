@@ -4,6 +4,12 @@ This is intentionally a policy transfer, not a claim that the tablebase solves
 the full canonical STL game.  It projects canonical load/TTD downward to
 completed buckets and lifts bucket action ``a`` to literal second
 ``bucket_seconds * a``.
+
+A long live game can drift onto states whose bucket projection is outside the
+tablebase's reachable closure, because literal-second dynamics do not stay on
+the bucket-quantized transition graph.  Those states fall back to a uniform
+policy over the lifted action set — a documented approximation, preferred to
+killing the match.
 """
 
 from __future__ import annotations
@@ -117,10 +123,19 @@ class AbstractTablebasePolicyProvider:
                 f"adapter {self._rules.ruleset_id!r}"
             )
 
+    def _uniform_lifted_policy(self) -> Mapping[int, float]:
+        return {
+            self.bucket_seconds * (index + 1): 1.0
+            for index in range(self._rules.action_size)
+        }
+
     def policy(self, decision: CanonicalDecision) -> Mapping[int, float]:
         projected = project_to_abstract_state(decision, self._rules)
         if self._packed is not None:
-            packed_row = self._packed.lookup(projected)
+            try:
+                packed_row = self._packed.lookup(projected)
+            except LookupError:
+                return self._uniform_lifted_policy()
             row = (
                 packed_row["drop_policy"]
                 if decision.role == "dropper"
@@ -130,9 +145,7 @@ class AbstractTablebasePolicyProvider:
             key = _state_key(projected)
             rows = self._policies.get(key)
             if rows is None:
-                raise LookupError(
-                    f"projected canonical state {key} is not covered by the abstract tablebase"
-                )
+                return self._uniform_lifted_policy()
             row = rows[0] if decision.role == "dropper" else rows[1]
         return {
             self.bucket_seconds * (index + 1): float(probability)

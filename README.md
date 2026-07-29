@@ -45,6 +45,7 @@ uv run python -m abstract exact
 # Canonical referee with a pluggable Hal policy provider
 uv run python -m arena play --hal-agent abstract
 uv run python -m arena play --hal-agent abstract --buckets 5
+uv run python -m arena play --hal-agent dth
 ```
 
 Each project owns its `config/`, `docs/`, tests, checkpoints, and outputs.
