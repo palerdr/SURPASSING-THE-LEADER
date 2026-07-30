@@ -479,6 +479,54 @@ Whole-pack maximum at depth three is 0.0196, with zero LP fallbacks. The
 anchor that blocks promotion is 11.5× smaller at play depth than at the
 depth the gate scores.
 
+### The pathology check — run 2026-07-30
+
+Run after the four attempts, on the standing best candidate. Method: rebuild
+the depth-two resolve at the h4 anchor with the ladder's own seeds
+(`make_node`, `expand`, `warmup_node` at 3600 cells, `max_depth=2`,
+`NetworkEvaluator` on `class_head_gen5/best.pt`), take the root's
+`mean_q_matrix`, and compare it against `payoff_from_exact_targets` for the
+same root. The reproduced gap is 0.06762293792521135, identical to the
+ladder record, so the analysis is of the same object the gate scores.
+
+**The exploitability is diffuse, not pivotal.** Injecting the 100 largest
+cell errors into the exact matrix leaves the gap at 2.2e-16; about 500 of
+3600 cells are needed to recreate it. A random-cell control inverts the
+naive expectation — 100 randomly chosen errors give a mean gap of 0.0117
+against the largest 100's exactly zero — so the biggest errors sit on cells
+no equilibrium touches.
+
+**The anchor is a zero-margin classification.** In the exact matrix 33 of 60
+checker replies and 31 of 60 dropper actions are tied at the game value to
+within 1e-12, while the remaining actions lose 0.0069–0.1779 (checker) and
+0.0083–0.1660 (dropper). Half the action space is exactly optimal and the
+other half is badly wrong, with no margin between them. Against that, the
+evaluator's cell error is 0.0011 median, 0.0104 mean, 0.0233 on the
+equilibrium's own support — straddling the 0.0069 cheapest mistake. The
+resolve answers with a 21x21 support where the exact equilibrium is 4x2,
+and the gap splits almost evenly across seats (checker 0.0373, dropper
+0.0303).
+
+**The h5 anchors cannot discriminate.** The same measurement at
+`(239,0,0,240)` h5 finds 57 of 60 checker replies and 58 of 60 dropper
+actions tied, with a worst mistake of 0.0062. Maximum available
+exploitability there is about 0.006, which is why every checkpoint passes
+those two anchors. `anchor_worst_gap` is therefore a single-state gate in
+practice: the h4 anchor is the only one of the three carrying strategic
+content.
+
+This refutes the artifact hypothesis (reading 3 below) and refines the
+weak-evaluator hypothesis (reading 1). The evaluator's typical cell is well
+inside tolerance; it fails only where a tied-optimal set abuts a losing set
+across a zero-margin boundary, which carries no gradient to learn from.
+That is consistent with every result in the campaign: no data or capacity
+lever sharpens a step function, and depth-three resolve avoids the problem
+by reaching horizon-one leaves whose values are terminal expectations.
+
+The diagnostic ran from a scratch script, not a repository module, per this
+subtree's rule against one-off experiment modules; the method above is
+enough to reproduce it.
+
 ### The rules question for the maintainer
 
 **Should a depth-two bar gate an agent that plays depth-three resolve
@@ -493,21 +541,31 @@ there. Twelve attempts have failed to move the depth-two number by the
 required margin while five of them improved the evaluation roots by 65%
 or more.
 
-Three readings are available, and choosing among them is a maintainer
-decision, not one this goal may make:
+The pathology check above narrows what is still open. It refuted the
+artifact reading — the exploitability is diffuse across hundreds of cells,
+not one pivot — and it refined the weak-evaluator reading, because the
+evaluator's typical cell error (0.0011) is well inside tolerance and only
+its behaviour at a zero-margin boundary fails. What remains is a question
+about the standard, not about the facts:
 
-1. The depth-two bar is the correct conservative gate — it measures leaf
-   quality with search stripped away, and the agent should not be
-   promoted on search that masks a weak evaluator. Then the ceiling is
-   real and the next work is a different evaluator class, not another
-   training generation.
+1. Demanding equilibrium-support recovery on a zero-margin boundary is
+   the right promotion standard. Half the h4 anchor's action space is
+   exactly optimal and half loses up to 0.18, with nothing in between; a
+   learned evaluator with 0.0104 mean cell error cannot place that
+   boundary, and an agent that cannot should not be promoted. Then the
+   ceiling is real, no training lever will pass it, and the next work is
+   a different evaluator class — exact values, or a certified bound at
+   the leaf — not another training generation.
 2. The bar measures the wrong configuration — the deployed agent never
-   plays depth two — and the gate should be re-declared at play depth.
-   That is a change to the gate, explicitly out of scope here.
-3. The anchor is individually pathological rather than representative.
-   Nothing in the evidence settles this; it would need the anchor's
-   depth-two matrix inspected against the exact one, which no attempt
-   here did.
+   plays depth two, and at depth three the same anchor is 0.00588 because
+   its frontier reaches horizon-one leaves whose values are terminal
+   expectations. Then the gate should be re-declared at play depth. That
+   is a change to the gate, explicitly out of scope here.
+3. The gate's aggregate is the problem rather than its threshold.
+   `anchor_worst_gap` is a maximum over three anchors, two of which admit
+   at most 0.006 of exploitability and therefore cannot discriminate
+   between checkpoints. The bar is in practice a single-state test, which
+   may be more sensitivity than a promotion decision should rest on.
 
 Changing the gate, its threshold, or the promotion code was out of scope
 for this goal, and none of it was touched. The six new configs are
