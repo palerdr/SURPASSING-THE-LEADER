@@ -23,4 +23,6 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
 
 Read `docs/GAME_AND_SOLVER.md` for the model and `docs/EXACTNESS_PROOF.md` for
 the proof boundary. `docs/AGENT_GOAL.md` owns the sub-project's end goal,
-gates, and milestone order. Run `uv run python -m pytest src/dth/tests -q`.
+gates, milestone order, and any open decision; `docs/PROMOTION_CAMPAIGN.md`
+owns the measured history behind it and is reference, not instruction. Run
+`uv run python -m pytest src/dth/tests -q`.
