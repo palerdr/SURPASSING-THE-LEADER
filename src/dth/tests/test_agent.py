@@ -298,3 +298,73 @@ def test_network_leaf_model_answers_from_the_play_head_when_present(
 
     assert playless_values[0] == pytest.approx(float(np.tanh(-0.3)))
     assert play_values[0] == pytest.approx(float(np.tanh(0.7)))
+
+
+def test_backup_rung_answers_before_every_other_and_marks_provenance(tmp_path):
+    """The dense artifact, when present, is the agent's first and last word."""
+
+    import numpy as np
+    from dth.agent import BoundedResolveAgent
+
+    class _StubBackup:
+        def __init__(self):
+            self.calls = []
+
+        def certificate(self, state):
+            self.calls.append(state)
+            if state[1] == 7:  # stand-in for an off-domain TTD
+                raise LookupError("off domain")
+            drop = np.zeros(60)
+            drop[3] = 1.0
+            check = np.zeros(60)
+            check[5] = 1.0
+            return {
+                "value": 0.25,
+                "drop_policy": drop,
+                "check_policy": check,
+                "saddle_gap": 1e-12,
+            }
+
+    agent = BoundedResolveAgent()
+    stub = _StubBackup()
+    agent._backup = stub
+
+    decision = agent.decide((10, 0, 20, 0))
+    assert decision.provenance == "complete-game-exact"
+    assert decision.scope_detail == "backup-tablebase"
+    assert decision.value == 0.25
+    assert decision.saddle_gap == 1e-12
+    assert decision.exact_leaf_fraction == 1.0
+    assert decision.drop_policy[3] == 1.0
+    assert stub.calls == [(10, 0, 20, 0)]
+
+
+def test_backup_rung_falls_through_off_domain(tmp_path):
+    """Off-domain states hand back to the older ladder instead of failing."""
+
+    import numpy as np
+    from dth.agent import BoundedResolveAgent
+
+    class _OffDomain:
+        def certificate(self, state):
+            raise LookupError("off domain")
+
+    agent = BoundedResolveAgent()
+    agent._backup = _OffDomain()
+    decision = agent.decide((10, 0, 20, 0))
+    assert decision.provenance != "complete-game-exact"
+
+
+def test_backup_rung_does_not_swallow_certificate_failures():
+    """A certificate that misses tolerance is a real error, not a fallback."""
+
+    from dth.agent import BoundedResolveAgent
+
+    class _Broken:
+        def certificate(self, state):
+            raise RuntimeError("certificate gap too large")
+
+    agent = BoundedResolveAgent()
+    agent._backup = _Broken()
+    with pytest.raises(RuntimeError):
+        agent.decide((10, 0, 20, 0))

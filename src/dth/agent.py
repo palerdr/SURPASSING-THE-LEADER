@@ -36,6 +36,7 @@ from dth.solver import (
     solve_certified_matrix,
     validate_live_state,
 )
+from dth.backup_tablebase import BackupTablebase
 from dth.tablebase import CertifiedTablebase
 
 
@@ -217,6 +218,7 @@ class BoundedResolveAgent:
         self,
         *,
         tablebase_path: str | Path | None = None,
+        backup_path: str | Path | None = None,
         network: NetworkLeafModel | None = None,
         budget: ResolveBudget | None = None,
     ) -> None:
@@ -224,10 +226,14 @@ class BoundedResolveAgent:
         self.network = network
         self._tablebase: CertifiedTablebase | None = None
         self._tablebase_path = None if tablebase_path is None else Path(tablebase_path)
+        self._backup_path = None if backup_path is None else Path(backup_path)
+        self._backup: BackupTablebase | None = None
         self._exact_agent: ExactDTHAgent | None = None
         self._band_values: dict[tuple[int, int], float] = {}
 
     def __enter__(self) -> "BoundedResolveAgent":
+        if self._backup_path is not None:
+            self._backup = BackupTablebase(artifact_dir=self._backup_path)
         if self._tablebase_path is not None:
             self._tablebase = CertifiedTablebase(self._tablebase_path).__enter__()
             self._exact_agent = ExactDTHAgent(self._tablebase)
@@ -235,6 +241,7 @@ class BoundedResolveAgent:
         return self
 
     def __exit__(self, *details: object) -> None:
+        self._backup = None
         if self._tablebase is not None:
             self._tablebase.__exit__(*details)
             self._tablebase = None
@@ -267,6 +274,22 @@ class BoundedResolveAgent:
     def decide(self, state: NTState) -> MoveDecision:
         started = time.monotonic()
         normalized = validate_live_state(state)
+
+        backup = self._try_backup(normalized)
+        if backup is not None:
+            return MoveDecision(
+                state=normalized,
+                value=backup["value"],
+                drop_policy=tuple(float(p) for p in backup["drop_policy"]),
+                check_policy=tuple(float(p) for p in backup["check_policy"]),
+                provenance="complete-game-exact",
+                scope_detail="backup-tablebase",
+                horizon=None,
+                saddle_gap=backup["saddle_gap"],
+                resolve_depth=None,
+                exact_leaf_fraction=1.0,
+                elapsed_seconds=time.monotonic() - started,
+            )
 
         exact_result = self._try_exact(normalized)
         if exact_result is not None and exact_result.scope == "complete-game-exact":
@@ -319,6 +342,22 @@ class BoundedResolveAgent:
             exact_leaf_fraction=None,
             elapsed_seconds=time.monotonic() - started,
         )
+
+    def _try_backup(self, state: NTState) -> dict | None:
+        """The dense complete-game artifact, ahead of every other rung.
+
+        Its domain is the transition-closed quotient space, so a state with an
+        off-domain TTD raises ``LookupError`` and the older ladder answers
+        instead.  Nothing else is caught: a certificate that misses tolerance
+        is a real failure and must not be silently downgraded to a resolve.
+        """
+
+        if self._backup is None:
+            return None
+        try:
+            return self._backup.certificate(state)
+        except LookupError:
+            return None
 
     def _try_exact(self, state: NTState):
         if self._exact_agent is None:

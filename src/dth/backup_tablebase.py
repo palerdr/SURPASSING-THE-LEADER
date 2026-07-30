@@ -59,7 +59,11 @@ from dth.solver import (
     solve_matrix,
     solver_schema_hash,
 )
-from dth.support_solver import certify, solve_matrix_single_lp
+from dth.support_solver import (
+    certify,
+    solve_certified_matrix_fast,
+    solve_matrix_single_lp,
+)
 
 __all__ = [
     "BACKUP_TABLEBASE_SCHEMA",
@@ -447,18 +451,17 @@ def _residue_worker(
     return index, value, drop_support, check_support, backend
 
 
-def recertify_class(
+def class_transition_values(
     table: QuotientProfileTable,
     class_id: int,
     value: np.ndarray,
-    *,
-    max_support: int = 12,
-) -> float:
-    """Rebuild one class's 61 class values from stored children and re-solve.
+) -> tuple[np.ndarray, float]:
+    """Rebuild one class's 61 transition-class values from stored children.
 
-    The Bellman-recertify-on-demand primitive: per-class certificates are not
-    persisted because, given the child values, the whole certificate can be
-    re-derived at this cost whenever it is questioned.
+    Sixty successful-check continuations indexed by squandered-time lag, then
+    the failed-check expectation.  Child values are negated because the roles
+    swap across every live edge, and an absent child is the terminal win for
+    the mover.
     """
 
     profile_count = int(len(table.st_by_profile))
@@ -477,6 +480,50 @@ def recertify_class(
         failed = revival * (
             -float(value[dropper * profile_count + failure_profile])
         ) + (1.0 - revival)
+    return success, float(failed)
+
+
+def class_certificate(
+    table: QuotientProfileTable,
+    class_id: int,
+    value: np.ndarray,
+    *,
+    max_support: int = 12,
+) -> tuple[float, np.ndarray, np.ndarray, float]:
+    """Re-derive one class's full certificate: value, both policies, and gap.
+
+    The artifact stores values only, so a player that wants to *act* on a
+    class rebuilds its matrix from stored children and solves it here.  The
+    returned pair is certified against that full matrix at the frozen
+    tolerance exactly as the sweep certified it, so acting on this costs one
+    matrix solve and concedes nothing.
+    """
+
+    success, failed = class_transition_values(table, class_id, value)
+    matrix = reconstruct_transition_class_matrix(success, failed)
+    solved, drop, check, _ = solve_certified_matrix_fast(matrix)
+    gap = float(np.max(matrix @ check) - np.min(matrix.T @ drop))
+    if gap > SADDLE_GAP_TOLERANCE:
+        raise RuntimeError(f"class {class_id} certificate gap too large: {gap}")
+    del max_support
+    return float(solved), drop, check, max(0.0, gap)
+
+
+def recertify_class(
+    table: QuotientProfileTable,
+    class_id: int,
+    value: np.ndarray,
+    *,
+    max_support: int = 12,
+) -> float:
+    """Rebuild one class's 61 class values from stored children and re-solve.
+
+    The Bellman-recertify-on-demand primitive: per-class certificates are not
+    persisted because, given the child values, the whole certificate can be
+    re-derived at this cost whenever it is questioned.
+    """
+
+    success, failed = class_transition_values(table, class_id, value)
     gap, maximin, minimax = toeplitz_saddle(success[None, :], np.array([failed]))
     if gap[0] <= SADDLE_GAP_TOLERANCE:
         return float((maximin[0] + minimax[0]) / 2.0)
@@ -1268,6 +1315,47 @@ class BackupTablebase:
                 )
             result["recertification_gap"] = gap
         return result
+
+    def certificate(self, state) -> dict[str, Any]:
+        """Resolve one live state to a playable certificate.
+
+        Returns the stored value alongside a freshly derived equilibrium pair
+        and its saddle gap, so a player can act on a class the artifact stores
+        only the value of.  Raises ``LookupError`` off the domain, exactly as
+        :meth:`lookup` does, and ``RuntimeError`` if the rebuilt certificate
+        misses the frozen tolerance.
+        """
+
+        if not self._canonical:
+            raise RuntimeError(
+                "state lookup requires an artifact built from the canonical table"
+            )
+        try:
+            index = encode_class(tuple(state))
+        except ValueError as error:
+            raise LookupError(str(error)) from error
+        value, drop, check, gap = class_certificate(
+            build_profile_table(),
+            index,
+            self._arrays["value"],
+            max_support=int(self._manifest["metadata"]["max_support"]),
+        )
+        stored = float(self._arrays["value"][index])
+        if abs(stored - value) > SADDLE_GAP_TOLERANCE:
+            raise RuntimeError(
+                f"stored value disagrees with its certificate at class {index}: "
+                f"{abs(stored - value)}"
+            )
+        return {
+            "state": decode_class(index),
+            "class_index": index,
+            "value": stored,
+            "certificate_value": value,
+            "drop_policy": drop,
+            "check_policy": check,
+            "saddle_gap": gap,
+            "solver_kind": int(self._arrays["solver_kind"][index]),
+        }
 
 
 # --------------------------------------------------------------------------

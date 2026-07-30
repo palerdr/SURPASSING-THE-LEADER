@@ -50,6 +50,7 @@ class DTHResolvePolicyProvider:
     """Serve bounded-resolve mixed policies and keep per-move provenance."""
 
     tablebase_path: Path | None = None
+    backup_path: Path | None = None
     checkpoint_path: Path | None = None
     budget: ResolveBudget = field(default_factory=ResolveBudget)
     decisions: list[MoveDecision] = field(default_factory=list, repr=False)
@@ -63,6 +64,7 @@ class DTHResolvePolicyProvider:
         )
         self._agent = BoundedResolveAgent(
             tablebase_path=self.tablebase_path,
+            backup_path=self.backup_path,
             network=network,
             budget=self.budget,
         )

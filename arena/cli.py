@@ -12,6 +12,7 @@ from stl.engine.actions import validate_action
 from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
 DEFAULT_DTH_TABLEBASE = "src/dth/artifacts/exact_band_v1.sqlite"
+DEFAULT_DTH_BACKUP = "src/dth/artifacts/backup_full_v1"
 DEFAULT_DTH_CHECKPOINT = "src/dth/checkpoints/depth_baseline_v1/best.pt"
 
 
@@ -60,6 +61,18 @@ def _make_dth_provider(args: argparse.Namespace):
             flush=True,
         )
         tablebase_path = None
+    backup_path = Path(args.dth_backup) if args.dth_backup else None
+    if backup_path is not None and not (backup_path / "tablebase.json").is_file():
+        if args.dth_backup != DEFAULT_DTH_BACKUP:
+            raise FileNotFoundError(
+                f"requested DTH backup tablebase does not exist: {backup_path}"
+            )
+        print(
+            f"DTH backup tablebase missing at {backup_path}; playing without "
+            "complete-game lookups. Build it with: uv run python -m dth backup",
+            flush=True,
+        )
+        backup_path = None
     checkpoint_path = Path(args.dth_checkpoint) if args.dth_checkpoint else None
     if checkpoint_path is not None and not checkpoint_path.is_file():
         if args.dth_checkpoint != DEFAULT_DTH_CHECKPOINT:
@@ -74,6 +87,7 @@ def _make_dth_provider(args: argparse.Namespace):
         checkpoint_path = None
     return DTHResolvePolicyProvider(
         tablebase_path=tablebase_path,
+        backup_path=backup_path,
         checkpoint_path=checkpoint_path,
         budget=ResolveBudget(
             deadline_seconds=args.dth_deadline,
@@ -295,6 +309,14 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         "--dth-tablebase",
         default=DEFAULT_DTH_TABLEBASE,
         help="certified DTH band tablebase read by the dth agent",
+    )
+    parser.add_argument(
+        "--dth-backup",
+        default=DEFAULT_DTH_BACKUP,
+        help=(
+            "dense complete-game backup tablebase directory; the dth agent's "
+            "top lookup rung"
+        ),
     )
     parser.add_argument(
         "--dth-checkpoint",

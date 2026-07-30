@@ -162,15 +162,43 @@ so the verdicts are snapshot here with their artifact names.
 | G1 | **pass** — depth-effective | `depth_gate_v1.json`: CVaR gap 0.1675 → 0.1477 → 0.0033 and max gap 0.2844 → 0.0073 across depths 1–3, zero LP fallbacks. |
 | G2 | **pass at play depth, fail at leaf depth** | `orientation_gate_baseline_d3.json`: consistent, every pair ≤ 0.0073. At depth-2 leaves the imbalance is real for every checkpoint (`orientation_gate_*_d2.json`, ratios to 100×). The paired probe ran for the first time: single-orientation training raised held-out mirror value MSE 0.053 → 0.133. No algebraic mirror identity exists (43,189 exact pairs checked). |
 | G3 | **fail — no-promote, twelve times; closed at Exit B 2026-07-30** | `promotion_v1.json` … `promotion_lineage_horizon_v1.json`: evaluation median gap improved 21–97% and every infrastructure gate passed, but anchor-worst-gap improvement never reached 10% — best 5.30%, band 0.06569–0.08270 on the h4 anchor. No champion is frozen; the flagship default remains `depth_baseline_v1`. The band, the depth-three comparison, and the diagnosis are in [`PROMOTION_CAMPAIGN.md`](PROMOTION_CAMPAIGN.md); the open rules question is below. |
-| G4 | **fail** for the deployed default | `arena_league_bucket12_v2.json`: 24–26, SPRT accept-h0. `arena_league_bucket6_v1.json`: 30–30. Strong seat asymmetry both ways (≈60–67% dropping first, ≈33–36% second). |
-| G5 | reported per match | Every match prints certified-move fraction and provenance counts; 100% by construction once both STs ≥ 240 via `exact_band_v1.sqlite`. |
-| G6 | **pass** | `arena_latency_smoke_v1.json`: p95 0.609 s, max 1.024 s against the 2.0 s budget, after the predictive depth gate landed. |
+| G4 | **fail, and the gate is now known to be unpassable by an optimal player** | Re-run 2026-07-30 on the tablebase-backed agent: `arena_league_bucket12_v3.json` and `arena_league_bucket6_v2.json` both 31–29, seats 0.567/0.467, SPRT continue. See the note below — an equilibrium player cannot satisfy `both_seatings_at_least_even`. Superseded runs on the network agent: `arena_league_bucket12_v2.json` 24–26, `arena_league_bucket6_v1.json` 30–30, seats 0.600/0.360 and 0.667/0.333. |
+| G5 | **pass** | Tablebase-backed runs report **611/611 and 635/635 moves `complete-game-exact`** — 100% certified everywhere, not only once both STs ≥ 240. |
+| G6 | **pass** | Tablebase-backed p95 **0.004–0.005 s**, max 0.359 s against the 2.0 s budget, down from p95 0.609 s on the resolve agent. |
 
 One durable exact claim was produced on the way: the complete failure-dead
 quotient band is solved and certified, giving the complete-game value
 `V(240, 0, 240, 0) = 0.3372132166291093` at saddle gap 1.7e-16
 (`exact_band_v1_report.json`, Bellman-recertified on reopen).
 
+
+### G4 measures something an optimal player will not do (recorded 2026-07-30)
+
+With the tablebase wired as the top lookup rung the agent plays the exact
+equilibrium of the addressable domain, and the league result barely moved:
+31–29 at both bucket widths, against 24–26 and 30–30 for the network agent.
+That is not a disappointment, it is the theory arriving on schedule.
+
+The seat rates confirm it quantitatively. The exact root value is
+`V(0,0,0,0) = +0.08985`, which is a first-seat win rate of `(1+V)/2 =
+0.5449` and a second-seat rate of `0.4551`. Observed: **0.5667 and 0.4667**,
+z = +0.24 and +0.13 against the binomial standard deviation of 0.0909. The
+empirical seat split reproduces the computed root value — an independent
+confirmation of the artifact from a direction the sweep never touched. The
+old agent's 0.600/0.360 and 0.667/0.333 splits were the signature of a
+player throwing away the second seat; that asymmetry has now collapsed from
+24–33 points to 10.
+
+The consequence for the gate is structural. An equilibrium strategy is
+*maximin*: it guarantees the game value against any opponent and does not
+exploit a weak one. So an optimal DTH player scores ≈0.545 in the first seat
+and ≈0.455 in the second, and `both_seatings_at_least_even` — which demands
+≥ 0.5 in **both** — is unreachable for it in a game with a first-mover
+advantage. Passing that gate requires an *exploitative* agent that models the
+opponent and best-responds, which is a different deliverable from the
+certified player this goal ships. Like the G3 depth-two bar before it, this
+is a gate whose bar a correct agent cannot clear, and changing it is the
+maintainer's call, not this goal's.
 
 The diagnosis behind the G3 row is recorded in
 [`PROMOTION_CAMPAIGN.md`](PROMOTION_CAMPAIGN.md): the gating h4 anchor is a
@@ -305,21 +333,61 @@ canonical artifact:
   [`DTH_BACKUP_PARITY.md`](DTH_BACKUP_PARITY.md) is green for both the
   Python authority and the compiled kernel.
 
-Measured markers (2026-07-30, build in progress): the top 150 real layers
-solve with zero LP calls (the full-support equalizer rung takes 96% of them),
-the swept root matches the band value to 6.9e-12, and the Rust kernel
-reproduces the Python authority bit for bit at 59.7x its speed. The claim
-covers exactly the addressable domain — alive TTDs in `{0} | [60, 300]`,
-which is transition closed; off-domain states fail closed at lookup.
+The claim covers exactly the addressable domain — alive TTDs in
+`{0} | [60, 300]`, which is transition closed; off-domain states fail closed
+at lookup.
+
+### Closed — all four gates pass (2026-07-30)
+
+The sweep finished in **5,432 s (1.51 h)** on a Ryzen 9 3900X, solving all
+289,374,121 classes. Artifact `backup_full_v1` (`value.npy` 2.16 GiB,
+`solver_kind.npy` 276 MiB, `tablebase.json` manifest,
+`manifest_sha256 877219…4939`).
+
+| Gate | Verdict | Evidence |
+|---|---|---|
+| BG1 completeness | **pass** | The finalize scan accepted every class: all finite, within `[-1, 1]`, known routing byte. The build refuses to reach `phase=complete` otherwise. |
+| BG2 sampled recertification | **pass** | 4,792 deterministic per-layer samples re-derived their matrices from stored children; worst gap **4.84e-7** against the frozen 1e-6 tolerance. |
+| BG3 external anchors | **pass** | `V(240,0,240,0)` agrees with the certified band to **6.87e-12**; the independent `build_dead_band_reference` agrees on all **90,000** dead-dead classes to **4.84e-7**; the 61-state closure root `V(239,241,299,300)` is exactly `-1.0` at gap 0.0. |
+| BG4 backend parity | **pass** | `DTH_BACKUP_PARITY.md`'s gates are green for both backends; the manifest records `execution_backends: [python, rust]`. |
+
+**The complete-game value of pure DTH at one-second resolution:**
+
+| State | Value | Reading |
+|---|---:|---|
+| `V(0,0,0,0)` | **+0.08985007280951** | the opening — a modest edge to the side dropping first, ≈54.5% in win-probability terms |
+| `V(240,0,240,0)` | +0.33721321663598 | the failure-dead band anchor |
+| `V(240,0,0,0)` | +0.99740491662732 | a fully loaded opponent is nearly lost |
+| `V(0,0,240,0)` | −0.98638959676988 | and symmetrically so from the other seat |
+| `V(120,0,120,0)` | +0.13198043558895 | |
+| `V(60,0,60,0)` | +0.09706462968145 | |
+
+Route mix over the whole space: full-support equalizer 99.805%, pure saddle
+0.116%, LP residue 0.066% (190,995 classes, of which 9 needed the tightened
+retry), warm-start 0.013% of solves from 571,843,253 attempts. Two of the
+three optimizations this plan was originally built around — support-restricted
+solving and warm-start-from-neighbour — carried almost none of the work; the
+rung that did was the k=60 full-support equalizer, the opposite of small
+support. Cost split: solve 4,270 s (79.3%), commit 1,117 s (20.7%).
+
+One number deserves a standing caveat: the worst recertification gap and the
+worst dead-band disagreement are the same 4.84e-7, which points at a single
+ill-conditioned family near the dead-band boundary rather than diffuse noise.
+It is inside the gate with about 2x margin and would be the first thing to
+examine if that tolerance is ever tightened.
 
 ## Claim boundary
 
 - The bounded-resolve goal claims no complete-game L1 solution; the root
   interval narrows only through the interval machinery of
   [`EXACTNESS_PROOF.md`](EXACTNESS_PROOF.md), never through play results.
-  Goal 2's complete-game closure claim exists **only** once BG1–BG4 pass on
-  a finished canonical artifact, and covers only the transition-closed
-  quotient domain; until then, nothing claims a complete-game solution.
+  Goal 2's closure claim became live on 2026-07-30, when BG1–BG4 all passed
+  on the finished canonical `backup_full_v1` artifact. It licenses exactly
+  one thing: the complete-game value of every class in the transition-closed
+  quotient domain, each certified to the frozen 1e-6 saddle tolerance.
+  It does **not** license a claim about states outside that domain, which
+  fail closed at lookup, nor about any other rung of the ladder, nor about
+  play strength — that is still G4's to measure.
 - No global exploitability claim. Strength claims use the whitepaper's four
   categories — exact, bounded, approximate, empirical — and per-move
   provenance; a promotion report may say no sampled case is certified worse,
