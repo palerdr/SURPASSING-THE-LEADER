@@ -1,0 +1,410 @@
+defaults:
+  - train_class_head_v1
+  - _self_
+
+# Generation five of the expert-iteration loop. The anchor-leaf closure
+# proved every leaf the depth-two anchor resolve queries already has a
+# finite training row, so the binding constraint is fit, not coverage:
+# multi-task trunk pressure lets anchor-leaf accuracy decay. The lever is
+# the recorded alternative, heavier anchor frontier replay: the two leaf
+# layers the anchor resolves evaluate join the replay stage, so every
+# epoch spends dedicated gradient steps holding the finite head at the
+# states the promotion gates actually measure.
+dataset: src/dth/artifacts/class_head_gen5_corpus.npz
+output_dir: src/dth/checkpoints/class_head_gen5
+initial_checkpoint: src/dth/checkpoints/class_head_gen4/best.pt
+
+model:
+  transition_class_head: true
+  play_value_head: true
+
+exact_frontiers:
+  groups:
+    - name: h5_children
+      repeats: 32
+      roots:
+        - state: [239, 0, 0, 240]
+          horizon: 5
+        - state: [0, 240, 239, 0]
+          horizon: 5
+    - name: retained_h4_children
+      repeats: 64
+      roots:
+        - state: [239, 0, 0, 240]
+          horizon: 4
+    # Children of both h5 anchors, so the replayed frontier is the 7,442
+    # grandchild states the depth-two h5 resolves evaluate at h3.
+    - name: h5_grandchildren
+      repeats: 4
+      roots:
+        - state: [0, 240, 0, 299]
+          horizon: 4
+        - state: [0, 240, 240, 0]
+          horizon: 4
+        - state: [0, 240, 241, 0]
+          horizon: 4
+        - state: [0, 240, 242, 0]
+          horizon: 4
+        - state: [0, 240, 243, 0]
+          horizon: 4
+        - state: [0, 240, 244, 0]
+          horizon: 4
+        - state: [0, 240, 245, 0]
+          horizon: 4
+        - state: [0, 240, 246, 0]
+          horizon: 4
+        - state: [0, 240, 247, 0]
+          horizon: 4
+        - state: [0, 240, 248, 0]
+          horizon: 4
+        - state: [0, 240, 249, 0]
+          horizon: 4
+        - state: [0, 240, 250, 0]
+          horizon: 4
+        - state: [0, 240, 251, 0]
+          horizon: 4
+        - state: [0, 240, 252, 0]
+          horizon: 4
+        - state: [0, 240, 253, 0]
+          horizon: 4
+        - state: [0, 240, 254, 0]
+          horizon: 4
+        - state: [0, 240, 255, 0]
+          horizon: 4
+        - state: [0, 240, 256, 0]
+          horizon: 4
+        - state: [0, 240, 257, 0]
+          horizon: 4
+        - state: [0, 240, 258, 0]
+          horizon: 4
+        - state: [0, 240, 259, 0]
+          horizon: 4
+        - state: [0, 240, 260, 0]
+          horizon: 4
+        - state: [0, 240, 261, 0]
+          horizon: 4
+        - state: [0, 240, 262, 0]
+          horizon: 4
+        - state: [0, 240, 263, 0]
+          horizon: 4
+        - state: [0, 240, 264, 0]
+          horizon: 4
+        - state: [0, 240, 265, 0]
+          horizon: 4
+        - state: [0, 240, 266, 0]
+          horizon: 4
+        - state: [0, 240, 267, 0]
+          horizon: 4
+        - state: [0, 240, 268, 0]
+          horizon: 4
+        - state: [0, 240, 269, 0]
+          horizon: 4
+        - state: [0, 240, 270, 0]
+          horizon: 4
+        - state: [0, 240, 271, 0]
+          horizon: 4
+        - state: [0, 240, 272, 0]
+          horizon: 4
+        - state: [0, 240, 273, 0]
+          horizon: 4
+        - state: [0, 240, 274, 0]
+          horizon: 4
+        - state: [0, 240, 275, 0]
+          horizon: 4
+        - state: [0, 240, 276, 0]
+          horizon: 4
+        - state: [0, 240, 277, 0]
+          horizon: 4
+        - state: [0, 240, 278, 0]
+          horizon: 4
+        - state: [0, 240, 279, 0]
+          horizon: 4
+        - state: [0, 240, 280, 0]
+          horizon: 4
+        - state: [0, 240, 281, 0]
+          horizon: 4
+        - state: [0, 240, 282, 0]
+          horizon: 4
+        - state: [0, 240, 283, 0]
+          horizon: 4
+        - state: [0, 240, 284, 0]
+          horizon: 4
+        - state: [0, 240, 285, 0]
+          horizon: 4
+        - state: [0, 240, 286, 0]
+          horizon: 4
+        - state: [0, 240, 287, 0]
+          horizon: 4
+        - state: [0, 240, 288, 0]
+          horizon: 4
+        - state: [0, 240, 289, 0]
+          horizon: 4
+        - state: [0, 240, 290, 0]
+          horizon: 4
+        - state: [0, 240, 291, 0]
+          horizon: 4
+        - state: [0, 240, 292, 0]
+          horizon: 4
+        - state: [0, 240, 293, 0]
+          horizon: 4
+        - state: [0, 240, 294, 0]
+          horizon: 4
+        - state: [0, 240, 295, 0]
+          horizon: 4
+        - state: [0, 240, 296, 0]
+          horizon: 4
+        - state: [0, 240, 297, 0]
+          horizon: 4
+        - state: [0, 240, 298, 0]
+          horizon: 4
+        - state: [0, 240, 299, 0]
+          horizon: 4
+        - state: [239, 0, 0, 300]
+          horizon: 4
+        - state: [239, 0, 1, 240]
+          horizon: 4
+        - state: [239, 0, 2, 240]
+          horizon: 4
+        - state: [239, 0, 3, 240]
+          horizon: 4
+        - state: [239, 0, 4, 240]
+          horizon: 4
+        - state: [239, 0, 5, 240]
+          horizon: 4
+        - state: [239, 0, 6, 240]
+          horizon: 4
+        - state: [239, 0, 7, 240]
+          horizon: 4
+        - state: [239, 0, 8, 240]
+          horizon: 4
+        - state: [239, 0, 9, 240]
+          horizon: 4
+        - state: [239, 0, 10, 240]
+          horizon: 4
+        - state: [239, 0, 11, 240]
+          horizon: 4
+        - state: [239, 0, 12, 240]
+          horizon: 4
+        - state: [239, 0, 13, 240]
+          horizon: 4
+        - state: [239, 0, 14, 240]
+          horizon: 4
+        - state: [239, 0, 15, 240]
+          horizon: 4
+        - state: [239, 0, 16, 240]
+          horizon: 4
+        - state: [239, 0, 17, 240]
+          horizon: 4
+        - state: [239, 0, 18, 240]
+          horizon: 4
+        - state: [239, 0, 19, 240]
+          horizon: 4
+        - state: [239, 0, 20, 240]
+          horizon: 4
+        - state: [239, 0, 21, 240]
+          horizon: 4
+        - state: [239, 0, 22, 240]
+          horizon: 4
+        - state: [239, 0, 23, 240]
+          horizon: 4
+        - state: [239, 0, 24, 240]
+          horizon: 4
+        - state: [239, 0, 25, 240]
+          horizon: 4
+        - state: [239, 0, 26, 240]
+          horizon: 4
+        - state: [239, 0, 27, 240]
+          horizon: 4
+        - state: [239, 0, 28, 240]
+          horizon: 4
+        - state: [239, 0, 29, 240]
+          horizon: 4
+        - state: [239, 0, 30, 240]
+          horizon: 4
+        - state: [239, 0, 31, 240]
+          horizon: 4
+        - state: [239, 0, 32, 240]
+          horizon: 4
+        - state: [239, 0, 33, 240]
+          horizon: 4
+        - state: [239, 0, 34, 240]
+          horizon: 4
+        - state: [239, 0, 35, 240]
+          horizon: 4
+        - state: [239, 0, 36, 240]
+          horizon: 4
+        - state: [239, 0, 37, 240]
+          horizon: 4
+        - state: [239, 0, 38, 240]
+          horizon: 4
+        - state: [239, 0, 39, 240]
+          horizon: 4
+        - state: [239, 0, 40, 240]
+          horizon: 4
+        - state: [239, 0, 41, 240]
+          horizon: 4
+        - state: [239, 0, 42, 240]
+          horizon: 4
+        - state: [239, 0, 43, 240]
+          horizon: 4
+        - state: [239, 0, 44, 240]
+          horizon: 4
+        - state: [239, 0, 45, 240]
+          horizon: 4
+        - state: [239, 0, 46, 240]
+          horizon: 4
+        - state: [239, 0, 47, 240]
+          horizon: 4
+        - state: [239, 0, 48, 240]
+          horizon: 4
+        - state: [239, 0, 49, 240]
+          horizon: 4
+        - state: [239, 0, 50, 240]
+          horizon: 4
+        - state: [239, 0, 51, 240]
+          horizon: 4
+        - state: [239, 0, 52, 240]
+          horizon: 4
+        - state: [239, 0, 53, 240]
+          horizon: 4
+        - state: [239, 0, 54, 240]
+          horizon: 4
+        - state: [239, 0, 55, 240]
+          horizon: 4
+        - state: [239, 0, 56, 240]
+          horizon: 4
+        - state: [239, 0, 57, 240]
+          horizon: 4
+        - state: [239, 0, 58, 240]
+          horizon: 4
+        - state: [239, 0, 59, 240]
+          horizon: 4
+        - state: [239, 0, 60, 240]
+          horizon: 4
+    # Children of the h4 anchor, so the replayed frontier is the grandchild
+    # states its depth-two resolve evaluates at h2.
+    - name: h4_anchor_grandchildren
+      repeats: 8
+      roots:
+        - state: [0, 240, 0, 299]
+          horizon: 3
+        - state: [0, 240, 240, 0]
+          horizon: 3
+        - state: [0, 240, 241, 0]
+          horizon: 3
+        - state: [0, 240, 242, 0]
+          horizon: 3
+        - state: [0, 240, 243, 0]
+          horizon: 3
+        - state: [0, 240, 244, 0]
+          horizon: 3
+        - state: [0, 240, 245, 0]
+          horizon: 3
+        - state: [0, 240, 246, 0]
+          horizon: 3
+        - state: [0, 240, 247, 0]
+          horizon: 3
+        - state: [0, 240, 248, 0]
+          horizon: 3
+        - state: [0, 240, 249, 0]
+          horizon: 3
+        - state: [0, 240, 250, 0]
+          horizon: 3
+        - state: [0, 240, 251, 0]
+          horizon: 3
+        - state: [0, 240, 252, 0]
+          horizon: 3
+        - state: [0, 240, 253, 0]
+          horizon: 3
+        - state: [0, 240, 254, 0]
+          horizon: 3
+        - state: [0, 240, 255, 0]
+          horizon: 3
+        - state: [0, 240, 256, 0]
+          horizon: 3
+        - state: [0, 240, 257, 0]
+          horizon: 3
+        - state: [0, 240, 258, 0]
+          horizon: 3
+        - state: [0, 240, 259, 0]
+          horizon: 3
+        - state: [0, 240, 260, 0]
+          horizon: 3
+        - state: [0, 240, 261, 0]
+          horizon: 3
+        - state: [0, 240, 262, 0]
+          horizon: 3
+        - state: [0, 240, 263, 0]
+          horizon: 3
+        - state: [0, 240, 264, 0]
+          horizon: 3
+        - state: [0, 240, 265, 0]
+          horizon: 3
+        - state: [0, 240, 266, 0]
+          horizon: 3
+        - state: [0, 240, 267, 0]
+          horizon: 3
+        - state: [0, 240, 268, 0]
+          horizon: 3
+        - state: [0, 240, 269, 0]
+          horizon: 3
+        - state: [0, 240, 270, 0]
+          horizon: 3
+        - state: [0, 240, 271, 0]
+          horizon: 3
+        - state: [0, 240, 272, 0]
+          horizon: 3
+        - state: [0, 240, 273, 0]
+          horizon: 3
+        - state: [0, 240, 274, 0]
+          horizon: 3
+        - state: [0, 240, 275, 0]
+          horizon: 3
+        - state: [0, 240, 276, 0]
+          horizon: 3
+        - state: [0, 240, 277, 0]
+          horizon: 3
+        - state: [0, 240, 278, 0]
+          horizon: 3
+        - state: [0, 240, 279, 0]
+          horizon: 3
+        - state: [0, 240, 280, 0]
+          horizon: 3
+        - state: [0, 240, 281, 0]
+          horizon: 3
+        - state: [0, 240, 282, 0]
+          horizon: 3
+        - state: [0, 240, 283, 0]
+          horizon: 3
+        - state: [0, 240, 284, 0]
+          horizon: 3
+        - state: [0, 240, 285, 0]
+          horizon: 3
+        - state: [0, 240, 286, 0]
+          horizon: 3
+        - state: [0, 240, 287, 0]
+          horizon: 3
+        - state: [0, 240, 288, 0]
+          horizon: 3
+        - state: [0, 240, 289, 0]
+          horizon: 3
+        - state: [0, 240, 290, 0]
+          horizon: 3
+        - state: [0, 240, 291, 0]
+          horizon: 3
+        - state: [0, 240, 292, 0]
+          horizon: 3
+        - state: [0, 240, 293, 0]
+          horizon: 3
+        - state: [0, 240, 294, 0]
+          horizon: 3
+        - state: [0, 240, 295, 0]
+          horizon: 3
+        - state: [0, 240, 296, 0]
+          horizon: 3
+        - state: [0, 240, 297, 0]
+          horizon: 3
+        - state: [0, 240, 298, 0]
+          horizon: 3
+        - state: [0, 240, 299, 0]
+          horizon: 3

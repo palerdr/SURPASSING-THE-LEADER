@@ -172,6 +172,16 @@ uv run python -m dth dataset --config-name class_head_gen4_corpus
 uv run python -m dth train --config-name train_class_head_gen4
 ```
 
+Generation five adds the exact anchor closure (which proved the anchor-leaf
+rows already existed — see AGENT_GOAL.md) and replays the two leaf layers
+the depth-two anchor resolves evaluate:
+
+```powershell
+uv run python -m dth dataset --config-name anchor_leaf_closure_v1
+uv run python -m dth dataset --config-name class_head_gen5_corpus
+uv run python -m dth train --config-name train_class_head_gen5
+```
+
 ## Validation
 
 ```powershell

@@ -244,6 +244,38 @@ exact finite-horizon closures generated inside the anchor neighbourhood
 (and/or heavier anchor frontier replay) so the finite head has literal
 supervision where the gates bind.
 
+### Generation five — coverage disproved, fit confirmed, recorded 2026-07-29
+
+The closure half of the lever falsified its own premise: the full exact
+anchor closure at horizon five (`anchor_leaf_closure_v1`, 68,346 states,
+h5..h1) turned out to already be inside the training reference — every leaf
+the depth-two anchor resolve queries had a finite training row all along.
+The anchor failure was never coverage; it is fit under multi-task trunk
+pressure. The replay half then delivered: generation five added the two
+leaf layers the anchor resolves actually evaluate (7,442 h3 rows at
+repeats 4, 3,721 h2 rows at repeats 8) to the exact-frontier replay stage.
+
+Result (`promotion_gen5.json`): **seven of eight promotion gates pass** —
+anchor value-error regression passes for the first time in the campaign
+(deltas +0.0098/−0.0124/+0.0014 against the 0.01 allowance), the mirror h5
+anchor resolves to gap 0.0, the primary h5 anchor to 0.0096, and eval
+median improved 64.5% with no max regression. The sole failing gate is
+anchor-worst-gap improvement: the h4 anchor sits at 0.0676 against the
+0.0624 bar (a 2.5% improvement where 10% is required). A refinement probe
+(`promotion_gen5b.json`, h2 replay tripled, fine-tuned from generation
+five) moved the gap only to 0.0673 while re-breaking the value-error gate
+and costing eval-median improvement — replay weight is past its optimum,
+and generation five remains the selected candidate of the loop.
+
+The stuck quantity deserves naming: the depth-two gap of the h4 anchor has
+sat in the 0.066–0.070 band for the baseline and every candidate across
+five generations, while depth-three resolve — the depth the flagship agent
+actually plays — equalizes the same anchors to ≤ 0.0073 (G1 ladder). The
+plausible next levers, in evidence order: a trunk-capacity probe (the
+`train_capacity_probe_128x2` recipe exists for exactly this question), or
+a rules-level decision by the maintainer about whether the depth-two bar
+measures the deployed agent — which is not a change this goal may make.
+
 ## Claim boundary
 
 - Nothing under this goal claims a complete-game L1 solution; the root

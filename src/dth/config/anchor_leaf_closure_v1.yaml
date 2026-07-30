@@ -1,0 +1,25 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# Generation five: the full exact closure of the two promotion anchors at
+# horizon five (68,346 states across layers h5..h1).  The depth-two anchor
+# resolve evaluates network leaves at exactly the grandchild states this
+# closure covers at h3 and h2, so the finite head gets literal supervision
+# where the anchor gates bind.
+dataset_version: anchor_leaf_closure_v1
+output: src/dth/artifacts/anchor_leaf_closure_v1.npz
+emission: reachable_layers
+horizon: 5
+root_states:
+  - [239, 0, 0, 240]
+  - [0, 240, 239, 0]
+progress_every: 2000
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false
