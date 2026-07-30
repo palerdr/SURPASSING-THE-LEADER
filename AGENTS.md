@@ -9,7 +9,9 @@
 ## Repository boundaries
 
 - `docs/` owns repository-wide canonical game and solver contracts.
-- `papers/` owns primary evidence, the whitepaper, and cited literature.
+- `paper/` owns the project's mathematical paper. Re-render and visually
+  inspect its PDF after changing the TeX.
+- `docs/papers/` owns primary evidence and cited literature.
 - `src/stl/`, `src/dth/`, `src/abstract/`, and `src/ocaml/` are peer
   projects. They must not import one another. `arena/` is a neutral play
   surface: it may consume their public interfaces, but they must not import it

@@ -2,7 +2,8 @@
 
 Primary game evidence now lives one level up in
 [`../game-sources/`](../game-sources/), beside the evidence ledger it supports.
-This directory holds cited literature and the project whitepaper.
+This directory holds cited literature and primary game evidence; the project
+paper lives at the repository root under `paper/`.
 
 ## Primary game evidence
 
@@ -21,13 +22,15 @@ This directory holds cited literature and the project whitepaper.
 The ledger records one transcription error, catalogued as
 [E-LEDGER-ERRATUM](../game-sources/EVIDENCE.md#e-ledger-erratum).
 
-## Project whitepaper
+## Project paper
 
-- `whitepaper/stl_solver_whitepaper.tex` — editable source.
-- `whitepaper/stl_solver_whitepaper.pdf` — checked-in rendered copy.
-
-Note that the whitepaper predates the frozen revival model and the formulation
-ladder; regenerate it before citing its rule statements.
+The mathematical paper lives at the repository root:
+`paper/dth_exact_solution.tex` (editable source) and
+`paper/dth_exact_solution.pdf` (checked-in rendered copy). It records the
+certified exact solution of the complete DTH game (2026-07-30) and retains the
+matrix-value Lipschitz and saddle-gap propositions the repository cites. The
+retired STL/AlphaZero whitepaper it replaced remains available in Git history
+(`docs/papers/whitepaper/` before 2026-07-30).
 
 ## Solver literature
 

@@ -7,8 +7,7 @@ the exactness boundary in [`EXACTNESS_PROOF.md`](EXACTNESS_PROOF.md), commands
 and exact-result status in [`WORKFLOWS.md`](WORKFLOWS.md), and the claim ladder
 in [`FORMULATION_LADDER.md`](../../../docs/FORMULATION_LADDER.md). The error
 bounds cited below are the matrix-value Lipschitz and saddle-gap propositions
-in the whitepaper
-(`docs/papers/whitepaper/stl_solver_whitepaper.tex`).
+in the project paper (`paper/dth_exact_solution.tex`).
 
 
 ## Goal
@@ -388,8 +387,8 @@ examine if that tolerance is ever tightened.
   It does **not** license a claim about states outside that domain, which
   fail closed at lookup, nor about any other rung of the ladder, nor about
   play strength — that is still G4's to measure.
-- No global exploitability claim. Strength claims use the whitepaper's four
-  categories — exact, bounded, approximate, empirical — and per-move
+- No global exploitability claim. Strength claims use the claim vocabulary of
+  `docs/FOUNDATIONS.md` — exact, bounded, approximate, empirical — and per-move
   provenance; a promotion report may say no sampled case is certified worse,
   not that the agent is globally better.
 - Network outputs never provide leaf values or bounds for certification, and

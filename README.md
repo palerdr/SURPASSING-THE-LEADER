@@ -11,9 +11,10 @@ This repository contains deliberately separate game-solving projects:
 | `src/crates/` | Shared Rust acceleration workspace | Python remains behavioral authority until explicit parity contracts |
 | `arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
 
-Repository-wide game contracts live in [`docs/`](docs/). The whitepaper,
-primary game evidence, and cited research are kept separately in
-[`papers/`](papers/). The OCaml project records its authorship in
+Repository-wide game contracts live in [`docs/`](docs/). The mathematical
+paper — a certified exact solution of the complete DTH game — lives at
+[`paper/`](paper/); primary game evidence and cited research are kept in
+[`docs/papers/`](docs/papers/). The OCaml project records its authorship in
 [`src/ocaml/AUTHORS.md`](src/ocaml/AUTHORS.md).
 
 ## Setup

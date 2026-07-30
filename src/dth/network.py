@@ -227,8 +227,9 @@ class DTHPolicyValueNet(nn.Module):
         order; index ``60`` is the action-independent failed-check class.
         ``reconstruct_transition_class_matrix`` expands these to the literal
         stage matrix, so network error enters the matrix through exactly 61
-        numbers and the whitepaper's matrix-accuracy saddle-gap bound applies
-        to the quantity a class loss optimizes.
+        numbers and the approximate-matrix saddle-gap bound of the project
+        paper (``paper/dth_exact_solution.tex``) applies to the quantity a
+        class loss optimizes.
         """
 
         if self.transition_class_head is None:

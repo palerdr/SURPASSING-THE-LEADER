@@ -34,6 +34,23 @@ approximators around exact/tablebase anchors; they do not change engine rules or
 certify themselves. Promotion requires calibration, deterministic comparison,
 exploitability evidence, and any declared policy-drift/readability gates.
 
+## Claim vocabulary
+
+Result reports keep four categories separate and never promote one into
+another:
+
+- **exact**: full-width finite-horizon LP, an analytic tablebase, or a
+  certified complete-game value with an explicit saddle-gap certificate;
+- **bounded**: an interval or error statement for a declared horizon and
+  frontier;
+- **approximate**: finite-budget candidate MCTS or neural output;
+- **empirical**: self-play, arena, calibration, and robustness results on
+  declared distributions.
+
+The matrix-value Lipschitz bound and the approximate-matrix saddle-gap bound
+that connect these categories are stated and proved in the project paper
+(`paper/dth_exact_solution.tex`).
+
 ## Claim boundary
 
 The current STL solver is a fully observed public-state baseline at ladder rung

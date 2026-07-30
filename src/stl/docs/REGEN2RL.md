@@ -68,8 +68,10 @@ Every ticket and gate below inherits these contracts:
   code.
 - `papers/references/README.md` and `papers/references/literature_assessment.md` for the
   AlphaZero, simultaneous-move MCTS, CFR, DeepStack, and ReBeL lineage.
-- `papers/whitepaper/stl_solver_whitepaper.tex` for the mathematical model,
-  guarantees, limitations, and target architecture.
+- `docs/FOUNDATIONS.md` for the shared solver mathematics and claim
+  vocabulary; the retired STL whitepaper (model, guarantees, target
+  architecture) is in Git history, and the project's mathematical paper is
+  now `paper/dth_exact_solution.tex`.
 - `tests/README.md` for subsystem ownership of regression tests.
 
 If a phase conflicts with one of these documents, update the contradiction in
@@ -193,7 +195,7 @@ code.
 
 - [x] **P0.1 State the game class.** Document a fully observed, two-player,
   zero-sum stochastic Markov game with simultaneous legal role actions and
-  engine chance. Use the whitepaper notation.
+  engine chance. Use the notation of `docs/FOUNDATIONS.md`.
 - [x] **P0.2 Define `G_H`.** Add a training/evaluation wrapper cap
   `max_half_rounds`. For the first baseline, freeze `H_train=64` and
   `H_eval=128`. A nonterminal state at the cap is a training draw `z=0`, tagged
@@ -967,7 +969,7 @@ must reproduce exactly.
 - [ ] deterministic trajectory fixtures for normal, leap, survival, and fatal
   branches;
 - [ ] CPU throughput and memory benchmark;
-- [ ] updated README, REGEN2RL, whitepaper source/PDF, and graphify graph.
+- [ ] updated README, REGEN2RL, `docs/FOUNDATIONS.md`, and graphify graph.
 
 ### Exit gate
 
@@ -983,9 +985,9 @@ must reproduce exactly.
   and report digests; a different training seed is recorded as a distinct run.
 - [ ] The default runtime imports no Rust extension and all required evidence was
   produced by Python.
-- [ ] The whitepaper labels exact finite-horizon results, approximate search
-  results, and empirical RL results separately and makes no full-game solution
-  claim.
+- [ ] Reports label exact finite-horizon results, approximate search results,
+  and empirical RL results separately per the claim vocabulary of
+  `docs/FOUNDATIONS.md`, and make no full-game STL solution claim.
 
 Only after this gate is satisfied is the Python behavior frozen as the kernel
 oracle.
