@@ -507,13 +507,21 @@ resolve answers with a 21x21 support where the exact equilibrium is 4x2,
 and the gap splits almost evenly across seats (checker 0.0373, dropper
 0.0303).
 
-**The h5 anchors cannot discriminate.** The same measurement at
+**The maximum over anchors always selects h4.** The same measurement at
 `(239,0,0,240)` h5 finds 57 of 60 checker replies and 58 of 60 dropper
-actions tied, with a worst mistake of 0.0062. Maximum available
-exploitability there is about 0.006, which is why every checkpoint passes
-those two anchors. `anchor_worst_gap` is therefore a single-state gate in
-practice: the h4 anchor is the only one of the three carrying strategic
-content.
+actions tied, with a worst pure deviation against equilibrium play costing
+0.0062 — a nearly flat payoff surface, not a bound on exploitability
+(uniform play is exploitable by 0.096 at that root). Empirically, across
+the thirteen checkpoints measured at depth two, the two h5 anchors stayed
+within 0.0000–0.0234 while the h4 anchor never left 0.0657–0.0827. The
+maximum is therefore always attained at h4, which makes
+`anchor_worst_gap` a single-state test in practice.
+
+**The gate asks for most of the quantity's dynamic range.** That h4 band
+is 0.0170 wide across every checkpoint the campaign produced, from the M1
+baseline to a 128-wide trunk to a from-scratch lineage. The gate requires
+a 0.00694 improvement — 41% of the total observed variation of the
+quantity, in one direction, at one state.
 
 This refutes the artifact hypothesis (reading 3 below) and refines the
 weak-evaluator hypothesis (reading 1). The evaluator's typical cell is well
@@ -562,10 +570,38 @@ about the standard, not about the facts:
    expectations. Then the gate should be re-declared at play depth. That
    is a change to the gate, explicitly out of scope here.
 3. The gate's aggregate is the problem rather than its threshold.
-   `anchor_worst_gap` is a maximum over three anchors, two of which admit
-   at most 0.006 of exploitability and therefore cannot discriminate
-   between checkpoints. The bar is in practice a single-state test, which
-   may be more sensitivity than a promotion decision should rest on.
+   `anchor_worst_gap` is a maximum over three anchors whose levels never
+   overlap, so it is a single-state test on the h4 anchor, and it demands
+   41% of that state's entire observed dynamic range. That may be more
+   sensitivity than a promotion decision should rest on.
+
+A candidate replacement was backtested against all thirteen measured
+checkpoints and is recorded below, but adopting it is a gate change and
+therefore a maintainer decision.
+
+### A backtested candidate replacement (recorded 2026-07-30, not adopted)
+
+Swapping the aggregate alone is not safe: CVaR(alpha 0.5) over the full
+eleven-root pack improves 14–38% for *every* checkpoint ever measured,
+including `promo_candidate` and `promo_candidate_v2`, which regressed the
+h4 anchor. A 10% bar on that aggregate alone is a rubber stamp.
+
+Pairing it with a firewall restores strictness. Under "CVaR(0.5) over all
+eleven roots improves ≥ 10% **and** no single root regresses by more than
+0.01" — the same tolerance `anchor_gap_regression` already applies to the
+three anchors, extended pack-wide — eleven of the twelve candidates are
+rejected, most of them on the evaluation root `(119,120,179,60)` h3
+rather than on an anchor. Only `class_head_lineage_horizon_v1` passes,
+at CVaR +37.8% with a worst per-root regression of 0.0096.
+
+Two properties recommend this shape over the current one: the aggregate
+has real dynamic range (0.0913–0.1477 across checkpoints, against the h4
+anchor's 0.0170), and the no-regression clause, not the improvement
+clause, does the rejecting — which is the conservative direction.
+
+Whether it should also move to play depth is separate and untested: no
+depth-three ladders exist for the candidates, so that variant cannot be
+backtested without running them.
 
 Changing the gate, its threshold, or the promotion code was out of scope
 for this goal, and none of it was touched. The six new configs are
