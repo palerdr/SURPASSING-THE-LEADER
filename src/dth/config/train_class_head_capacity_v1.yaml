@@ -1,0 +1,15 @@
+defaults:
+  - train_class_head_gen5
+  - _self_
+
+# Lever one, stage B of the champion-or-ceiling promotion goal
+# (docs/AGENT_GOAL.md): the generation-five decision recipe unchanged --
+# same corpus, same leaf-layer replay groups, same decision loss, same
+# selection thresholds -- carried onto the 128x2 trunk from stage A.  Only
+# the trunk width and the initial checkpoint differ from generation five,
+# so a gap move at the h4 anchor is attributable to capacity.
+output_dir: src/dth/checkpoints/class_head_capacity_v1
+initial_checkpoint: src/dth/checkpoints/capacity_128x2_rows_v1/best.pt
+
+model:
+  hidden_width: 128

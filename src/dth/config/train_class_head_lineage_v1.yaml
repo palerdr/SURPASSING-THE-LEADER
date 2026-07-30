@@ -1,0 +1,12 @@
+defaults:
+  - train_class_head_gen5
+  - _self_
+
+# Lever three, stage B of the champion-or-ceiling promotion goal
+# (docs/AGENT_GOAL.md): the generation-five decision recipe unchanged on
+# its own width, initialised from the from-scratch rows stage instead of
+# the generation-four lineage.  If the plateau in the h4 anchor's
+# depth-two gap is carried by the fine-tuning chain rather than by the
+# recipe, this is where it shows.
+output_dir: src/dth/checkpoints/class_head_lineage_v1
+initial_checkpoint: src/dth/checkpoints/lineage_rows_v1/best.pt

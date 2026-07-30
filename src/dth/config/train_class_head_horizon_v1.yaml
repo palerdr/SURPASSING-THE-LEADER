@@ -1,0 +1,27 @@
+defaults:
+  - train_class_head_gen5
+  - _self_
+
+# Lever two of the champion-or-ceiling promotion goal (docs/AGENT_GOAL.md):
+# the horizon-batch knob weighted toward the leaf horizons the depth-two
+# anchor resolves actually evaluate.  Lever one regressed the binding gate,
+# so this applies to generation five, per that lever's own conditional.
+#
+# The corpus is dominated by horizon-four resolve-play rows (214,760 of
+# 388,161 training rows) while the h2 and h3 finite layers the anchor
+# resolves query hold 47,620 and 6,668.  Inverse-count loss balancing gives
+# each horizon an equal share of the loss; explicit batch composition gives
+# h2 and h3 about 37% each instead.  Counts must cover exactly the training
+# horizons, which is why h5 appears with its single row.
+output_dir: src/dth/checkpoints/class_head_horizon_v1
+initial_checkpoint: src/dth/checkpoints/class_head_gen5/best.pt
+
+training:
+  horizon_batch:
+    counts:
+      1: 24
+      2: 96
+      3: 95
+      4: 40
+      5: 1
+    batches_per_epoch: 400

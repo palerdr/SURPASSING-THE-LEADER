@@ -1,0 +1,12 @@
+defaults:
+  - train_class_head_horizon_v1
+  - _self_
+
+# Attempt four of the champion-or-ceiling promotion goal
+# (docs/AGENT_GOAL.md): the two sanctioned levers that did not regress the
+# binding gate through capacity, composed.  Lever two's leaf-horizon batch
+# emphasis is applied to lever three's from-scratch trunk instead of to
+# generation five, so the h4 anchor's depth-two gap is measured under leaf
+# emphasis on a second, independent trunk.  Nothing else changes.
+output_dir: src/dth/checkpoints/class_head_lineage_horizon_v1
+initial_checkpoint: src/dth/checkpoints/class_head_lineage_v1/best.pt

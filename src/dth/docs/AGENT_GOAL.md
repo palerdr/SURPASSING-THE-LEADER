@@ -180,7 +180,7 @@ so the verdicts are snapshot here with their artifact names.
 |---|---|---|
 | G1 | **pass** — depth-effective | `depth_gate_v1.json`: CVaR gap 0.1675 → 0.1477 → 0.0033 and max gap 0.2844 → 0.0073 across depths 1–3, zero LP fallbacks. |
 | G2 | **pass at play depth, fail at leaf depth** | `orientation_gate_baseline_d3.json`: consistent, every pair ≤ 0.0073. At depth-2 leaves the imbalance is real for every checkpoint (`orientation_gate_*_d2.json`, ratios to 100×). The paired probe ran for the first time: single-orientation training raised held-out mirror value MSE 0.053 → 0.133. No algebraic mirror identity exists (43,189 exact pairs checked). |
-| G3 | **fail — no-promote, twice** | `promotion_v1.json`, `promotion_v2.json`: evaluation median gap improved 94.7% / 97.3% and every infrastructure gate passed, but the anchor-improvement criteria bind on anchor gaps of at most 0.075 that depth-2 resolve has already equalized. No champion is frozen; the flagship default remains `depth_baseline_v1`. |
+| G3 | **fail — no-promote, twelve times; closed at Exit B 2026-07-30** | `promotion_v1.json` … `promotion_lineage_horizon_v1.json`: evaluation median gap improved 21–97% and every infrastructure gate passed, but anchor-worst-gap improvement never reached 10% — best 5.30%, band 0.06569–0.08270 on the h4 anchor. No champion is frozen; the flagship default remains `depth_baseline_v1`. See "Exit B — ceiling" below for the band, the depth-three comparison, and the open rules question. |
 | G4 | **fail** for the deployed default | `arena_league_bucket12_v2.json`: 24–26, SPRT accept-h0. `arena_league_bucket6_v1.json`: 30–30. Strong seat asymmetry both ways (≈60–67% dropping first, ≈33–36% second). |
 | G5 | reported per match | Every match prints certified-move fraction and provenance counts; 100% by construction once both STs ≥ 240 via `exact_band_v1.sqlite`. |
 | G6 | **pass** | `arena_latency_smoke_v1.json`: p95 0.609 s, max 1.024 s against the 2.0 s budget, after the predictive depth gate landed. |
@@ -326,6 +326,197 @@ authority stays finite-only and play rows never supervise the finite head;
 every experiment runs through a versioned config; artifacts stay
 gitignored; each attempt's verdict is recorded here before the next
 attempt starts.
+
+### Attempt 1 — capacity probe, 128x2 trunk (recorded 2026-07-30)
+
+Configs `train_capacity_rows_v1` (from-scratch rows stage, both heads live
+from the first step because the corpus carries resolve-play rows) and
+`train_class_head_capacity_v1` (the generation-five decision recipe
+unchanged: same corpus, same leaf-layer replay groups, same thresholds;
+only trunk width and init differ). Stage A stopped at epoch 57 selecting
+epoch 7; stage B selected epoch 74.
+
+Verdict (`promotion_capacity_v1.json`): **no-promote, and the binding gate
+moved the wrong way.** Seven of eight gates pass again, but anchor worst
+gap *regressed* to 0.07624 against the baseline's 0.06937 — an improvement
+fraction of −9.9% where +10% is required — driven entirely by the h4
+anchor. Everything else improved: evaluation median gap 0.0837 → 0.0210
+(74.9%, tied for the campaign's best), evaluation max 0.2794 → 0.2153,
+both h5 anchors within tolerance, value-error regression passing.
+
+The interesting part is what this falsifies. Width tripled the finite
+head's fit — validation finite value MSE 0.0032 against generation five's
+0.0099, with play 0.0048 and class 0.0072 — and the h4 anchor's depth-two
+gap still got *worse*. Fit at the anchor leaf band was the standing
+diagnosis after generation five disproved coverage; attempt one says the
+h4 depth-two gap does not track finite-head accuracy either. Two of the
+three recorded explanations for this quantity are now spent.
+
+Because lever one regressed, lever two applies the horizon-batch knob to
+generation five, per its own conditional.
+
+### Attempt 2 — horizon-batch emphasis on generation five (recorded 2026-07-30)
+
+Config `train_class_head_horizon_v1`: generation five fine-tuned with
+`training.horizon_batch` composing every batch as 24/96/95/40/1 across
+horizons 1–5 over 400 batches per epoch, so the h2 and h3 finite leaf
+layers take about 37% of the gradient mass each instead of the ~20%
+inverse-count loss balancing gives them. Counts cover exactly the training
+horizons, h5 included with its single row. Selected epoch 58, dev-root
+worst gap 0.2425.
+
+Verdict (`promotion_horizon_v1.json`): **no-promote, six of eight gates.**
+Anchor worst gap 0.06758 — a 2.6% improvement against the required 10%,
+landing within 0.00005 of generation five's own 0.06762. Evaluation median
+improved 46.2% and max fell to 0.1999, but the anchor value-error gate
+broke this time: the mirror h5 anchor regressed +0.0158 against the 0.01
+allowance while its gap fell to 0.0001, the same trade the campaign has
+seen since generation one.
+
+Emphasising the leaf horizons the anchor resolves query moved the anchor
+gap by 0.00004. Together with attempt one this is now three independent
+data levers and one capacity lever that leave this quantity inside the
+same band.
+
+### Attempt 3 — init lineage from scratch (recorded 2026-07-30)
+
+Configs `train_lineage_rows_v1` and `train_class_head_lineage_v1`: the
+generation-five decision recipe unchanged at its own 64 width, but
+initialised from a from-scratch rows stage on the generation-five corpus
+instead of the chain that runs generation five ← four ← … ← the M1
+baseline. Holding width at 64 also makes this the width control for
+attempt one. Rows stage stopped at epoch 57 selecting epoch 7; decision
+stage selected epoch 66 with dev-root worst gap 0.2103, the closest any
+attempt here came to generation five's 0.2078.
+
+Verdict (`promotion_lineage_v1.json`): **no-promote, seven of eight
+gates**, and the binding gate regressed hardest of all: anchor worst gap
+0.08270, an improvement fraction of −19.2%. Everything else was the
+campaign's best: evaluation median gap 0.0837 → 0.0139 (83.4%),
+evaluation max 0.2010, anchor value-error regression passing.
+
+The width control is worth keeping: the 64-wide from-scratch rows stage
+reached validation finite value MSE 0.003173 against the 128-wide stage's
+0.003128. Width bought 1.4% of corpus fit. Whatever holds the h4 anchor,
+it is neither trunk capacity nor initialisation lineage.
+
+### Attempt 4 — the two non-capacity levers composed (recorded 2026-07-30)
+
+Config `train_class_head_lineage_horizon_v1`: lever two's leaf-horizon
+batch emphasis applied to lever three's from-scratch trunk rather than to
+generation five, so the anchor is measured under leaf emphasis on a
+second, independent trunk. Selected epoch 39, dev-root worst gap 0.2192.
+One run died mid-training on a transient `cudaErrorLaunchFailure` and was
+restarted; the restart reproduced every logged epoch bit-for-bit through
+the failure point, so the fault was the accelerator, not the recipe.
+
+Verdict (`promotion_lineage_horizon_v1.json`): **no-promote, six of eight
+gates.** Anchor worst gap 0.07655 (−10.4%), evaluation median 79.2%,
+evaluation max 0.1996. The composition inherits the from-scratch trunk's
+anchor regression rather than the emphasis lever's neutrality.
+
+## Exit B — ceiling (closed 2026-07-30)
+
+The goal takes **Exit B**. Four candidate evaluations covered all three
+sanctioned levers and the composition of the two that did not act through
+capacity; none produced a promotion, and none brought the binding gate
+within reach. No champion is frozen. The flagship default remains
+`depth_baseline_v1`, and generation five (`class_head_gen5/best.pt`)
+remains the best candidate at seven of eight gates.
+
+### The measured band of the h4 anchor's depth-two gap
+
+Every promotion attempt in the campaign, sorted by the quantity that
+decides the gate — the depth-two saddle gap of anchor `(239, 0, 0, 240)`
+at horizon 4. The bar is 0.06243 (baseline 0.06937 × 0.9).
+
+| Attempt | h4 depth-two gap | worst-gap improvement | eval median improvement |
+|---|---:|---:|---:|
+| gen2 | 0.06569 | +5.30% | 49.13% |
+| gen3 | 0.06672 | +3.81% | 66.51% |
+| gen1 | 0.06705 | +3.34% | 69.68% |
+| gen5b | 0.06726 | +3.04% | 21.30% |
+| horizon_v1 | 0.06758 | +2.58% | 46.21% |
+| gen5 | 0.06762 | +2.52% | 64.54% |
+| gen4 | 0.07032 | −1.38% | 74.87% |
+| v2 | 0.07448 | −7.36% | 97.26% |
+| v1 | 0.07505 | −8.19% | 94.71% |
+| capacity_v1 | 0.07624 | −9.90% | 74.90% |
+| lineage_horizon_v1 | 0.07655 | −10.36% | 79.20% |
+| lineage_v1 | 0.08270 | −19.22% | 83.37% |
+
+Twelve attempts, band 0.06569–0.08270, best improvement 5.30% against a
+required 10%. The levers that have now been spent on this one number:
+three coverage and labeling generations, value-semantics separation, an
+exact anchor closure, leaf-layer replay at two weights, trunk capacity,
+leaf-horizon batch emphasis, and initialisation lineage. Two of those
+disproved their own premise outright — the closure showed coverage was
+never missing, and the width control showed the 64-wide and 128-wide
+trunks fit the corpus to within 1.4% of each other.
+
+The campaign also shows a consistent tension the maintainer should see:
+across those twelve attempts the h4 depth-two gap correlates *positively*
+with evaluation-median improvement (Spearman 0.73, n = 12). Every attempt
+that improved the evaluation roots most — v2 at 97.3%, v1 at 94.7%,
+lineage_v1 at 83.4% — scored worst on this anchor, and the attempt with
+the best anchor (gen2) had the second-weakest evaluation improvement.
+This is an observed association over non-independent attempts, not a
+causal claim, but no attempt has yet escaped it.
+
+### What depth-three resolve says about the same anchor
+
+`class_head_gen5_d3.json` measures the standing best candidate on the
+same 11-root pack at the depth the flagship agent actually plays inside
+its 2.0 s budget (G6 measured p95 0.609 s at that depth):
+
+| Root | h | depth-two gap | depth-three gap |
+|---|---:|---:|---:|
+| `(239,0,0,240)` | 4 | 0.06762 | **0.00588** |
+| `(239,0,0,240)` | 5 | 0.00960 | 0.00557 |
+| `(0,240,239,0)` | 5 | 0.00000 | 0.00000 |
+
+Whole-pack maximum at depth three is 0.0196, with zero LP fallbacks. The
+anchor that blocks promotion is 11.5× smaller at play depth than at the
+depth the gate scores.
+
+### The rules question for the maintainer
+
+**Should a depth-two bar gate an agent that plays depth-three resolve
+inside its budget?**
+
+The G3 promotion gate compares candidates at `mcts.max_depth=2`. The
+deployed agent resolves to depth three within its declared budget, and
+G1 established that depth is the search variable that matters: the same
+anchors that sit at 0.066–0.083 at depth two equalize to ≤ 0.0073 at
+depth three (`depth_gate_v1.json`), and generation five reaches 0.00588
+there. Twelve attempts have failed to move the depth-two number by the
+required margin while five of them improved the evaluation roots by 65%
+or more.
+
+Three readings are available, and choosing among them is a maintainer
+decision, not one this goal may make:
+
+1. The depth-two bar is the correct conservative gate — it measures leaf
+   quality with search stripped away, and the agent should not be
+   promoted on search that masks a weak evaluator. Then the ceiling is
+   real and the next work is a different evaluator class, not another
+   training generation.
+2. The bar measures the wrong configuration — the deployed agent never
+   plays depth two — and the gate should be re-declared at play depth.
+   That is a change to the gate, explicitly out of scope here.
+3. The anchor is individually pathological rather than representative.
+   Nothing in the evidence settles this; it would need the anchor's
+   depth-two matrix inspected against the exact one, which no attempt
+   here did.
+
+Changing the gate, its threshold, or the promotion code was out of scope
+for this goal, and none of it was touched. The six new configs are
+`train_capacity_rows_v1`, `train_class_head_capacity_v1`,
+`train_class_head_horizon_v1`, `train_lineage_rows_v1`,
+`train_class_head_lineage_v1`, and
+`train_class_head_lineage_horizon_v1`; every artifact named above is
+regenerable from them through the commands in
+[`WORKFLOWS.md`](WORKFLOWS.md).
 
 ## Claim boundary
 

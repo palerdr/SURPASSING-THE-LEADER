@@ -1,0 +1,15 @@
+defaults:
+  - train_capacity_rows_v1
+  - _self_
+
+# Lever three, stage A of the champion-or-ceiling promotion goal
+# (docs/AGENT_GOAL.md): the same from-scratch rows stage as lever one at
+# the original 64 width, so the decision stage that follows differs from
+# generation five only in init lineage -- generation five fine-tunes a
+# chain that runs back through generation four to the M1 baseline, this
+# starts from random weights on the generation-five corpus.  Holding the
+# width at 64 also makes this the width control for lever one.
+output_dir: src/dth/checkpoints/lineage_rows_v1
+
+model:
+  hidden_width: 64

@@ -182,6 +182,39 @@ uv run python -m dth dataset --config-name class_head_gen5_corpus
 uv run python -m dth train --config-name train_class_head_gen5
 ```
 
+## The champion-or-ceiling attempts
+
+The four candidate evaluations of the promotion goal (AGENT_GOAL.md, Exit
+B). Each is train, then the depth-two ladder, then the unchanged promotion
+pipeline; the ladder and promotion lines are the ones under "Promotion and
+league" above with the candidate's own paths.
+
+```powershell
+# Attempt 1, capacity: 128x2 trunk, from-scratch rows then the gen5 recipe.
+uv run python -m dth train --config-name train_capacity_rows_v1
+uv run python -m dth train --config-name train_class_head_capacity_v1
+
+# Attempt 2, leaf-horizon batch emphasis on generation five.
+uv run python -m dth train --config-name train_class_head_horizon_v1
+
+# Attempt 3, init lineage: from-scratch rows at 64 wide, then the recipe.
+uv run python -m dth train --config-name train_lineage_rows_v1
+uv run python -m dth train --config-name train_class_head_lineage_v1
+
+# Attempt 4, the two non-capacity levers composed.
+uv run python -m dth train --config-name train_class_head_lineage_horizon_v1
+```
+
+The depth-three comparison that frames the goal's closing rules question
+is the depth ladder at one seed against the standing best candidate:
+
+```powershell
+uv run python -m dth mcts-audit --config-name mcts_depth_ladder_v1 `
+  mcts.max_depth=3 'evaluators=[network]' 'seeds=[0]' `
+  checkpoint=src/dth/checkpoints/class_head_gen5/best.pt `
+  output=src/dth/artifacts/class_head_gen5_d3.json
+```
+
 ## Validation
 
 ```powershell

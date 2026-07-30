@@ -1,0 +1,34 @@
+defaults:
+  - train
+  - _self_
+
+# Lever one, stage A of the champion-or-ceiling promotion goal
+# (docs/AGENT_GOAL.md).  Anchor-leaf fit plateaued at 64 wide under three
+# independent data levers, so the trunk widens to 128x2 (precedent:
+# train_capacity_probe_128x2).  No migration path exists from a 64-wide
+# checkpoint, so the wider trunk restarts row supervision from scratch on
+# the generation-five corpus, exactly as the M1 baseline staged its own
+# from-scratch rows run, before the unchanged generation-five decision
+# recipe fine-tunes it.
+#
+# Both heads exist from the first gradient step: the corpus carries
+# resolve-play rows, which may only supervise the play head, and the class
+# head is the 61-output continuation head the resolve reconstructs matrices
+# through.  The epoch cap is lower than the base recipe's 500 because this
+# corpus is 6.6x larger than the M1 stage-A corpus; patience still decides.
+dataset: src/dth/artifacts/class_head_gen5_corpus.npz
+output_dir: src/dth/checkpoints/capacity_128x2_rows_v1
+initial_checkpoint: null
+device: cuda
+
+model:
+  hidden_width: 128
+  transition_class_head: true
+  play_value_head: true
+
+training:
+  batch_size: 256
+  epochs: 250
+  patience: 50
+  class_weight: 1.0
+  log_every: 10
