@@ -24,5 +24,7 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
 Read `docs/GAME_AND_SOLVER.md` for the model and `docs/EXACTNESS_PROOF.md` for
 the proof boundary. `docs/AGENT_GOAL.md` owns the sub-project's end goal,
 gates, milestone order, and any open decision; `docs/PROMOTION_CAMPAIGN.md`
-owns the measured history behind it and is reference, not instruction. Run
+owns the measured history behind it and is reference, not instruction. The
+packed backup tablebase's Rust kernel must satisfy
+`docs/DTH_BACKUP_PARITY.md` before it can become a default backend. Run
 `uv run python -m pytest src/dth/tests -q`.

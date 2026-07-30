@@ -1,0 +1,29 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+# The full 289,374,121-class quotient sweep. The artifact directory holds
+# value.npy (f64), solver_kind.npy (u8), the build checkpoint, and the final
+# digest manifest; the sweep resumes from the last completed potential layer.
+output_dir: src/dth/artifacts/backup_full_v1
+report_path: src/dth/artifacts/backup_full_v1_report.json
+backend: auto
+warm_start: true
+max_support: 12
+lp_workers: 1
+work_item_profiles: 4096
+# Per-layer progress lines: 0 silences them, N prints every Nth completed
+# layer.  A full sweep is hours long and otherwise writes nothing to stdout
+# until it finishes, so the default reports every layer.
+progress_every: 1
+
+sweep:
+  stop_after_layers: null
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

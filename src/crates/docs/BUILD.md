@@ -121,3 +121,19 @@ uv run --project ../.. maturin develop --release
 cd ../..
 uv run python -m pytest src/abstract/tests/test_rust_parity.py -q
 ```
+
+## DTH backup-sweep kernel
+
+`src/crates/dth_backup` is an opt-in PyO3 + rayon accelerator for the DTH
+packed-quotient backward sweep. Python (`src/dth/backup_tablebase.py`) remains
+behavioral authority, performs all LP residue solves, and precomputes every
+revival probability — the kernel does no transcendental arithmetic, which is
+what makes its class values bit-identical to Python's. Its eligibility
+contract is `src/dth/docs/DTH_BACKUP_PARITY.md`.
+
+```powershell
+cd src/crates/dth_backup
+uv run --project ../../.. maturin develop --release
+cd ../../..
+uv run python -m pytest src/dth/tests/test_backup_rust_parity.py -q
+```

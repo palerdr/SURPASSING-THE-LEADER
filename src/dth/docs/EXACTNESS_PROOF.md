@@ -49,6 +49,65 @@ For root `(240,0,240,0)`, the bitset recurrence yields exactly
 
 reachable equivalence classes.
 
+## Per-player TTD-dead quotient
+
+The failure-dead quotient above requires *both* STs at 240. The per-player
+generalization quotients each player independently: the complete game reads a
+player's TTD in exactly one place, the revival probability
+`revival_model(s_c, t_c)` of a failed check, and
+
+1. `survive_injection(s, t)` is exactly \(s\le239\wedge s+t\le240\) and a
+   failing profile has `revival_model == 0`;
+2. failing survival is absorbing: a successful check raises that player's ST
+   and leaves their TTD alone, a failed one ends the game for them unless
+   they survive, so ST growth is the only motion available to a dead profile
+   and it never revives it (`tests/test_dead_ttd_quotient.py` locks all
+   three claims exhaustively).
+
+A dead profile's TTD is therefore never read again: on the only branch that
+reads TTD the probability is identically zero, so the transition distribution
+— and hence the value — factors through the map that replaces a dead TTD
+with a per-ST sentinel. That collapses the 72,600 per-player \((s,t)\)
+profiles over the reachable TTD domain \(\{0\}\cup[60,300]\) to
+\(16{,}711+300=17{,}011\) classes and the two-player space to
+\(17{,}011^2=289{,}374{,}121\).
+
+The domain \(\{0\}\cup[60,300]\) is transition closed: revival requires
+\(s_c+t_c\le240\), so a failure child's TTD \(t_c+s_c+60\) never exceeds 300.
+An **alive** profile with TTD in 1..59 is a valid live state outside this
+closure; the packed codec (`dth.packed`) fails closed on it rather than
+approximate. A dead profile is accepted with any TTD because the quotient
+discards dead TTDs exactly.
+
+## Backup sweep potential
+
+The packed backup tablebase schedules the quotient space by the potential
+
+\[
+\Phi(x)=s_c+s_d+\rho(s_c,t_c)+\rho(s_d,t_d),\qquad
+\rho(s,t)=\begin{cases}t&\text{alive}\\301&\text{dead,}\end{cases}
+\]
+
+with maximum \(299+299+301+301=1200\). Every live transition strictly
+increases it, by cases on the mover's profile:
+
+- successful lag \(\ell\), profile stays alive or stays dead:
+  \(\Delta\Phi=\ell\);
+- successful lag \(\ell\), alive profile dies: \(\Delta\Phi=\ell+301-t\ge
+  \ell+61\) since alive implies \(t\le240\) (dead never revives, so the
+  reverse move does not exist);
+- failed check, revived profile alive: \(\Delta\Phi=60\) (the ST resets to
+  zero and the new TTD is \(t_c+s_c+60\));
+- failed check, revived profile dead: \(\Delta\Phi=301-(s_c+t_c)\ge61\).
+
+`tests/test_backup_potential.py` checks all 1,035,541 live profile
+transitions exhaustively. Since no edge stays inside a layer, solving whole
+layers in descending \(\Phi\) sees every child before its parents, which is
+the correctness basis of `dth.backup_tablebase`; its per-class certificates
+are re-derivable on demand from stored child values (`recertify_class`), the
+same Bellman-recertification standard the SQLite pipeline applies to queried
+roots. Cross-backend behavior is governed by `docs/DTH_BACKUP_PARITY.md`.
+
 ## Certified value intervals
 
 An unknown live child begins at the mathematical bound \([-1,1]\). If a child

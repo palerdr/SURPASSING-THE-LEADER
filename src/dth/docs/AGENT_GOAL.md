@@ -259,9 +259,12 @@ measurements say need not be used.
   Over 400 sampled h2/h3 matrices, `solve_full_support_structured_matrix`
   applies to 5%; the other 95% run two generic 60x60 LPs to find equilibria
   of median support 2x2 (84.7% are 6x6 or smaller). Throughput on one core:
-  744 solves/s structured, 186 LP. A support-restricted solve with a
-  best-response verification step should capture most of that gap, and it
-  certifies *more* explicitly than a black-box LP.
+  744 solves/s structured, 186 LP. (Superseded 2026-07-30: the double oracle
+  measured 45x *slower* — `support_solver.py` records why — and the
+  complete-game endgame band is 96% mixed with near-full supports, so the
+  h2/h3 support statistics do not transfer there. The speedup that
+  materialized is pure-saddle screening, single-LP dual extraction, and the
+  full-support equalizer solve.)
 - **TTD-layer decomposition** (recorded, not re-verified here) puts the
   whole census in ~142 MB resident, or ~25 MB quotiented.
 
@@ -269,14 +272,54 @@ Re-priced on measured throughput, 289M classes is 18 core-days at today's LP
 rate and 4–5 at the structured rate. This is not a claim that closure is
 done or scheduled — it is a claim that its price is now an open question
 rather than a settled impossibility, and that the next scoping decision
-should be made against the re-priced figure. The claim boundary below is
-unchanged: none of this asserts a complete-game L1 solution.
+should be made against the re-priced figure. That scoping decision was taken
+on 2026-07-30 and is the goal below.
+
+## Goal 2 — certified complete-game closure of the quotient space
+
+Adopted 2026-07-30. Solve every one of the 289,374,121 per-player TTD-dead
+quotient classes exactly, as one dense certified artifact
+(`dth.backup-tablebase.v1`: a float64 value and a solver-routing byte per
+class, digest manifest, no per-class certificate — certificates are
+re-derived on demand from stored children, the standard
+[`EXACTNESS_PROOF.md`](EXACTNESS_PROOF.md) applies to queried roots). The
+solver is the descending-potential backup sweep of `dth.backup_tablebase`
+(Hydra entry `dth backup`, config `backup_full_v1`), with the Rust kernel
+`dth_backup_rs` behind the parity contract
+[`DTH_BACKUP_PARITY.md`](DTH_BACKUP_PARITY.md). The existing SQLite interval
+pipeline is untouched and remains the authority for its own artifacts.
+
+The closure claim is valid **only** when all four gates pass on the finished
+canonical artifact:
+
+- **BG1 — completeness.** Every class value is finite, in `[-1, 1]`, with a
+  known routing byte; the finalize scan refuses anything else.
+- **BG2 — sampled recertification.** Deterministic per-layer samples
+  re-derive their matrices from stored children and re-solve within the
+  frozen 1e-6 saddle tolerance.
+- **BG3 — external anchors.** The artifact reproduces all 3,541
+  `exact_band_v1` classes within certificate width and
+  `V(240,0,240,0) = 0.3372132166291093`; the independent
+  `build_dead_band_reference` agrees on the full dead-dead band.
+- **BG4 — backend parity.** Every gate of
+  [`DTH_BACKUP_PARITY.md`](DTH_BACKUP_PARITY.md) is green for both the
+  Python authority and the compiled kernel.
+
+Measured markers (2026-07-30, build in progress): the top 150 real layers
+solve with zero LP calls (the full-support equalizer rung takes 96% of them),
+the swept root matches the band value to 6.9e-12, and the Rust kernel
+reproduces the Python authority bit for bit at 59.7x its speed. The claim
+covers exactly the addressable domain — alive TTDs in `{0} | [60, 300]`,
+which is transition closed; off-domain states fail closed at lookup.
 
 ## Claim boundary
 
-- Nothing under this goal claims a complete-game L1 solution; the root
+- The bounded-resolve goal claims no complete-game L1 solution; the root
   interval narrows only through the interval machinery of
   [`EXACTNESS_PROOF.md`](EXACTNESS_PROOF.md), never through play results.
+  Goal 2's complete-game closure claim exists **only** once BG1–BG4 pass on
+  a finished canonical artifact, and covers only the transition-closed
+  quotient domain; until then, nothing claims a complete-game solution.
 - No global exploitability claim. Strength claims use the whitepaper's four
   categories — exact, bounded, approximate, empirical — and per-move
   provenance; a promotion report may say no sampled case is certified worse,

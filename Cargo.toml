@@ -1,3 +1,7 @@
 [workspace]
-members = ["src/crates/abstract_solver", "src/crates/stl_solver"]
+members = [
+    "src/crates/abstract_solver",
+    "src/crates/dth_backup",
+    "src/crates/stl_solver",
+]
 resolver = "2"

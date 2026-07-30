@@ -1,0 +1,17 @@
+[package]
+name = "dth_backup_rs"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "dth_backup_rs"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+numpy = "*"
+pyo3 = "*"
+rayon = "1"
