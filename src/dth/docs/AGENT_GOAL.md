@@ -276,6 +276,57 @@ plausible next levers, in evidence order: a trunk-capacity probe (the
 a rules-level decision by the maintainer about whether the depth-two bar
 measures the deployed agent — which is not a change this goal may make.
 
+## The promotion goal — champion or ceiling (frozen 2026-07-29)
+
+Standing state when this goal was frozen: generation five
+(`class_head_gen5/best.pt`) is the best candidate — seven of eight G3 gates
+pass (`promotion_gen5.json`). The sole failing gate is anchor-worst-gap
+improvement, bound entirely by the depth-two gap of anchor
+`(239, 0, 0, 240)` h4: candidate 0.0676 against the 0.0624 bar (baseline
+0.0694 × 0.9). That gap has held 0.066–0.070 for every checkpoint since the
+baseline, while depth-three resolve equalizes the same anchor to ≤ 0.0073.
+
+This goal has exactly two exits, both terminal; iterating past the budget
+is a failure of the goal, not diligence.
+
+- **Exit A — champion.** A candidate passes every G3 gate, unmodified,
+  through `readiness.py promotion`. Then finish the promotion: point the
+  arena default dth checkpoint at the new champion, re-run the G4
+  paired-seat league and the latency/certified-play smoke with it, record
+  every verdict here, and update the measured-status table.
+- **Exit B — ceiling.** The lever budget exhausts without a promotion.
+  Then record the measured band of the h4 depth-two gap across all
+  attempts alongside the existing five-generation history, and close by
+  putting the rules question to the maintainer: should a depth-two bar
+  gate an agent that plays depth-three resolve inside its budget? Changing
+  the gate, its threshold, or the promotion code is out of scope.
+
+Budget: at most **six** full candidate evaluations (train → depth-two
+ladder → promotion), spent on these levers in evidence order:
+
+1. **Capacity probe.** A 128×2 trunk (precedent:
+   `train_capacity_probe_128x2.yaml`) trained on the generation-five corpus
+   with the generation-five leaf-layer replay groups, class head and play
+   head enabled. No migration path exists from 64-wide checkpoints, so
+   stage it like the M1 baseline: a from-scratch rows stage, then the
+   decision recipe. This lever is first because fit at the anchor leaf band
+   plateaued at 64 wide under three independent data levers.
+2. **Horizon-batch emphasis.** The existing `training.horizon_batch`
+   counts knob weighted toward the h2/h3 leaf horizons, applied to the
+   best trunk from lever one (or to generation five if lever one
+   regresses).
+3. **Init lineage.** The best recipe so far retrained from scratch
+   (rows stage, then decision stage) instead of fine-tuned from the
+   generation-four lineage, in case the fine-tuning chain itself carries
+   the plateau.
+
+Standing rules, restated because a fresh session will read this cold:
+gates, tolerances, and readiness thresholds are untouchable; exact
+authority stays finite-only and play rows never supervise the finite head;
+every experiment runs through a versioned config; artifacts stay
+gitignored; each attempt's verdict is recorded here before the next
+attempt starts.
+
 ## Claim boundary
 
 - Nothing under this goal claims a complete-game L1 solution; the root
