@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = ROOT / "src"
 PROJECTS = ("stl", "dth", "abstract")
-IMPLEMENTATIONS = (*PROJECTS, "crates", "ocaml")
+IMPLEMENTATIONS = (*PROJECTS, "crates", "dth_ocaml", "arena")
 IGNORED_PARTS = {
     ".git",
     ".venv",
@@ -31,16 +31,26 @@ def _source_files(suffix: str):
             yield path
 
 
-def test_readmes_are_owned_by_root_or_an_implementation():
+# A subtree's README is also its instruction file, so exactly these are the
+# ones CLAUDE.md imports. A README deeper inside a subtree is ordinary
+# documentation and is deliberately not an instruction file.
+INSTRUCTION_READMES = frozenset(
+    [f"src/{name}/README.md" for name in IMPLEMENTATIONS] + ["docs/papers/README.md"]
+)
+
+
+def test_readmes_are_owned_by_root_or_a_subtree():
     for path in _source_files("README.md"):
         relative = path.relative_to(ROOT)
-        assert relative == Path("README.md") or (
-            relative.parts[0] == "src" and relative.parts[1] in IMPLEMENTATIONS
+        assert (
+            relative == Path("README.md")
+            or relative.as_posix() in INSTRUCTION_READMES
+            or (relative.parts[0] == "src" and relative.parts[1] in IMPLEMENTATIONS)
         ), relative
 
 
 def test_markdown_is_owned_by_an_approved_context_root():
-    approved_roots = {"docs", "src", "arena", ".codex"}
+    approved_roots = {"docs", "src", ".codex"}
     for path in _source_files(".md"):
         relative = path.relative_to(ROOT)
         if len(relative.parts) == 1:
@@ -89,13 +99,23 @@ def test_evidence_links_resolve_to_a_declared_id():
     assert links, "no document cites the evidence ledger"
 
 
-def test_claude_md_imports_every_agents_file():
+def test_claude_md_imports_every_subtree_readme():
+    """Every subtree README is an instruction file and must be imported.
+
+    The root AGENTS.md is imported separately as the global rules; subtree
+    guidance lives in that subtree's README so one file serves a reader and an
+    agent. READMEs nested deeper inside a subtree are documentation, not
+    instructions, and are excluded by INSTRUCTION_READMES.
+    """
+
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    imported = set(re.findall(r"^@(\S*AGENTS\.md)\s*$", claude, flags=re.MULTILINE))
+    imported = set(re.findall(r"^@(\S*README\.md)\s*$", claude, flags=re.MULTILINE))
     on_disk = {
         path.relative_to(ROOT).as_posix()
-        for path in _source_files("AGENTS.md")
+        for path in _source_files("README.md")
+        if path.relative_to(ROOT).as_posix() in INSTRUCTION_READMES
     }
+    assert on_disk == INSTRUCTION_READMES, f"instruction README missing on disk: {INSTRUCTION_READMES - on_disk}"
     assert imported == on_disk, f"missing {on_disk - imported}, stale {imported - on_disk}"
 
 

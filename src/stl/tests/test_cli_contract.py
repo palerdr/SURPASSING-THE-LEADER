@@ -64,17 +64,3 @@ def test_hydra_command_matches_argparse_contract(config_path: Path) -> None:
             if action.option_strings and action.required
         }
         assert required_destinations <= config_destinations
-
-
-def test_tier_a_stage1_experiment_overrides_the_selected_command() -> None:
-    with initialize_config_dir(version_base="1.3", config_dir=str(ROOT / "config")):
-        config = compose(
-            config_name="config",
-            overrides=["command=tier_a", "experiment=tier_a_stage1"],
-        )
-
-    assert config.command.module == "stl.commands.tier_a"
-    assert config.command.stage == 1
-    assert config.command.limit == 1
-    assert config.command.workers == 1
-

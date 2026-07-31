@@ -17,7 +17,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stl", "src/dth", "src/abstract", "arena"]
+packages = ["src/stl", "src/dth", "src/abstract", "src/arena"]
 
 [dependency-groups]
 dev = [
@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "arena/tests", "tests/meta"]
+testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "tests/meta"]
 pythonpath = ["src", "."]
 
 [tool.uv]

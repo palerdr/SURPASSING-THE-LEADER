@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-This repository's instructions live in `AGENTS.md` files, one per subtree. Treat
-every one of them as if it were a `CLAUDE.md`: its contents are binding for work
-inside that directory.
+The root `AGENTS.md` holds this repository's global rules. Each subtree then
+carries its own `README.md`, whose "working in this subtree" guidance is
+binding for work inside that directory -- treat it as if it were a `CLAUDE.md`.
 
 The root file below is always in force. The per-project files are imported so
 they are available in context; when they conflict with the root file, the root
@@ -14,13 +14,13 @@ file's frozen global rules win.
 
 ## Project instructions
 
-@src/stl/AGENTS.md
-@src/dth/AGENTS.md
-@src/abstract/AGENTS.md
-@src/ocaml/AGENTS.md
-@src/crates/AGENTS.md
-@arena/AGENTS.md
-@docs/papers/AGENTS.md
+@src/stl/README.md
+@src/dth/README.md
+@src/abstract/README.md
+@src/dth_ocaml/README.md
+@src/crates/README.md
+@src/arena/README.md
+@docs/papers/README.md
 
 ## Canonical contracts
 

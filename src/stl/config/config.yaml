@@ -1,5 +1,5 @@
 defaults:
-  - command: tier_a
+  - command: train
   - experiment: smoke
   - rl: baseline_v1
   - _self_

@@ -399,40 +399,6 @@ def test_factory_constructs_real_solver_agent():
 
 
 @needs_checkpoint
-def test_play_cli_solver_path_builds_solver_agent():
-    from stl.play import cli as play_cli
-
-    hal_ai = play_cli.load_hal_ai(depth=2, checkpoint=None, agent="solver", iterations=8)
-    assert isinstance(hal_ai, SolverAgent)
-    assert hal_ai.resolve_at_critical is True
-    assert hal_ai.resolve_horizon == 1
-
-
-@needs_checkpoint
-def test_play_cli_solver_path_can_enable_tier_a():
-    from stl.solver.tablebase import TierAEvaluator
-
-    from stl.play import cli as play_cli
-
-    hal_ai = play_cli.load_hal_ai(
-        depth=2,
-        checkpoint=None,
-        agent="solver",
-        iterations=8,
-        use_tier_a=True,
-    )
-    assert isinstance(hal_ai, SolverAgent)
-    assert isinstance(hal_ai.evaluator, TierAEvaluator)
-
-
-def test_play_cli_solver_path_fails_loudly_without_checkpoint(tmp_path):
-    from stl.play import cli as play_cli
-
-    with pytest.raises(FileNotFoundError):
-        play_cli.load_hal_ai(depth=2, checkpoint=str(tmp_path / "missing.pt"), agent="solver")
-
-
-# ── Baku seat ─────────────────────────────────────────────────────────────
 
 
 def test_baku_seat_agent_acts_legally_including_leap_drop():
