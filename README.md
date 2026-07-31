@@ -53,6 +53,25 @@ Each project owns its `config/`, `docs/`, tests, checkpoints, and outputs.
 Generated artifacts are gitignored and must not be mixed between projects or
 across incompatible schema versions.
 
+## Exact DTH paper
+
+The completed paper is available as both the rendered
+[`paper/dth_exact_solution.pdf`](paper/dth_exact_solution.pdf) and its
+[`paper/dth_exact_solution.tex`](paper/dth_exact_solution.tex) source. It gives
+a certified exact solution of the complete finite DTH game, including the root
+value and equilibrium strategies.
+
+With the exact value table available, the paper and its figures can be
+reproduced from the repository root:
+
+```powershell
+uv run python paper/generate_figure_data.py
+uv run --with matplotlib --with seaborn --with pandas python paper/make_figures.py
+Push-Location paper
+tectonic dth_exact_solution.tex --synctex --keep-logs
+Pop-Location
+```
+
 ## Canonical contracts
 
 - [`docs/ACTION_TIMING.md`](docs/ACTION_TIMING.md) owns literal action seconds,
@@ -61,7 +80,7 @@ across incompatible schema versions.
   full-game state, transition, death, revival, clock, and terminal boundaries.
 - [`docs/FOUNDATIONS.md`](docs/FOUNDATIONS.md) owns the shared zero-sum matrix
   and exact-solver foundations without repeating game rules.
-- [`papers/game-sources/EVIDENCE.md`](papers/game-sources/EVIDENCE.md) records
+- [`docs/game-sources/EVIDENCE.md`](docs/game-sources/EVIDENCE.md) records
   the documentary basis for frozen rule choices.
 
 ## Repository policy
