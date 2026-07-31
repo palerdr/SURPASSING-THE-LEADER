@@ -37,7 +37,10 @@ pythonpath = ["src", "."]
 # (24 here) exhausts Windows handles while importing sympy and makes the
 # workers fight over the GPU. 8 leaves headroom and still gets most of the win.
 addopts = "-n 8"
-markers = ["slow: builds a real artifact end to end; deselected unless --slow is given"]
+# Runs by default -- under xdist these cost ~19s of wall clock and they are the
+# only coverage of resume and backend parity, which is not worth trading away.
+# Use -m "not slow" for a tighter loop when iterating on unrelated code.
+markers = ["slow: builds a real backup artifact end to end"]
 
 [tool.uv]
 package = true

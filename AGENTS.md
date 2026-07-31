@@ -64,15 +64,16 @@ opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 ```
 
-`pytest` runs distributed (`-n auto`) and deselects the `slow` tests, which
-build real backup artifacts end to end. Add `-n 0` for a readable serial
-traceback when something fails. **Before merging anything that touches
-`src/dth/backup_tablebase.py`, `src/dth/packed.py`, or the `dth_backup`
-crate, run the full suite:**
+`pytest` runs distributed at `-n 8`; that width is deliberate, because one
+worker per logical core exhausts Windows handles importing torch's
+dependencies and makes the workers contend for the GPU. Add `-n 0` for a
+readable serial traceback when something fails.
 
-```powershell
-uv run python -m pytest -q --slow
-```
+Everything runs by default, including the `slow` tests that build real backup
+artifacts end to end — they are the only coverage of resume and backend
+parity, and under xdist they cost about 19 seconds. Use `-m "not slow"` for a
+tighter loop when iterating on unrelated code, never as the check before a
+merge.
 
 After code changes, run `graphify update .`. Use `graphify query`, `path`, or
 `explain` for architecture questions when `graphify-out/graph.json` exists.
