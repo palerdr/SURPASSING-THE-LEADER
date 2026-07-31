@@ -145,6 +145,7 @@ def test_support_attempt_reproduces_the_oracle_and_fails_closed() -> None:
     assert reproduced >= 5
 
 
+@pytest.mark.slow  # 34s: sweeps a synthetic table and re-solves every class independently
 def test_python_sweep_matches_independent_resolution(tmp_path) -> None:
     table = make_synthetic_table()
     builder = BackupTablebaseBuilder(
@@ -167,6 +168,7 @@ def test_python_sweep_matches_independent_resolution(tmp_path) -> None:
     assert metadata["canonical_table"] is False
 
 
+@pytest.mark.slow  # 48s: builds, interrupts, resumes, and diffs the artifact bytes
 def test_interrupted_build_resumes_byte_for_byte(tmp_path) -> None:
     table = make_synthetic_table()
     straight = tmp_path / "straight"
@@ -227,6 +229,7 @@ def test_corrupted_artifact_fails_closed(tmp_path) -> None:
 
 
 @pytest.mark.skipif(not BAND_PATH.exists(), reason="exact_band_v1.sqlite not present")
+@pytest.mark.slow  # 31s: solves the dead-dead band against the shipped exact band
 def test_dead_band_reference_matches_exact_band_v1() -> None:
     # The shipped band solves the both-STs>=240 quotient: classes keyed by
     # remaining capacities in a disjoint negative id range.  The dead-band

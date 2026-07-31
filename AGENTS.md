@@ -64,5 +64,15 @@ opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 ```
 
+`pytest` runs distributed (`-n auto`) and deselects the `slow` tests, which
+build real backup artifacts end to end. Add `-n 0` for a readable serial
+traceback when something fails. **Before merging anything that touches
+`src/dth/backup_tablebase.py`, `src/dth/packed.py`, or the `dth_backup`
+crate, run the full suite:**
+
+```powershell
+uv run python -m pytest -q --slow
+```
+
 After code changes, run `graphify update .`. Use `graphify query`, `path`, or
 `explain` for architecture questions when `graphify-out/graph.json` exists.

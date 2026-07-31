@@ -23,11 +23,21 @@ packages = ["src/stl", "src/dth", "src/abstract", "src/arena"]
 dev = [
     "maturin>=1.14.1",
     "pytest>=8.0",
+    "pytest-xdist>=3.6",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "tests/meta"]
 pythonpath = ["src", "."]
+# The suite is overwhelmingly independent and every artifact-building test
+# already writes under its own tmp_path, so it distributes cleanly. Use "-n 0"
+# when a failure needs a readable serial traceback.
+#
+# 8, not "auto": several tests import torch, and one worker per logical core
+# (24 here) exhausts Windows handles while importing sympy and makes the
+# workers fight over the GPU. 8 leaves headroom and still gets most of the win.
+addopts = "-n 8"
+markers = ["slow: builds a real artifact end to end; deselected unless --slow is given"]
 
 [tool.uv]
 package = true

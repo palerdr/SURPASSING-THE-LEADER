@@ -77,6 +77,7 @@ def test_support_attempt_is_bit_identical() -> None:
     assert accepted >= 40
 
 
+@pytest.mark.slow  # 26s: runs the whole sweep on both backends and compares bytes
 def test_synthetic_sweep_backends_are_bit_identical(tmp_path) -> None:
     table = make_synthetic_table()
     python_dir = tmp_path / "python"
