@@ -11,3 +11,9 @@
   tui_input
   tui_max_additions)
  (libraries dth_engine))
+
+(executable
+ (public_name dth-solve-tablebase)
+ (name solve_tablebase)
+ (modules solve_tablebase)
+ (libraries dth_solver unix))
