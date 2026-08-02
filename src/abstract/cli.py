@@ -26,8 +26,6 @@ def command_exact(args: argparse.Namespace) -> int:
         args.packed
         or rules.ruleset_id
         in {
-            "bucket6_unified80",
-            "bucket12_unified80",
             "bucket6_frozen95",
             "bucket12_frozen95",
         }
@@ -95,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     exact.add_argument(
         "--packed",
         action="store_true",
-        help="use the resumable packed v3 builder (automatic for production rulesets)",
+        help="use the resumable packed v4 builder (automatic for production rulesets)",
     )
     exact.add_argument(
         "--checkpoint-states",

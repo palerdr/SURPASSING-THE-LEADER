@@ -755,8 +755,13 @@ PGFPlots: reading {build/figures/root_strategies.dat}
 File: build/figures/seaborn/fig5_strategy_and_value.pdf Graphic file (type pdf)
 
 <use build/figures/seaborn/fig5_strategy_and_value.pdf>
- [9] [10] (dth_exact_solution.aux)
+ [9]
+Package microtype Info: Loading generic protrusion settings for font family
+(microtype)             `lmtt' (encoding: TU).
+(microtype)             For optimal results, create family-specific settings.
+(microtype)             See the microtype manual for details.
+ [10] [11] (dth_exact_solution.aux)
 Package rerunfilecheck Info: File `dth_exact_solution.out' has not changed.
 (rerunfilecheck)             Checksum: 6EA439464F39F665BA4E16F62F5D4F13;1959.
  )
-Output written on dth_exact_solution.xdv (10 pages, 310612 bytes).
+Output written on dth_exact_solution.xdv (11 pages, 315340 bytes).

@@ -21,10 +21,7 @@ type cylinder_config = {
 
 type survival_config = {
   baseline : float;
-  ttd_half_life_seconds : float;
-  ttd_curve_exponent : float;
-  effective_referee_decay : float;
-  effective_referee_floor : float;
+  ttd_decay_per_minute : float;
 }
 
 type t = {
@@ -51,11 +48,8 @@ let default_config =
     cylinder = { max = 300; death_procedure_overhead = 120 };
     survival =
       {
-        baseline = 0.80;
-        ttd_half_life_seconds = 120.0;
-        ttd_curve_exponent = 1.3;
-        effective_referee_decay = 0.88;
-        effective_referee_floor = 0.4;
+        baseline = 0.95;
+        ttd_decay_per_minute = 0.75;
       };
   }
 

@@ -87,7 +87,7 @@ def test_class_round_trip_and_dead_sentinel_representative() -> None:
         0,
         CLASS_COUNT - 1,
         encode_class((0, 0, 0, 0)),
-        encode_class((240, 0, 240, 0)),  # the exact_band_v1 root, dead-dead
+        encode_class((240, 0, 240, 0)),  # independent dead-band anchor
         encode_class((239, 0, 0, 240)),  # the h4/h5 anchor state
         encode_class((180, 60, 299, 300)),
     ]

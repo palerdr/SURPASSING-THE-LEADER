@@ -1,27 +1,27 @@
-"""The read-only backup facade: digests, schema gates, and class lookups."""
+"""The read-only complete facade: digests, schema gates, and class lookups."""
 
 import numpy as np
 import pytest
 
-from dth.backup_tablebase import (
-    BackupTablebase,
-    BackupTablebaseBuilder,
+from dth.complete_tablebase import (
+    CompleteTablebase,
+    CompleteTablebaseBuilder,
     recertify_class,
 )
-from dth.tests.test_backup_sweep_python import make_synthetic_table
+from dth.tests.test_complete_sweep_python import make_synthetic_table
 
 
 @pytest.fixture(scope="module")
 def synthetic_artifact(tmp_path_factory):
     table = make_synthetic_table(count=24)
-    target = tmp_path_factory.mktemp("backup") / "artifact"
-    BackupTablebaseBuilder(output_dir=target, backend="python", table=table).sweep()
+    target = tmp_path_factory.mktemp("complete") / "artifact"
+    CompleteTablebaseBuilder(output_dir=target, backend="python", table=table).sweep()
     return table, target
 
 
 def test_class_lookup_and_bounds(synthetic_artifact) -> None:
     table, target = synthetic_artifact
-    tablebase = BackupTablebase(target)
+    tablebase = CompleteTablebase(target)
     count = len(table.st_by_profile)
     assert np.isfinite(tablebase.value_of_class(0))
     assert np.isfinite(tablebase.value_of_class(count * count - 1))
@@ -31,14 +31,14 @@ def test_class_lookup_and_bounds(synthetic_artifact) -> None:
 
 def test_state_lookup_requires_the_canonical_table(synthetic_artifact) -> None:
     _, target = synthetic_artifact
-    tablebase = BackupTablebase(target)
+    tablebase = CompleteTablebase(target)
     with pytest.raises(RuntimeError, match="canonical"):
         tablebase.lookup((0, 0, 0, 0))
 
 
 def test_recertification_agrees_with_stored_values(synthetic_artifact) -> None:
     table, target = synthetic_artifact
-    tablebase = BackupTablebase(target)
+    tablebase = CompleteTablebase(target)
     values = np.array(
         [tablebase.value_of_class(index) for index in range(len(table.st_by_profile) ** 2)]
     )
@@ -49,7 +49,7 @@ def test_recertification_agrees_with_stored_values(synthetic_artifact) -> None:
 
 def test_metadata_reports_the_routing_split(synthetic_artifact) -> None:
     table, target = synthetic_artifact
-    metadata = BackupTablebase(target).metadata
+    metadata = CompleteTablebase(target).metadata
     count = len(table.st_by_profile)
     assert metadata["class_count"] == count * count
     assert metadata["profile_count"] == count
@@ -59,3 +59,27 @@ def test_metadata_reports_the_routing_split(synthetic_artifact) -> None:
         == count * count
     )
     assert metadata["execution_backends"] == ["python"]
+
+
+def test_lp_residue_uses_ipm_before_tightened_fallback(monkeypatch) -> None:
+    import dth.complete_tablebase as module
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("forced")
+
+    monkeypatch.setattr(module, "solve_matrix_single_lp", fail)
+    monkeypatch.setattr(module, "solve_matrix", fail)
+    monkeypatch.setattr(module, "_solve_matrix_tightened", fail)
+    success = np.where(np.arange(60) % 2 == 0, 1.0, -1.0)
+    value, drop, check, backend = module._solve_residue(
+        success, 0.0, max_support=12
+    )
+    matrix = module.reconstruct_transition_class_matrix(success, 0.0)
+    assert backend == "highs-ipm"
+    assert np.isfinite(value)
+    expected, full_drop, full_check = module._solve_matrix_ipm(matrix)
+    assert value == pytest.approx(expected, abs=1e-9)
+    assert max(
+        0.0,
+        float(np.max(matrix @ full_check) - np.min(matrix.T @ full_drop)),
+    ) <= 1e-6

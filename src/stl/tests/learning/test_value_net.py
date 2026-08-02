@@ -81,7 +81,7 @@ def test_baku_dropper_in_leap_window_keeps_second_61_mass():
     assert dropper_dist.sum() == pytest.approx(1.0)
 
 
-def test_cpr_feature_distinguishes_fatigue_values_above_six():
+def test_cpr_history_feature_distinguishes_recorded_attempt_counts():
     hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
     baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
     game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)

@@ -718,6 +718,16 @@ equilibrium strategies are re-derived from stored child values on demand.
   Figures~\ref{fig:root} and~\ref{fig:surfaces}.
 \end{itemize}
 
+\section*{Reproducibility}
+
+From the repository head: \texttt{uv run python -m dth complete} builds the
+artifact (checkpointed, resumable; the configuration is
+\texttt{src/dth/config/complete\_full\_v1.yaml}); the exhaustive structural
+tests and both-backend parity suite run under
+\texttt{uv run python -m pytest src/dth/tests -q} and
+\texttt{cargo test --workspace}. The artifact manifest embeds SHA-256
+digests of every array and of the solver sources that produced it.
+
 \vspace{-0.8em}
 \begin{thebibliography}{9}
 \footnotesize

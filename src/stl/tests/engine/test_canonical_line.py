@@ -10,7 +10,8 @@ arithmetic or the doc's state tables drift, this file fails.
 Replay semantics: every death in the canonical line was survived in the manga,
 so death half-rounds are resolved with resolve_half_round(..., survived_outcome=True)
 (forced outcome). The forced path still increments referee.cprs_performed, so
-referee fatigue accumulates exactly as in live play.
+the revival-attempt history remains exact even though it is not a probability
+input.
 
 TIMING INTERPRETATION:
 
@@ -21,16 +22,9 @@ ST=1, and ST is `check - drop + 1`. The action pairs below are the ordinal
 encoding of the source intervals. This follows docs/ACTION_TIMING.md and makes
 R5H1's instant success one second, as documented.
 
-KNOWN CANON-VS-ENGINE DISCREPANCY (deliberate, documented):
-
-R9H2 survival probability. hal/HAL.md derives ~0.28 for Hal's R9H2 death;
-   that derivation is stale. With the engine's actual state at the R9H2
-   injection — death_duration=60, hal.ttd=238 (prior damage, before this
-   death), cprs_performed=4, physicality=1.0 — the referee computes
-       P = (1 - (60/300)**3) * 0.85**(238/60) * max(0.4, 0.88**4) * 1.0
-         = 0.992 * 0.85**(238/60) * 0.88**4
-         ~= 0.312
-   test_r9h2_survival_probability pins this corrected value.
+R9H2 revival probability uses the repository-wide frozen surface. With vial
+ST 0 and prior TTD 238, it is ``0.95 * 0.75**(238/60)``. The accumulated
+revival-attempt count is history only and player identity is irrelevant.
 
 Clock pins: rows whose start times the doc states explicitly (8:12, 8:17,
 8:19, 8:21, 8:26, 8:28, 8:30, 8:32, 8:34, 8:36, 8:38, 8:45, 8:49, 8:57, 8:59)
@@ -175,12 +169,7 @@ def test_leap_turn_action_space():
 
 
 def test_r9h2_survival_probability():
-    """Pin the corrected R9H2 survival probability (~0.312, not HAL.md's stale 0.28).
-
-    At injection: death_duration=60 (cylinder 0+60), hal.ttd=238 prior damage,
-    referee has performed 4 CPRs, physicality 1.0:
-        P = (1 - (60/300)**3) * 0.85**(238/60) * max(0.4, 0.88**4) * 1.0
-    """
+    """Pin R9H2 to the frozen repository-wide revival surface."""
     game = _make_game()
     _replay(game, CANONICAL_LINE)
 
@@ -188,6 +177,5 @@ def test_r9h2_survival_probability():
     assert record.death_duration == pytest.approx(60.0)
     assert record.survived is True
 
-    expected = 0.992 * 0.85 ** (238 / 60) * max(0.4, 0.88 ** 4) * 1.0
+    expected = 0.95 * 0.75 ** (238 / 60)
     assert record.survival_probability == pytest.approx(expected, abs=1e-3)
-    assert record.survival_probability == pytest.approx(0.312, abs=1e-3)

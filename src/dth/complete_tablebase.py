@@ -1,12 +1,10 @@
-"""Backward-sweep backup tablebase over the packed TTD-dead quotient.
+"""Complete-game tablebase over the packed TTD-dead quotient.
 
 This module owns the dense complete-game solver artifact: one float64 value
 per quotient class of ``dth.packed``, computed by dynamic programming in
 strictly decreasing class potential, plus a one-byte solver-routing record per
-class.  It replaces no existing pipeline; the SQLite interval tablebase
-remains the verified authority for its own artifacts, and this module's
-Python path is the behavioral authority for the optional Rust kernel per
-``docs/DTH_BACKUP_PARITY.md``.
+class. This module's Python path is the behavioral authority for the optional
+Rust kernel per ``docs/DTH_COMPLETE_PARITY.md``.
 
 Solve ladder per class, in pinned order (``LADDER_ID``):
 
@@ -20,8 +18,9 @@ Solve ladder per class, in pinned order (``LADDER_ID``):
 3. full-support solve: the identical equalizer mechanism at k = 60, which is
    the structured full-support path and dominates the endgame regions;
 4. LP residue: the certified single-LP-dual rung of ``dth.support_solver``,
-   then the two-LP HiGHS oracle, then the oracle under tightened HiGHS
-   tolerances — the retry tightens the solver, never the gate.
+   then the two-LP HiGHS oracle, an HiGHS IPM retry, and finally the oracle
+   under tightened HiGHS dual-simplex tolerances — every retry changes or
+   tightens the solver, never the gate.
 
 Every rung returns a certificate midpoint measured against the full matrix at
 the same 1e-6 gate; nothing is accepted on a weaker test.  Warm guesses are
@@ -66,14 +65,14 @@ from dth.support_solver import (
 )
 
 __all__ = [
-    "BACKUP_TABLEBASE_SCHEMA",
-    "BACKUP_BUILD_SCHEMA",
+    "COMPLETE_TABLEBASE_SCHEMA",
+    "COMPLETE_BUILD_SCHEMA",
     "WARM_START_POLICY",
     "SOLVER_KIND_PURE",
     "SOLVER_KIND_SUPPORT",
     "SOLVER_KIND_LP",
-    "BackupTablebaseBuilder",
-    "BackupTablebase",
+    "CompleteTablebaseBuilder",
+    "CompleteTablebase",
     "build_dead_band_reference",
     "buckets_from_potential",
     "toeplitz_saddle",
@@ -82,8 +81,8 @@ __all__ = [
     "recertify_class",
 ]
 
-BACKUP_TABLEBASE_SCHEMA = "dth.backup-tablebase.v1"
-BACKUP_BUILD_SCHEMA = "dth.backup-tablebase-build.v1"
+COMPLETE_TABLEBASE_SCHEMA = "dth.complete-tablebase.v1"
+COMPLETE_BUILD_SCHEMA = "dth.complete-tablebase-build.v1"
 WARM_START_POLICY = "prev-layer-neighbor-v1"
 SOLVER_KIND_PURE = 0
 SOLVER_KIND_SUPPORT = 1
@@ -163,7 +162,7 @@ def _open_npy(path: Path, *, mode: str, dtype: str, shape: tuple[int, ...]) -> n
     loaded = np.load(path, mmap_mode=mode, allow_pickle=False)
     if loaded.shape != shape or loaded.dtype != np.dtype(dtype):
         raise ValueError(
-            f"backup array {path.name} has shape/dtype {loaded.shape}/{loaded.dtype}, "
+            f"complete-tablebase array {path.name} has shape/dtype {loaded.shape}/{loaded.dtype}, "
             f"expected {shape}/{np.dtype(dtype)}"
         )
     return loaded
@@ -410,15 +409,57 @@ def _solve_matrix_tightened(matrix: np.ndarray) -> tuple[float, np.ndarray, np.n
     return value, drop, check
 
 
+def _solve_matrix_ipm(matrix: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
+    """Solve the two LPs with HiGHS' interior-point method.
+
+    A small set of ill-conditioned transition matrices can make HiGHS' dual
+    simplex path report status 15 even though the same feasible game solves
+    cleanly with IPM. This is a solver-path retry only: the returned pair is
+    still certified against the full matrix at the frozen saddle-gap gate.
+    """
+
+    from scipy.optimize import linprog
+
+    rows, cols = matrix.shape
+    drop_result = linprog(
+        c=np.concatenate([np.zeros(rows), [-1.0]]),
+        A_ub=np.hstack([-matrix.T, np.ones((cols, 1))]),
+        b_ub=np.zeros(cols),
+        A_eq=np.hstack([np.ones((1, rows)), np.zeros((1, 1))]),
+        b_eq=np.array([1.0]),
+        bounds=[(0.0, None)] * rows + [(None, None)],
+        method="highs-ipm",
+    )
+    if not drop_result.success:
+        raise RuntimeError(f"IPM Dropper LP failed: {drop_result.message}")
+    check_result = linprog(
+        c=np.concatenate([np.zeros(cols), [1.0]]),
+        A_ub=np.hstack([matrix, -np.ones((rows, 1))]),
+        b_ub=np.zeros(rows),
+        A_eq=np.hstack([np.ones((1, cols)), np.zeros((1, 1))]),
+        b_eq=np.array([1.0]),
+        bounds=[(0.0, None)] * cols + [(None, None)],
+        method="highs-ipm",
+    )
+    if not check_result.success:
+        raise RuntimeError(f"IPM Checker LP failed: {check_result.message}")
+    drop = np.clip(drop_result.x[:-1], 0.0, None)
+    check = np.clip(check_result.x[:-1], 0.0, None)
+    drop /= drop.sum()
+    check /= check.sum()
+    value, _ = certify(matrix, drop, check)
+    return value, drop, check
+
+
 def _solve_residue(
     success: np.ndarray, failed: float, *, max_support: int
 ) -> tuple[float, tuple[int, ...], tuple[int, ...], str]:
     """Certified LP path shared verbatim by both backends.
 
-    Three attempts, all certified against the full matrix at the frozen
-    tolerance: single LP with dual extraction, the two-LP oracle, then the
-    oracle under tightened HiGHS tolerances.  A matrix that fails all three
-    aborts the build rather than store an uncertified value.
+    Four attempts, all certified against the full matrix at the frozen
+    tolerance: single LP with dual extraction, the two-LP oracle, an IPM
+    retry, then the oracle under tightened HiGHS tolerances.  A matrix that
+    fails all four aborts the build rather than store an uncertified value.
     """
 
     matrix = reconstruct_transition_class_matrix(success, failed)
@@ -430,8 +471,12 @@ def _solve_residue(
             value, drop, check = solve_matrix(matrix)
             backend = "highs"
         except RuntimeError:
-            value, drop, check = _solve_matrix_tightened(matrix)
-            backend = "highs-tightened"
+            try:
+                value, drop, check = _solve_matrix_ipm(matrix)
+                backend = "highs-ipm"
+            except RuntimeError:
+                value, drop, check = _solve_matrix_tightened(matrix)
+                backend = "highs-tightened"
     return (
         float(value),
         support_of_policy(drop, max_support=max_support),
@@ -537,7 +582,7 @@ def recertify_class(
 
 
 @dataclass
-class BackupTablebaseBuilder:
+class CompleteTablebaseBuilder:
     """Checkpointed descending-potential sweep over the packed class space.
 
     ``table=None`` builds the canonical quotient; tests inject small synthetic
@@ -576,7 +621,7 @@ class BackupTablebaseBuilder:
         self._progress_path = self.output_dir / "build-progress.json"
         self._config_digest = _digest_json(
             {
-                "schema": BACKUP_BUILD_SCHEMA,
+                "schema": COMPLETE_BUILD_SCHEMA,
                 "class_encoding": PACKED_CLASS_ENCODING,
                 "canonical_table": self._canonical,
                 "table_digest": _table_digest(self._table),
@@ -593,8 +638,8 @@ class BackupTablebaseBuilder:
         self._active_backend = "rust" if self._rust_kernel is not None else "python"
         if self._progress_path.exists():
             self._progress = json.loads(self._progress_path.read_text(encoding="utf-8"))
-            if self._progress.get("schema_version") != BACKUP_BUILD_SCHEMA:
-                raise ValueError("unsupported backup tablebase checkpoint schema")
+            if self._progress.get("schema_version") != COMPLETE_BUILD_SCHEMA:
+                raise ValueError("unsupported complete-tablebase checkpoint schema")
             if self._progress.get("config_digest") != self._config_digest:
                 raise ValueError(
                     "checkpoint configuration does not match the requested build"
@@ -607,18 +652,18 @@ class BackupTablebaseBuilder:
         if self.backend == "python":
             return None
         try:
-            module = importlib.import_module("dth_backup_rs")
+            module = importlib.import_module("dth_complete_rs")
         except ImportError:
             if self.backend == "rust":
                 raise RuntimeError(
-                    "Rust backend requested but dth_backup_rs is not installed; "
+                    "Rust backend requested but dth_complete_rs is not installed; "
                     "see src/crates/docs/BUILD.md"
                 )
             return None
-        expected = "dth-backup-parity-v1"
+        expected = "dth-complete-parity-v1"
         if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
             raise RuntimeError(
-                "dth_backup_rs does not match the Python parity contract"
+                "dth_complete_rs does not match the Python parity contract"
             )
         return module
 
@@ -653,7 +698,7 @@ class BackupTablebaseBuilder:
         for array in arrays.values():
             array.flush()
         self._progress = {
-            "schema_version": BACKUP_BUILD_SCHEMA,
+            "schema_version": COMPLETE_BUILD_SCHEMA,
             "config_digest": self._config_digest,
             "phase": "sweep",
             "completed_potential": self._max_class_potential + 1,
@@ -664,6 +709,7 @@ class BackupTablebaseBuilder:
             "lp_states": 0,
             "lp_single_dual": 0,
             "lp_highs": 0,
+            "lp_ipm": 0,
             "lp_tightened": 0,
             "warm_attempts": 0,
             "execution_backends": [],
@@ -795,7 +841,7 @@ class BackupTablebaseBuilder:
             return
         solved = self._solved_class_count()
         print(
-            f"[backup] resuming at Phi={int(self._progress['completed_potential'])} "
+            f"[complete] resuming at Phi={int(self._progress['completed_potential'])} "
             f"of {self._max_class_potential}; {solved:,} of {self._class_count:,} "
             f"classes solved ({100.0 * solved / self._class_count:.2f}%); "
             f"backend={self._active_backend} lp_workers={self.lp_workers} "
@@ -836,7 +882,7 @@ class BackupTablebaseBuilder:
         eta_hours = remaining / rate / 3600.0 if rate > 0.0 else float("inf")
         lp = int(counters.get("lp_states", 0))
         print(
-            f"[backup] Phi={potential:4d} {layer_classes:9,} classes "
+            f"[complete] Phi={potential:4d} {layer_classes:9,} classes "
             f"in {elapsed:7.2f}s ({solve_seconds:6.2f}+{commit_seconds:5.2f}) "
             f"| {layer_classes / elapsed if elapsed > 0 else 0.0:9,.0f}/s "
             f"| pure {int(counters.get('pure_states', 0)):6,} "
@@ -890,6 +936,7 @@ class BackupTablebaseBuilder:
             "lp_states": 0,
             "lp_single_dual": 0,
             "lp_highs": 0,
+            "lp_ipm": 0,
             "lp_tightened": 0,
             "warm_attempts": 0,
         }
@@ -1008,6 +1055,7 @@ class BackupTablebaseBuilder:
         backend_keys = {
             "single-lp-dual": "lp_single_dual",
             "highs": "lp_highs",
+            "highs-ipm": "lp_ipm",
             "highs-tightened": "lp_tightened",
         }
         for class_id, solved_value, drop_support, check_support, backend in solved:
@@ -1088,6 +1136,7 @@ class BackupTablebaseBuilder:
             "lp_states": 0,
             "lp_single_dual": 0,
             "lp_highs": 0,
+            "lp_ipm": 0,
             "lp_tightened": 0,
             "warm_attempts": int(warm_attempts),
         }
@@ -1124,20 +1173,20 @@ class BackupTablebaseBuilder:
             if not np.all(np.isfinite(values)):
                 raise RuntimeError("cannot finalize with unsolved classes")
             if np.any(np.abs(values) > 1.0 + 1e-9):
-                raise RuntimeError("backup value lies outside [-1, 1]")
+                raise RuntimeError("complete-tablebase value lies outside [-1, 1]")
             if np.any(kinds > SOLVER_KIND_LP):
-                raise RuntimeError("backup solver_kind contains an unknown route")
+                raise RuntimeError("complete-tablebase solver_kind contains an unknown route")
 
         recertified, worst_gap = self._sampled_recertification(value, kind)
 
         source_root = Path(__file__).resolve().parent
-        digest_inputs = [source_root / "packed.py", source_root / "backup_tablebase.py"]
+        digest_inputs = [source_root / "packed.py", source_root / "complete_tablebase.py"]
         if "rust" in self._progress["execution_backends"]:
             workspace = source_root.parent
             digest_inputs.extend(
                 (
-                    workspace / "crates" / "dth_backup" / "Cargo.toml",
-                    workspace / "crates" / "dth_backup" / "src" / "lib.rs",
+                    workspace / "crates" / "dth_complete" / "Cargo.toml",
+                    workspace / "crates" / "dth_complete" / "src" / "lib.rs",
                     workspace.parent / "Cargo.lock",
                 )
             )
@@ -1154,7 +1203,7 @@ class BackupTablebaseBuilder:
                 "sha256": _sha256_file(path),
             }
         manifest = {
-            "schema_version": BACKUP_TABLEBASE_SCHEMA,
+            "schema_version": COMPLETE_TABLEBASE_SCHEMA,
             "metadata": {
                 "class_encoding": PACKED_CLASS_ENCODING,
                 "canonical_table": self._canonical,
@@ -1176,6 +1225,7 @@ class BackupTablebaseBuilder:
                 "lp_states": int(self._progress["lp_states"]),
                 "lp_single_dual": int(self._progress["lp_single_dual"]),
                 "lp_highs": int(self._progress["lp_highs"]),
+                "lp_ipm": int(self._progress.get("lp_ipm", 0)),
                 "lp_tightened": int(self._progress.get("lp_tightened", 0)),
                 "warm_attempts": int(self._progress["warm_attempts"]),
                 "execution_backends": list(self._progress["execution_backends"]),
@@ -1243,8 +1293,8 @@ class BackupTablebaseBuilder:
 
 
 @dataclass
-class BackupTablebase:
-    """Digest-verified read-only view over a completed backup artifact."""
+class CompleteTablebase:
+    """Digest-verified read-only view over the completed DTH artifact."""
 
     artifact_dir: Path
     verify_hashes: bool = True
@@ -1253,11 +1303,11 @@ class BackupTablebase:
         self.artifact_dir = Path(self.artifact_dir)
         manifest_path = self.artifact_dir / "tablebase.json"
         if not manifest_path.exists():
-            raise FileNotFoundError(f"no backup tablebase manifest at {manifest_path}")
+            raise FileNotFoundError(f"no complete tablebase manifest at {manifest_path}")
         self._manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if self._manifest.get("schema_version") != BACKUP_TABLEBASE_SCHEMA:
+        if self._manifest.get("schema_version") != COMPLETE_TABLEBASE_SCHEMA:
             raise ValueError(
-                f"unsupported backup tablebase schema "
+                f"unsupported complete-tablebase schema "
                 f"{self._manifest.get('schema_version')!r}"
             )
         metadata = self._manifest["metadata"]
@@ -1268,7 +1318,7 @@ class BackupTablebase:
         for name, spec in self._manifest["arrays"].items():
             path = self.artifact_dir / spec["file"]
             if self.verify_hashes and _sha256_file(path) != spec["sha256"]:
-                raise ValueError(f"backup array {name} fails its manifest digest")
+                raise ValueError(f"complete-tablebase array {name} fails its manifest digest")
             self._arrays[name] = _open_npy(
                 path, mode="r", dtype=spec["dtype"], shape=tuple(spec["shape"])
             )
@@ -1369,10 +1419,10 @@ def build_dead_band_reference(*, min_total: int = 0) -> np.ndarray:
     When both profiles are dead every failed check is a certain win for the
     Dropper, so the sub-DAG closes over the 300 x 300 remaining-ST grid; this
     is the per-player generalization of ``solver.failure_dead_quotient``.  The
-    solver here deliberately shares no sweep machinery: it exists to
-    cross-check the backup artifact and the shipped ``exact_band_v1`` band
-    against each other.  Returns values indexed ``checker_st * 300 +
-    dropper_st`` with NaN below ``min_total = checker_st + dropper_st``.
+    solver here deliberately shares no sweep machinery: it is an independent
+    audit oracle for the corresponding region of the complete artifact.
+    Returns values indexed ``checker_st * 300 + dropper_st`` with NaN below
+    ``min_total = checker_st + dropper_st``.
     """
 
     from dth.support_solver import solve_certified_matrix_fast
@@ -1398,13 +1448,13 @@ def build_dead_band_reference(*, min_total: int = 0) -> np.ndarray:
 # --------------------------------------------------------------------------
 
 
-def run_backup(config) -> dict[str, Any]:
+def run_complete(config) -> dict[str, Any]:
     """Run one checkpointed sweep session and write its JSON report."""
 
     from omegaconf import OmegaConf
 
     started = time.perf_counter()
-    builder = BackupTablebaseBuilder(
+    builder = CompleteTablebaseBuilder(
         output_dir=Path(config.output_dir),
         backend=str(config.backend),
         warm_start=bool(config.warm_start),
@@ -1433,11 +1483,11 @@ def main() -> None:
     import hydra
     from omegaconf import DictConfig
 
-    @hydra.main(version_base="1.3", config_path="config", config_name="backup_full_v1")
+    @hydra.main(version_base="1.3", config_path="config", config_name="complete_full_v1")
     def _entry(config: DictConfig) -> None:
-        report = run_backup(config)
+        report = run_complete(config)
         print(
-            f"backup sweep {'finished' if report['finished'] else 'checkpointed'} "
+            f"complete sweep {'finished' if report['finished'] else 'checkpointed'} "
             f"in {report['elapsed_seconds']:.1f}s; report at {config.report_path}"
         )
 

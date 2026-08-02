@@ -1,8 +1,8 @@
 """Deterministic agent-versus-agent matches with paired seats and one SPRT.
 
-The referee, seats, and physicality are exactly the interactive ones: the
-player-one seat is named Hal and drops first, the player-two seat is named
-Baku and holds the leap-window and physicality asymmetries.  Because those
+The referee and seats are exactly the interactive ones: the player-one seat is
+named Hal and drops first, while the player-two Baku seat holds the leap-window
+action asymmetry. Because those
 are seat properties, every base seed is played twice with the agents'
 seats swapped, and results are recorded per agent, not per seat.
 

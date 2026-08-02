@@ -131,46 +131,44 @@ def safe_budget_pressure_at_cylinder_239() -> TacticalScenario:
     )
 
 
-def cpr_degradation_fresh_referee() -> TacticalScenario:
+def revival_history_fresh() -> TacticalScenario:
     """Baku checker, cylinder=180, fresh referee (cprs_performed=0).
 
-    Paired with ``cpr_degradation_fatigued_referee``. Used with a forced-fail
+    Paired with ``revival_history_after_ten_attempts``. Used with a forced-fail
     joint action (drop late, check early) so the survival branch fires; the
-    paired scenarios assert that fatigue lowers Baku's survival probability
-    and therefore raises Hal's value on the fail branch.
+    paired scenarios assert that the history counter does not alter Baku's
+    frozen revival probability or the branch value.
     """
     game = _base_game()
     game.player2.cylinder = 180.0
     return TacticalScenario(
-        name="cpr_degradation_fresh_referee",
+        name="revival_history_fresh",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
-        expected_note="Reference state for the CPR-fatigue pair; cprs_performed=0.",
+        expected_note="Reference state for the revival-history pair; cprs_performed=0.",
         expected_value=None,
-        tags=("cpr_fatigue", "monotonic_pair", "survival_branch"),
+        tags=("revival_history", "monotonic_pair", "survival_branch"),
     )
 
 
-def cpr_degradation_fatigued_referee() -> TacticalScenario:
-    """Baku checker, cylinder=180, fatigued referee (cprs_performed=10).
+def revival_history_after_ten_attempts() -> TacticalScenario:
+    """Baku checker, cylinder=180, referee after ten attempts (cprs_performed=10).
 
-    Paired with ``cpr_degradation_fresh_referee``. cprs_performed=10 sits at
-    the REFEREE_FLOOR-bound regime; Baku's survival probability on a forced
-    failed check is strictly lower than the fresh-referee pair, so the
-    branch-weighted value tilts further toward Hal.
+    Paired with ``revival_history_fresh``. The attempt count is public history
+    only, so the forced-fail probability and value must be identical.
     """
     game = _base_game()
     game.player2.cylinder = 180.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
-        name="cpr_degradation_fatigued_referee",
+        name="revival_history_after_ten_attempts",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
-        expected_note="Fatigue counterpart; cprs_performed=10 sits at REFEREE_FLOOR.",
+        expected_note="History-only counterpart; revival probability is unchanged.",
         expected_value=None,
-        tags=("cpr_fatigue", "monotonic_pair", "survival_branch"),
+        tags=("revival_history", "monotonic_pair", "survival_branch"),
     )
 
 
@@ -237,7 +235,7 @@ def death_trade_double_pressure() -> TacticalScenario:
         half_round_horizon=3,
         expected_note="Death-trade pressure state: both sides near costly failure branches.",
         expected_value=None,
-        tags=("death_trade", "cpr_fatigue", "holdout"),
+        tags=("death_trade", "revival_history", "holdout"),
         holdout=True,
     )
 
@@ -277,7 +275,7 @@ def role_alignment_variation4_post_engineering() -> TacticalScenario:
 # ``forced_*_overflow_death`` template: cylinder=300 on the checker side
 # means every joint action drives the LP to a Hal-win (half=1, baku
 # checker) or Baku-win (half=2, hal checker) within one half-round.
-# Each variant changes one or more axes (clock, ttd, deaths, fatigue,
+# Each variant changes one or more axes (clock, ttd, deaths, revival history,
 # leap-window proximity) so feature vectors are distinct from the original
 # two pins while preserving the all-terminal structure that makes
 # ``unresolved_probability == 0`` provable.
@@ -412,39 +410,39 @@ def forced_baku_overflow_post_leap() -> TacticalScenario:
 # Category 3: Fatigue and TTD pressure ────────────────────────────────────
 
 
-def forced_baku_overflow_fatigued_referee() -> TacticalScenario:
-    """Forced Baku overflow with a fatigued referee (cprs_performed=10)."""
+def forced_baku_overflow_after_ten_attempts() -> TacticalScenario:
+    """Forced Baku overflow with a referee after ten attempts (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=1)
     game.player2.cylinder = 300.0
     game.player1.deaths = 10
     game.player1.ttd = 600.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
-        name="forced_baku_overflow_fatigued_referee",
+        name="forced_baku_overflow_after_ten_attempts",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
         expected_note="cprs=10 raises the cpr feature; all-terminal structure unchanged.",
         expected_value=1.0,
-        tags=("near_overflow", "forced_terminal", "hal_win", "cpr_fatigue"),
+        tags=("near_overflow", "forced_terminal", "hal_win", "revival_history"),
     )
 
 
-def forced_hal_overflow_fatigued_referee() -> TacticalScenario:
-    """Forced Hal overflow with a fatigued referee (cprs_performed=10)."""
+def forced_hal_overflow_after_ten_attempts() -> TacticalScenario:
+    """Forced Hal overflow with a referee after ten attempts (cprs_performed=10)."""
     game = _base_game(clock=720.0, current_half=2)
     game.player1.cylinder = 300.0
     game.player2.deaths = 10
     game.player2.ttd = 600.0
     game.referee.cprs_performed = 10
     return TacticalScenario(
-        name="forced_hal_overflow_fatigued_referee",
+        name="forced_hal_overflow_after_ten_attempts",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=1,
         expected_note="Baku-win counterpart at cprs=10.",
         expected_value=-1.0,
-        tags=("near_overflow", "forced_terminal", "baku_win", "cpr_fatigue"),
+        tags=("near_overflow", "forced_terminal", "baku_win", "revival_history"),
     )
 
 
@@ -643,7 +641,7 @@ def _interior_fail_game(hal_cylinder: float, cprs_performed: int) -> Game:
 
 
 def forced_hal_fail_survivable_fresh() -> TacticalScenario:
-    """Interior pin: survivable forced fail on Hal, fresh referee → value 2p-1 > 0."""
+    """Interior pin: survivable forced fail on Hal under the frozen surface."""
     game = _interior_fail_game(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=0)
     return TacticalScenario(
         name="forced_hal_fail_survivable_fresh",
@@ -653,36 +651,31 @@ def forced_hal_fail_survivable_fresh() -> TacticalScenario:
         expected_note=(
             "Leap-window Baku drop=61 forces Hal to fail every check (death_duration "
             "180, survivable). Survive -> Baku@300 overflow next round (Hal win); die -> "
-            "Baku win. Exact interior value 2p-1 at fresh referee (p=0.784 → +0.568)."
+            "Baku win. Exact interior value is 2p-1 with p=0.475, hence -0.05."
         ),
         expected_value=_survivable_fail_value(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=0),
         tags=("leap_window", "forced_fail", "interior_value", "survivable_death",
-              "hal_checker", "cpr_fatigue_pair"),
+              "hal_checker", "revival_history_pair"),
     )
 
 
-def forced_hal_fail_survivable_fatigued() -> TacticalScenario:
-    """Interior pin: survivable forced fail on Hal, fatigued referee (cprs=10).
-
-    Monotone counterpart to ``forced_hal_fail_survivable_fresh``: more referee
-    fatigue lowers Hal's revival probability on the forced fail, lowering the
-    interior value (+0.568 fresh → -0.3728 fatigued).
-    """
+def forced_hal_fail_survivable_after_ten_attempts() -> TacticalScenario:
+    """History-invariance counterpart after ten recorded revival attempts."""
     game = _interior_fail_game(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=10)
     game.player2.deaths = 10
     game.player2.ttd = 600.0
     return TacticalScenario(
-        name="forced_hal_fail_survivable_fatigued",
+        name="forced_hal_fail_survivable_after_ten_attempts",
         game=game,
         config=ExactSearchConfig(),
         half_round_horizon=2,
         expected_note=(
-            "Fatigued counterpart (cprs=10 → referee floor 0.4): p=0.3136 → value "
-            "-0.3728. Pairs with the fresh pin for the monotone fatigue invariant."
+            "History-only counterpart: cprs=10 does not enter the frozen surface, "
+            "so p=0.475 and the value remains -0.05."
         ),
         expected_value=_survivable_fail_value(_INTERIOR_FAIL_HAL_CYLINDER, cprs_performed=10),
         tags=("leap_window", "forced_fail", "interior_value", "survivable_death",
-              "hal_checker", "cpr_fatigue_pair"),
+              "hal_checker", "revival_history_pair"),
     )
 
 
@@ -747,8 +740,8 @@ REGISTRY: dict[str, ScenarioFactory] = {
         # Original relational (Phase 8)
         safe_budget_pressure_at_cylinder_240,
         safe_budget_pressure_at_cylinder_239,
-        cpr_degradation_fresh_referee,
-        cpr_degradation_fatigued_referee,
+        revival_history_fresh,
+        revival_history_after_ten_attempts,
         # Original holdout diagnostics (Phase 8)
         baku_dropper_leap_window_alignment,
         hal_dropper_leap_window_asymmetry,
@@ -768,8 +761,8 @@ REGISTRY: dict[str, ScenarioFactory] = {
         forced_baku_overflow_leap_window_late,
         forced_baku_overflow_post_leap,
         # Fatigue / TTD pressure
-        forced_baku_overflow_fatigued_referee,
-        forced_hal_overflow_fatigued_referee,
+        forced_baku_overflow_after_ten_attempts,
+        forced_hal_overflow_after_ten_attempts,
         forced_baku_overflow_high_ttd,
         # Asymmetric death pins
         forced_baku_overflow_with_baku_deaths,
@@ -781,7 +774,7 @@ REGISTRY: dict[str, ScenarioFactory] = {
         both_overflow_hal_dies_first,
         # Phase F-2: interior-valued pins (survivable leap-window forced fail) ─
         forced_hal_fail_survivable_fresh,
-        forced_hal_fail_survivable_fatigued,
+        forced_hal_fail_survivable_after_ten_attempts,
         forced_hal_fail_survivable_deep,
     )
 }

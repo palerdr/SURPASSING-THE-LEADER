@@ -27,8 +27,8 @@ EXPECTED_NAMES = (
     "forced_hal_overflow_death",
     "safe_budget_pressure_at_cylinder_240",
     "safe_budget_pressure_at_cylinder_239",
-    "cpr_degradation_fresh_referee",
-    "cpr_degradation_fatigued_referee",
+    "revival_history_fresh",
+    "revival_history_after_ten_attempts",
     "baku_dropper_leap_window_alignment",
     "hal_dropper_leap_window_asymmetry",
     "near_overflow_marginal_baku_294",
@@ -44,8 +44,8 @@ EXPECTED_NAMES = (
     "forced_hal_overflow_leap_window_open",
     "forced_baku_overflow_leap_window_late",
     "forced_baku_overflow_post_leap",
-    "forced_baku_overflow_fatigued_referee",
-    "forced_hal_overflow_fatigued_referee",
+    "forced_baku_overflow_after_ten_attempts",
+    "forced_hal_overflow_after_ten_attempts",
     "forced_baku_overflow_high_ttd",
     "forced_baku_overflow_with_baku_deaths",
     "forced_hal_overflow_with_hal_deaths",
@@ -55,13 +55,13 @@ EXPECTED_NAMES = (
     "both_overflow_hal_dies_first",
     # Phase F-2 interior-valued pins (survivable leap-window forced fail)
     "forced_hal_fail_survivable_fresh",
-    "forced_hal_fail_survivable_fatigued",
+    "forced_hal_fail_survivable_after_ten_attempts",
     "forced_hal_fail_survivable_deep",
 )
 
 INTERIOR_PIN_NAMES = (
     "forced_hal_fail_survivable_fresh",
-    "forced_hal_fail_survivable_fatigued",
+    "forced_hal_fail_survivable_after_ten_attempts",
     "forced_hal_fail_survivable_deep",
 )
 
@@ -89,7 +89,7 @@ def test_materialize_all_returns_one_scenario_per_factory():
 def test_pinned_scenarios_include_phase_f_expansion():
     """Phase F brought REGISTRY pinned count from 2 → 19. Two original
     overflow pins plus 17 forced-terminal extensions across clock, leap-
-    window, fatigue, ttd, asymmetric-deaths, and double-overflow axes.
+    window, revival-history, ttd, asymmetric-deaths, and double-overflow axes.
     """
     pinned = pinned_scenarios()
     pinned_names = {s.name for s in pinned}
@@ -146,18 +146,18 @@ def test_safe_budget_threshold_pair_distinguishes_cylinder_value():
     assert pressure_239.value_for_hal == pytest.approx(0.0)
 
 
-def test_late_cpr_degradation_pair_increases_hal_value_under_forced_fail():
-    fresh = get_scenario("cpr_degradation_fresh_referee")
-    fatigued = get_scenario("cpr_degradation_fatigued_referee")
+def test_revival_history_does_not_change_forced_fail_value():
+    fresh = get_scenario("revival_history_fresh")
+    history = get_scenario("revival_history_after_ten_attempts")
     forced_fail = ExactJointAction(drop_time=60, check_time=1)
 
     fresh_branch = evaluate_joint_action(fresh.game, forced_fail, half_round_horizon=1)
-    fatigued_branch = evaluate_joint_action(fatigued.game, forced_fail, half_round_horizon=1)
+    history_branch = evaluate_joint_action(history.game, forced_fail, half_round_horizon=1)
 
     assert fresh_branch.unresolved_probability > 0.0
-    assert fatigued_branch.unresolved_probability > 0.0
-    assert fatigued_branch.hal_win_probability > fresh_branch.hal_win_probability
-    assert fatigued_branch.value > fresh_branch.value
+    assert history_branch.unresolved_probability > 0.0
+    assert history_branch.hal_win_probability == fresh_branch.hal_win_probability
+    assert history_branch.value == fresh_branch.value
 
 
 # ── Phase F acceptance: every pinned scenario satisfies strict criteria ───
@@ -238,18 +238,13 @@ def test_interior_pins_are_genuinely_interior(name):
     verify_pinned_value(name)
 
 
-def test_interior_fail_pins_monotone_in_referee_fatigue():
-    """Relational invariant backing the interior-pin family: more CPR fatigue
-    lowers Hal's revival probability on the forced fail, so the fresh pin's
-    interior value must strictly exceed the fatigued pin's. The fresh state is
-    Hal-favored (p > 0.5 → value > 0); at the referee floor the fatigued state
-    is Baku-favored (p < 0.5 → value < 0), so the pair also straddles zero.
-    """
+def test_interior_fail_pins_are_invariant_to_revival_history():
+    """The audit counter is not an input to the frozen surface."""
     fresh = solve_target("forced_hal_fail_survivable_fresh")
-    fatigued = solve_target("forced_hal_fail_survivable_fatigued")
+    history = solve_target("forced_hal_fail_survivable_after_ten_attempts")
 
-    assert fresh.value_for_hal > fatigued.value_for_hal
-    assert fresh.value_for_hal > 0.0 > fatigued.value_for_hal
+    assert fresh.value_for_hal == pytest.approx(history.value_for_hal)
+    assert fresh.value_for_hal == pytest.approx(-0.05)
 
 
 def test_interior_pins_break_the_all_boundary_ruler():
@@ -264,4 +259,3 @@ def test_interior_pins_break_the_all_boundary_ruler():
     ]
     assert interior, "no interior pinned anchors present; the ruler is all-boundary again"
     assert {s.name for s in interior} >= set(INTERIOR_PIN_NAMES)
-

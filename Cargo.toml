@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "src/crates/abstract_solver",
-    "src/crates/dth_backup",
+    "src/crates/dth_complete",
     "src/crates/stl_solver",
 ]
 resolver = "2"

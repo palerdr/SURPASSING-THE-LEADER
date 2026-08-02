@@ -115,4 +115,5 @@ the HiGHS primal and dual LPs. Every accepted certificate must satisfy
 \]
 
 Finite-horizon values use the same matrix formulation with live cutoff value
-zero at horizon zero.
+zero at horizon zero and remain useful only for research comparisons. The
+production play value is read from the complete quotient tablebase.

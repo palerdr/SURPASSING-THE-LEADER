@@ -2,7 +2,7 @@ import numpy as np
 
 from abstract.exact import enumerate_reachable_states, solve_exact
 from abstract.matrix import saddle_gap, solve_matrix
-from abstract.rules import Bucket6TTDCurve95Rules
+from abstract.rules import Bucket6Frozen95Rules
 from abstract.state import AbstractState
 
 
@@ -22,7 +22,7 @@ def test_matrix_lp_normalizes_and_certifies_matching_pennies() -> None:
 
 
 def test_exact_solver_uses_role_swap_and_terminal_values_without_a_horizon() -> None:
-    rules = Bucket6TTDCurve95Rules()
+    rules = Bucket6Frozen95Rules()
     terminal_state = AbstractState(checker_load=29, checker_ttd=0, dropper_load=0, dropper_ttd=0)
     result = solve_exact(terminal_state, rules)
     assert result.value_for_dropper == 1.0
@@ -33,7 +33,7 @@ def test_exact_solver_uses_role_swap_and_terminal_values_without_a_horizon() -> 
 
 
 def test_reachable_closure_is_exhaustive_from_the_initial_state() -> None:
-    rules = Bucket6TTDCurve95Rules()
+    rules = Bucket6Frozen95Rules()
     states = enumerate_reachable_states(rules)
     assert len(states) == 576_270
     assert states[0] == AbstractState()

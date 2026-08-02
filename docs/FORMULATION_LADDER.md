@@ -57,7 +57,7 @@ no referee object, no player identity.
 Both are exactly enumerable and certified end to end. L0 exists to make the
 rules falsifiable at a size where every state can be checked.
 
-### L1 — pure DTH · the current target
+### L1 — pure DTH · solved
 
 Owner: `src/dth/`. Identical to L0 with `B = 1`: literal seconds `1..60`,
 `C = 300`, `F = 60`. This is the **pure** formulation and it is now frozen —
@@ -68,6 +68,10 @@ Owner: `src/dth/`. Identical to L0 with `B = 1`: literal seconds `1..60`,
 | reachable states | 5,267,489,760 |
 | with the per-player dead-TTD quotient | 289,374,121 |
 | distinct stage-matrix degrees of freedom | 61 |
+
+The per-player dead-TTD quotient has 289,374,121 classes. Artifact
+`complete_full_v1` solves all of them by certified backward induction and is
+the default policy provider for `arena play`.
 
 L1 is the fidelity ceiling for the *mechanics*: no rung above it changes how ST,
 doses, or revival work. Everything above adds information or an extra action.
@@ -90,6 +94,10 @@ Only the distance to the window matters, and after it the coordinate is
 absorbing, so `phase` is bounded by the number of half-rounds a match can reach
 the window from. Size is `L1 × |phase|`. Both players know the leap rule from
 initialization; knowledge does not alter structural legality.
+
+All loads, TTD, checks, doses, eligibility guards, revival probabilities, role
+swaps, and actions 1..60 are exactly L1. The prospective action 61 for Baku as
+Dropper in the public leap window is the only game-rule difference.
 
 L2 is still **perfect information**. It is the largest rung that backward
 induction can address in principle.
@@ -121,8 +129,10 @@ decisions that no evidence constrains.
 ## Claim boundary
 
 - L0 is solved and certified.
-- L1 is the active target. No complete-game claim exists for it yet.
-- L2 has a public-state baseline implementation only.
+- L1 is completely solved and certified by `complete_full_v1`.
+- L2 is the canonical public game implemented by the STL engines and arena;
+  the exact L1 strategy is its default baseline, but no complete L2 solve is
+  claimed because of the leap-phase action 61.
 - L3 and L4 are not implemented. Nothing in this repository may claim to solve
   a private-information version of this game.
 

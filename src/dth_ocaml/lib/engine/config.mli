@@ -32,17 +32,11 @@ type cylinder_config = {
       (** injection + waiting + CPR + recovery (~2 min) *)
 }
 
-(** Unified two-variable revival-model parameters.
-
-    The only state variables are the ST already in the vial and the player's
-    accrued TTD. The effective-referee factor is derived from TTD; there is no
-    identity physicality or CPR-count input. *)
+(** Frozen two-variable revival-model parameters from docs/REVIVAL_MODEL.md.
+    There is no identity or CPR-count input. *)
 type survival_config = {
-  baseline : float;  (** fresh-player, empty-vial probability: 0.80 *)
-  ttd_half_life_seconds : float;
-  ttd_curve_exponent : float;
-  effective_referee_decay : float;  (** decay per 60 seconds of accrued TTD *)
-  effective_referee_floor : float;
+  baseline : float;  (** fresh-player, empty-vial probability: 0.95 *)
+  ttd_decay_per_minute : float;  (** 0.75 per 60 seconds of accrued TTD *)
 }
 
 (** Complete engine configuration grouped by subsystem. *)

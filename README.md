@@ -5,7 +5,7 @@ This repository contains deliberately separate game-solving projects:
 | Project | Purpose | Rules |
 | --- | --- | --- |
 | `src/stl/` | Full Surpassing the Leader engine, exact solver, search, learning, and play surface | Leap-aware public game; only Baku as Dropper may use second 61 |
-| `src/dth/` | Pure Drop the Handkerchief solver | Literal seconds 1..60; no leap second or STL-only rules |
+| `src/dth/` | Completed pure Drop the Handkerchief solve and optional research tooling | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
 | `src/dth_ocaml/` | Minimal exact OCaml solver | Literal DTH seconds and the repository-wide frozen revival model |
 | `src/crates/` | Shared Rust acceleration workspace | Python remains behavioral authority until explicit parity contracts |
@@ -34,8 +34,11 @@ cargo test --workspace
 # Full STL Hydra command surface
 uv run python -m stl.cli --help
 
-# Pure DTH target generation and training
+# Pure DTH complete solution and optional research tools
 uv run python -m dth --help
+
+# Complete exact DTH quotient tablebase
+uv run python -m dth complete
 uv run python -m dth dataset --help
 uv run python -m dth train --help
 
@@ -43,10 +46,11 @@ uv run python -m dth train --help
 uv run python -m abstract --help
 uv run python -m abstract exact
 
-# Canonical referee with a pluggable Hal policy provider
+# Canonical STL referee; complete DTH is the default Hal policy
+uv run python -m arena play
 uv run python -m arena play --hal-agent abstract
 uv run python -m arena play --hal-agent abstract --buckets 5
-uv run python -m arena play --hal-agent dth
+uv run python -m arena play --tui
 ```
 
 Each project owns its `config/`, `docs/`, tests, checkpoints, and outputs.

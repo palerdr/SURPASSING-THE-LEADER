@@ -32,22 +32,13 @@ let compute_revival_prob (config : Config.t) ~(st_in_vial : int)
       let st_factor =
         1.0 -. (float_of_int st_in_vial /. float_of_int survivable_st_span)
       in
-      let normalized_ttd =
-        float_of_int ttd_accrued /. survival.ttd_half_life_seconds
-      in
-      let ttd_factor =
-        2.0 ** -.(normalized_ttd ** survival.ttd_curve_exponent)
-      in
-      let effective_deaths =
+      let death_minutes =
         float_of_int ttd_accrued
         /. float_of_int config.turn.failed_check_penalty
       in
-      let referee_factor =
-        max survival.effective_referee_floor
-          (survival.effective_referee_decay ** effective_deaths)
-      in
+      let ttd_factor = survival.ttd_decay_per_minute ** death_minutes in
       clamp_probability
-        (survival.baseline *. st_factor *. ttd_factor *. referee_factor)
+        (survival.baseline *. st_factor *. ttd_factor)
 
 let attempt_revival (config : Config.t) ~(st_in_vial : int) ~(ttd_accrued : int)
     (rng : rng) : bool =

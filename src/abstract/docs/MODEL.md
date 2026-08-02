@@ -16,10 +16,9 @@ production discretizations implement the same rules:
 The half-life is the frozen 144.3 seconds expressed in bucket units; it is a
 derived quantity, not a free parameter.
 
-The prior `bucket6_unified80`, `bucket12_unified80`, `bucket6_ttd_curve95`, and
-`bucket12_ttd_curve95` rulesets remain addressable only to reproduce old
-experiments. They are not CLI defaults and their artifacts are not
-interchangeable with the production rulesets.
+These are the only addressable rulesets. Pre-freeze probability variants and
+their artifact loaders have been removed; an artifact must bind the frozen
+revival metadata exactly or fail closed.
 
 Actions are positive ordinal buckets and action zero is illegal. An action maps
 to seconds only in artifact metadata. A check succeeds iff `check >= drop`, and
@@ -63,8 +62,8 @@ the probability is \(0.95/240=0.003958\). Prior TTD decays geometrically at a
 quarter per accrued death-minute, a 144.3-second half-life, keeping the state
 role-relative and a function of exactly two variables.
 
-`0.75` is a rounding of \(0.85\times0.88\), the product of `CARDIAC_DECAY` and
-`REFEREE_DECAY` from the STL engine; the unified model is STL's own surface with
+`0.75` is a rounding of \(0.85\times0.88\), the product of the pre-freeze STL
+cardiac and referee decay constants; the unified model preserves that structure with
 the dose term linearized and per-player physicality folded into the `0.95`
 baseline. STL's `max(0.40, ...)` referee floor is omitted because it requires
 more than 7.17 death-minutes while eligibility caps TTD at 4.0, so it can never
@@ -109,13 +108,13 @@ program as recursive memoization: every live child is already solved, terminal
 branches are exact, and every simultaneous matrix is solved to the configured
 saddle-gap tolerance. There is no depth horizon or approximate leaf value.
 
-The production 10-second tablebase uses the packed, resumable builder:
+The production 10-second tablebase uses the packed, resumable v4 builder:
 
 ```powershell
 uv run python -m abstract exact --ruleset bucket6_frozen95
 ```
 
-The full 5-second tablebase uses the same packed, resumable v3 builder:
+The full 5-second tablebase uses the same packed, resumable v4 builder:
 
 ```powershell
 uv run python -m abstract exact `

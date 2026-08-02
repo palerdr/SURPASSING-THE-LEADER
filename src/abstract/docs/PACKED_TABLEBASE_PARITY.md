@@ -44,13 +44,12 @@ Revival calculations use IEEE-754 binary64. Cross-language absolute error must
 be at most `1e-15` per branch probability. Probability mass must sum to one
 within `1e-12`.
 
-The `abstract-packed-parity-v2` contract covers all versioned probability
-models. Production `*_frozen95` rules use
-`linear_st_geometric_ttd_v1`; Python and Rust must agree on the linear
+The `abstract-packed-parity-v3` contract covers the sole frozen probability
+model, `linear_st_geometric_ttd_v1`. Python and Rust must agree on the linear
 pre-failure-ST factor, geometric `0.75^(ttd / failed_check_penalty)` factor,
-and fatality guards. The superseded effective-referee and cubic rules remain
-parity-covered only for reproducibility. The ruleset model discriminator is
-part of every checkpoint configuration digest and artifact manifest.
+and fatality guards. The frozen model identifier and constants are part of
+every checkpoint configuration digest and artifact manifest; other metadata
+is rejected.
 
 ## Reachability parity
 
@@ -94,8 +93,8 @@ and every state routed to LP in the sample.
 
 ## Artifact and resume parity
 
-The artifact schema is `abstract.packed-tablebase.v3` and the resumable
-checkpoint schema is `abstract.packed-tablebase-build.v2`. Required arrays, shapes,
+The artifact schema is `abstract.packed-tablebase.v4` and the resumable
+checkpoint schema is `abstract.packed-tablebase-build.v3`. Required arrays, shapes,
 dtypes, packed ordering, SHA-256 file digests, metadata, and lookup results must
 match the Python build. Per-state SHA IDs are forbidden in hot arrays and are
 derived from `ruleset_id|state_fields` only at lookup/export.

@@ -1,17 +1,17 @@
-//! Rayon-parallel backup kernel for the DTH packed-quotient sweep.
+//! Rayon-parallel complete-tablebase kernel for the DTH packed-quotient sweep.
 //!
-//! Behavioral authority is `src/dth/backup_tablebase.py`; this kernel mirrors
+//! Behavioral authority is `src/dth/complete_tablebase.py`; this kernel mirrors
 //! its pinned arithmetic operation for operation (no FMA, sequential
 //! reductions, lowest-index tie-breaks) so that class values and solver
 //! routing are reproduced bit for bit.  The contract is
-//! `src/dth/docs/DTH_BACKUP_PARITY.md`; this module performs no transcendental
+//! `src/dth/docs/DTH_COMPLETE_PARITY.md`; this module performs no transcendental
 //! arithmetic — every revival probability arrives precomputed from Python.
 
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadwriteArray1};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
-pub const PARITY_CONTRACT_VERSION: &str = "dth-backup-parity-v1";
+pub const PARITY_CONTRACT_VERSION: &str = "dth-complete-parity-v1";
 const POLICY_MASS_EPS: f64 = 1e-9;
 const PIVOT_EPS: f64 = 1e-12;
 const ACTIONS: usize = 60;
@@ -359,10 +359,8 @@ fn solve_item(
                 let checker_shift = inputs.success_child[checker * ACTIONS];
                 let dropper_shift = inputs.success_child[dropper * ACTIONS];
                 let neighbours = [
-                    (checker_shift >= 0)
-                        .then(|| (checker_shift as usize * count + dropper) as u64),
-                    (dropper_shift >= 0)
-                        .then(|| (checker * count + dropper_shift as usize) as u64),
+                    (checker_shift >= 0).then(|| (checker_shift as usize * count + dropper) as u64),
+                    (dropper_shift >= 0).then(|| (checker * count + dropper_shift as usize) as u64),
                 ];
                 for neighbour in neighbours.into_iter().flatten() {
                     if let Some((rows, cols)) = guess_lookup(inputs, neighbour) {
@@ -391,10 +389,8 @@ fn solve_item(
                         *value.0.add(class_id as usize) = solved.value;
                         *kind.0.add(class_id as usize) = 1;
                     }
-                    let drop_support =
-                        support_of_policy(&solved.drop_policy, inputs.max_support);
-                    let check_support =
-                        support_of_policy(&solved.check_policy, inputs.max_support);
+                    let drop_support = support_of_policy(&solved.drop_policy, inputs.max_support);
+                    let check_support = support_of_policy(&solved.check_policy, inputs.max_support);
                     output.hit_classes.push(class_id);
                     for slot in 0..inputs.max_support {
                         output
@@ -539,7 +535,10 @@ fn sweep_layer_rs<'py>(
 }
 
 #[pyfunction]
-fn toeplitz_saddle_rs(success: PyReadonlyArray1<'_, f64>, failed: f64) -> PyResult<(f64, f64, f64)> {
+fn toeplitz_saddle_rs(
+    success: PyReadonlyArray1<'_, f64>,
+    failed: f64,
+) -> PyResult<(f64, f64, f64)> {
     let slice = success.as_slice()?;
     if slice.len() != ACTIONS {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -571,17 +570,19 @@ fn attempt_support_rs<'py>(
     fixed.copy_from_slice(slice);
     let rows: Vec<usize> = rows.into_iter().map(|v| v as usize).collect();
     let cols: Vec<usize> = cols.into_iter().map(|v| v as usize).collect();
-    Ok(attempt_support(&fixed, failed, &rows, &cols, tolerance).map(|solution| {
-        (
-            solution.value,
-            solution.drop_policy.to_vec().into_pyarray(py),
-            solution.check_policy.to_vec().into_pyarray(py),
-        )
-    }))
+    Ok(
+        attempt_support(&fixed, failed, &rows, &cols, tolerance).map(|solution| {
+            (
+                solution.value,
+                solution.drop_policy.to_vec().into_pyarray(py),
+                solution.check_policy.to_vec().into_pyarray(py),
+            )
+        }),
+    )
 }
 
 #[pymodule]
-fn dth_backup_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn dth_complete_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("PARITY_CONTRACT_VERSION", PARITY_CONTRACT_VERSION)?;
     m.add_function(wrap_pyfunction!(sweep_layer_rs, m)?)?;
     m.add_function(wrap_pyfunction!(toeplitz_saddle_rs, m)?)?;

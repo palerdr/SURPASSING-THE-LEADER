@@ -9,14 +9,9 @@ from stl.engine.game import CYLINDER_MAX, PHYSICALITY_HAL, PHYSICALITY_BAKU
 
 class TestSurvivalProbability:
     def test_first_death_60s_high_survival(self, referee, hal):
-        """First death at 60s: base_curve is generous, no cardiac/fatigue penalty."""
+        """A bare 60-second injection starts at the frozen 0.95 baseline."""
         prob = referee.compute_survival_probability(hal, death_duration=60)
-        # base_curve(60) = 1 - (60/300)^3 = 1 - 0.008 = 0.992
-        # cardiac(0) = 0.85^0 = 1.0
-        # referee(0) = max(0.4, 0.88^0) = 1.0
-        # physicality = 1.0
-        # P = 0.992
-        assert prob == pytest.approx(0.992, abs=0.01)
+        assert prob == pytest.approx(0.95)
 
     def test_death_at_300_is_always_fatal(self, referee, hal):
         """Cylinder at 300 = guaranteed death regardless of other factors."""
@@ -48,8 +43,8 @@ class TestSurvivalProbability:
 
         assert prob_damaged < prob_fresh
 
-    def test_referee_fatigue(self):
-        """Each CPR degrades the referee's effectiveness."""
+    def test_revival_history_is_not_a_probability_input(self):
+        """The attempt count is audit history, not part of the frozen surface."""
         ref = Referee()
         p = Player(name="Test", physicality=1.0)
 
@@ -57,19 +52,22 @@ class TestSurvivalProbability:
         ref.cprs_performed = 3
         prob_tired = ref.compute_survival_probability(p, death_duration=60)
 
-        assert prob_tired < prob_fresh
+        assert prob_tired == prob_fresh
 
-    def test_baku_lower_physicality(self, referee):
-        """Baku has strictly lower survival than Hal for the same death."""
+    def test_player_identity_is_not_a_probability_input(self, referee):
         hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
         baku = Player(name="Baku", physicality=PHYSICALITY_BAKU)
 
         p_hal = referee.compute_survival_probability(hal, death_duration=60)
         p_baku = referee.compute_survival_probability(baku, death_duration=60)
 
-        assert p_baku < p_hal
-        assert p_baku == pytest.approx(p_hal * PHYSICALITY_BAKU, abs=0.001)
+        assert p_baku == p_hal
 
+    def test_matches_frozen_linear_geometric_surface(self, referee, hal):
+        hal.ttd = 120
+        # q=180 means s=120: .95 * (1 - 120/240) * .75^(120/60)
+        prob = referee.compute_survival_probability(hal, death_duration=180)
+        assert prob == pytest.approx(0.95 * 0.5 * 0.75**2)
 
 class TestDeathSequence:
     def test_failed_check_triggers_death(self, game):

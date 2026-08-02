@@ -85,14 +85,14 @@ both compound with repetition. A constant per-death-minute multiplier is the
 minimal encoding of that, and it keeps the surface a function of exactly two
 variables.
 
-`0.75` is a rounding of `0.85 * 0.88 = 0.748`, the product of STL's
-`CARDIAC_DECAY` and `REFEREE_DECAY` (`src/stl/engine/game.py:79,81`). The
+`0.75` is a rounding of `0.85 * 0.88 = 0.748`, the product of the pre-freeze
+STL cardiac and referee decay constants. The
 rounding costs at most 1.07% relative error, at `t = 240`; since neither
 constant is documentary, no accuracy that ever existed is lost.
 
 ### Why there is no referee floor
 
-STL carries `max(0.40, 0.88^cprs)`. Reduced to two variables that floor would be
+The pre-freeze STL model carried `max(0.40, 0.88^cprs)`. Reduced to two variables that floor would be
 `max(0.40, 0.88^(t/60))`, which **can never bind**: it requires `t/60 > 7.17`
 death-minutes, while eligibility caps `t` at 240 s = 4.0 death-minutes — a
 3.17-minute margin. It is dead code inside the eligible region, so it is omitted
@@ -100,13 +100,14 @@ rather than carried.
 
 ### Two variables, not four
 
-STL's engine takes four inputs: dose, TTD, referee CPR count, and per-player
-physicality. Reduced formulations have no referee object and no player identity.
-Folding physicality into the baseline and the CPR count into `t` — each death
+The pre-freeze STL engine took four inputs: dose, TTD, referee CPR count, and
+per-player physicality. The unified engine instead folds physicality into the
+baseline and the CPR count into `t` — each death
 costs at least 60 seconds of TTD, so `t/60` is a lower bound on deaths — gives a
-two-variable surface faithful to STL's structure and portable to every
-abstraction. This is a modeling bridge, not a claim that accrued TTD is a
-literal observed CPR count.
+two-variable surface faithful to the earlier structure and portable to every
+formulation. Current STL, DTH, abstract, Rust, and OCaml engines all execute
+that same two-variable rule. This is a modeling bridge, not a claim that
+accrued TTD is a literal observed CPR count.
 
 ## Table
 
@@ -202,38 +203,35 @@ never revisited; and a policy comparison across a baseline change is not
 like-for-like.
 
 `0.95` is chosen because both players in the source spend *planned* moves on
-fresh deaths, which rules out anything that reads as a gamble; because STL's own
-implied `P(0,0)` is 0.992; and because it leaves headroom for the physicality
-multiplier it absorbs.
+fresh deaths, which rules out anything that reads as a gamble; because the
+pre-freeze STL model implied `P(0,0)=0.992`; and because it leaves headroom for
+the identity-specific multiplier the unified model deliberately absorbs.
 
-## Migration status
+## Implementation status
 
-The DTH and abstract executable models, their Rust parity arm, and their
-production tablebases now use this frozen surface. Changing the model
-invalidated the prior value-bearing artifacts as intended; the DTH learned
-artifacts were retired and the opening census was rerun under the new schema.
-The leap-aware STL public-engine integration remains a separate pending
-migration and is not used by the DTH or abstract artifacts described here.
-Scope, sequencing, and measured costs are in
+Every executable formulation now uses this frozen surface: pure DTH, both
+abstract tablebases, the Python and Rust STL engines, and the leap-aware OCaml
+engine and solver. Arena and both terminal renderers display the probability
+recorded by their engine; neither carries a separate revival calculation.
+The implementation record is in
 [`REGENERATION_PLAN.md`](REGENERATION_PLAN.md).
 
-| Site | Current | Required |
-|---|---|---|
-| `src/dth/solver.py:33-39` | frozen linear/geometric surface | complete |
-| `src/dth/solver.py:185-203` | source-derived rule hash | complete |
-| `src/abstract/rules.py:147-177` | frozen model kind, baseline 0.95 | complete |
-| `src/abstract/packed_tablebase.py:45-49` | frozen model-kind mapping | complete |
-| `src/crates/abstract_solver/src/lib.rs:57-88` | frozen Rust arm | complete; parity verified |
-| `src/stl/engine/game.py:222-231` | cubic, cardiac, referee, physicality | linear dose term |
+| Site | Contract |
+|---|---|
+| `src/dth/solver.py` | frozen surface and source-derived rule hash |
+| `src/abstract/rules.py` | only the frozen surface is addressable |
+| `src/abstract/packed_tablebase.py` | manifests reject non-frozen metadata |
+| `src/crates/abstract_solver/src/lib.rs` | frozen Rust kernel; parity verified |
+| `src/stl/engine/game.py` | frozen linear/geometric surface |
+| `src/crates/stl_solver/src/game.rs` | frozen linear/geometric surface |
+| `src/dth_ocaml/lib/engine/referee.ml` | frozen linear/geometric surface |
+| `src/dth_ocaml/lib/solver/exact.ml` | frozen linear/geometric surface |
 
 `src/dth/solver.py`'s `solver_schema_hash()` now hashes the source of every
 rule function plus `_FAILURE_DEAD_MIN_ST`, following the source-byte approach
 used by `src/abstract/artifacts.py:31-41`. Replacing `revival_model` or changing
 the failure threshold therefore changes the DTH schema hash and rejects stale
 artifacts.
-
-Per the root `AGENTS.md`, the rules change, canonical docs, evidence citations,
-schemas, and tests move together in one commit.
 
 ## Modeling boundary
 

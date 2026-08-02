@@ -11,7 +11,7 @@ from dth.support_solver import solve_certified_matrix_fast
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 VALUE_TABLE = (
-    REPOSITORY / "src" / "dth" / "artifacts" / "backup_full_v1" / "value.npy"
+    REPOSITORY / "src" / "dth" / "artifacts" / "complete_full_v1" / "value.npy"
 )
 OUTPUT = REPOSITORY / "paper" / "build" / "figures"
 

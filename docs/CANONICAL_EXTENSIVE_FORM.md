@@ -56,8 +56,8 @@ public game be played from one interface against comparable numbers.
 Superseded and no longer permitted anywhere: the cubic dose curve
 `1 - (q/300)^3`, DTH's local `2^(-t/240)` factor, and the `abstract` `0.80`
 baseline with a stretched-exponential TTD term. No project may carry its own
-revival constants, and no project may reintroduce an explicit CPR count or a
-per-player physicality multiplier below ladder rung L2.
+revival constants, and no project may use an explicit revival-attempt count or
+per-player physicality multiplier in revival odds at any ladder rung.
 
 <!-- canon:C-AUTHORITY -->
 ## Executable authorities

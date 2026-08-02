@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from abstract.rules import Bucket12Unified80Rules
+from abstract.rules import Bucket12Frozen95Rules
 from arena import abstract_adapter, cli
 from arena.abstract_adapter import AbstractTablebasePolicyProvider, project_to_abstract_state
 from arena.agent import PolicyDrivenAgent, decision_from_game, normalize_legal_policy
@@ -34,7 +34,7 @@ def test_projection_floors_seconds_to_role_relative_ten_second_buckets() -> None
 
 
 def test_projection_floors_seconds_to_role_relative_five_second_buckets() -> None:
-    state = project_to_abstract_state(_decision(), Bucket12Unified80Rules())
+    state = project_to_abstract_state(_decision(), Bucket12Frozen95Rules())
     assert (state.checker_load, state.checker_ttd, state.dropper_load, state.dropper_ttd) == (
         3,
         24,
@@ -80,6 +80,20 @@ def test_bucket_flag_selects_bucket_specific_default_artifact() -> None:
     )
 
 
+def test_dth_complete_tablebase_is_default_without_legacy_alias() -> None:
+    parser = cli.build_parser()
+    defaults = parser.parse_args(["play"])
+    canonical = parser.parse_args(
+        ["play", "--hal-agent", "dth", "--dth-complete-tablebase", "complete-tablebase"]
+    )
+
+    assert defaults.hal_agent == "dth"
+    assert defaults.dth_complete_tablebase == cli.DEFAULT_DTH_COMPLETE_TABLEBASE
+    assert canonical.dth_complete_tablebase == "complete-tablebase"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["play", "--dth-backup", "legacy-tablebase"])
+
+
 def test_policy_normalization_discards_illegal_zero_mass_entries() -> None:
     actions, probabilities = normalize_legal_policy({0: 4.0, 1: 1.0, 2: 3.0, 61: 2.0}, (1, 2))
     assert actions.tolist() == [1, 2]
@@ -109,6 +123,20 @@ def test_decision_uses_engine_role_relative_state() -> None:
     assert decision.checker_cylinder_seconds == 40
 
 
+def test_stl_and_dth_revival_surfaces_match_over_the_full_domain() -> None:
+    from dth.solver import revival_model
+
+    referee = Referee(cprs_performed=17)
+    player = Player(name="Either", physicality=0.01)
+    for st_in_vial in range(300):
+        for ttd in range(301):
+            player.ttd = ttd
+            actual = referee.compute_survival_probability(
+                player, death_duration=st_in_vial + 60
+            )
+            assert actual == revival_model(st_in_vial, ttd)
+
+
 def test_cli_exits_cleanly_on_control_c(monkeypatch: pytest.MonkeyPatch) -> None:
     def interrupt(_args: object) -> int:
         raise KeyboardInterrupt
@@ -117,7 +145,7 @@ def test_cli_exits_cleanly_on_control_c(monkeypatch: pytest.MonkeyPatch) -> None
     assert cli.main(["play"]) == 130
 
 
-def test_dth_projection_is_the_identity_with_defensive_clamps() -> None:
+def test_dth_projection_is_the_exact_literal_second_identity() -> None:
     from arena.dth_adapter import project_to_dth_state
 
     assert project_to_dth_state(_decision()) == (19, 120, 29, 70)
@@ -132,28 +160,32 @@ def test_dth_projection_is_the_identity_with_defensive_clamps() -> None:
         dropper_ttd_seconds=299.6,
         native_state=object(),
     )
-    assert project_to_dth_state(wide) == (299, 300, 0, 299)
+    with pytest.raises(ValueError, match="literal-second"):
+        project_to_dth_state(wide)
 
 
-def test_dth_provider_serves_certified_policies_without_artifacts() -> None:
-    from arena.dth_adapter import DTHResolvePolicyProvider
-    from dth.agent import ResolveBudget
+def test_dth_provider_serves_only_complete_exact_policies(monkeypatch, tmp_path) -> None:
+    import arena.dth_adapter as adapter
+    from dth.agent import MoveDecision
 
-    provider = DTHResolvePolicyProvider(
-        budget=ResolveBudget(deadline_seconds=10.0, finite_fallback_horizon=1)
-    )
-    try:
-        decision = _decision()
-        policy = provider.policy(decision)
-        assert policy
-        assert all(1 <= second <= 60 for second in policy)
-        assert all(weight > 0.0 for weight in policy.values())
-        assert provider.decisions[0].provenance == "finite-horizon-exact"
-        summary = provider.match_summary()
-        assert "certified 1/1" in summary
-        assert "latency p95" in summary
-    finally:
-        provider.close()
+    class _Agent:
+        def __init__(self, artifact_dir) -> None:
+            assert artifact_dir == tmp_path
+
+        def decide(self, state):
+            return MoveDecision(
+                state=state,
+                value=0.1,
+                drop_policy=(1.0,) + (0.0,) * 59,
+                check_policy=(0.0,) * 59 + (1.0,),
+                saddle_gap=1e-7,
+                elapsed_seconds=0.001,
+            )
+
+    monkeypatch.setattr(adapter, "CompleteDTHAgent", _Agent)
+    provider = adapter.DTHCompletePolicyProvider(tmp_path)
+    assert provider.policy(_decision()) == {1: 1.0}
+    assert "1 exact moves" in provider.match_summary()
 
 
 def test_dth_cli_dispatch_builds_a_policy_driven_agent(tmp_path) -> None:
@@ -161,26 +193,12 @@ def test_dth_cli_dispatch_builds_a_policy_driven_agent(tmp_path) -> None:
     args = parser.parse_args(
         [
             "play",
-            "--hal-agent",
-            "dth",
-            "--dth-tablebase",
-            str(tmp_path / "missing-but-default.sqlite"),
+            "--dth-complete-tablebase",
+            str(tmp_path / "missing"),
         ]
     )
     with pytest.raises(FileNotFoundError):
         cli._make_hal(args)
-
-    defaults = parser.parse_args(["play", "--hal-agent", "dth"])
-    defaults.dth_checkpoint = cli.DEFAULT_DTH_CHECKPOINT
-    defaults.dth_tablebase = cli.DEFAULT_DTH_TABLEBASE
-    if not Path(cli.DEFAULT_DTH_TABLEBASE).is_file():
-        agent = cli._make_hal(defaults)
-        assert isinstance(agent, PolicyDrivenAgent)
-    else:
-        agent = cli._make_hal(defaults)
-        assert isinstance(agent, PolicyDrivenAgent)
-        agent.provider.close()
-
 
 def test_match_series_pairs_seats_and_reports_sprt(tmp_path) -> None:
     from arena.match import run_paired_series

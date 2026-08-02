@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Mapping, Sequence, Tuple
+from typing import Callable, Mapping, Sequence, Tuple
 from enum import IntEnum
 import hashlib
 import inspect
@@ -77,10 +77,6 @@ type State = NTState | TState
 type Branch = tuple[float, State]
 type Distribution = tuple[Branch, ...]
 
-if TYPE_CHECKING:
-    from dth.tablebase import CertifiedTablebase
-
-
 def validate_live_state(raw: Sequence[int]) -> NTState:
     """Validate and canonicalize one role-canonical live DTH state."""
 
@@ -115,7 +111,7 @@ def damage_rank(x: NTState) -> int:
 
 
 def encode_raw_state_id(raw: Sequence[int]) -> int:
-    """Pack every public-state coordinate losslessly into one SQLite integer."""
+    """Pack every public-state coordinate losslessly into one integer."""
 
     state = validate_live_state(raw)
     encoded = 0
@@ -328,7 +324,7 @@ class CompleteGameMetrics:
     new_solutions: int = 0
     elapsed_seconds: float = 0.0
     dependency_construction_seconds: float = 0.0
-    sqlite_lookup_and_certificate_seconds: float = 0.0
+    tablebase_lookup_and_certificate_seconds: float = 0.0
     matrix_reconstruction_seconds: float = 0.0
     highs_lp_solving_seconds: float = 0.0
     durable_commit_seconds: float = 0.0

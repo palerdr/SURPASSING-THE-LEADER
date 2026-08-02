@@ -80,7 +80,7 @@ def test_selective_audit_zero_gap_on_safe_budget_pair():
 
 
 def test_selective_audit_zero_gap_on_cpr_pair():
-    for name in ("cpr_degradation_fresh_referee", "cpr_degradation_fatigued_referee"):
+    for name in ("revival_history_fresh", "revival_history_after_ten_attempts"):
         audit = _audit(name)
         assert audit.value_gap == pytest.approx(0.0, abs=1e-9), name
 

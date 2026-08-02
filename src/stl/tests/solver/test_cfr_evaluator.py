@@ -135,7 +135,7 @@ def test_tablebase_evaluator_construction_loads_pinned_registry_entries():
     """Phase F brought the pinned registry to 19 forced-terminal ±1 entries;
     Phase F-2 added interior-valued pins. The evaluator's table must include the
     boundary pins (both ±1 signs) AND the interior pins — at an MCTS leaf that
-    matches an interior pin, returning the exact value (e.g. 0.568) is correct."""
+    matches an interior pin, returning its exact non-boundary value is correct."""
     evaluator = TablebaseEvaluator(fallback=TerminalOnlyEvaluator())
     assert len(evaluator._table) >= 22, (
         f"expected >= 22 pinned entries after Phase F-2, got {len(evaluator._table)}"
@@ -251,8 +251,8 @@ def test_tablebase_evaluator_relational_scenarios_are_not_in_table():
     relational_names = (
         "safe_budget_pressure_at_cylinder_240",
         "safe_budget_pressure_at_cylinder_239",
-        "cpr_degradation_fresh_referee",
-        "cpr_degradation_fatigued_referee",
+        "revival_history_fresh",
+        "revival_history_after_ten_attempts",
     )
     from stl.solver.exact import exact_public_state
 

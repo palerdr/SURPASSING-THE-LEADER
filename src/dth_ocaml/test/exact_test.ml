@@ -1,5 +1,7 @@
 module E = Dth_solver.Exact
 module M = Dth_solver.Matrix_game
+module R = Dth_engine.Referee
+module C = Dth_engine.Config
 
 let fail name detail = failwith (name ^ ": " ^ detail)
 let check name condition = if not condition then fail name "condition failed"
@@ -43,6 +45,15 @@ let test_revival_surface () =
   check_approx "total load above 300 is fatal" 0.0 (E.revival_probability 1 240);
   check "positive ttd reduces revival"
     (E.revival_probability 0 60 < E.revival_probability 0 0)
+
+let test_engine_solver_revival_parity () =
+  let config = C.default () in
+  for st = 0 to 299 do
+    for ttd = 0 to 300 do
+      check_approx "engine/solver revival parity" (E.revival_probability st ttd)
+        (R.compute_revival_prob config ~st_in_vial:st ~ttd_accrued:ttd)
+    done
+  done
 
 let test_action_primitives () =
   check "inclusive squandered time" (E.squandered_time (10, 20) = 11);
@@ -193,7 +204,7 @@ let test_certificate () =
     (lower -. 1e-9 <= solution.M.value && solution.M.value <= upper +. 1e-9)
 
 (* Cross-implementation parity. These are complete-game Dropper-relative values
-   read from the Python authority's certified artifact (backup_full_v1, every
+   read from the Python authority's certified artifact (complete_full_v1, every
    class certified to a 1e-6 saddle gap). The states are deep enough in the
    endgame that the direct recursion closes quickly, and they are the check
    that this project agrees with the peer solver rather than merely with
@@ -211,6 +222,7 @@ let test_python_authority_parity () =
 
 let () =
   test_revival_surface ();
+  test_engine_solver_revival_parity ();
   test_action_primitives ();
   test_successful_transition ();
   test_failed_transition ();

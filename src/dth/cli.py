@@ -8,9 +8,8 @@ import sys
 
 
 COMMANDS = {
-    "backup": "dth.backup_tablebase",
+    "complete": "dth.complete_tablebase",
     "dataset": "dth.generate_dataset",
-    "exact": "dth.exact_agent",
     "train": "dth.train",
     "self-play": "dth.self_play",
     "mcts-audit": "dth.mcts",

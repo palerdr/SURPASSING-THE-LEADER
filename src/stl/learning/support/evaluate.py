@@ -10,7 +10,7 @@ from stl.engine.game import (
     LS_WINDOW_START,
     OPENING_START_CLOCK,
     PHYSICALITY_BAKU,
-    CARDIAC_DECAY,
+    REVIVAL_TTD_DECAY_PER_MINUTE,
 )
 from stl.engine.game import Game
 from stl.solver.exact import survival_probability
@@ -110,8 +110,8 @@ def _handcrafted_evaluate(game: Game) -> float:
     hal_budget = safe_strategy_budget(hal)
     baku_budget = safe_strategy_budget(baku)
 
-    hal_cardiac = CARDIAC_DECAY ** (hal.ttd / 60.0)
-    baku_cardiac = CARDIAC_DECAY ** (baku.ttd / 60.0)
+    hal_cardiac = REVIVAL_TTD_DECAY_PER_MINUTE ** (hal.ttd / 60.0)
+    baku_cardiac = REVIVAL_TTD_DECAY_PER_MINUTE ** (baku.ttd / 60.0)
 
     var = lsr_variation_from_clock(game.game_clock)
     dropper, _ = game.get_roles_for_half(game.current_half)

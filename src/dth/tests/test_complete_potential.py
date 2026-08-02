@@ -1,4 +1,4 @@
-"""The sweep potential strictly increases along every live class transition.
+"""The complete sweep potential strictly increases along every live transition.
 
 ``phi(profile) = ST + TTD`` when alive and ``ST + 301`` when dead; a class's
 potential is the sum over both profiles.  Descending-potential dynamic

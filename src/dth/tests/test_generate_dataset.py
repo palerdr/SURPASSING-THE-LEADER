@@ -272,7 +272,7 @@ def test_resolve_labeled_emission_writes_play_coverage_rows(tmp_path):
 
     import numpy as np
 
-    from dth.agent import BoundedResolveAgent, ResolveBudget
+    from dth.research_agent import BoundedResolveAgent, ResolveBudget
     from dth.generate_dataset import generate_resolve_labeled_targets
 
     @dataclass(frozen=True)

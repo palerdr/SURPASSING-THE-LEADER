@@ -461,7 +461,7 @@ def main() -> int:
             #      boundary count so neither class dominates by sheer volume (the
             #      original 90:660 = 12% share is what drowned them);
             #  (2) gradient priority — a modest extra loss weight, because the
-            #      interior targets (+0.568 / −0.373 / −0.024) sit in the hard,
+            #      interior targets sit in the hard,
             #      non-saturated middle of tanh and need more gradient per sample
             #      than the easy ±1 boundary pins. Memorization target ≤ 0.05.
             interior_replicate = max(1, round(n_boundary / len(interior)))

@@ -61,28 +61,19 @@ DEATH_PROCEDURE_OVERHEAD = 120      # injection + waiting + CPR + recovery (~2 m
 WITHIN_ROUND_OVERHEAD = 60          # total procedural time within a round (settling,
                                     # injection procedure, role swap). Applied between halves.
 # ──────────────────────────────────────────────
-# SURVIVAL PROBABILITY
+# REVIVAL PROBABILITY
 #
-# P(survival) = base_curve(t) * cardiac(ttd_prior) * referee(n) * physicality
-# subject to hard guards: current dose >= 300 or resulting total TTD > 300
-# has probability zero; resulting total TTD == 300 remains eligible.
-#
-# base_curve(t)       = max(0, 1 - (t / CYLINDER_MAX) ^ BASE_CURVE_K)
-# cardiac(ttd_prior)  = CARDIAC_DECAY ^ (ttd_prior / 60)
-# referee(n)          = max(REFEREE_FLOOR, REFEREE_DECAY ^ n)
-# physicality         = per-player constant
+# Repository authority: docs/REVIVAL_MODEL.md. ``death_duration`` is the
+# complete injected dose q = s + 60. The frozen surface is identity-neutral
+# and depends only on vial ST ``s`` and prior TTD.
 # ──────────────────────────────────────────────
-# Base curve: oxygen deprivation danger for THIS death
-BASE_CURVE_K = 3
-# Cardiac degradation: accumulated heart damage from prior deaths
-# Each minute of prior cumulative death weakens the heart by this factor
-CARDIAC_DECAY = 0.85
-# Referee fatigue: CPR quality degrades with each revival performed
-REFEREE_DECAY = 0.88
-REFEREE_FLOOR = 0.4                 # minimum effectiveness (even exhausted)
-# Player physicality presets
+REVIVAL_BASELINE = 0.95
+REVIVAL_TTD_DECAY_PER_MINUTE = 0.75
+# Player metadata retained for strategy/feature consumers. It is deliberately
+# absent from the frozen revival calculation, so both canonical presets are
+# identity-neutral.
 PHYSICALITY_HAL = 1.0
-PHYSICALITY_BAKU = 0.94
+PHYSICALITY_BAKU = 1.0
 
 from dataclasses import dataclass, field
 
@@ -157,29 +148,15 @@ class Player:
 """
 Drop The Handkerchief — Referee
 
-The Referee (Yakou) manages the death/revival process.
+The Referee (Yakou) manages the death/revival roll.
 
 The referee has ONE job in the engine: determine whether a player survives
 a death episode. This involves:
 
-1. Computing the survival probability from four independent factors.
+1. Computing the frozen two-variable revival probability.
 2. Rolling against that probability.
-3. Tracking CPR fatigue (how many revivals have been performed total).
-
-The referee is a GLOBAL resource — fatigue accumulates regardless of
-which player died. If Baku dies twice and Hal dies once, Yakou has
-performed 3 CPRs and is exhausted for whoever needs revival next.
-
-Survival Probability:
-    P = base_curve(this_death_duration)
-      x cardiac_modifier(player.ttd before this death)
-      x referee_modifier(self.cprs_performed)
-      x player.physicality
-
-Where:
-    base_curve(t)           = max(0, 1 - (t / 300)^k)
-    cardiac_modifier(ttd)   = α^(ttd / 60)
-    referee_modifier(n)     = max(β_min, β^n)
+3. Tracking revival attempts for match history only. That count is not a
+   probability input.
 """
 
 import random
@@ -195,21 +172,15 @@ class Referee:
         Compute the probability that `player` survives a death of `death_duration` seconds.
 
         Args:
-            player: The player who is dying. Use player.ttd (BEFORE this death
-                    is added) for cardiac modifier, and player.physicality for baseline.
-            death_duration: How long the player will be dead THIS time (seconds).
-                            This is the cylinder contents at time of injection.
+            player: The player who is dying. ``player.ttd`` is prior accrued TTD.
+            death_duration: Complete injected dose ``q = s + 60`` in seconds.
 
         Returns:
             Float in [0.0, 1.0] — probability of successful revival.
 
         Implementation notes:
-            - base_curve uses death_duration (THIS episode's danger)
-            - cardiac uses player.ttd (accumulated PRIOR damage to the heart)
-            - referee uses self.cprs_performed (global fatigue)
-            - physicality is player.physicality (constant per player)
-            - Multiply all four. Clamp to [0.0, 1.0].
-            - A death_duration >= 300 is always fatal.
+            - ``s = death_duration - 60`` is vial ST before the failed dose.
+            - A complete dose at or above 300 is always fatal.
             - Resulting cumulative TTD > 300 is always fatal. Exactly 300
               remains eligible for the probability calculation.
         """
@@ -219,17 +190,13 @@ class Referee:
         ):
             return 0.0
 
-        death_curve = lambda t: max(0.0, 1 - (t / CYLINDER_MAX) ** BASE_CURVE_K)
-        cardiac_modifier = lambda ttd: CARDIAC_DECAY ** (ttd / 60)
-        referee_modifier = lambda n: max(REFEREE_FLOOR, REFEREE_DECAY ** n)
-        death_pr = (
-            death_curve(death_duration)
-            * cardiac_modifier(player.ttd)
-            * referee_modifier(self.cprs_performed)
-            * player.physicality
+        st_in_vial = max(0.0, death_duration - FAILED_CHECK_PENALTY)
+        survivable_st_span = CYLINDER_MAX - FAILED_CHECK_PENALTY
+        st_factor = 1.0 - st_in_vial / survivable_st_span
+        ttd_factor = REVIVAL_TTD_DECAY_PER_MINUTE ** (
+            player.ttd / FAILED_CHECK_PENALTY
         )
-
-        return death_pr
+        return max(0.0, min(1.0, REVIVAL_BASELINE * st_factor * ttd_factor))
 
     def attempt_revival(self, player: Player, death_duration: float, rng: random.Random | None = None) -> bool:
         """
@@ -246,7 +213,7 @@ class Referee:
             True if revival succeeds, False if player dies permanently.
 
         Side effects:
-            - Increments self.cprs_performed (always, regardless of outcome).
+            - Increments self.cprs_performed for match history only.
             - On the Player side, the caller (Game) should handle on_death/on_revival/on_permanent_death.
 
         Design note:
@@ -603,7 +570,6 @@ class Game:
                 "deaths": p.deaths,
                 "alive": p.alive,
                 "safe_strategies_remaining": p.safe_strategies_remaining,
-                "physicality": p.physicality,
             }
         return {
             "round_num": self.round_num,
@@ -613,7 +579,7 @@ class Game:
             "is_leap_second_turn": self.is_leap_second_turn(),
             "player1": player_summary(self.player1),
             "player2": player_summary(self.player2),
-            "referee_cprs": self.referee.cprs_performed,
+            "revival_attempts": self.referee.cprs_performed,
             "game_over": self.game_over,
             "winner": self.winner.name if self.winner else None,
             "loser": self.loser.name if self.loser else None,

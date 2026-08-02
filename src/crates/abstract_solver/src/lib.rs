@@ -1,7 +1,7 @@
 use numpy::{PyArray1, PyReadonlyArray1, PyReadwriteArray1};
 use pyo3::prelude::*;
 
-const PARITY_CONTRACT_VERSION: &str = "abstract-packed-parity-v2";
+const PARITY_CONTRACT_VERSION: &str = "abstract-packed-parity-v3";
 const UNREACHABLE: u32 = u32::MAX;
 
 fn encode(
@@ -54,47 +54,15 @@ fn live_successors(index: u32, cap: u32, action_size: u32, penalty: u32) -> Vec<
     result
 }
 
-fn revival_probability(
-    prior_ttd: u32,
-    dose: u32,
-    cap: u32,
-    penalty: u32,
-    model_kind: u8,
-    baseline: f64,
-    dose_exponent: f64,
-    half_life: f64,
-    ttd_exponent: f64,
-    ttd_decay_per_death_dose: f64,
-    referee_decay: f64,
-    referee_floor: f64,
-) -> f64 {
+fn revival_probability(prior_ttd: u32, dose: u32, cap: u32, penalty: u32) -> f64 {
     if dose >= cap || prior_ttd + dose > cap {
         return 0.0;
     }
-    let (dose_factor, referee_factor) = match model_kind {
-        0 => (1.0 - (dose as f64 / cap as f64).powf(dose_exponent), 1.0),
-        1 => {
-            let pre_failure_st = dose - penalty;
-            let survivable_st_span = cap - penalty;
-            let effective_deaths = prior_ttd as f64 / penalty as f64;
-            (
-                1.0 - pre_failure_st as f64 / survivable_st_span as f64,
-                referee_floor.max(referee_decay.powf(effective_deaths)),
-            )
-        }
-        2 => {
-            let pre_failure_st = dose - penalty;
-            let survivable_st_span = cap - penalty;
-            (1.0 - pre_failure_st as f64 / survivable_st_span as f64, 1.0)
-        }
-        _ => return f64::NAN,
-    };
-    let ttd_factor = if model_kind == 2 {
-        ttd_decay_per_death_dose.powf(prior_ttd as f64 / penalty as f64)
-    } else {
-        2.0_f64.powf(-((prior_ttd as f64 / half_life).powf(ttd_exponent)))
-    };
-    (baseline * dose_factor * ttd_factor * referee_factor).clamp(0.0, 1.0)
+    let pre_failure_st = dose - penalty;
+    let survivable_st_span = cap - penalty;
+    let dose_factor = 1.0 - pre_failure_st as f64 / survivable_st_span as f64;
+    let ttd_factor = 0.75_f64.powf(prior_ttd as f64 / penalty as f64);
+    (0.95 * dose_factor * ttd_factor).clamp(0.0, 1.0)
 }
 
 fn close(left: f64, right: f64) -> bool {
@@ -194,14 +162,6 @@ fn backup_chunk_rs<'py>(
     cap: u32,
     action_size: u32,
     penalty: u32,
-    revival_model_kind: u8,
-    baseline: f64,
-    dose_exponent: f64,
-    half_life: f64,
-    ttd_exponent: f64,
-    ttd_decay_per_death_dose: f64,
-    referee_decay: f64,
-    referee_floor: f64,
 ) -> PyResult<(
     Bound<'py, PyArray1<u8>>,
     Bound<'py, PyArray1<f64>>,
@@ -236,20 +196,7 @@ fn backup_chunk_rs<'py>(
     for (position, index) in indices.iter().copied().enumerate() {
         let (checker_load, checker_ttd, dropper_load, dropper_ttd) = decode(index, cap);
         let dose = checker_load + penalty;
-        let revive = revival_probability(
-            checker_ttd,
-            dose,
-            cap,
-            penalty,
-            revival_model_kind,
-            baseline,
-            dose_exponent,
-            half_life,
-            ttd_exponent,
-            ttd_decay_per_death_dose,
-            referee_decay,
-            referee_floor,
-        );
+        let revive = revival_probability(checker_ttd, dose, cap, penalty);
         let (failure_value, failure_dropper_win, failure_checker_win) = if revive > 0.0 {
             let child = encode(dropper_load, dropper_ttd, 0, checker_ttd + dose, cap);
             let row = *ordinal.get(child as usize).ok_or_else(|| {
@@ -373,30 +320,11 @@ mod tests {
     }
 
     #[test]
-    fn unified_revival_model_matches_seconds_equivalent_buckets() {
-        let ten_second =
-            revival_probability(12, 18, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4);
-        let five_second =
-            revival_probability(24, 36, 60, 12, 1, 0.8, 3.0, 24.0, 1.3, 0.75, 0.88, 0.4);
-        assert!((ten_second - 0.15488).abs() < 1e-12);
-        assert!((ten_second - five_second).abs() < 1e-12);
-        assert_eq!(
-            revival_probability(0, 6, 30, 6, 1, 0.8, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4),
-            0.8
-        );
-    }
-
-    #[test]
     fn frozen_revival_model_matches_seconds_equivalent_buckets() {
-        let ten_second =
-            revival_probability(12, 18, 30, 6, 2, 0.95, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4);
-        let five_second =
-            revival_probability(24, 36, 60, 12, 2, 0.95, 3.0, 24.0, 1.3, 0.75, 0.88, 0.4);
+        let ten_second = revival_probability(12, 18, 30, 6);
+        let five_second = revival_probability(24, 36, 60, 12);
         assert!((ten_second - (0.95 * 0.5 * 0.75_f64.powi(2))).abs() < 1e-12);
         assert!((ten_second - five_second).abs() < 1e-12);
-        assert_eq!(
-            revival_probability(0, 6, 30, 6, 2, 0.95, 3.0, 12.0, 1.3, 0.75, 0.88, 0.4),
-            0.95
-        );
+        assert_eq!(revival_probability(0, 6, 30, 6), 0.95);
     }
 }

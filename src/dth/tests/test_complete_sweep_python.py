@@ -3,20 +3,18 @@
 The builder is exercised on small synthetic profile tables (same structural
 invariants as the canonical quotient, ~kilobyte artifacts) and cross-checked
 against an independent per-class resolution through the certified ladder.
-The dead-band reference ties the new machinery to ``exact_band_v1.sqlite``.
 """
 
 import json
-import sqlite3
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from dth.backup_tablebase import (
-    BACKUP_TABLEBASE_SCHEMA,
-    BackupTablebase,
-    BackupTablebaseBuilder,
+from dth.complete_tablebase import (
+    COMPLETE_TABLEBASE_SCHEMA,
+    CompleteTablebase,
+    CompleteTablebaseBuilder,
     attempt_support_solution,
     buckets_from_potential,
     build_dead_band_reference,
@@ -30,9 +28,6 @@ from dth.solver import (
     solve_matrix,
 )
 from dth.support_solver import solve_certified_matrix_fast
-
-BAND_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "exact_band_v1.sqlite"
-
 
 def make_synthetic_table(count: int = 40) -> QuotientProfileTable:
     """A miniature game with the canonical structural shape.
@@ -148,11 +143,11 @@ def test_support_attempt_reproduces_the_oracle_and_fails_closed() -> None:
 @pytest.mark.slow  # 34s: sweeps a synthetic table and re-solves every class independently
 def test_python_sweep_matches_independent_resolution(tmp_path) -> None:
     table = make_synthetic_table()
-    builder = BackupTablebaseBuilder(
+    builder = CompleteTablebaseBuilder(
         output_dir=tmp_path / "sweep", backend="python", table=table
     )
     assert builder.sweep() is True
-    tablebase = BackupTablebase(tmp_path / "sweep")
+    tablebase = CompleteTablebase(tmp_path / "sweep")
     reference = independent_class_values(table)
     count = len(table.st_by_profile)
     for class_id in range(count * count):
@@ -172,18 +167,18 @@ def test_python_sweep_matches_independent_resolution(tmp_path) -> None:
 def test_interrupted_build_resumes_byte_for_byte(tmp_path) -> None:
     table = make_synthetic_table()
     straight = tmp_path / "straight"
-    BackupTablebaseBuilder(output_dir=straight, backend="python", table=table).sweep()
+    CompleteTablebaseBuilder(output_dir=straight, backend="python", table=table).sweep()
 
     interrupted = tmp_path / "interrupted"
-    first = BackupTablebaseBuilder(
+    first = CompleteTablebaseBuilder(
         output_dir=interrupted, backend="python", table=table
     )
     assert first.sweep(stop_after_layers=7) is False
-    second = BackupTablebaseBuilder(
+    second = CompleteTablebaseBuilder(
         output_dir=interrupted, backend="python", table=table
     )
     assert second.sweep(stop_after_layers=11) is False
-    third = BackupTablebaseBuilder(
+    third = CompleteTablebaseBuilder(
         output_dir=interrupted, backend="python", table=table
     )
     assert third.sweep() is True
@@ -194,12 +189,12 @@ def test_interrupted_build_resumes_byte_for_byte(tmp_path) -> None:
 
 def test_checkpoint_rejects_a_different_configuration(tmp_path) -> None:
     table = make_synthetic_table()
-    builder = BackupTablebaseBuilder(
+    builder = CompleteTablebaseBuilder(
         output_dir=tmp_path / "build", backend="python", table=table
     )
     builder.sweep(stop_after_layers=2)
     with pytest.raises(ValueError, match="configuration"):
-        BackupTablebaseBuilder(
+        CompleteTablebaseBuilder(
             output_dir=tmp_path / "build",
             backend="python",
             table=table,
@@ -210,48 +205,25 @@ def test_checkpoint_rejects_a_different_configuration(tmp_path) -> None:
 def test_corrupted_artifact_fails_closed(tmp_path) -> None:
     table = make_synthetic_table(count=20)
     target = tmp_path / "artifact"
-    BackupTablebaseBuilder(output_dir=target, backend="python", table=table).sweep()
-    BackupTablebase(target)  # intact artifact opens
+    CompleteTablebaseBuilder(output_dir=target, backend="python", table=table).sweep()
+    CompleteTablebase(target)  # intact artifact opens
 
     value_path = target / "value.npy"
     payload = bytearray(value_path.read_bytes())
     payload[-9] ^= 0xFF
     value_path.write_bytes(bytes(payload))
     with pytest.raises(ValueError, match="digest"):
-        BackupTablebase(target)
+        CompleteTablebase(target)
 
     manifest_path = target / "tablebase.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["schema_version"] = "dth.backup-tablebase.v0"
+    manifest["schema_version"] = "dth.complete-tablebase.v0"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match="schema"):
-        BackupTablebase(target)
+        CompleteTablebase(target)
 
 
-@pytest.mark.skipif(not BAND_PATH.exists(), reason="exact_band_v1.sqlite not present")
-@pytest.mark.slow  # 31s: solves the dead-dead band against the shipped exact band
-def test_dead_band_reference_matches_exact_band_v1() -> None:
-    # The shipped band solves the both-STs>=240 quotient: classes keyed by
-    # remaining capacities in a disjoint negative id range.  The dead-band
-    # reference solves the per-player generalization independently; on the
-    # shared 3,541 classes the two must agree within certificate width.
+def test_dead_band_reference_has_pinned_root_value() -> None:
     reference = build_dead_band_reference(min_total=480)
-    connection = sqlite3.connect(f"file:{BAND_PATH}?mode=ro", uri=True)
-    rows = connection.execute(
-        "SELECT state_id, value FROM 'values' "
-        "WHERE namespace='complete-game' AND is_exact=1 AND state_id < 0"
-    ).fetchall()
-    connection.close()
-    assert len(rows) == 3_541
-    worst = 0.0
-    for state_id, stored in rows:
-        offset = -1 - int(state_id)
-        checker_remaining, dropper_remaining = divmod(offset, 60)
-        checker_st = 299 - checker_remaining
-        dropper_st = 299 - dropper_remaining
-        mine = float(reference[checker_st * 300 + dropper_st])
-        assert np.isfinite(mine)
-        worst = max(worst, abs(mine - float(stored)))
-    assert worst <= 5e-7
     root = float(reference[240 * 300 + 240])
     assert abs(root - 0.3372132166291093) <= 1e-9

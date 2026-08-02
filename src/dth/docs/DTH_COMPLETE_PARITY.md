@@ -1,11 +1,11 @@
-# DTH Backup Tablebase Parity Contract
+# DTH Complete-Game Tablebase Parity Contract
 
-`src/dth/packed.py` and `src/dth/backup_tablebase.py` are the behavioral
-authority for the packed-quotient backup tablebase. The Rust kernel
-`dth_backup_rs` (`src/crates/dth_backup`) is an opt-in accelerator and remains
+`src/dth/packed.py` and `src/dth/complete_tablebase.py` are the behavioral
+authority for the packed-quotient complete-game tablebase. The Rust kernel
+`dth_complete_rs` (`src/crates/dth_complete`) is an opt-in accelerator and remains
 opt-in until every gate in this contract passes; an unchecked Rust result must
 never silently replace Python output. The contract version string is
-`dth-backup-parity-v1`, exported by the extension and checked at import; a
+`dth-complete-parity-v1`, exported by the extension and checked at import; a
 mismatch refuses the backend outright.
 
 ## Class encoding
@@ -48,7 +48,7 @@ mismatch refuses the backend outright.
   transition strictly increases it: success by the lag (alive to alive and
   dead to dead), by at least lag + 61 when the mover's profile dies; failure
   by exactly 60 when the revived profile is alive and by at least 61 when it
-  is dead. `tests/test_backup_potential.py` checks all 1,035,541 live profile
+  is dead. `tests/test_complete_potential.py` checks all 1,035,541 live profile
   transitions exhaustively; the proof is in `docs/EXACTNESS_PROOF.md`.
 - There are no same-layer edges, so the sweep solves whole layers descending
   from 1,200 with a barrier per layer, and layer-P LP residues need writing
@@ -60,7 +60,7 @@ mismatch refuses the backend outright.
 - Warm-start guesses are **precomputed per state** from the previous layer's
   support table (see below); kernels perform no chaining, so artifact bytes
   are independent of worker count and work-item partition by construction.
-  `test_backup_rust_parity.py` verifies byte-identity against
+  `test_complete_rust_parity.py` verifies byte-identity against
   `RAYON_NUM_THREADS=1`.
 
 ## Assembly parity
@@ -106,22 +106,23 @@ frozen `SADDLE_GAP_TOLERANCE = 1e-6` and returns the certificate midpoint
 4. **LP residue**: kernels return the state's 61 class values; both backends
    route them through the same Python code in ascending class order,
    optionally on an LP worker pool: `support_solver.solve_matrix_single_lp`,
-   then `solver.solve_matrix`, then the two-LP oracle under tightened HiGHS
+   then `solver.solve_matrix`, then HiGHS IPM, then the two-LP oracle under
+   tightened HiGHS
    dual-simplex tolerances (1e-10 feasibility) — the retry tightens the
-   *solver*, never the 1e-6 gate, and a matrix failing all three aborts the
+   *solver*, never the 1e-6 gate, and a matrix failing all four aborts the
    build. Identical code, so cross-backend parity cannot break here.
 
 Recorded supports (for the next layer's guesses) use the pinned extraction:
 mass above 1e-9, top-`max_support` by descending mass with ascending-index
 ties, stored ascending. Routing parity is **exact**: the `solver_kind` byte
 per class (0 pure, 1 support-certified, 2 lp) must be equal across backends,
-and `test_backup_rust_parity.py` compares full synthetic sweeps byte for
+and `test_complete_rust_parity.py` compares full synthetic sweeps byte for
 byte, primitive calls bit for bit, and counter sets exactly.
 
 ## Artifact and resume parity
 
-- Schema strings: artifact `dth.backup-tablebase.v1`, build checkpoint
-  `dth.backup-tablebase-build.v1`. Arrays: `value.npy` float64 and
+- Schema strings: artifact `dth.complete-tablebase.v1`, build checkpoint
+  `dth.complete-tablebase-build.v1`. Arrays: `value.npy` float64 and
   `solver_kind.npy` uint8, both dense over class indices, NaN /
   implicit-zero before solving. No per-class certificates are stored:
   given the child values any certificate is re-derivable on demand
@@ -136,23 +137,20 @@ byte, primitive calls bit for bit, and counter sets exactly.
   only at layer completion, so an interrupted layer never double-counts.
 - Interrupt/resume must be byte-for-byte against an uninterrupted build of
   the same backend, verified with stops in at least two distinct layers
-  (`test_backup_sweep_python.py`, `test_backup_rust_parity.py`).
+  (`test_complete_sweep_python.py`, `test_complete_rust_parity.py`).
 - The finalize manifest embeds the build config digest inputs, per-array
   SHA-256, the routing counters, and a `code_config_digest` over
-  `packed.py`, `backup_tablebase.py` and — when Rust executed — the crate's
+  `packed.py`, `complete_tablebase.py` and — when Rust executed — the crate's
   `Cargo.toml`, `lib.rs`, and the workspace `Cargo.lock`. The read facade
   re-verifies shape, dtype, schema, and digests on open and fails closed.
 
 ## External anchors
 
-- `build_dead_band_reference()` solves the dead x dead sub-DAG with no sweep
-  machinery; on the 3,541 classes of the shipped both-STs>=240 quotient it
-  must match `artifacts/exact_band_v1.sqlite` within certificate width
-  (measured max 4.9e-8), and `V(240,0,240,0) = 0.3372132166291093` within
-  1e-9 (measured 6.9e-12 for the swept artifact, 6.2e-11 for the reference).
-- A completed canonical artifact must reproduce the same band values, and
-  sampled classes must pass Bellman recertification from their stored
-  children.
+- `build_dead_band_reference()` solves the dead x dead sub-DAG without sweep
+  machinery and independently pins `V(240,0,240,0) = 0.3372132166291093`
+  within 1e-9.
+- The completed artifact must reproduce that independent anchor, and sampled
+  classes must pass Bellman recertification from their stored children.
 
 ## Promotion gate
 

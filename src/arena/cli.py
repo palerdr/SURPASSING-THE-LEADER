@@ -11,9 +11,7 @@ from arena.agent import PolicyDrivenAgent
 from stl.engine.actions import validate_action
 from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
-DEFAULT_DTH_TABLEBASE = "src/dth/artifacts/exact_band_v1.sqlite"
-DEFAULT_DTH_BACKUP = "src/dth/artifacts/backup_full_v1"
-DEFAULT_DTH_CHECKPOINT = "src/dth/checkpoints/depth_baseline_v1/best.pt"
+DEFAULT_DTH_COMPLETE_TABLEBASE = "src/dth/artifacts/complete_full_v1"
 
 
 def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
@@ -45,55 +43,16 @@ def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
 
 
 def _make_dth_provider(args: argparse.Namespace):
-    from arena.dth_adapter import DTHResolvePolicyProvider
-    from dth.agent import ResolveBudget
+    from arena.dth_adapter import DTHCompletePolicyProvider
 
-    tablebase_path = Path(args.dth_tablebase) if args.dth_tablebase else None
-    if tablebase_path is not None and not tablebase_path.is_file():
-        if args.dth_tablebase != DEFAULT_DTH_TABLEBASE:
-            raise FileNotFoundError(
-                f"requested DTH tablebase does not exist: {tablebase_path}"
-            )
-        print(
-            f"DTH band tablebase missing at {tablebase_path}; playing without "
-            "exact anchors. Build it with: uv run python -m dth exact "
-            "--config-name exact_band_v1",
-            flush=True,
+    artifact_dir = Path(args.dth_complete_tablebase)
+    manifest = artifact_dir / "tablebase.json"
+    if not manifest.is_file():
+        raise FileNotFoundError(
+            f"complete DTH tablebase is required at {artifact_dir}; "
+            "build it with: uv run python -m dth complete"
         )
-        tablebase_path = None
-    backup_path = Path(args.dth_backup) if args.dth_backup else None
-    if backup_path is not None and not (backup_path / "tablebase.json").is_file():
-        if args.dth_backup != DEFAULT_DTH_BACKUP:
-            raise FileNotFoundError(
-                f"requested DTH backup tablebase does not exist: {backup_path}"
-            )
-        print(
-            f"DTH backup tablebase missing at {backup_path}; playing without "
-            "complete-game lookups. Build it with: uv run python -m dth backup",
-            flush=True,
-        )
-        backup_path = None
-    checkpoint_path = Path(args.dth_checkpoint) if args.dth_checkpoint else None
-    if checkpoint_path is not None and not checkpoint_path.is_file():
-        if args.dth_checkpoint != DEFAULT_DTH_CHECKPOINT:
-            raise FileNotFoundError(
-                f"requested DTH checkpoint does not exist: {checkpoint_path}"
-            )
-        print(
-            f"DTH checkpoint missing at {checkpoint_path}; playing on exact "
-            "and finite-horizon certificates only.",
-            flush=True,
-        )
-        checkpoint_path = None
-    return DTHResolvePolicyProvider(
-        tablebase_path=tablebase_path,
-        backup_path=backup_path,
-        checkpoint_path=checkpoint_path,
-        budget=ResolveBudget(
-            deadline_seconds=args.dth_deadline,
-            max_depth=args.dth_max_depth,
-        ),
-    )
+    return DTHCompletePolicyProvider(artifact_dir=artifact_dir)
 
 
 def _make_provider(kind: str, args: argparse.Namespace):
@@ -306,34 +265,10 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--checkpoint")
     parser.add_argument("--iterations", type=int, default=200)
     parser.add_argument(
-        "--dth-tablebase",
-        default=DEFAULT_DTH_TABLEBASE,
-        help="certified DTH band tablebase read by the dth agent",
-    )
-    parser.add_argument(
-        "--dth-backup",
-        default=DEFAULT_DTH_BACKUP,
-        help=(
-            "dense complete-game backup tablebase directory; the dth agent's "
-            "top lookup rung"
-        ),
-    )
-    parser.add_argument(
-        "--dth-checkpoint",
-        default=DEFAULT_DTH_CHECKPOINT,
-        help="DTH network checkpoint used for resolve leaves",
-    )
-    parser.add_argument(
-        "--dth-deadline",
-        type=float,
-        default=2.0,
-        help="per-move wall-clock budget in seconds for the dth agent",
-    )
-    parser.add_argument(
-        "--dth-max-depth",
-        type=int,
-        default=3,
-        help="maximum full-width resolve depth for the dth agent",
+        "--dth-complete-tablebase",
+        default=DEFAULT_DTH_COMPLETE_TABLEBASE,
+        metavar="DTH_COMPLETE_TABLEBASE",
+        help="completed exact DTH quotient tablebase directory",
     )
 
 
@@ -367,7 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser("play", help="play canonical STL against a pluggable Hal policy")
     play.add_argument(
-        "--hal-agent", choices=("abstract", "dth", "stl-mcts"), default="abstract"
+        "--hal-agent", choices=("abstract", "dth", "stl-mcts"), default="dth"
     )
     _add_agent_arguments(play)
     play.add_argument("--human-name", default="Baku")

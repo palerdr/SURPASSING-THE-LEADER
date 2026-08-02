@@ -40,7 +40,7 @@ addopts = "-n 8"
 # Runs by default -- under xdist these cost ~19s of wall clock and they are the
 # only coverage of resume and backend parity, which is not worth trading away.
 # Use -m "not slow" for a tighter loop when iterating on unrelated code.
-markers = ["slow: builds a real backup artifact end to end"]
+markers = ["slow: builds a real complete-tablebase artifact end to end"]
 
 [tool.uv]
 package = true

@@ -18,8 +18,6 @@ from abstract.matrix import solve_matrix
 from abstract.packed import PackedStateCodec, packed_live_successors
 from abstract.rules import (
     FROZEN_REVIVAL_MODEL,
-    LEGACY_REVIVAL_MODEL,
-    UNIFIED_REVIVAL_MODEL,
     AbstractRuleset,
     TIMING_CONVENTION_ID,
 )
@@ -27,8 +25,8 @@ from abstract.state import AbstractState
 from abstract.tablebase import state_id
 
 
-PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v3"
-PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v2"
+PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v4"
+PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v3"
 UNREACHABLE_ORDINAL = np.iinfo(np.uint32).max
 
 _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -41,15 +39,6 @@ _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
     "dropper_win_probability": ("float64", ("reachable",)),
     "checker_win_probability": ("float64", ("reachable",)),
 }
-
-
-def _rust_revival_model_code(rules: AbstractRuleset) -> int:
-    return {
-        LEGACY_REVIVAL_MODEL: 0,
-        UNIFIED_REVIVAL_MODEL: 1,
-        FROZEN_REVIVAL_MODEL: 2,
-    }[rules.revival_model_kind]
-
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -151,7 +140,7 @@ class PackedTablebaseBuilder:
                     "see src/crates/docs/BUILD.md"
                 )
             return None
-        expected = "abstract-packed-parity-v2"
+        expected = "abstract-packed-parity-v3"
         if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
             raise RuntimeError("Rust packed solver does not match the Python parity contract")
         return module
@@ -565,14 +554,6 @@ class PackedTablebaseBuilder:
             self.rules.load_cap_units,
             size,
             self.rules.failed_check_penalty_units,
-            _rust_revival_model_code(self.rules),
-            self.rules.revival_baseline,
-            self.rules.dose_curve_exponent,
-            self.rules.ttd_half_life_units,
-            self.rules.ttd_curve_exponent,
-            self.rules.ttd_decay_per_death_dose,
-            self.rules.referee_decay_per_death_dose,
-            self.rules.referee_floor,
         )
         (
             pure_mask,
@@ -836,14 +817,6 @@ class PackedTablebaseBuilder:
                     self.rules.load_cap_units,
                     size,
                     self.rules.failed_check_penalty_units,
-                    _rust_revival_model_code(self.rules),
-                    self.rules.revival_baseline,
-                    self.rules.dose_curve_exponent,
-                    self.rules.ttd_half_life_units,
-                    self.rules.ttd_curve_exponent,
-                    self.rules.ttd_decay_per_death_dose,
-                    self.rules.referee_decay_per_death_dose,
-                    self.rules.referee_floor,
                 )
                 mixed_positions = np.asarray(result[6], dtype=np.int64)
                 if mixed_positions.size == 0:
@@ -959,24 +932,19 @@ class PackedTablebase:
     @staticmethod
     def _rules_for_manifest(metadata: dict[str, Any]) -> AbstractRuleset:
         revival = metadata["revival_model"]
+        if revival != {
+            "kind": FROZEN_REVIVAL_MODEL,
+            "baseline": 0.95,
+            "st_shape": "linear_pre_failure_load",
+            "ttd_decay_per_death_dose": 0.75,
+        }:
+            raise ValueError("packed tablebase does not use the frozen revival model")
         return AbstractRuleset(
             ruleset_id=str(metadata["ruleset_id"]),
             action_values=tuple(int(value) for value in metadata["action_values"]),
             bucket_seconds=int(metadata["bucket_seconds"]),
             load_cap_units=int(metadata["load_cap_units"]),
             failed_check_penalty_units=int(metadata["failed_check_penalty_units"]),
-            revival_model_kind=str(revival["kind"]),
-            revival_baseline=float(revival["baseline"]),
-            dose_curve_exponent=float(revival.get("dose_curve_exponent", 3.0)),
-            ttd_half_life_units=float(revival.get("ttd_half_life_units", 12.0)),
-            ttd_curve_exponent=float(revival.get("ttd_curve_exponent", 1.3)),
-            ttd_decay_per_death_dose=float(
-                revival.get("ttd_decay_per_death_dose", 0.75)
-            ),
-            referee_decay_per_death_dose=float(
-                revival.get("referee_decay_per_death_dose", 1.0)
-            ),
-            referee_floor=float(revival.get("referee_floor", 1.0)),
         )
 
     def lookup(self, state: AbstractState | tuple[int, int, int, int] | int) -> dict[str, Any]:

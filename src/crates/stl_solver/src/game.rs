@@ -13,12 +13,10 @@ pub const CYLINDER_MAX: u32 = 300;
 pub const TOTAL_TTD_MAX: u32 = 300;
 pub const DEATH_PROCEDURE_OVERHEAD: u32 = 120;
 pub const WITHIN_ROUND_OVERHEAD: u32 = 60;
-pub const BASE_CURVE_K: u32 = 3;
-pub const CARDIAC_DECAY: f64 = 0.85;
-pub const REFEREE_DECAY: f64 = 0.88;
-pub const REFEREE_FLOOR: f64 = 0.4;
+pub const REVIVAL_BASELINE: f64 = 0.95;
+pub const REVIVAL_TTD_DECAY_PER_MINUTE: f64 = 0.75;
 pub const PHYSICALITY_HAL: f64 = 1.0;
-pub const PHYSICALITY_BAKU: f64 = 0.94;
+pub const PHYSICALITY_BAKU: f64 = 1.0;
 pub const ACTION_NORMAL_MAX: u8 = 60;
 pub const ACTION_LEAP_MAX: u8 = 61;
 pub const ACTION_SIZE: usize = (ACTION_LEAP_MAX as usize) + 1;
@@ -119,18 +117,12 @@ impl Referee {
         {
             return 0.0;
         }
-        let death_curve = |t: u32| -> f64 {
-            let t = t as f64;
-            let max_t = CYLINDER_MAX as f64;
-            (1.0 - (t / max_t).powf(BASE_CURVE_K as f64)).max(0.0)
-        };
-        let cardiac_modifier = |ttd: u32| -> f64 { CARDIAC_DECAY.powf(ttd as f64 / 60.0) };
-        let referee_modifier =
-            |cprs: u32| -> f64 { REFEREE_FLOOR.max(REFEREE_DECAY.powf(cprs as f64)) };
-        death_curve(death_duration)
-            * cardiac_modifier(player.ttd)
-            * referee_modifier(self.cprs_performed)
-            * player.physicality
+        let st_in_vial = death_duration.saturating_sub(FAILED_CHECK_PENALTY) as f64;
+        let survivable_st_span = (CYLINDER_MAX - FAILED_CHECK_PENALTY) as f64;
+        let st_factor = 1.0 - st_in_vial / survivable_st_span;
+        let ttd_factor =
+            REVIVAL_TTD_DECAY_PER_MINUTE.powf(player.ttd as f64 / FAILED_CHECK_PENALTY as f64);
+        (REVIVAL_BASELINE * st_factor * ttd_factor).clamp(0.0, 1.0)
     }
 
     pub fn attempt_revival(
@@ -565,5 +557,18 @@ mod ttd_boundary_tests {
 
         player.ttd = 241;
         assert_eq!(referee.compute_survival_probability(&player, 60), 0.0);
+    }
+
+    #[test]
+    fn frozen_surface_is_identity_and_history_neutral() {
+        let mut referee = Referee::new();
+        let mut hal = Player::new(PlayerId::Hal);
+        let mut baku = Player::new(PlayerId::Baku);
+        hal.ttd = 120;
+        baku.ttd = 120;
+        referee.cprs_performed = 99;
+        let expected = 0.95 * 0.5 * 0.75_f64.powf(2.0);
+        assert_eq!(referee.compute_survival_probability(&hal, 180), expected);
+        assert_eq!(referee.compute_survival_probability(&baku, 180), expected);
     }
 }

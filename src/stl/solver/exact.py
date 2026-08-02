@@ -773,10 +773,9 @@ import numpy as np
 from stl.engine.game import (
     FAILED_CHECK_PENALTY,
     CYLINDER_MAX,
-    BASE_CURVE_K,
-    CARDIAC_DECAY,
-    REFEREE_DECAY,
-    REFEREE_FLOOR,
+    TOTAL_TTD_MAX,
+    REVIVAL_BASELINE,
+    REVIVAL_TTD_DECAY_PER_MINUTE,
 )
 
 
@@ -795,13 +794,20 @@ def survival_probability(
     cprs_performed: int,
     physicality: float,
 ) -> float:
-    """Compute survival probability using the engine's exact formula."""
+    """Compute the frozen revival surface used by the engine.
+
+    ``cprs_performed`` and ``physicality`` remain arguments because archived
+    solver feature records carry them, but neither is a game-rule input.
+    """
+    del cprs_performed, physicality
     if death_duration >= CYLINDER_MAX or player_ttd + death_duration > TOTAL_TTD_MAX:
         return 0.0
-    base = max(0.0, 1.0 - (death_duration / CYLINDER_MAX) ** BASE_CURVE_K)
-    cardiac = CARDIAC_DECAY ** (player_ttd / 60.0)
-    referee = max(REFEREE_FLOOR, REFEREE_DECAY ** cprs_performed)
-    return base * cardiac * referee * physicality
+    st_in_vial = max(0.0, death_duration - FAILED_CHECK_PENALTY)
+    st_factor = 1.0 - st_in_vial / (CYLINDER_MAX - FAILED_CHECK_PENALTY)
+    ttd_factor = REVIVAL_TTD_DECAY_PER_MINUTE ** (
+        player_ttd / FAILED_CHECK_PENALTY
+    )
+    return max(0.0, min(1.0, REVIVAL_BASELINE * st_factor * ttd_factor))
 
 
 def compute_payoff_matrix(

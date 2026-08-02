@@ -73,7 +73,7 @@ class BootstrapConfig:
     # Phase F-2: interior-valued pins are gated separately from the ±1 boundary
     # pins so a miscalibrated interior can't hide behind the easy boundary class.
     # Looser than the boundary ceiling (0.01) because hitting an exact interior
-    # value like 0.568 is genuinely harder than saturating to ±1. Only fires when
+    # An interior value is genuinely harder than saturating to ±1. Only fires when
     # the held-out ruler actually contains the interior source (backward-safe).
     tablebase_interior_mse_threshold: float = 0.05
     max_unresolved_per_source: float = 0.05

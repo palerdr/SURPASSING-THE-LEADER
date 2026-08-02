@@ -56,8 +56,8 @@ BOUNDARY_HISTORIES = (
     ("baku_shallow", 0, 0, 1, 60),
     ("baku_deep", 0, 0, 1, 300),
     ("both_shallow", 1, 60, 1, 60),
-    ("hal_min_baku_max_fatigue", 5, 300, 5, 1500),
-    ("hal_max_baku_min_fatigue", 5, 1500, 5, 300),
+    ("hal_min_baku_max_damage", 5, 300, 5, 1500),
+    ("hal_max_baku_min_damage", 5, 1500, 5, 300),
 )
 INTERIOR_HAL_CYLINDERS = (*range(0, 240, 10), 239)
 INTERIOR_HISTORIES = (

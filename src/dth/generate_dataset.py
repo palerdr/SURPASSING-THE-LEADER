@@ -723,12 +723,16 @@ def generate_resolve_labeled_targets(
         raise ValueError("max_resolves must be positive")
 
     if agent is None:
-        from dth.agent import BoundedResolveAgent, NetworkLeafModel, ResolveBudget
+        from dth.research_agent import (
+            BoundedResolveAgent,
+            NetworkLeafModel,
+            ResolveBudget,
+        )
 
         if checkpoint is None:
             raise ValueError("resolve labelling needs a checkpoint or an agent")
         agent = BoundedResolveAgent(
-            tablebase_path=tablebase,
+            complete_path=tablebase,
             network=NetworkLeafModel(checkpoint),
             budget=ResolveBudget(
                 deadline_seconds=label_deadline_seconds,

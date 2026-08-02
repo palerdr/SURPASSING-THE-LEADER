@@ -11,7 +11,7 @@ space it induces is what this module makes addressable:
   ``[0, 17_011)``: 16,711 alive profiles ordered by (TTD ascending over
   ``{0} | [60, 240]``, ST ascending), then 300 dead sentinels ordered by ST;
 - a *class* is ``checker_profile * 17_011 + dropper_profile``, one of
-  289,374,121 indices, each the address of one float64 in the backup
+  289,374,121 indices, each the address of one float64 in the complete
   tablebase's value array.
 
 The addressable domain is the transition-closed set of states whose alive
@@ -28,7 +28,7 @@ every child before its parents.  ``packed_class_children`` re-checks that
 invariant on every call and refuses to return a non-increasing edge.
 
 Cross-backend behavior of everything built on these tables is governed by
-``docs/DTH_BACKUP_PARITY.md``.
+``docs/DTH_COMPLETE_PARITY.md``.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ ALIVE_TTD_DOMAIN = (0, *range(60, 301))
 class QuotientProfileTable:
     """Precomputed per-profile rule tables, the bit-level solver authority.
 
-    Every transcendental quantity the backup sweep needs is evaluated here,
+    Every transcendental quantity the complete sweep needs is evaluated here,
     once, in Python: kernels downstream (numpy or Rust) only gather from these
     arrays, which is what makes their arithmetic reproducible bit-for-bit.
     """
@@ -195,7 +195,7 @@ def profile_id(st: int, ttd: int) -> int:
     if packed < 0:
         raise ValueError(
             f"alive profile ({st}, {ttd}) has an off-domain TTD in 1..59; "
-            "the backup tablebase does not address it"
+            "the complete tablebase does not address it"
         )
     return packed
 
