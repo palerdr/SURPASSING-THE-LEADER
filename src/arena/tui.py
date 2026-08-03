@@ -69,6 +69,12 @@ POSE_SCALE = {"dropping": 1.0, "standing": 0.9, "idle": 1.0, "seated": 0.80}
 # players', as the panel stages him.
 POSE_LIFT = {"standing": 0.1}
 
+# Baku's dropping fixture fills its square canvas edge to edge while Hal's
+# leaves margin, so at equal pose scale Baku reads oversized on the Dropper
+# mark; shrink him slightly there. Keyed by the same name rule that selects
+# the sprite: any non-Hal player wears the Baku art.
+BAKU_DROPPING_SCALE = 0.9
+
 # Longest edge used when preparing a fixture, with headroom for large layouts.
 _WORK_EDGE = 320
 
@@ -81,8 +87,8 @@ _RESULT_TEXT = {
     HalfRoundResult.CHECK_SUCCESS: "CHECK SUCCESS",
     HalfRoundResult.CHECK_FAIL_SURVIVED: "CHECK FAILED — died, revived",
     HalfRoundResult.CHECK_FAIL_DIED: "CHECK FAILED — died permanently",
-    HalfRoundResult.CYLINDER_OVERFLOW_SURVIVED: "VIAL OVERFLOW — died, revived",
-    HalfRoundResult.CYLINDER_OVERFLOW_DIED: "VIAL OVERFLOW — died permanently",
+    HalfRoundResult.CYLINDER_OVERFLOW_SURVIVED: "ST OVERFLOW — died, revived",
+    HalfRoundResult.CYLINDER_OVERFLOW_DIED: "ST OVERFLOW — died permanently",
 }
 
 _ART_ROOT = Path("art/sprites")
@@ -468,6 +474,14 @@ def _figure_columns(sprite: Sprite | None, cell_rows: int) -> int:
     return max(2, round(2 * cell_rows * sprite.width / sprite.height))
 
 
+def _pose_scale(name: str, pose: str) -> float:
+    """Figure height fraction for one figure's pose, with per-character tweaks."""
+    scale = POSE_SCALE.get(pose, 1.0)
+    if pose == "dropping" and name.strip().lower() != "hal":
+        scale *= BAKU_DROPPING_SCALE
+    return scale
+
+
 def _sprite_block(
     sprite: Sprite | None,
     label: str,
@@ -495,7 +509,7 @@ def _sprite_block(
         body[scene_rows // 2] = text
         return body
 
-    figure_rows = max(1, round(scene_rows * POSE_SCALE.get(pose, 1.0)))
+    figure_rows = max(1, round(scene_rows * _pose_scale(label, pose)))
     lines = render_cells(
         _scaled(sprite, columns, figure_rows, GLYPH_GRIDS[glyphs]),
         columns,
@@ -566,8 +580,14 @@ def _scene(
     def slot_widths(band: int) -> list[int]:
         widths = []
         for slot, (_, _, pose) in zip(occupants, cast):
-            rows = max(1, round(band * POSE_SCALE.get(pose, 1.0)))
-            widths.append(max(figure_width(sprite, label, rows) for sprite, label in slot))
+            widths.append(
+                max(
+                    figure_width(
+                        sprite, label, max(1, round(band * _pose_scale(label, pose)))
+                    )
+                    for sprite, label in slot
+                )
+            )
         return widths
 
     gutter = SCENE_GUTTER
@@ -585,7 +605,7 @@ def _scene(
 
     blocks = []
     for (sprite, label, pose), slot in zip(cast, widths):
-        rows = max(1, round(band_rows * POSE_SCALE.get(pose, 1.0)))
+        rows = max(1, round(band_rows * _pose_scale(label, pose)))
         lift = round(band_rows * POSE_LIFT.get(pose, 0.0))
         width = min(slot, figure_width(sprite, label, rows))
         block = _sprite_block(
@@ -621,7 +641,7 @@ def _player_column(player: Player, *, tag: str, width: int) -> list[str]:
     name = f"{player.name.upper()} {tag}".strip()
     return [
         name[:width].ljust(width),
-        f"vial   {_bar(player.cylinder, CYLINDER_MAX)} {int(player.cylinder):>3}/{CYLINDER_MAX}"[:width].ljust(width),
+        f"ST     {_bar(player.cylinder, CYLINDER_MAX)} {int(player.cylinder):>3}/{CYLINDER_MAX}"[:width].ljust(width),
         f"TTD    {_bar(player.ttd, TOTAL_TTD_MAX)} {int(player.ttd):>3}/{TOTAL_TTD_MAX}"[:width].ljust(width),
         f"deaths {player.deaths}"[:width].ljust(width),
     ]
@@ -742,7 +762,7 @@ def render_outcome(
         # Inclusive elapsed time, spelled out so the rule is visible in play.
         body.append(
             f"squandered time  ST = {record.check_time} - {record.drop_time} + 1"
-            f" = {int(record.st_gained)}s into {record.checker}'s vial"
+            f" = {int(record.st_gained)}s into {record.checker}'s ST"
         )
     if record.death_duration:
         body.append("")

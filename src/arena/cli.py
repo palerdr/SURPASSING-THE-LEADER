@@ -106,7 +106,12 @@ def _make_provider(kind: str, args: argparse.Namespace):
         from stl.play.agent import SolverAgent
 
         return STLSolverPolicyProvider(
-            SolverAgent(args.checkpoint, player_name="Hal", iterations=args.iterations, seed=args.seed)
+            SolverAgent(
+                args.checkpoint,
+                player_name="Hal",
+                iterations=args.iterations,
+                seed=0 if args.seed is None else args.seed,
+            )
         )
     raise ValueError(f"unknown agent kind {kind!r}")
 
@@ -306,7 +311,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_agent_arguments(play)
     play.add_argument("--human-name", default="Baku")
-    play.add_argument("--seed", type=int, default=0)
+    play.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for Hal's sampling and the revival rolls; omit for "
+        "fresh randomness each match, set for a reproducible replay",
+    )
     play.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
     play.add_argument("--max-half-rounds", type=int, default=None, help="stop after this many half-rounds")
     play.add_argument("--tui", action="store_true", help="render the terminal interface instead of plain text")
