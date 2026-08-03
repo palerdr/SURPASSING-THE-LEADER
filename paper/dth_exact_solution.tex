@@ -12,7 +12,6 @@
 \usepackage{tikz}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
-\usepgfplotslibrary{colormaps}
 \usetikzlibrary{arrows.meta}
 
 \hypersetup{
@@ -50,16 +49,12 @@
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{corollary}[theorem]{Corollary}
 \newtheorem{definition}[theorem]{Definition}
-\newtheorem{remark}[theorem]{Remark}
 
-\newcommand{\states}{\mathcal{X}}
-\newcommand{\expect}{\mathbb{E}}
 \newcommand{\val}{\operatorname{val}}
 \newcommand{\gap}{\operatorname{gap}}
-\newcommand{\alive}{\operatorname{alive}}
 \newcommand{\tol}{\tau_0}
 
-\title{An Exact Solution to the\\Drop-the-Handkerchief Timing Game}
+\title{An Exact Approach to Solving\\the Drop-the-Handkerchief Timing Game}
 \author{James Cenawood\thanks{Code and instructions to reproduce the results
 are available in the project repository.}}
 \date{July 31, 2026}
@@ -72,23 +67,26 @@ Drop the Handkerchief (DTH) is a fully observed, two-player, zero-sum
 stochastic game with simultaneous exact-second actions, a hard 300-second
 capacity, and a probabilistic revival rule. We solve the complete game. Once
 a player can no longer survive an injection, the game never reads their
-cumulative time dead again. Quotienting by that observation collapses
-$5.27\times10^{9}$ reachable states to $289{,}374{,}121$ equivalence
-classes, a factor of $18.2$. A potential function organizes those classes
+cumulative time dead again. Quotienting by that observation collapses the
+$5.27\times10^{9}$-state transition-closed domain to $289{,}374{,}121$
+equivalence classes, a factor of $18.2$. A potential function organizes those classes
 into $1{,}201$ layers and permits a single backward sweep without search or
 reachability analysis. Every stored value is accepted only with an explicit
 equilibrium certificate whose saddle gap against the full $60\times60$ stage
 matrix is at most $10^{-6}$. A ladder of certified solvers produced these
-values; $99.8\%$ of the equilibria had full support. The production sweep ran
-once through a parallel Rust kernel, while a Python reference matched it byte
-for byte on every region computed by both. The certified root value is
+values; in $99.8\%$ of classes the accepted certificate came from the
+full-support equalizer. The sweep is implemented twice, and the parallel
+Rust kernel and the Python reference agree byte for byte on every region
+computed by both. The stored certified root value is
 \[
-V(0,0,0,0)=0.0898500728095116,
+\widehat V(0,0,0,0)=0.0898500728095116,
 \]
-so under optimal play the first Dropper wins with probability
-$\approx0.5449$. The computation took $5{,}432$ seconds, or about $1.51$
-hours, on one twelve-core desktop, against a previously recorded
-single-core projection of $3.7$--$5.1$ years.
+with an a priori error bound of $6.1\times10^{-4}$ and a measured root
+re-solve deviation of $1.4\times10^{-15}$, so under optimal play the first
+Dropper wins with probability $\approx0.5449$. The final checkpointed
+session, covering $98.1\%$ of the table, took $5{,}432$ seconds on one
+twelve-core desktop, against a previously recorded single-core projection
+of $3.7$--$5.1$ years.
 \end{abstract}
 
 \section{Introduction}
@@ -105,7 +103,7 @@ plus a fixed 60-second penalty; the injection is fatal unless a frozen,
 monotone revival law (Figure~\ref{fig:revival}) saves them, in which case
 their cylinder resets and their cumulative time dead (TTD) grows. Overflowing
 the cylinder is fatal outright. The last player alive wins. That is the
-entire game.
+entire game we solve.
 
 The game is finite but large, stochastic, and simultaneous. Its
 stage games require mixed strategies, and its state space was, until now,
@@ -126,8 +124,8 @@ complete solution and the mathematics that made it cheap:
   exploitability against the fully reconstructed stage matrix is at most
   $\tol=10^{-6}$, no matter which solver produced it;
 \item the $61$-class \emph{Toeplitz structure} of the stage matrices
-  (Section~\ref{sec:stage}), which makes certificates and pure-saddle tests
-  $O(60)$ or $O(60k)$ instead of $O(60^2)$.
+  (Section~\ref{sec:stage}), which gives an $O(60)$ pure-saddle screen on
+  every class and $O(60k)$ certificates below full support.
 \end{enumerate}
 
 Section~\ref{sec:computation} reports the computation, its
@@ -137,7 +135,7 @@ states what is and is not established.
 \section{The game}\label{sec:game}
 
 \begin{definition}[State]\label{def:state}
-A live state is $x=(s_c,t_c,s_d,t_d)\in\states$, written from the
+A live state is $x=(s_c,t_c,s_d,t_d)$, written from the
 perspective of the current \emph{Dropper}: $s_c\in\{0,\dots,299\}$ and
 $t_c\in\{0,\dots,300\}$ are the current \emph{Checker's} accumulated load
 (``squandered time'', ST) and cumulative time dead (TTD), and
@@ -151,7 +149,8 @@ check). The check \emph{succeeds} iff $d\le c$, and then the checker's load
 grows by the inclusive interval $\ell=c-d+1\in\{1,\dots,60\}$; equal seconds
 cost one second, not zero. If $s_c+\ell\ge300$ the cylinder overflows and
 the checker dies: the transition ends with payoff $+1$ for the Dropper.
-Otherwise play continues from
+Overflow is uniformly fatal: a cylinder at capacity leaves no revival
+headroom for any dose. Otherwise play continues from
 \[
 (s_c,t_c,s_d,t_d)\ \xrightarrow{\ \text{success, lag }\ell\ }\
 (s_d,\,t_d,\,s_c+\ell,\,t_c),
@@ -202,8 +201,9 @@ the role swap; the game is zero-sum with terminal-only payoff in
 $\{-1,+1\}$, so all values lie in $[-1,1]$. We call the checker profile
 $(s,t)$ \emph{dead} when \eqref{eq:survive} fails --- the player is still
 playing, but any future failed check is certainly fatal for them.
-Figure~\ref{fig:revival} plots the law. It is smooth and positive on the alive
-triangle $s+t\le240$, then identically zero outside it. TTD is read nowhere
+Figure~\ref{fig:revival} plots the law. The interior formula is smooth and
+positive on the alive region ($s\le239$, $s+t\le240$); the law is
+identically zero outside it. TTD is read nowhere
 else in the rules, so Section~\ref{sec:quotient} collapses the zero region.
 
 \begin{figure}[t]
@@ -212,8 +212,8 @@ else in the rules, so Section~\ref{sec:quotient} collapses the zero region.
 \caption{The frozen revival law \eqref{eq:revival}. Color and height both
 encode probability. The blue edge isolates the linear loss from load; the
 purple edge isolates the exponential loss from time dead. The orange curtain
-marks $s+t=240$: probability is positive on the curtain and drops to zero
-immediately beyond it.}
+marks $s+t=240$: probability is positive on the curtain, except at its
+$s=240$ endpoint, and drops to zero immediately beyond it.}
 \label{fig:revival}
 \end{figure}
 
@@ -227,8 +227,8 @@ $60$ (the dose $s_c+60$ enters TTD while the load $s_c$ resets).
 
 \begin{corollary}[The game is finite]\label{cor:finite}
 $R\le299+300+299+300=1198$ on live states, so every play reaches a terminal
-outcome within $1198$ live transitions. The game therefore has a unique
-value $V:\states\to[-1,1]$, obtained by backward induction over the finite
+outcome within $1199$ transitions. The game therefore has a unique
+value $V(x)\in[-1,1]$ at every live state, obtained by backward induction over the finite
 acyclic transition graph~\cite{zermelo1913}, solving at each state the
 zero-sum simultaneous stage game by von Neumann's minimax
 theorem~\cite{vonneumann1928}; the construction is the finite, absorbing
@@ -258,7 +258,7 @@ S_{c-d+1}, & c\ge d,\\
 F, & c<d,
 \end{cases}
 \end{equation}
-and $V(x)=\val(M(x))$. In particular $M(x)$ carries only $61$ distinct
+and $V(x)=\val(M(x))$. In particular $M(x)$ carries at most $61$ distinct
 entries: it is Toeplitz on and above the diagonal and constant below it.
 \end{proposition}
 
@@ -288,8 +288,9 @@ m_{60}, & d=1,\\
 M_{60}, & c=60,
 \end{cases}
 \end{align*}
-computable in $O(60)$ operations, exactly (min and max are associative and
-commutative on floats), from the $61$ class values alone.
+computable in $O(60)$ operations, exactly (min and max select one of their
+arguments, so the scans introduce no rounding), from the $61$ class values
+alone.
 \end{lemma}
 
 Figure~\ref{fig:toeplitz} draws the layout. Each row contains a prefix of the
@@ -332,9 +333,12 @@ children, and hence identical values: $V$ factors through $\varphi$.
 
 \begin{proof}
 Compare the $61$ classes of Proposition~\ref{prop:classes} at two states
-that differ only in a dead player's TTD. Success classes never read TTD and
-preserve both profiles' aliveness classification by
-Lemma~\ref{lem:absorbing}, so they map to $\varphi$-identified children.
+that differ only in a dead player's TTD. Success classes never read TTD,
+and the child's $\varphi$-image is determined by the parent's
+$\varphi$-image and $\ell$: an alive profile retains its TTD, which fixes
+its child's classification, and a dead profile stays dead by
+Lemma~\ref{lem:absorbing}. So success classes map to
+$\varphi$-identified children.
 The failure class reads the checker's TTD only through $p$: if the checker
 profile is dead, $p\equiv0$ and $F=+1$ with no child at all; if alive, the
 TTD is not quotiented and $F$ is read off unchanged. Induction over the
@@ -350,7 +354,7 @@ sentinels (one per load), i.e.\ $17{,}011$ classes per player and
 17{,}011^2=289{,}374{,}121
 \]
 two-player classes: a factor $18.2$ below the $72{,}600^2\approx
-5.27\times10^{9}$ reachable states. The raw coordinate envelope
+5.27\times10^{9}$ states of the transition-closed domain. The raw coordinate envelope
 $300\cdot301\cdot300\cdot301\approx8.15\times10^{9}$, on which the
 previously recorded closure projection was priced, also counts alive TTDs
 in $1..59$ that Lemma~\ref{lem:closure} rules out; against that envelope
@@ -358,7 +362,7 @@ the combined restriction and quotient is a factor $28.2$.
 \end{proposition}
 
 \begin{lemma}[Domain closure]\label{lem:closure}
-Every root of interest has both TTDs in $\{0\}\cup[60,300]$, and the domain
+The initial state has both TTDs in $\{0\}\cup[60,300]$, and the domain
 is transition closed: revival requires $s_c+t_c\le240$, so a failure
 child's TTD $t_c+s_c+60$ lies in $[60,300]$, and success preserves TTDs. A
 live state with an \emph{alive} TTD in $1..59$ is thus unreachable from the
@@ -423,8 +427,10 @@ exhaustive enumeration over all $72{,}600$ profiles.
 \caption{The geometry of the quotient. Left: the alive triangle contains
 $16{,}711$ of $72{,}600$ profiles; at each load, all dead TTD values map to
 one of $300$ sentinels, leaving $17{,}011$ classes. Right: applying the map
-to both players reduces $5.27\times10^9$ states to $289{,}374{,}121$, a
-factor of $18.2$.}
+to both players reduces the $5.27\times10^9$ domain states to
+$289{,}374{,}121$, a factor of $18.2$. Left-panel areas are schematic: the
+unreachable TTD band $1..59$ (Lemma~\ref{lem:closure}) is drawn as part of
+the continuum; the percentages are exact counts.}
 \label{fig:quotient}
 \end{figure}
 
@@ -496,7 +502,7 @@ levels.
 \end{proof}
 
 \begin{lemma}[Matrix-value Lipschitz bound]\label{lem:lipschitz}
-If $\|M-\widehat M\|_\infty\le\epsilon$ entrywise, then
+If $\max_{d,c}|M_{d,c}-\widehat M_{d,c}|\le\epsilon$, then
 $|\val(M)-\val(\widehat M)|\le\epsilon$, since
 $|\sigma_d^{\mathsf T}(M-\widehat M)\sigma_c|\le\epsilon$ for all mixed pairs.
 \end{lemma}
@@ -522,7 +528,7 @@ closed for any reason without affecting soundness.
   \begin{pmatrix}M_{D,C}^{\mathsf T}&-\mathbf 1\\
   \mathbf 1^{\mathsf T}&0\end{pmatrix}
   \begin{pmatrix}\sigma_{d,D}\\ u_d\end{pmatrix}
-  =\begin{pmatrix}\mathbf 0\\ 1\end{pmatrix},
+  =\begin{pmatrix}\mathbf 0\\ 1\end{pmatrix}.
   \]
   The first system chooses the Checker's mix so every supported Dropper
   action earns the same candidate value $u_c$; the transpose chooses the
@@ -532,9 +538,12 @@ closed for any reason without affecting soundness.
   against the full matrix in $O(60k)$ via \eqref{eq:toeplitz}. Guessed
   supports come from spatial neighbours one potential step up (the
   lag-one shift of either profile), recorded when the neighbour was
-  solved. The case $k=60$ is the classical full-support structured solve
-  and needs no guess. This case matters: $99.8\%$ of the game's equilibria
-  put mass on all $60$ actions.
+  solved and capped at twelve actions, so this rung never guesses the
+  full-support case. The case $k=60$ is the classical full-support
+  structured solve and needs no guess; it is a dense $61\times61$
+  elimination, so the Toeplitz structure pays in the screen and the
+  certificate, not in this solve. It matters: the full-support equalizer
+  produced the accepted certificate in $99.8\%$ of classes.
 \item \textbf{Linear programming.} The standard LP for the row
   player with the column strategy extracted from its inequality duals,
   falling back to two independent LPs, and finally to the same two LPs
@@ -556,10 +565,10 @@ $\delta(x)$ bound the longest live path from $x$ to a terminal. Then the
 stored value $\widehat V(x)$ satisfies
 \[
 |\widehat V(x)-V(x)|\;\le\;\delta(x)\,\frac{\tol}{2}
-\;\le\;\frac{1200-\Phi(x)}{2}\,\tol .
+\;\le\;\frac{1201-\Phi(x)}{2}\,\tol .
 \]
 In particular the initial state obeys
-$|\widehat V-V|(0,0,0,0)\le6.0\times10^{-4}$.
+$|\widehat V-V|(0,0,0,0)\le6.1\times10^{-4}$.
 \end{proposition}
 
 \begin{proof}
@@ -567,14 +576,16 @@ Induction up the DAG. Terminal entries are exact. If every child satisfies
 the bound with $\delta(x)-1$, the assembled matrix is entrywise within
 $(\delta(x)-1)\tol/2$ of the true one (expectations and negation are
 non-expansive), Lemma~\ref{lem:lipschitz} transfers that to the value, and
-Proposition~\ref{prop:midpoint} adds the state's own $\tol/2$. Each live
-transition raises $\Phi$ by at least one (Theorem~\ref{thm:potential}),
-bounding $\delta$.
+Proposition~\ref{prop:midpoint} adds the state's own $\tol/2$. Each
+live-to-live transition raises $\Phi$ by at least one
+(Theorem~\ref{thm:potential}), so a play from $x$ makes at most
+$1200-\Phi(x)$ of them plus one terminal transition, bounding $\delta$.
 \end{proof}
 
 This a priori bound is loose by design; Section~\ref{sec:computation}
-reports the measured gaps, which are typically at the $10^{-12}$ scale and
-never exceeded $4.9\times10^{-7}$ on any audited sample. Every stored
+reports the measured audits: sampled Bellman re-solve deviations sit at
+the $10^{-15}$ scale in the typical class and never exceeded
+$4.9\times10^{-7}$. Every stored
 value's certificate is re-derivable on demand from the stored children
 (Bellman recertification), so no per-class certificate is persisted.
 
@@ -594,22 +605,29 @@ semantics, and a parallel Rust kernel constrained to \emph{bit-identical}
 arithmetic: pinned elimination order, first-maximum pivoting, no fused
 multiply-add, sequential ascending reductions, and per-state warm-start
 guesses precomputed so that no kernel result depends on thread count or
-work partition. On every region computed by both (all synthetic
-end-to-end sweeps, and a forked continuation of the production run)
-the two implementations produced byte-identical value and routing arrays.
+work partition. On every region computed by both (the synthetic
+end-to-end sweeps persisted as tests, and a one-time forked continuation
+of the production run during the build) the two implementations produced
+byte-identical value and routing arrays.
 The LP residue rung is shared
 Python code by construction. This does not make the two implementations
 fully independent, but it shows that the Rust path matches the reference
-where compared. The complete table was produced once, through the Rust
-kernel, and every accepted value passed the same certificate gate.
+where compared. The production table was built across checkpointed
+sessions on both backends --- the final Rust session produced $98.1\%$ of
+the classes --- and every accepted value passed the same certificate gate
+regardless of backend.
 
 \subsection{Results}
 
-The full sweep over all $289{,}374{,}121$ classes completed in $5{,}432$
-seconds ($1.51$ hours) on a single
-twelve-core consumer desktop (AMD Ryzen~9 3900X), against the previously
-recorded single-core projection of $3.7$--$5.1$ years for the unquotiented,
-search-based design. Solver routing:
+The sweep covered all $289{,}374{,}121$ classes across checkpointed
+sessions on a single twelve-core consumer desktop (AMD Ryzen~9 3900X). The
+final session --- $283{,}764{,}990$ classes, $98.1\%$ of the table ---
+completed in $5{,}432$ seconds ($1.51$ hours); the remaining
+$5{,}609{,}131$ classes were built in earlier, untimed sessions. The
+previously recorded single-core projection for the unquotiented,
+search-based design was $3.7$--$5.1$ years; that ratio mixes three
+factors: the $18.2\times$ quotient, the sweep-for-search redesign, and
+twelve-way parallelism. Solver routing:
 
 \begin{center}
 \begin{tabular}{@{}lrr@{}}
@@ -621,15 +639,22 @@ equalizer, warm-started support & $38{,}138$ & $0.013\%$\\
 equalizer, full support ($k=60$) & $288{,}810{,}400$ & $99.805\%$\\
 linear programming & $190{,}995$ & $0.066\%$\\
 \quad of which dual-extraction single LP & $190{,}986$ & \\
+\quad of which two independent LPs & $0$ & \\
 \quad of which tightened-tolerance retry & $9$ & \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-Complete-game DTH equilibria are overwhelmingly full-support. This reverses
+Complete-game certificates are overwhelmingly full-support: at $99.805\%$
+of classes the $60$-action equalizer produced the accepted certificate,
+and every sampled certificate places strictly positive mass on all $60$
+actions. This reverses
 the small-support pattern previously measured on shallow finite-horizon
-matrices and makes the classical structured solve the workhorse.
+matrices and makes the classical structured solve the workhorse. It also
+explains the warm rung's numbers: it certified $38{,}138$ of
+$571{,}843{,}253$ attempts, because its twelve-action support cap made it
+structurally blind to the full-support majority.
 
 \begin{figure}[t]
 \centering
@@ -651,8 +676,9 @@ matrices and makes the classical structured solve the workhorse.
 \legend{Dropper $\sigma_d$, Checker $\sigma_c$}
 \end{axis}
 \end{tikzpicture}
-\caption{The certified equilibrium at the initial state $(0,0,0,0)$,
-recertified at gap $1.4\times10^{-15}$. Both strategies are full-support.
+\caption{The certified equilibrium at the initial state $(0,0,0,0)$; the
+displayed pair's saddle gap against the full matrix is
+$3.2\times10^{-15}$. Both strategies are full-support.
 The Dropper concentrates $27.3\%$ on dropping immediately and shades the
 remainder toward later seconds; the Checker mirrors it. The logarithmic
 axis keeps the atom and the remaining support visible together.}
@@ -662,12 +688,14 @@ axis keeps the atom and the remaining support visible together.}
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=0.96\textwidth]{build/figures/seaborn/fig5_strategy_and_value.pdf}
-\caption{Two zero-TTD slices, sampled in $10$-load steps. \textbf{(a)} The
-Dropper's equilibrium mix along $(s,0,s,0)$. Every sampled strategy has full
-support; the survival boundary at $s=240$ produces atoms on seconds $1$ and
-$60$, before the mix flattens near overflow. \textbf{(b)} Certified values
-$\widehat V(s_c,0,s_d,0)$. At equal loads of $290$, the mover's value is
-$0.753$; unequal high loads create the opposing cliffs.}
+\caption{Two zero-TTD slices, sampled in $10$-load steps; dashed lines
+mark the survival boundary at load $240$. \textbf{(a)} The Dropper's
+equilibrium mix along $(s,0,s,0)$. Every sampled strategy has full support,
+with an atom on second $1$ at every load; the boundary at $s=240$ adds a
+second atom on second $60$, and the mix flattens near overflow.
+\textbf{(b)} Certified values $\widehat V(s_c,0,s_d,0)$. At equal loads of
+$290$ the Dropper's value is $0.753$; unequal high loads create the
+opposing cliffs.}
 \label{fig:surfaces}
 \end{figure}
 
@@ -676,7 +704,7 @@ in $[-1,1]$, with a known routing byte); Bellman recertification of
 $4{,}792$ deterministically sampled classes with worst deviation
 $4.84\times10^{-7}$; agreement with the independently produced endgame
 band tablebase (both loads ${}\ge240$) on
-all $3{,}541$ shared classes to at most $4.9\times10^{-8}$, and at its
+all $3{,}541$ classes it stores, to at most $2.8\times10^{-8}$, and at its
 root to $6.9\times10^{-12}$; and an independent dead-band reference solver
 sharing no sweep machinery.
 
@@ -689,7 +717,7 @@ $10^{-6}$, with the a priori accumulated bound of
 Proposition~\ref{prop:accumulated} and the measured audits above. At the
 initial state,
 \[
-\widehat V(0,0,0,0)=0.0898500728095116,
+\widehat V(0,0,0,0)=0.0898500728095116.
 \]
 Thus under optimal play the first Dropper wins with probability
 $\tfrac{1+\widehat V}{2}\approx0.5449$, within the stated error bounds;
@@ -708,8 +736,12 @@ equilibrium strategies are re-derived from stored child values on demand.
   IEEE double midpoints with explicit saddle-gap certificates and the
   accumulated bound of Proposition~\ref{prop:accumulated}; this is a
   certified-numerics result, not an exact rational or interval-arithmetic
-  proof. The structural theorems (quotient, potential, finiteness,
-  Toeplitz form) are exact and machine-checked exhaustively.
+  proof, and the certificate calculus is evaluated in round-to-nearest
+  float64 without directed rounding. The structural theorems (quotient,
+  potential, finiteness, Toeplitz form) are exact; their finite
+  hypotheses --- the survival predicate, absorption, the counts, and the
+  potential increase --- are machine-enumerated exhaustively over all
+  profiles and profile transitions.
 \item \textbf{Domain.} The table covers the transition-closed quotient
   domain; live states with an alive TTD in $1..59$ are outside it and are
   rejected, not approximated (Lemma~\ref{lem:closure}).

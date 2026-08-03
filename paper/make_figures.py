@@ -326,7 +326,7 @@ def make_toeplitz_structure() -> None:
         (0.06, 0.42),
         0.88,
         0.19,
-        "$61$ distinct values\n$S_1,\\ldots,S_{60}$ and $F$",
+        "at most $61$ distinct values\n$S_1,\\ldots,S_{60}$ and $F$",
         facecolor="#E8F4F0",
         edgecolor=TEAL,
     )
@@ -670,8 +670,17 @@ def make_strategy_and_value_surfaces() -> None:
         cmap=strategy_cmap,
         alpha=0.68,
     )
-    ax_strategy.plot([1, 60], [240, 240], [0, 0], color=ORANGE, lw=1.4, ls="--")
-    ax_strategy.text(59, 244, 0.02, "$s=240$", color=ORANGE, ha="right", fontsize=7)
+    boundary_row = strategy_grid.loc[240].to_numpy()
+    ax_strategy.plot(
+        expected_actions,
+        np.full(expected_actions.size, 240),
+        boundary_row + 0.004,
+        color=ORANGE,
+        lw=1.2,
+        ls="--",
+        zorder=10,
+    )
+    ax_strategy.text(56, 262, 0.43, "$s=240$", color=ORANGE, ha="center", fontsize=7)
     ax_strategy.set(
         title="(a) Dropper strategy",
         xlabel="Second",
@@ -750,7 +759,7 @@ def make_strategy_and_value_surfaces() -> None:
     )
     colorbar.set_label("Value", fontsize=7.5)
     colorbar.ax.tick_params(labelsize=6.5)
-    fig.subplots_adjust(left=0.01, right=0.95, bottom=0.06, top=0.95, wspace=0.03)
+    fig.subplots_adjust(left=0.01, right=0.96, bottom=0.06, top=0.95, wspace=0.18)
     save_figure(fig, "fig5_strategy_and_value")
 
 
