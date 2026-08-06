@@ -40,6 +40,6 @@ rules, state encodings, or artifact schemas.
 
 ## Maintaining this file
 
-When a new subtree with its own `AGENTS.md` is added, add an import line for it
-here. When a subtree is removed or renamed, remove or update its line — a stale
-import is a silent context gap.
+When a new subtree with its own binding `README.md` is added, add an import line
+for it here. When a subtree is removed or renamed, remove or update its line —
+a stale import is a silent context gap.

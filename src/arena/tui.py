@@ -3,7 +3,7 @@
 This is a display layer and nothing more. Every function here takes canonical
 engine objects and returns text; none of them advance the clock, resolve a
 half-round, or write to a :class:`~stl.engine.game.Player`. The STL engine
-remains the only referee, exactly as ``arena/AGENTS.md`` requires.
+remains the only referee, exactly as ``src/arena/README.md`` requires.
 
 The scene is staged after ``art/panels/stl1.jpg``: the seated player on the
 left, Yakou standing at the centre, and the Dropper on the right facing left
@@ -685,6 +685,52 @@ def format_result(record: HalfRoundRecord) -> str:
 
 
 # ── screens ───────────────────────────────────────────────────────────────
+
+
+def rules_body() -> tuple[str, ...]:
+    """Canonical player-facing rules shared by the plain CLI and TUI."""
+    return (
+        "GOAL — Be the last player alive.",
+        "",
+        "EACH HALF-ROUND",
+        "Dropper secretly chooses a handkerchief-drop second from 1..60.",
+        "Checker independently chooses a check second from 1..60 (1 is immediate).",
+        "Second 0 and passing are illegal; check succeeds when check >= drop.",
+        "ST means Squandered Time.",
+        "A success adds ST = check - drop + 1 to the Checker's vial.",
+        "",
+        "FAILED CHECK, DEATH, AND REVIVAL",
+        "A failed check injects q = current vial ST + 60 seconds.",
+        "q >= 300 or TTD + q > 300 is fatal; equality is eligible when q < 300.",
+        "TTD means Total Time Dead; every revived dose is added to it.",
+        "Revival chance falls as vial ST and prior TTD rise.",
+        "A revival clears vial ST.",
+        "Roles swap after every half-round that both players survive.",
+    )
+
+
+def render_rules(
+    *,
+    human_name: str = "Baku",
+    hal_label: str = "dth",
+    layout: Layout = DEFAULT_LAYOUT,
+) -> list[str]:
+    """Build the session-opening rules screen without touching game state."""
+    inner = layout.inner
+    span = "═" * (layout.width - 2)
+    top, rule, bottom = f"╔{span}╗", f"╠{span}╣", f"╚{span}╝"
+
+    body_height = layout.scene_rows + 6
+    body = list(rules_body())[:body_height]
+    body.extend([""] * (body_height - len(body)))
+    players = f"You: {human_name}    Opponent: Hal ({hal_label})"
+
+    lines = [top, _row("SURPASSING THE LEADER — RULES", inner), _row(players, inner), rule]
+    lines.extend(_row(line, inner) for line in body)
+    lines.append(rule)
+    lines.append(_row("press Enter to begin", inner))
+    lines.append(bottom)
+    return lines
 
 
 def render_frame(

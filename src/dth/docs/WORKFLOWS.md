@@ -48,7 +48,9 @@ These commands remain useful for policy compression, learned evaluation,
 search comparisons, and empirical analysis. Configured outputs must state
 whether a target is finite-horizon exact or an approximate play estimate. No
 research output is a fallback for `CompleteDTHAgent` or a substitute for the
-complete artifact.
+complete artifact. [`RESEARCH_CONFIGS.md`](RESEARCH_CONFIGS.md) classifies the
+tracked presets and separates current entry configurations from reproducible
+research lineages.
 
 ## Cross-backend validation
 

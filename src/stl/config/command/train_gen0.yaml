@@ -1,12 +1,12 @@
 name: train_gen0
 module: stl.learning.train
 args: null
-targets: src/stl/outputs/regen2rl/gen0_train_v3.npz
+targets: src/stl/outputs/gen0/gen0_train_v3.npz
 validation_targets: null
 policy_certificates: null
 validation_policy_certificates: null
 training_taxonomy: null
-out: src/stl/outputs/regen2rl/gen0_checkpoint_v3
+out: src/stl/outputs/gen0/gen0_checkpoint_v3
 epochs: 100
 batch_size: 64
 lr: 0.001

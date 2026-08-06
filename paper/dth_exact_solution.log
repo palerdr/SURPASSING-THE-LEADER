@@ -294,6 +294,8 @@ File: microtype.cfg 2022/03/14 v3.0d microtype main configuration file (RS)
 ))
 (parskip.sty
 Package: parskip 2021-03-14 v2.0h non-zero parskip adjustments
+) (placeins.sty
+Package: placeins 2005/04/18  v 2.2
 ) (caption.sty
 Package: caption 2022/03/01 v3.6b Customizing captions (AR)
  (caption3.sty
@@ -311,21 +313,21 @@ Package caption Info: Standard document class detected.
 \c@caption@flags=\count291
 \c@continuedfloat=\count292
 Package caption Info: hyperref package is loaded.
-) (tikz.sty (pgf.sty (pgfrcs.sty
-(pgfutil-common.tex
+) (tikz.sty (pgf.sty
+(pgfrcs.sty (pgfutil-common.tex
 \pgfutil@everybye=\toks31
 \pgfutil@tempdima=\dimen185
 \pgfutil@tempdimb=\dimen186
  (pgfutil-common-lists.tex)) (pgfutil-latex.def
 \pgfutil@abb=\box55
-)
-(pgfrcs.code.tex (pgf.revision.tex)
+) (pgfrcs.code.tex (pgf.revision.tex)
 Package: pgfrcs 2021/05/15 v3.1.9a (3.1.9a)
 ))
 Package: pgf 2021/05/15 v3.1.9a (3.1.9a)
- (pgfcore.sty (pgfsys.sty (pgfsys.code.tex
+ (pgfcore.sty (pgfsys.sty
+(pgfsys.code.tex
 Package: pgfsys 2021/05/15 v3.1.9a (3.1.9a)
-(pgfkeys.code.tex
+ (pgfkeys.code.tex
 \pgfkeys@pathtoks=\toks32
 \pgfkeys@temptoks=\toks33
  (pgfkeysfiltered.code.tex
@@ -355,21 +357,21 @@ Package: pgfsys 2021/05/15 v3.1.9a (3.1.9a)
 File: pgf.cfg 2021/05/15 v3.1.9a (3.1.9a)
 )
 Driver file for pgf: pgfsys-xetex.def
- (pgfsys-xetex.def
-File: pgfsys-xetex.def 2021/05/15 v3.1.9a (3.1.9a)
 
-(pgfsys-dvipdfmx.def
+(pgfsys-xetex.def
+File: pgfsys-xetex.def 2021/05/15 v3.1.9a (3.1.9a)
+ (pgfsys-dvipdfmx.def
 File: pgfsys-dvipdfmx.def 2021/05/15 v3.1.9a (3.1.9a)
  (pgfsys-common-pdf.def
 File: pgfsys-common-pdf.def 2021/05/15 v3.1.9a (3.1.9a)
 )
 \pgfsys@objnum=\count298
-))) (pgfsyssoftpath.code.tex
+)))
+(pgfsyssoftpath.code.tex
 File: pgfsyssoftpath.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgfsyssoftpath@smallbuffer@items=\count299
 \pgfsyssoftpath@bigbuffer@items=\count300
-)
-(pgfsysprotocol.code.tex
+) (pgfsysprotocol.code.tex
 File: pgfsysprotocol.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 )) (xcolor.sty
 Package: xcolor 2021/10/31 v2.13 LaTeX color extensions (UK)
@@ -385,11 +387,11 @@ Package xcolor Info: Model `tHsb' substituted by `hsb' on input line 1372.
 Package xcolor Info: Model `HSB' substituted by `hsb' on input line 1373.
 Package xcolor Info: Model `Gray' substituted by `gray' on input line 1374.
 Package xcolor Info: Model `wave' substituted by `hsb' on input line 1375.
-) (pgfcore.code.tex
+)
+(pgfcore.code.tex
 Package: pgfcore 2021/05/15 v3.1.9a (3.1.9a)
-
-(pgfmath.code.tex (pgfmathcalc.code.tex (pgfmathutil.code.tex)
-(pgfmathparser.code.tex
+ (pgfmath.code.tex (pgfmathcalc.code.tex (pgfmathutil.code.tex) (pgfmathparser.
+code.tex
 \pgfmath@dimen=\dimen197
 \pgfmath@count=\count301
 \pgfmath@box=\box56
@@ -600,7 +602,7 @@ File: pgflibraryarrows.meta.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgfarrowwidth=\dimen307
 \pgfarrowlinewidth=\dimen308
 )
-Package hyperref Info: Option `colorlinks' set `true' on input line 22.
+Package hyperref Info: Option `colorlinks' set `true' on input line 23.
 \c@theorem=\count323
 
 (l3backend-xetex.def
@@ -616,31 +618,31 @@ File: l3backend-xetex.def 2022-02-07 L3 backend support: XeTeX
 ) (dth_exact_solution.aux)
 \openout1 = `dth_exact_solution.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 62.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 63.
 LaTeX Font Info:    Trying to load font information for TS1+cmr on input line 6
-2.
+3.
  (ts1cmr.fd
 File: ts1cmr.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 62.
-LaTeX Font Info:    ... okay on input line 62.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 63.
+LaTeX Font Info:    ... okay on input line 63.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: xetex
@@ -676,7 +678,7 @@ LaTeX Font Info:    ... okay on input line 62.
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-Package hyperref Info: Link coloring ON on input line 62.
+Package hyperref Info: Link coloring ON on input line 63.
 (nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
  (refcount.sty
@@ -686,19 +688,19 @@ Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
 \c@section@level=\count331
 )
-LaTeX Info: Redefining \ref on input line 62.
-LaTeX Info: Redefining \pageref on input line 62.
-LaTeX Info: Redefining \nameref on input line 62.
+LaTeX Info: Redefining \ref on input line 63.
+LaTeX Info: Redefining \pageref on input line 63.
+LaTeX Info: Redefining \nameref on input line 63.
  (dth_exact_solution.out)
 (dth_exact_solution.out)
 \@outlinefile=\write4
 \openout4 = `dth_exact_solution.out'.
 
-LaTeX Info: Redefining \microtypecontext on input line 62.
-Package microtype Info: Applying patch `item' on input line 62.
-Package microtype Info: Applying patch `toc' on input line 62.
-Package microtype Info: Applying patch `eqnum' on input line 62.
-Package microtype Info: Applying patch `footnote' on input line 62.
+LaTeX Info: Redefining \microtypecontext on input line 63.
+Package microtype Info: Applying patch `item' on input line 63.
+Package microtype Info: Applying patch `toc' on input line 63.
+Package microtype Info: Applying patch `eqnum' on input line 63.
+Package microtype Info: Applying patch `footnote' on input line 63.
 Package microtype Info: Character protrusion enabled (level 2).
 Package microtype Info: Using default protrusion set `alltext'.
 Package microtype Info: No adjustment of tracking.
@@ -718,14 +720,14 @@ s been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
 (RS)
 )
-LaTeX Font Info:    Trying to load font information for U+msa on input line 64.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 65.
 
  (umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 ) (mt-msa.cfg
 File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 64.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 65.
 
  (umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
@@ -755,13 +757,15 @@ PGFPlots: reading {build/figures/root_strategies.dat}
 File: build/figures/seaborn/fig5_strategy_and_value.pdf Graphic file (type pdf)
 
 <use build/figures/seaborn/fig5_strategy_and_value.pdf>
- [9]
+ [9] [10]
 Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `lmtt' (encoding: TU).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
- [10] [11] (dth_exact_solution.aux)
+ [11
+
+] (dth_exact_solution.aux)
 Package rerunfilecheck Info: File `dth_exact_solution.out' has not changed.
 (rerunfilecheck)             Checksum: 6EA439464F39F665BA4E16F62F5D4F13;1959.
  )
-Output written on dth_exact_solution.xdv (11 pages, 335880 bytes).
+Output written on dth_exact_solution.xdv (11 pages, 335100 bytes).

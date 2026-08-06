@@ -56,26 +56,26 @@ def main() -> None:
 
     with (OUTPUT / "diag_strategy.dat").open("w", encoding="ascii") as handle:
         handle.write("s action prob\n")
-        for load in range(0, 300, 10):
-            pid = profile_id(load, 0)
-            _, drop_at_load, _, _ = solve_certified_matrix_fast(
+        for st in range(0, 300, 10):
+            pid = profile_id(st, 0)
+            _, drop_at_st, _, _ = solve_certified_matrix_fast(
                 class_matrix(pid, pid)
             )
             for action in range(60):
                 handle.write(
-                    f"{load} {action + 1} {drop_at_load[action]:.10f}\n"
+                    f"{st} {action + 1} {drop_at_st[action]:.10f}\n"
                 )
             handle.write("\n")
 
-    loads = range(0, 300, 10)
+    sampled_st = range(0, 300, 10)
     with (OUTPUT / "value_surface.dat").open("w", encoding="ascii") as handle:
         handle.write("sc sd value\n")
-        for checker_load in loads:
-            checker = profile_id(checker_load, 0)
-            for dropper_load in loads:
-                dropper = profile_id(dropper_load, 0)
+        for checker_st in sampled_st:
+            checker = profile_id(checker_st, 0)
+            for dropper_st in sampled_st:
+                dropper = profile_id(dropper_st, 0)
                 value = float(values[checker * PROFILE_COUNT + dropper])
-                handle.write(f"{checker_load} {dropper_load} {value:.10f}\n")
+                handle.write(f"{checker_st} {dropper_st} {value:.10f}\n")
             handle.write("\n")
 
 

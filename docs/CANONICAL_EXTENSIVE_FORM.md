@@ -72,7 +72,7 @@ per-player physicality multiplier in revival odds at any ladder rung.
 - `src/dth_ocaml/lib/solver/exact.ml` is a minimal OCaml exact-solver arm for the
   pure DTH formulation. It is not an owner of the leap-aware public-game rung
   and does not reclassify older STL/DTH checkpoints.
-- `arena/` owns no game rules; it adapts solver policies to the canonical STL
+- `src/arena/` owns no game rules; it adapts solver policies to the canonical STL
   referee for live play.
 
 Solvers may use audited scalar helpers but must not reimplement divergent game

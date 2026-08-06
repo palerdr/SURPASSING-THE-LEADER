@@ -210,7 +210,7 @@ the identity-specific multiplier the unified model deliberately absorbs.
 ## Implementation status
 
 Every executable formulation now uses this frozen surface: pure DTH, both
-abstract tablebases, the Python and Rust STL engines, and the leap-aware OCaml
+abstract tablebases, the Python and Rust STL engines, and the pure-DTH OCaml
 engine and solver. Arena and both terminal renderers display the probability
 recorded by their engine; neither carries a separate revival calculation.
 The implementation record is in

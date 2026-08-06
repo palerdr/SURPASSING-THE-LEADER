@@ -8,6 +8,7 @@
 \usepackage{hyperref}
 \usepackage{microtype}
 \usepackage{parskip}
+\usepackage{placeins}
 \usepackage[font=small,labelfont=bf]{caption}
 \usepackage{tikz}
 \usepackage{pgfplots}
@@ -67,7 +68,7 @@ Drop the Handkerchief (DTH) is a fully observed, two-player, zero-sum
 stochastic game with simultaneous exact-second actions, a hard 300-second
 capacity, and a probabilistic revival rule. We solve the complete game. Once
 a player can no longer survive an injection, the game never reads their
-cumulative time dead again. Quotienting by that observation collapses the
+cumulative time dead (TTD) again. Quotienting by that observation collapses the
 $5.27\times10^{9}$-state transition-closed domain to $289{,}374{,}121$
 equivalence classes, a factor of $18.2$. A potential function organizes those classes
 into $1{,}201$ layers and permits a single backward sweep without search or
@@ -96,12 +97,12 @@ manga \emph{Usogui}. Two
 players alternate the roles of \emph{Dropper} and \emph{Checker}. Each round
 both simultaneously commit to a second in $\{1,\dots,60\}$; the check
 succeeds if it does not precede the drop, in which case the checker absorbs
-the inclusive elapsed interval, also called squandered time (ST), as poison
+the inclusive elapsed interval, called squandered time (ST), as poison
 in a personal 300-second cylinder, and the roles swap. A failed check injects
-the checker with their accumulated load
+the checker with their accumulated ST
 plus a fixed 60-second penalty; the injection is fatal unless a frozen,
 monotone revival law (Figure~\ref{fig:revival}) saves them, in which case
-their cylinder resets and their cumulative time dead (TTD) grows. Overflowing
+their cylinder resets and their time dead (TTD) grows. Overflowing
 the cylinder is fatal outright. The last player alive wins. That is the
 entire game we solve.
 
@@ -113,7 +114,7 @@ complete solution and the mathematics that made it cheap:
 \begin{enumerate}[leftmargin=*]
 \item a \emph{per-player quotient} (Section~\ref{sec:quotient}): death
   eligibility is absorbing and zeroes the probability model, the only expression that ever reads a
-  player's time dead, so that coordinate collapses to a sentinel
+  player's TTD, so that coordinate collapses to a sentinel
   independently for each player;
 \item a \emph{potential} (Section~\ref{sec:potential}) that strictly
   increases along every live transition, so a single descending sweep sees
@@ -137,15 +138,14 @@ states what is and is not established.
 \begin{definition}[State]\label{def:state}
 A live state is $x=(s_c,t_c,s_d,t_d)$, written from the
 perspective of the current \emph{Dropper}: $s_c\in\{0,\dots,299\}$ and
-$t_c\in\{0,\dots,300\}$ are the current \emph{Checker's} accumulated load
-(``squandered time'', ST) and cumulative time dead (TTD), and
+$t_c\in\{0,\dots,300\}$ are the current \emph{Checker's} ST and TTD, and
 $(s_d,t_d)$ are the Dropper's. Terminal payoffs are $+1$ when the current
 Dropper wins and $-1$ when they lose.
 \end{definition}
 
 \begin{definition}[Actions and timing]\label{def:actions}
 Both players simultaneously choose seconds $d,c\in\{1,\dots,60\}$ (drop and
-check). The check \emph{succeeds} iff $d\le c$, and then the checker's load
+check). The check \emph{succeeds} iff $d\le c$, and then the Checker's ST
 grows by the inclusive interval $\ell=c-d+1\in\{1,\dots,60\}$; equal seconds
 cost one second, not zero. If $s_c+\ell\ge300$ the cylinder overflows and
 the checker dies: the transition ends with payoff $+1$ for the Dropper.
@@ -210,8 +210,8 @@ else in the rules, so Section~\ref{sec:quotient} collapses the zero region.
 \centering
 \includegraphics[width=0.95\textwidth]{build/figures/seaborn/fig1_revival_probability.pdf}
 \caption{The frozen revival law \eqref{eq:revival}. Color and height both
-encode probability. The blue edge isolates the linear loss from load; the
-purple edge isolates the exponential loss from time dead. The orange curtain
+encode probability. The blue edge isolates the linear loss from ST; the
+purple edge isolates the exponential loss from TTD. The orange curtain
 marks $s+t=240$: probability is positive on the curtain, except at its
 $s=240$ endpoint, and drops to zero immediately beyond it.}
 \label{fig:revival}
@@ -222,7 +222,7 @@ $s=240$ endpoint, and drops to zero immediately beyond it.}
 \begin{lemma}[Damage strictly increases]\label{lem:damage}
 Let $R(x)=s_c+t_c+s_d+t_d$. Every live transition strictly increases $R$:
 a successful lag $\ell$ adds $\ell\ge1$, and a revived failure adds exactly
-$60$ (the dose $s_c+60$ enters TTD while the load $s_c$ resets).
+$60$ (the dose $s_c+60$ enters TTD while the ST $s_c$ resets).
 \end{lemma}
 
 \begin{corollary}[The game is finite]\label{cor:finite}
@@ -316,16 +316,16 @@ powers the entire reduction.
 
 \begin{lemma}[Death is absorbing]\label{lem:absorbing}
 If the profile $(s,t)$ is dead, then $(s',t)$ is dead for every
-$s'\ge s$. Since a successful check raises a player's load and leaves their
+$s'\ge s$. Since a successful check raises a player's ST and leaves their
 TTD unchanged, and a failed check either ends the game for them or requires
-\eqref{eq:survive}, load growth is the only motion available to a dead
+\eqref{eq:survive}, ST growth is the only motion available to a dead
 profile, and it never revives it.
 \end{lemma}
 
 \begin{theorem}[Quotient soundness]\label{thm:quotient}
 Define $\varphi(s,t)=(s,t)$ when $(s,t)$ is alive and
 $\varphi(s,t)=(s,\bot)$ otherwise, where $\bot$ is the dead-TTD sentinel at
-load $s$. Apply this map to each player's profile independently. Then any two
+ST $s$. Apply this map to each player's profile independently. Then any two
 live states with equal images under $\varphi$
 have identical stage matrices up to $\varphi$-identification of their
 children, and hence identical values: $V$ factors through $\varphi$.
@@ -349,7 +349,7 @@ finite acyclic graph (Corollary~\ref{cor:finite}) closes the argument.
 Over the transition-closed TTD domain $\{0\}\cup[60,300]$ (Lemma
 \ref{lem:closure}), a player has $300\times242=72{,}600$ profiles;
 $\varphi$ collapses them to $16{,}711$ alive profiles plus $300$ dead
-sentinels (one per load), i.e.\ $17{,}011$ classes per player and
+sentinels (one per ST value), i.e.\ $17{,}011$ classes per player and
 \[
 17{,}011^2=289{,}374{,}121
 \]
@@ -382,7 +382,7 @@ exhaustive enumeration over all $72{,}600$ profiles.
 \centering
 \begin{tikzpicture}[x=0.86cm, y=0.86cm]
 % One-player profile geometry: the alive region is triangular, while every
-% death-eligible vertical fibre collapses to one sentinel for its load.
+% death-eligible vertical fibre collapses to one sentinel for its ST value.
 \fill[figlightgray] (0,0) rectangle (4.983,5);
 \fill[figpaleteal] (0,0) -- (4,0) -- (0,4) -- cycle;
 \draw[figboxgray, line width=0.5pt] (0,0) rectangle (4.983,5);
@@ -398,13 +398,13 @@ exhaustive enumeration over all $72{,}600$ profiles.
 \draw[-{Stealth[length=1.8mm]}, figorange, line width=0.8pt]
   (4.65,3.2) -- (4.65,-0.6);
 \node[font=\scriptsize, text=figpurple, anchor=north] at (2.49,-1.18)
-  {$300$ sentinels, one per load};
+  {$300$ sentinels, one per ST value};
 \node[font=\scriptsize, text=black!55, anchor=north] at (0,-0.08) {$0$};
 \node[font=\scriptsize, text=black!55, anchor=north] at (4,-0.08) {$240$};
 \node[font=\scriptsize, text=black!55, anchor=east] at (-0.08,4) {$240$};
 \node[font=\scriptsize, text=black!55, anchor=east] at (-0.08,5) {$300$};
-\node[font=\small, anchor=west] at (5.1,0.25) {load $s$};
-\node[font=\small, rotate=90] at (-0.85,2.5) {time dead $t$};
+\node[font=\small, anchor=west] at (5.1,0.25) {ST $s$};
+\node[font=\small, rotate=90] at (-0.85,2.5) {TTD $t$};
 \node[font=\small, align=center] at (2.5,6.0)
   {one player:\\ $300\times242$ profiles};
 
@@ -425,7 +425,7 @@ exhaustive enumeration over all $72{,}600$ profiles.
 \end{scope}
 \end{tikzpicture}
 \caption{The geometry of the quotient. Left: the alive triangle contains
-$16{,}711$ of $72{,}600$ profiles; at each load, all dead TTD values map to
+$16{,}711$ of $72{,}600$ profiles; at each ST value, all dead TTD values map to
 one of $300$ sentinels, leaving $17{,}011$ classes. Right: applying the map
 to both players reduces the $5.27\times10^9$ domain states to
 $289{,}374{,}121$, a factor of $18.2$. Left-panel areas are schematic: the
@@ -453,7 +453,7 @@ profile:
 \item successful lag $\ell$, alive profile dies:
   $\Delta\Phi=\ell+301-t\ge\ell+61$, since alive implies $t\le240$
   (and a dead profile never revives, so the reverse case is empty);
-\item failure, revived profile alive: $\Delta\Phi=60$ (the load resets to
+\item failure, revived profile alive: $\Delta\Phi=60$ (the ST resets to
   zero while TTD absorbs the dose);
 \item failure, revived profile dead: $\Delta\Phi=301-(s_c+t_c)\ge61$ by
   \eqref{eq:survive}.
@@ -685,25 +685,11 @@ axis keeps the atom and the remaining support visible together.}
 \label{fig:root}
 \end{figure}
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=0.96\textwidth]{build/figures/seaborn/fig5_strategy_and_value.pdf}
-\caption{Two zero-TTD slices, sampled in $10$-load steps; dashed lines
-mark the survival boundary at load $240$. \textbf{(a)} The Dropper's
-equilibrium mix along $(s,0,s,0)$. Every sampled strategy has full support,
-with an atom on second $1$ at every load; the boundary at $s=240$ adds a
-second atom on second $60$, and the mix flattens near overflow.
-\textbf{(b)} Certified values $\widehat V(s_c,0,s_d,0)$. At equal loads of
-$290$ the Dropper's value is $0.753$; unequal high loads create the
-opposing cliffs.}
-\label{fig:surfaces}
-\end{figure}
-
 Audits on the finished table include a completeness scan (every value finite,
 in $[-1,1]$, with a known routing byte); Bellman recertification of
 $4{,}792$ deterministically sampled classes with worst deviation
 $4.84\times10^{-7}$; agreement with the independently produced endgame
-band tablebase (both loads ${}\ge240$) on
+band tablebase (both ST values ${}\ge240$) on
 all $3{,}541$ classes it stores, to at most $2.8\times10^{-8}$, and at its
 root to $6.9\times10^{-12}$; and an independent dead-band reference solver
 sharing no sweep machinery.
@@ -724,6 +710,21 @@ $\tfrac{1+\widehat V}{2}\approx0.5449$, within the stated error bounds;
 equilibrium strategies are re-derived from stored child values on demand.
 \end{theorem}
 
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.96\textwidth]{build/figures/seaborn/fig5_strategy_and_value.pdf}
+\caption{Two zero-TTD slices, sampled in $10$-second ST steps; dashed lines
+mark the survival boundary at ST $240$. \textbf{(a)} The Dropper's
+equilibrium mix along $(s,0,s,0)$. Every sampled strategy has full support,
+with an atom on second $1$ at every ST value; the boundary at $s=240$ adds a
+second atom on second $60$, and the mix flattens near overflow.
+\textbf{(b)} Certified values $\widehat V(s_c,0,s_d,0)$. At equal ST values of
+$290$ the Dropper's value is $0.753$; unequal high ST values create the
+opposing cliffs.}
+\label{fig:surfaces}
+\end{figure}
+
+\FloatBarrier
 \section{Scope of the claims}\label{sec:claims}
 
 \begin{itemize}[leftmargin=*]

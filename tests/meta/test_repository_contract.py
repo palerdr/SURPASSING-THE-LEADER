@@ -157,5 +157,5 @@ def test_solver_configs_own_their_default_artifact_paths():
             continue
         for path in config_root.rglob("*.yaml"):
             text = path.read_text(encoding="utf-8")
-            assert "outputs/regen2rl" not in text, path
+            assert "src/stl/outputs/" not in text, path
             assert re.search(rf"\b(?:{project}/|\.)", text) or "output" not in text, path

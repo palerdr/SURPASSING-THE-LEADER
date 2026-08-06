@@ -16,7 +16,7 @@ Chart contracts
 ---------------
 1. Revival: expose the two decay mechanisms and the survivability cliff.
 2. Toeplitz: connect matrix structure to the O(60) saddle scan.
-3. Surfaces: expose load-dependent strategy shifts and value cliffs.
+3. Surfaces: expose ST-dependent strategy shifts and value cliffs.
 
 The quotient and root-strategy figures are deliberately rendered in TeX; their
 simpler geometry is clearer in the paper than the Seaborn alternatives.
@@ -126,9 +126,9 @@ def make_revival_probability() -> None:
     fig = plt.figure(figsize=(TEXT_WIDTH, 3.55))
     ax = fig.add_subplot(111, projection="3d")
 
-    load = np.linspace(0, 240, 61)
+    st = np.linspace(0, 240, 61)
     fraction = np.linspace(0, 1, 51)
-    S, U = np.meshgrid(load, fraction)
+    S, U = np.meshgrid(st, fraction)
     T = U * (240 - S)
     P = 0.95 * (1 - S / 240) * 0.75 ** (T / 60)
 
@@ -158,11 +158,11 @@ def make_revival_probability() -> None:
         shade=False,
     )
     ax.plot(boundary_s, boundary_t, boundary_p, color=ORANGE, lw=1.5)
-    ax.plot(load, np.zeros_like(load), 0.95 * (1 - load / 240), color=BLUE, lw=1.7)
+    ax.plot(st, np.zeros_like(st), 0.95 * (1 - st / 240), color=BLUE, lw=1.7)
     ax.plot(
-        np.zeros_like(load),
-        load,
-        0.95 * 0.75 ** (load / 60),
+        np.zeros_like(st),
+        st,
+        0.95 * 0.75 ** (st / 60),
         color=PURPLE,
         lw=1.7,
         ls="--",
@@ -172,8 +172,8 @@ def make_revival_probability() -> None:
         xlim=(0, 240),
         ylim=(0, 240),
         zlim=(0, 1),
-        xlabel="Load $s$",
-        ylabel="Time dead $t$",
+        xlabel="ST $s$",
+        ylabel="TTD $t$",
         zlabel="$p(s,t)$",
         title="Revival probability on the survivable region",
     )
@@ -390,8 +390,8 @@ def make_quotient_geometry() -> None:
     )
     raw.set(
         title="Raw one-player profiles",
-        xlabel="Load $s$",
-        ylabel="Time dead $t$",
+        xlabel="ST $s$",
+        ylabel="TTD $t$",
         xticks=(0, 120, 240, 300),
         yticks=(0, 120, 240, 300),
     )
@@ -621,10 +621,10 @@ def make_strategy_and_value_surfaces() -> None:
     value = load_table("value_surface.dat", ("sc", "sd", "value"))
 
     strategy_grid = strategy.pivot(index="s", columns="action", values="prob")
-    expected_loads = np.arange(0, 300, 10)
+    expected_st = np.arange(0, 300, 10)
     expected_actions = np.arange(1, 61)
-    if not np.array_equal(strategy_grid.index.to_numpy(), expected_loads):
-        raise ValueError("diag_strategy.dat must contain loads 0 through 290 by 10")
+    if not np.array_equal(strategy_grid.index.to_numpy(), expected_st):
+        raise ValueError("diag_strategy.dat must contain ST 0 through 290 by 10")
     if not np.array_equal(strategy_grid.columns.to_numpy(), expected_actions):
         raise ValueError("diag_strategy.dat must contain actions 1 through 60")
     if not np.allclose(strategy_grid.sum(axis=1), 1.0, atol=1e-8):
@@ -633,10 +633,10 @@ def make_strategy_and_value_surfaces() -> None:
         raise ValueError("one or more diagonal strategies are not full support")
 
     value_grid = value.pivot(index="sc", columns="sd", values="value")
-    if not np.array_equal(value_grid.index.to_numpy(), expected_loads):
-        raise ValueError("value_surface.dat must contain checker loads 0 through 290")
-    if not np.array_equal(value_grid.columns.to_numpy(), expected_loads):
-        raise ValueError("value_surface.dat must contain dropper loads 0 through 290")
+    if not np.array_equal(value_grid.index.to_numpy(), expected_st):
+        raise ValueError("value_surface.dat must contain Checker ST 0 through 290")
+    if not np.array_equal(value_grid.columns.to_numpy(), expected_st):
+        raise ValueError("value_surface.dat must contain Dropper ST 0 through 290")
     if (np.abs(value_grid.to_numpy()) > 1 + 1e-10).any():
         raise ValueError("value surface leaves the zero-sum range [-1, 1]")
 
@@ -644,14 +644,14 @@ def make_strategy_and_value_surfaces() -> None:
     ax_strategy = fig.add_subplot(1, 2, 1, projection="3d")
     ax_value = fig.add_subplot(1, 2, 2, projection="3d")
 
-    actions, loads = np.meshgrid(
+    actions, st_values = np.meshgrid(
         strategy_grid.columns.to_numpy(), strategy_grid.index.to_numpy()
     )
     probabilities = strategy_grid.to_numpy()
     strategy_cmap = sns.color_palette("crest", as_cmap=True)
     ax_strategy.plot_surface(
         actions,
-        loads,
+        st_values,
         probabilities,
         cmap=strategy_cmap,
         linewidth=0,
@@ -662,7 +662,7 @@ def make_strategy_and_value_surfaces() -> None:
     )
     ax_strategy.contourf(
         actions,
-        loads,
+        st_values,
         probabilities,
         zdir="z",
         offset=0,
@@ -684,7 +684,7 @@ def make_strategy_and_value_surfaces() -> None:
     ax_strategy.set(
         title="(a) Dropper strategy",
         xlabel="Second",
-        ylabel="Equal load $s$",
+        ylabel="Equal ST $s$",
         zlabel=r"$\sigma_d$",
         xlim=(1, 60),
         ylim=(0, 290),
@@ -696,15 +696,15 @@ def make_strategy_and_value_surfaces() -> None:
     ax_strategy.view_init(elev=28, azim=-126)
     ax_strategy.set_box_aspect((1, 1, 0.72))
 
-    dropper_load, checker_load = np.meshgrid(
+    dropper_st, checker_st = np.meshgrid(
         value_grid.columns.to_numpy(), value_grid.index.to_numpy()
     )
     values = value_grid.to_numpy()
     value_cmap = sns.diverging_palette(250, 25, s=80, l=52, as_cmap=True)
     norm = TwoSlopeNorm(vmin=-1, vcenter=0, vmax=1)
     value_surface = ax_value.plot_surface(
-        dropper_load,
-        checker_load,
+        dropper_st,
+        checker_st,
         values,
         cmap=value_cmap,
         norm=norm,
@@ -713,8 +713,8 @@ def make_strategy_and_value_surfaces() -> None:
         alpha=0.96,
     )
     ax_value.contourf(
-        dropper_load,
-        checker_load,
+        dropper_st,
+        checker_st,
         values,
         zdir="z",
         offset=-1,
@@ -727,8 +727,8 @@ def make_strategy_and_value_surfaces() -> None:
     ax_value.plot([0, 290], [240, 240], [-1, -1], color=ORANGE, lw=1.2, ls="--")
     ax_value.set(
         title="(b) Certified state value",
-        xlabel="Dropper load $s_d$",
-        ylabel="Checker load $s_c$",
+        xlabel="Dropper ST $s_d$",
+        ylabel="Checker ST $s_c$",
         zlabel=r"$\widehat V$",
         xlim=(0, 290),
         ylim=(0, 290),

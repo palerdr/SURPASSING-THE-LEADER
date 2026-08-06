@@ -9,11 +9,12 @@ This repository contains deliberately separate game-solving projects:
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
 | `src/dth_ocaml/` | Minimal exact OCaml solver | Literal DTH seconds and the repository-wide frozen revival model |
 | `src/crates/` | Shared Rust acceleration workspace | Python remains behavioral authority until explicit parity contracts |
-| `arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
+| `src/arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
 
 Repository-wide game contracts live in [`docs/`](docs/). The mathematical
 paper — a certified exact solution of the complete DTH game — lives at
-[`paper/`](paper/); primary game evidence and cited research are kept in
+[`paper/`](paper/); primary game evidence lives in
+[`docs/game-sources/`](docs/game-sources/) and cited research in
 [`docs/papers/`](docs/papers/). The OCaml project records its authorship in
 [`src/dth_ocaml/AUTHORS.md`](src/dth_ocaml/AUTHORS.md).
 
@@ -89,7 +90,7 @@ Pop-Location
 
 ## Repository policy
 
-Root guidance applies everywhere. Read the nearest nested `AGENTS.md` before
+Root guidance applies everywhere. Read the nearest binding subtree `README.md` before
 working inside a project. Folder-specific context belongs beside that folder,
 not in the repository root. Root Markdown is limited to this overview and the
 global agent contract; project Markdown stays under its owning `src/` subtree.

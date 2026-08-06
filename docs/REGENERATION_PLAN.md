@@ -5,7 +5,7 @@ complete.
 
 ## Result
 
-- DTH, abstract, Python STL, Rust STL, and OCaml STL evaluate the same
+- DTH, abstract, Python STL, Rust STL, and OCaml DTH evaluate the same
   `0.95 * (1 - s/240) * 0.75^(t/60)` surface and the same eligibility guards.
 - Identity physicality and accumulated revival attempts are not probability
   inputs. Historical counters may remain in match records or learned feature

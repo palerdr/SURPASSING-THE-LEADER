@@ -32,6 +32,7 @@ from arena.tui import (
     format_result,
     render_frame,
     render_outcome,
+    render_rules,
     render_victory,
 )
 from stl.engine.game import (
@@ -82,6 +83,34 @@ def _write_png(path: Path, pixels: list[list[tuple[int, int, int, int]]]) -> Pat
 
 
 # ── display fidelity ──────────────────────────────────────────────────────
+
+
+def test_rules_screen_explains_the_canonical_player_contract() -> None:
+    text = "\n".join(render_rules(human_name="Baku", hal_label="dth"))
+
+    assert "Opponent: Hal (dth)" in text
+    assert "handkerchief-drop second from 1..60" in text
+    assert "independently chooses a check second" in text
+    assert "check >= drop" in text
+    assert "ST means Squandered Time" in text
+    assert "check - drop + 1" in text
+    assert "current vial ST + 60" in text
+    assert "TTD + q > 300" in text
+    assert "TTD means Total Time Dead" in text
+    assert text.index("Roles swap") > text.index("FAILED CHECK")
+    assert "LEAP WINDOW" not in text
+    assert "choose 61" not in text
+    assert "press Enter to begin" in text
+
+
+@pytest.mark.parametrize("layout", [Layout(80, 10), Layout(100, 16), Layout(160, 40)])
+def test_rules_screen_is_the_same_size_as_the_live_frame(layout: Layout) -> None:
+    game = _game()
+    rules = render_rules(layout=layout)
+    live = render_frame(game, art=SceneArt(), layout=layout, colour=False)
+
+    assert len(rules) == len(live)
+    assert {len(line) for line in rules} == {layout.width}
 
 
 def test_frame_reports_every_required_field() -> None:

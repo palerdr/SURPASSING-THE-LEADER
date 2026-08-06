@@ -2,8 +2,9 @@
 
 Primary game evidence now lives one level up in
 [`../game-sources/`](../game-sources/), beside the evidence ledger it supports.
-This directory holds cited literature and primary game evidence; the project
-paper lives at the repository root under `paper/`.
+This directory holds cited literature. Primary game evidence lives in
+`../game-sources/`, and the project paper lives at the repository root under
+`paper/`.
 
 ## Primary game evidence
 

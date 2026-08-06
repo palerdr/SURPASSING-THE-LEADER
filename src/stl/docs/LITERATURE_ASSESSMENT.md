@@ -1,82 +1,60 @@
-# Literature Assessment
+# STL solver and learning claim boundary
 
-## Current Verdict
+## Current position
 
-The exact/search foundation is directionally aligned with modern game-solving
-systems, but the current repository does not yet have a closed AlphaZero
-reinforcement-learning loop. It has two disconnected approximations:
+Pure DTH at ladder rung L1 is the repository's completed exact solution and the
+default policy provider for arena play. The STL project owns rung L2: the same
+public mechanics plus Baku's prospective Dropper action 61 in the leap window.
+No complete L2 solve is claimed.
 
-- MCTS expert iteration over a constructed state grid; and
-- legacy bucketed `CanonicalHal` outcome training against scripted opponents.
+The STL exact, search, learning, evaluation, and promotion modules remain useful
+research surfaces. They do not supersede the DTH tablebase and are not a closed
+AlphaZero reinforcement-learning system.
 
-The audited bridge is now `src/stl/docs/REGEN2RL.md`. It connects the exact oracle,
-simultaneous-move MCTS, reconstructable replay, terminal-outcome self-play,
-policy/value training, and statistical promotion in Python before any new Rust
-kernel work.
+## What is rigorous
 
-## What Is Rigorous
+- The STL engine is the transition and legality authority for the public
+  leap-aware game.
+- Full-width finite-horizon matrices use literal legal actions, engine-derived
+  chance, and LP minimax.
+- Candidate search, CFR+, MCTS, learned values, Tier A frontiers, and tablebase
+  intervals retain their declared approximation boundaries.
+- Finite-depth best-response intervals certify only their named scenario,
+  horizon, support, and frontier. They are not global exploitability proofs.
 
-- The exact minimax tower uses literal-second public states, engine-derived
-  chance, terminal-only utility, and LP minimax solves.
-- Firewall tests prevent abstraction and shaping imports from entering the
-  rigorous recursion.
-- Tablebase and Tier A intervals tighten declared frontiers without changing
-  exact engine transitions.
-- Finite-depth best-response intervals are certified for their stated horizon,
-  support mass, and frontier bracket. They are not global exploitability
-  certificates.
+## Algorithmic roles
 
-## Where the Repository Matches the Literature
+- **Linear programming** is the matrix-game truth oracle.
+- **CFR/CFR+** is a bounded approximate matrix solver and must be audited against
+  LP before use in a claim.
+- **Simultaneous-move MCTS** produces empirical role marginals from finite search
+  budgets; its output is approximate even when its leaf values are exact.
+- **Policy/value networks** compress or extend exact anchors but never establish
+  their own correctness.
+- **DeepStack/ReBeL-style local resolving** is relevant to bounded critical-state
+  hardening, not evidence that the full game has been solved.
+- **AlphaZero-style training** would require complete MCTS-guided trajectories,
+  terminal or explicitly truncated outcomes, replay, reanalysis, and statistical
+  promotion. The current project does not claim that closed loop.
 
-- **AlphaZero / AlphaGo Zero:** the model already has value and policy heads,
-  the learner has masked cross-entropy and value loss, and search can produce
-  role policies. The missing step is genuine MCTS self-play whose visited-state
-  policies and completed outcomes feed replay.
-- **Simultaneous-move MCTS:** the playable solver samples average root role
-  strategies. This matches the need for mixed play, but the current PUCT-like
-  matrix rule does not automatically inherit the convergence theorem for
-  Hannan-consistent selection. `REGEN2RL` therefore requires exact-matrix
-  budget curves and saddle-gap audits.
-- **DeepStack / Libratus / ReBeL:** the repository separates a blueprint
-  evaluator from bounded local resolve. This is useful for critical-state
-  hardening, but it supplements rather than replaces the self-play loop.
-- **CFR / CFR+:** LP remains the certification path, while Python CFR+ is a
-  bounded local runtime option. Literal-second actions remain intact.
-- **Stockfish / NNUE:** search/evaluator separation is a useful systems analogy.
-  It is not evidence that the game is globally solved.
+## Retained executable surfaces
 
-## Gaps and Risks
+The current Hydra command configurations cover checkpoint training, saved-corpus
+training, evaluation, and report-based promotion. The source tree also retains
+finite-depth exploitability measurement, strength gates, exact/search audits,
+legacy scripted-opponent play, and learning support modules. Generated reports,
+checkpoints, and corpora remain ignored project outputs, not documentation or
+proof artifacts.
 
-- The audit found that the former Hydra self-play command emitted flags its
-  parser did not accept; distillation D1 removed that misleading surface until
-  P5 supplies the real joint-MCTS actor.
-- The module named self-play does not call matrix-game MCTS and only improves
-  Hal against scripted opponents.
-- Static MCTS bootstrap values are not AlphaZero terminal outcomes.
-- Replay rows lack exact-state reconstruction, schema versions, and producing
-  checkpoint/search hashes.
-- The 23-float feature map can collapse distinct exact states.
-- The engine permits arbitrarily long safe lines, so RL needs an explicit
-  episode-cap and truncation-sensitivity contract.
-- Candidate actions, finite MCTS budgets, and learned frontiers each add a
-  separate approximation that must be measured.
-- Calibration-improving fine-tunes have regressed against `pattern_reader`;
-  arena, policy, and finite-depth best-response evidence must remain mandatory.
+Historical generation-zero run ledgers and their removed commands are not a
+current roadmap. Any future training plan must begin from the present command
+surface, identify its rung on `docs/FORMULATION_LADDER.md`, predeclare its gates,
+and preserve the exact/approximate/empirical vocabulary of
+`docs/FOUNDATIONS.md`.
 
-## Required Next Validation
+## Literature library
 
-Do not start another long generation from the old scripts. Complete the
-`REGEN2RL` dependency chain in order:
-
-1. freeze the finite training-game and provenance contracts;
-2. certify Python engine/exact/search conformance;
-3. add reconstructable replay and grouped splits;
-4. validate the simultaneous MCTS improvement operator;
-5. train the exact-anchor generation-zero checkpoint; and
-6. pass the four-game MCTS self-play smoke before scaling.
-
-Promotion remains a multi-signal decision. Exact calibration, search
-conformance, paired arena/SPRT, scripted robustness, policy saddle gaps, and
-finite-depth best-response intervals must identify the same candidate and
-champion artifacts. Overlapping intervals are inconclusive, and no empirical
-gate is a proof of full-game equilibrium.
+Primary references live in `docs/papers/references/`: AlphaZero, CFR, CFR+,
+DeepStack, ReBeL, and the silent-duel timing paper. The duel paper supplies only
+timing-game precedent; its many-player non-constant-sum model is not the DTH or
+STL stage game.

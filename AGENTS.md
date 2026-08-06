@@ -37,9 +37,9 @@ Code loads them all as instruction files. Adding a subtree means adding its
 - Capacity is 300 seconds; `t + q > 300` is fatal and `t + q == 300` stays
   revival-eligible when `q < 300`.
 - One revival-probability surface is frozen for the whole repository in
-  `docs/REVIVAL_MODEL.md`. No project may carry its own revival constants, and
-  none may reintroduce an explicit CPR count or per-player physicality below
-  ladder rung L2.
+  `docs/REVIVAL_MODEL.md`. No project may carry its own revival constants or
+  reintroduce an explicit CPR count or per-player physicality as a revival-odds
+  input at any rung.
 - In STL's leap window only Baku as Dropper may choose 61; Checker remains
   capped at 60. Both players know the leap rule from game initialization.
 - DTH and abstract do not inherit STL-only leap or information-state mechanics.
@@ -69,7 +69,7 @@ worker per logical core exhausts Windows handles importing torch's
 dependencies and makes the workers contend for the GPU. Add `-n 0` for a
 readable serial traceback when something fails.
 
-Everything runs by default, including the `slow` tests that build real backup
+Everything runs by default, including the `slow` tests that build real complete
 artifacts end to end — they are the only coverage of resume and backend
 parity, and under xdist they cost about 19 seconds. Use `-m "not slow"` for a
 tighter loop when iterating on unrelated code, never as the check before a

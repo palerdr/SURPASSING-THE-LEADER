@@ -7,7 +7,12 @@ from typing import Mapping
 
 import numpy as np
 
-from arena.contracts import CanonicalDecision, CanonicalPolicyProvider
+from arena.contracts import (
+    CanonicalDecision,
+    CanonicalPolicyProvider,
+    PublicDecisionState,
+    PublicPlayerState,
+)
 from stl.engine.actions import legal_seconds
 from stl.engine.game import Game
 
@@ -27,6 +32,25 @@ def decision_from_game(game: Game, *, role: str, turn_duration: int) -> Canonica
         dropper_cylinder_seconds=dropper.cylinder,
         dropper_ttd_seconds=dropper.ttd,
         native_state=game,
+    )
+
+
+def public_state_from_game(game: Game, *, turn_duration: int) -> PublicDecisionState:
+    """Snapshot only the public state shared before simultaneous actions."""
+
+    return PublicDecisionState(
+        game_clock_seconds=float(game.game_clock),
+        round_index=int(game.round_num),
+        half_index=int(game.current_half),
+        turn_duration=int(turn_duration),
+        players=tuple(
+            PublicPlayerState(
+                name=player.name,
+                cylinder_seconds=float(player.cylinder),
+                ttd_seconds=float(player.ttd),
+            )
+            for player in (game.player1, game.player2)
+        ),
     )
 
 

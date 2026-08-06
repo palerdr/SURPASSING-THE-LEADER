@@ -1091,6 +1091,10 @@ def test_batch_loss_routes_play_rows_to_the_play_head():
 
     play_only = TargetRows(targets, np.asarray([1]), horizon_scale=3.0)
     model = DTHPolicyValueNet(config)
+    assert model.play_value_head is not None
+    with torch.no_grad():
+        model.play_value_head.weight.zero_()
+        model.play_value_head.bias.zero_()
     loss = _batch_loss(
         model,
         next(iter(DataLoader(play_only, batch_size=1))),
@@ -1098,11 +1102,14 @@ def test_batch_loss_routes_play_rows_to_the_play_head():
         device=torch.device("cpu"),
     )
     loss.backward()
-    assert model.play_value_head.weight.grad.abs().max().item() > 0.0
-    assert model.value_head.weight.grad.abs().max().item() == 0.0
+    assert model.play_value_head.bias.grad.abs().max().item() > 0.0
+    assert model.value_head.bias.grad.abs().max().item() == 0.0
 
     finite_only = TargetRows(targets, np.asarray([0]), horizon_scale=3.0)
     model = DTHPolicyValueNet(config)
+    with torch.no_grad():
+        model.value_head.weight.zero_()
+        model.value_head.bias.zero_()
     loss = _batch_loss(
         model,
         next(iter(DataLoader(finite_only, batch_size=1))),
@@ -1110,8 +1117,8 @@ def test_batch_loss_routes_play_rows_to_the_play_head():
         device=torch.device("cpu"),
     )
     loss.backward()
-    assert model.value_head.weight.grad.abs().max().item() > 0.0
-    assert model.play_value_head.weight.grad is None
+    assert model.value_head.bias.grad.abs().max().item() > 0.0
+    assert model.play_value_head.bias.grad is None
 
     playless = DTHPolicyValueNet(
         DTHNetworkConfig(hidden_width=4, hidden_layers=1)

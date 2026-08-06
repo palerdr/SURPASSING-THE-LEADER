@@ -51,8 +51,8 @@ no referee object, no player identity.
 
 | Ruleset | `B` | `A` | `C` | reachable states | with dead-TTD quotient |
 |---|---:|---:|---:|---:|---:|
-| `bucket6` | 10 s | 6 | 30 | 576,270 | 55,681 |
-| `bucket12` | 5 s | 12 | 60 | 8,870,160 | 644,335 |
+| `bucket6_frozen95` | 10 s | 6 | 30 | 576,270 | 55,681 |
+| `bucket12_frozen95` | 5 s | 12 | 60 | 8,870,160 | 644,335 |
 
 Both are exactly enumerable and certified end to end. L0 exists to make the
 rules falsifiable at a size where every state can be checked.

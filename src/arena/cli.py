@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from arena.abstract_adapter import AbstractTablebasePolicyProvider
-from arena.agent import PolicyDrivenAgent
+from arena.agent import PolicyDrivenAgent, public_state_from_game
+from arena.contracts import (
+    PublicGameOutcome,
+    PublicHalfRound,
+    end_provider_game,
+    observe_provider,
+    reset_provider_game,
+)
 from stl.engine.actions import validate_action
 from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
@@ -45,6 +53,10 @@ def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
 def _make_dth_provider(args: argparse.Namespace):
     from arena.dth_adapter import DTHCompletePolicyProvider
 
+    return DTHCompletePolicyProvider(artifact_dir=_dth_artifact_dir(args))
+
+
+def _dth_artifact_dir(args: argparse.Namespace) -> Path:
     artifact_dir = Path(args.dth_complete_tablebase)
     manifest = artifact_dir / "tablebase.json"
     if not manifest.is_file():
@@ -52,7 +64,62 @@ def _make_dth_provider(args: argparse.Namespace):
             f"complete DTH tablebase is required at {artifact_dir}; "
             "build it with: uv run python -m dth complete"
         )
-    return DTHCompletePolicyProvider(artifact_dir=artifact_dir)
+    return artifact_dir
+
+
+def _make_adaptive_dth_provider(args: argparse.Namespace):
+    from arena.adaptive_dth import (
+        AdaptiveDTHPolicyProvider,
+        ExploitationConfig,
+        load_opponent_model,
+    )
+
+    opponent = load_opponent_model(
+        args.adaptive_prior_json,
+        default_strength=args.adaptive_prior_strength,
+        decay=args.adaptive_decay,
+    )
+
+    return AdaptiveDTHPolicyProvider(
+        artifact_dir=_dth_artifact_dir(args),
+        opponent=opponent,
+        config=ExploitationConfig(
+            epsilon_grid=tuple(args.adaptive_epsilon_grid),
+            match_epsilon_budget=args.adaptive_match_epsilon_budget,
+            confidence=args.adaptive_confidence,
+            posterior_samples=args.adaptive_posterior_samples,
+        ),
+        seed=args.seed,
+    )
+
+
+def _make_exploit_hal_provider(args: argparse.Namespace):
+    if not args.exploit_hal_checkpoint:
+        raise ValueError(
+            "--exploit-hal-checkpoint is required for --hal-agent exploit-hal"
+        )
+    from arena.policies.adaptive import load_opponent_model
+    from arena.policies.exploit_hal import make_live_provider
+    from arena.policies.train_exploit_hal import (
+        load_training_config,
+        exploit_config_from_mapping,
+    )
+
+    tracked = load_training_config(args.exploit_hal_config)
+    config = exploit_config_from_mapping(tracked)
+    opponent = load_opponent_model(
+        args.adaptive_prior_json,
+        default_strength=args.adaptive_prior_strength,
+        decay=args.adaptive_decay,
+    )
+    return make_live_provider(
+        artifact_dir=_dth_artifact_dir(args),
+        checkpoint=args.exploit_hal_checkpoint,
+        opponent=opponent,
+        config=config,
+        seed=args.seed,
+        stochastic=args.exploit_hal_stochastic,
+    )
 
 
 def _make_provider(kind: str, args: argparse.Namespace):
@@ -99,6 +166,10 @@ def _make_provider(kind: str, args: argparse.Namespace):
         )
     if kind == "dth":
         return _make_dth_provider(args)
+    if kind == "adaptive-dth":
+        return _make_adaptive_dth_provider(args)
+    if kind == "exploit-hal":
+        return _make_exploit_hal_provider(args)
     if kind == "stl-mcts":
         if not args.checkpoint:
             raise ValueError("--checkpoint is required for --hal-agent stl-mcts")
@@ -128,12 +199,83 @@ def _print_state(game: Game) -> None:
         print(f"  {player.name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}")
 
 
-def command_play(args: argparse.Namespace) -> int:
-    hal_agent = _make_hal(args)
+def _show_rules(args: argparse.Namespace) -> None:
+    """Show one rules screen per play session and gate interactive play."""
+    if args.skip_rules:
+        return
+
+    from arena.tui import Layout, draw, enable_ansi, render_rules, rules_body
+
+    hal_label = args.public_hal_label or args.hal_agent
+    if args.tui:
+        enable_ansi()
+        layout = Layout.detect(args.frame_width, args.frame_height)
+        draw(
+            render_rules(
+                human_name=args.human_name,
+                hal_label=hal_label,
+                layout=layout,
+            )
+        )
+        prompt = ""
+    else:
+        print("\nSURPASSING THE LEADER — GAME RULES")
+        print(f"You: {args.human_name} | Opponent: Hal ({hal_label})\n")
+        print("\n".join(rules_body()))
+        prompt = "\nPress Enter to begin: "
+
+    # Piped input contains game actions, not a disposable acknowledgement.
+    if not sys.stdin.isatty():
+        return
+    try:
+        input(prompt)
+    except EOFError:
+        return
+
+
+def _public_player_state(player: Player) -> dict[str, float | int | str]:
+    return {
+        "name": player.name,
+        "cylinder_seconds": float(player.cylinder),
+        "ttd_seconds": float(player.ttd),
+        "deaths": int(player.deaths),
+    }
+
+
+def _write_play_transcript(destination: str | Path, transcript: dict[str, object]) -> Path:
+    path = Path(destination)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(transcript, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
+
+
+def _play_one_game(
+    args: argparse.Namespace,
+    hal_agent: PolicyDrivenAgent,
+    *,
+    game_index: int,
+) -> dict[str, object]:
+    game_seed = None if args.seed is None else args.seed + game_index
+    start_clock = (
+        args.start_clock_sequence[game_index]
+        if args.start_clock_sequence is not None
+        else args.start_clock
+    )
     hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
     human = Player(name=args.human_name, physicality=PHYSICALITY_BAKU)
-    game = Game(player1=hal, player2=human, referee=Referee(), rng=__import__("random").Random(args.seed))
-    game.game_clock = args.start_clock
+    game = Game(
+        player1=hal,
+        player2=human,
+        referee=Referee(),
+        rng=__import__("random").Random(game_seed),
+    )
+    game.game_clock = start_clock
+    reset_provider_game(hal_agent.provider)
 
     view = None
     show_outcome = None
@@ -201,10 +343,11 @@ def command_play(args: argparse.Namespace) -> int:
                     glyphs=args.glyphs,
                 )
             )
-    else:
-        print(f"Playing canonical STL: Hal uses {args.hal_agent}; you are {human.name}.")
+    elif args.games > 1:
+        print(f"\nGame {game_index + 1}/{args.games}")
 
     half_rounds = 0
+    public_history: list[dict[str, object]] = []
     while not game.game_over and (args.max_half_rounds is None or half_rounds < args.max_half_rounds):
         if view is not None:
             view()
@@ -212,6 +355,18 @@ def command_play(args: argparse.Namespace) -> int:
             _print_state(game)
         dropper, checker = game.get_roles_for_half(game.current_half)
         turn_duration = game.get_turn_duration()
+        lifecycle_state = public_state_from_game(game, turn_duration=turn_duration)
+        public_state = {
+            "clock_seconds": float(game.game_clock),
+            "clock_display": game.format_game_clock(),
+            "round": int(game.round_num + 1),
+            "half": int(game.current_half),
+            "turn_duration": int(turn_duration),
+            "players": [
+                _public_player_state(game.player1),
+                _public_player_state(game.player2),
+            ],
+        }
         if dropper is hal:
             drop = hal_agent.choose_action(game, "dropper", turn_duration)
             if view is None:
@@ -231,6 +386,37 @@ def command_play(args: argparse.Namespace) -> int:
         validate_action(drop, actor=dropper.name, role="dropper", turn_duration=turn_duration)
         validate_action(check, actor=checker.name, role="checker", turn_duration=turn_duration)
         result = game.play_half_round(drop, check)
+        observe_provider(
+            hal_agent.provider,
+            PublicHalfRound(
+                game_index=game_index,
+                half_round_index=half_rounds,
+                pre_decision_state=lifecycle_state,
+                dropper_name=result.dropper,
+                checker_name=result.checker,
+                drop_time=int(result.drop_time),
+                check_time=int(result.check_time),
+                outcome=result.result.value,
+                game_over=bool(game.game_over),
+                winner_name=(
+                    game.winner.name if game.winner is not None else None
+                ),
+            ),
+        )
+        public_history.append(
+            {
+                "public_state_before": public_state,
+                "dropper": result.dropper,
+                "checker": result.checker,
+                "drop_second": int(result.drop_time),
+                "check_second": int(result.check_time),
+                "result": result.result.value,
+                "squandered_seconds": float(result.st_gained),
+                "death_duration_seconds": float(result.death_duration),
+                "survived": result.survived,
+                "survival_probability": result.survival_probability,
+            }
+        )
         if show_outcome is not None:
             show_outcome(result)
         else:
@@ -242,9 +428,66 @@ def command_play(args: argparse.Namespace) -> int:
         print(f"Game over: {game.winner.name} wins.")
     else:
         print(f"Session stopped after {half_rounds} half-rounds.")
+    end_provider_game(
+        hal_agent.provider,
+        PublicGameOutcome(
+            game_index=game_index,
+            winner_name=game.winner.name if game.winner is not None else None,
+            half_rounds=half_rounds,
+        ),
+    )
+    return {
+        "game_index": game_index,
+        "seed": game_seed,
+        "start_clock": start_clock,
+        "winner": game.winner.name if game.winner is not None else None,
+        "stopped": not game.game_over,
+        "half_rounds": half_rounds,
+        "public_history": public_history,
+    }
+
+
+def command_play(args: argparse.Namespace) -> int:
+    if args.games <= 0:
+        raise ValueError("--games must be positive")
+    if args.tui and args.games != 1:
+        raise ValueError("--tui supports one game per invocation")
+    if (
+        args.start_clock_sequence is not None
+        and len(args.start_clock_sequence) != args.games
+    ):
+        raise ValueError("--start-clock-sequence must contain one value per game")
+    hal_agent = _make_hal(args)
+    _show_rules(args)
+    transcript: dict[str, object] = {
+        "schema_version": "arena-public-play-session-v1",
+        "hal_agent": args.hal_agent,
+        "public_hal_label": args.public_hal_label,
+        "human_name": args.human_name,
+        "base_seed": args.seed,
+        "start_clock": args.start_clock,
+        "start_clock_sequence": args.start_clock_sequence,
+        "requested_games": args.games,
+        "games": [],
+    }
+    games = transcript["games"]
+    assert isinstance(games, list)
+    for game_index in range(args.games):
+        games.append(_play_one_game(args, hal_agent, game_index=game_index))
+        if args.transcript:
+            _write_play_transcript(args.transcript, transcript)
     match_summary = getattr(hal_agent.provider, "match_summary", None)
     if callable(match_summary):
-        print(match_summary())
+        summary = match_summary()
+        if not args.conceal_hal_details:
+            print(summary)
+        transcript["hal_summary"] = summary
+    experiment_diagnostics = getattr(hal_agent.provider, "experiment_diagnostics", None)
+    if callable(experiment_diagnostics):
+        transcript["hal_diagnostics"] = experiment_diagnostics()
+    if args.transcript:
+        destination = _write_play_transcript(args.transcript, transcript)
+        print(f"Public session transcript: {destination}")
     return 0
 
 
@@ -274,6 +517,63 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_DTH_COMPLETE_TABLEBASE,
         metavar="DTH_COMPLETE_TABLEBASE",
         help="completed exact DTH quotient tablebase directory",
+    )
+    parser.add_argument(
+        "--adaptive-prior-json",
+        default=None,
+        help="optional versioned role or role-mixture population prior",
+    )
+    parser.add_argument(
+        "--adaptive-prior-strength",
+        type=float,
+        default=1.0,
+        help="uniform role-prior pseudo-observation count for adaptive DTH",
+    )
+    parser.add_argument(
+        "--adaptive-decay",
+        type=float,
+        default=0.9,
+        help="adaptive DTH evidence retention after each same-role observation",
+    )
+    parser.add_argument(
+        "--adaptive-epsilon-grid",
+        type=float,
+        nargs="+",
+        default=(0.0, 0.0025, 0.005, 0.01, 0.02),
+        help="candidate one-step safety losses for adaptive DTH",
+    )
+    parser.add_argument(
+        "--adaptive-match-epsilon-budget",
+        type=float,
+        default=0.05,
+        help="maximum cumulative one-step safety loss per game",
+    )
+    parser.add_argument(
+        "--adaptive-confidence",
+        type=float,
+        default=0.95,
+        help="posterior improvement-probability gate for adaptive DTH",
+    )
+    parser.add_argument(
+        "--adaptive-posterior-samples",
+        type=int,
+        default=512,
+        help="Dirichlet draws per adaptive DTH epsilon candidate",
+    )
+    parser.add_argument(
+        "--exploit-hal-checkpoint",
+        default=None,
+        help="required versioned actor-critic checkpoint for Exploit Hal",
+    )
+    parser.add_argument(
+        "--exploit-hal-config",
+        default="src/arena/config/exploit_hal_v1.yaml",
+        help="tracked Exploit Hal configuration used for checkpoint validation",
+    )
+    parser.add_argument(
+        "--exploit-hal-stochastic",
+        action="store_true",
+        help="sample candidates during evaluation instead of deterministic argmax",
     )
 
 
@@ -307,10 +607,33 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser("play", help="play canonical STL against a pluggable Hal policy")
     play.add_argument(
-        "--hal-agent", choices=("abstract", "dth", "stl-mcts"), default="dth"
+        "--hal-agent",
+        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        default="dth",
     )
     _add_agent_arguments(play)
     play.add_argument("--human-name", default="Baku")
+    play.add_argument(
+        "--public-hal-label",
+        default=None,
+        help="optional display label that conceals the provider implementation",
+    )
+    play.add_argument(
+        "--conceal-hal-details",
+        action="store_true",
+        help="record provider summary and diagnostics without printing them",
+    )
+    play.add_argument(
+        "--games",
+        type=int,
+        default=1,
+        help="games in one repeated-opponent session; Hal retains its opponent model",
+    )
+    play.add_argument(
+        "--transcript",
+        default=None,
+        help="optional JSON path for public states, revealed actions, and outcomes",
+    )
     play.add_argument(
         "--seed",
         type=int,
@@ -319,6 +642,13 @@ def build_parser() -> argparse.ArgumentParser:
         "fresh randomness each match, set for a reproducible replay",
     )
     play.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
+    play.add_argument(
+        "--start-clock-sequence",
+        type=int,
+        nargs="+",
+        default=None,
+        help="optional per-game start clocks; length must equal --games",
+    )
     play.add_argument("--max-half-rounds", type=int, default=None, help="stop after this many half-rounds")
     play.add_argument("--tui", action="store_true", help="render the terminal interface instead of plain text")
     play.add_argument(
@@ -351,14 +681,27 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not wait for input on the half-round outcome screen",
     )
+    play.add_argument(
+        "--skip-rules",
+        action="store_true",
+        help="start immediately without the opening rules screen",
+    )
     play.set_defaults(function=command_play)
 
     match = commands.add_parser(
         "match",
         help="paired-seat agent-versus-agent series with a predeclared SPRT",
     )
-    match.add_argument("--candidate", choices=("abstract", "dth", "stl-mcts"), required=True)
-    match.add_argument("--opponent", choices=("abstract", "dth", "stl-mcts"), required=True)
+    match.add_argument(
+        "--candidate",
+        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        required=True,
+    )
+    match.add_argument(
+        "--opponent",
+        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        required=True,
+    )
     _add_agent_arguments(match)
     match.add_argument("--games", type=int, default=50, help="maximum base seeds; each is played in both seatings")
     match.add_argument("--seed", type=int, default=0)

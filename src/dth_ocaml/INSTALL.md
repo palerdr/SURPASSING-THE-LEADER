@@ -15,6 +15,18 @@ opam switch create stl-dth-ocaml ocaml-base-compiler.5.3.0 --yes
 GLPK built for the switch's target must exist before `opam install` will
 succeed. On Linux and macOS the system package is enough
 (`apt install libglpk-dev`, `brew install glpk`), and `conf-glpk` finds it.
+With Homebrew on macOS, export the formula's include and library directories
+while installing and building the switch because the `lp-glpk` C stub and the
+native linker do not inherit Homebrew's `/opt/homebrew` prefix automatically:
+
+```sh
+GLPK_PREFIX="$(brew --prefix glpk)"
+export CPATH="$GLPK_PREFIX/include${CPATH:+:$CPATH}"
+export LIBRARY_PATH="$GLPK_PREFIX/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+```
+
+The current `stl-dth-ocaml` switch stores these two paths in its switch
+environment, so the commands below work directly through `opam exec`.
 
 On Windows there is no depext: `conf-glpk` installs but provides nothing, and
 Cygwin ships only a Cygwin-native GLPK, which cannot link against the
@@ -43,13 +55,13 @@ Copy `src/glpk.h` and `libglpk.a` into the switch's mingw sysroot, under
 Install the package and formatting dependencies:
 
 ```text
-opam install --switch=stl-dth-ocaml .\src\ocaml --deps-only --yes
+opam install --switch=stl-dth-ocaml .\src\dth_ocaml --deps-only --yes
+```
 
 Install the language server into the same switch:
 
 ```text
 opam install --switch=stl-dth-ocaml ocaml-lsp-server --yes
-```
 ```
 
 The switch can be used without modifying the current shell environment:

@@ -157,5 +157,5 @@ byte, primitive calls bit for bit, and counter sets exactly.
 The Rust backend is eligible as a default only after every test above passes
 for both the Python fallback and the compiled extension, and after a
 completed canonical build passes its finalize gates and external anchors.
-Per `src/crates/AGENTS.md`, no Python runtime behavior may depend on an
+Per `src/crates/README.md`, no Python runtime behavior may depend on an
 unchecked Rust path.
