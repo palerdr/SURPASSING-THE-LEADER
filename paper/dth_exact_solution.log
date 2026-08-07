@@ -296,6 +296,13 @@ File: microtype.cfg 2022/03/14 v3.0d microtype main configuration file (RS)
 Package: parskip 2021-03-14 v2.0h non-zero parskip adjustments
 ) (placeins.sty
 Package: placeins 2005/04/18  v 2.2
+) (float.sty
+Package: float 2001/11/08 v1.3d Float enhancements (AL)
+\c@float@type=\count291
+\float@exts=\toks31
+\float@box=\box55
+\@float@everytoks=\toks32
+\@floatcapt=\box56
 ) (caption.sty
 Package: caption 2022/03/01 v3.6b Customizing captions (AR)
  (caption3.sty
@@ -310,28 +317,29 @@ Package: caption3 2022/03/17 v2.3b caption3 kernel (AR)
 \caption@hangindent=\dimen184
 Package caption Info: Standard document class detected.
 )
-\c@caption@flags=\count291
-\c@continuedfloat=\count292
+\c@caption@flags=\count292
+\c@continuedfloat=\count293
+Package caption Info: float package is loaded.
 Package caption Info: hyperref package is loaded.
-) (tikz.sty (pgf.sty
-(pgfrcs.sty (pgfutil-common.tex
-\pgfutil@everybye=\toks31
+) (tikz.sty (pgf.sty (pgfrcs.sty (pgfutil-common.tex
+\pgfutil@everybye=\toks33
 \pgfutil@tempdima=\dimen185
 \pgfutil@tempdimb=\dimen186
- (pgfutil-common-lists.tex)) (pgfutil-latex.def
-\pgfutil@abb=\box55
+ (pgfutil-common-lists.tex))
+(pgfutil-latex.def
+\pgfutil@abb=\box57
 ) (pgfrcs.code.tex (pgf.revision.tex)
 Package: pgfrcs 2021/05/15 v3.1.9a (3.1.9a)
 ))
 Package: pgf 2021/05/15 v3.1.9a (3.1.9a)
- (pgfcore.sty (pgfsys.sty
-(pgfsys.code.tex
+ (pgfcore.sty
+(pgfsys.sty (pgfsys.code.tex
 Package: pgfsys 2021/05/15 v3.1.9a (3.1.9a)
  (pgfkeys.code.tex
-\pgfkeys@pathtoks=\toks32
-\pgfkeys@temptoks=\toks33
+\pgfkeys@pathtoks=\toks34
+\pgfkeys@temptoks=\toks35
  (pgfkeysfiltered.code.tex
-\pgfkeys@tmptoks=\toks34
+\pgfkeys@tmptoks=\toks36
 ))
 \pgf@x=\dimen187
 \pgf@y=\dimen188
@@ -345,32 +353,32 @@ Package: pgfsys 2021/05/15 v3.1.9a (3.1.9a)
 \pgf@yd=\dimen196
 \w@pgf@writea=\write3
 \r@pgf@reada=\read2
-\c@pgf@counta=\count293
-\c@pgf@countb=\count294
-\c@pgf@countc=\count295
-\c@pgf@countd=\count296
-\t@pgf@toka=\toks35
-\t@pgf@tokb=\toks36
-\t@pgf@tokc=\toks37
-\pgf@sys@id@count=\count297
- (pgf.cfg
+\c@pgf@counta=\count294
+\c@pgf@countb=\count295
+\c@pgf@countc=\count296
+\c@pgf@countd=\count297
+\t@pgf@toka=\toks37
+\t@pgf@tokb=\toks38
+\t@pgf@tokc=\toks39
+\pgf@sys@id@count=\count298
+
+(pgf.cfg
 File: pgf.cfg 2021/05/15 v3.1.9a (3.1.9a)
 )
 Driver file for pgf: pgfsys-xetex.def
-
-(pgfsys-xetex.def
+ (pgfsys-xetex.def
 File: pgfsys-xetex.def 2021/05/15 v3.1.9a (3.1.9a)
  (pgfsys-dvipdfmx.def
 File: pgfsys-dvipdfmx.def 2021/05/15 v3.1.9a (3.1.9a)
  (pgfsys-common-pdf.def
 File: pgfsys-common-pdf.def 2021/05/15 v3.1.9a (3.1.9a)
 )
-\pgfsys@objnum=\count298
+\pgfsys@objnum=\count299
 )))
 (pgfsyssoftpath.code.tex
 File: pgfsyssoftpath.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgfsyssoftpath@smallbuffer@items=\count299
-\pgfsyssoftpath@bigbuffer@items=\count300
+\pgfsyssoftpath@smallbuffer@items=\count300
+\pgfsyssoftpath@bigbuffer@items=\count301
 ) (pgfsysprotocol.code.tex
 File: pgfsysprotocol.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 )) (xcolor.sty
@@ -393,18 +401,18 @@ Package: pgfcore 2021/05/15 v3.1.9a (3.1.9a)
  (pgfmath.code.tex (pgfmathcalc.code.tex (pgfmathutil.code.tex) (pgfmathparser.
 code.tex
 \pgfmath@dimen=\dimen197
-\pgfmath@count=\count301
-\pgfmath@box=\box56
-\pgfmath@toks=\toks38
-\pgfmath@stack@operand=\toks39
-\pgfmath@stack@operation=\toks40
+\pgfmath@count=\count302
+\pgfmath@box=\box58
+\pgfmath@toks=\toks40
+\pgfmath@stack@operand=\toks41
+\pgfmath@stack@operation=\toks42
 ) (pgfmathfunctions.code.tex
 (pgfmathfunctions.basic.code.tex) (pgfmathfunctions.trigonometric.code.tex)
 (pgfmathfunctions.random.code.tex) (pgfmathfunctions.comparison.code.tex)
 (pgfmathfunctions.base.code.tex) (pgfmathfunctions.round.code.tex)
 (pgfmathfunctions.misc.code.tex) (pgfmathfunctions.integerarithmetics.code.tex)
 )) (pgfmathfloat.code.tex
-\c@pgfmathroundto@lastzeros=\count302
+\c@pgfmathroundto@lastzeros=\count303
 )) (pgfint.code.tex) (pgfcorepoints.code.tex
 File: pgfcorepoints.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgf@picminx=\dimen198
@@ -433,10 +441,10 @@ File: pgfcorepathusage.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 )
 (pgfcorescopes.code.tex
 File: pgfcorescopes.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgfpic=\box57
-\pgf@hbox=\box58
-\pgf@layerbox@main=\box59
-\pgf@picture@serial@count=\count303
+\pgfpic=\box59
+\pgf@hbox=\box60
+\pgf@layerbox@main=\box61
+\pgf@picture@serial@count=\count304
 ) (pgfcoregraphicstate.code.tex
 File: pgfcoregraphicstate.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgflinewidth=\dimen272
@@ -460,14 +468,14 @@ File: pgfcorearrows.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 ) (pgfcoreshade.code.tex
 File: pgfcoreshade.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgf@max=\dimen277
-\pgf@sys@shading@range@num=\count304
-\pgf@shadingcount=\count305
+\pgf@sys@shading@range@num=\count305
+\pgf@shadingcount=\count306
 ) (pgfcoreimage.code.tex
 File: pgfcoreimage.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 
 (pgfcoreexternal.code.tex
 File: pgfcoreexternal.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgfexternal@startupbox=\box60
+\pgfexternal@startupbox=\box62
 )) (pgfcorelayers.code.tex
 File: pgfcorelayers.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 )
@@ -479,7 +487,7 @@ File: pgfcorepatterns.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 File: pgfcorerdf.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 ))) (pgfmoduleshapes.code.tex
 File: pgfmoduleshapes.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgfnodeparttextbox=\box61
+\pgfnodeparttextbox=\box63
 ) (pgfmoduleplot.code.tex
 File: pgfmoduleplot.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 )
@@ -496,13 +504,13 @@ Package: pgffor 2021/05/15 v3.1.9a (3.1.9a)
 (pgfmath.code.tex)
 \pgffor@iter=\dimen280
 \pgffor@skip=\dimen281
-\pgffor@stack=\toks41
-\pgffor@toks=\toks42
+\pgffor@stack=\toks43
+\pgffor@toks=\toks44
 )) (tikz.code.tex
 Package: tikz 2021/05/15 v3.1.9a (3.1.9a)
  (pgflibraryplothandlers.code.tex
 File: pgflibraryplothandlers.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgf@plot@mark@count=\count306
+\pgf@plot@mark@count=\count307
 \pgfplotmarksize=\dimen282
 )
 \tikz@lastx=\dimen283
@@ -513,52 +521,52 @@ File: pgflibraryplothandlers.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \tikz@lastmovetoy=\dimen288
 \tikzleveldistance=\dimen289
 \tikzsiblingdistance=\dimen290
-\tikz@figbox=\box62
-\tikz@figbox@bg=\box63
-\tikz@tempbox=\box64
-\tikz@tempbox@bg=\box65
-\tikztreelevel=\count307
-\tikznumberofchildren=\count308
-\tikznumberofcurrentchild=\count309
-\tikz@fig@count=\count310
+\tikz@figbox=\box64
+\tikz@figbox@bg=\box65
+\tikz@tempbox=\box66
+\tikz@tempbox@bg=\box67
+\tikztreelevel=\count308
+\tikznumberofchildren=\count309
+\tikznumberofcurrentchild=\count310
+\tikz@fig@count=\count311
 
 (pgfmodulematrix.code.tex
 File: pgfmodulematrix.code.tex 2021/05/15 v3.1.9a (3.1.9a)
-\pgfmatrixcurrentrow=\count311
-\pgfmatrixcurrentcolumn=\count312
-\pgf@matrix@numberofcolumns=\count313
+\pgfmatrixcurrentrow=\count312
+\pgfmatrixcurrentcolumn=\count313
+\pgf@matrix@numberofcolumns=\count314
 )
-\tikz@expandcount=\count314
+\tikz@expandcount=\count315
  (tikzlibrarytopaths.code.tex
 File: tikzlibrarytopaths.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 ))) (pgfplots.sty
 (pgfplots.revision.tex)
 Package: pgfplots 2021/05/15 v1.18.1 Data Visualization (1.18.1)
  (pgfplots.code.tex (pgfplotscore.code.tex
-\t@pgfplots@toka=\toks43
-\t@pgfplots@tokb=\toks44
-\t@pgfplots@tokc=\toks45
+\t@pgfplots@toka=\toks45
+\t@pgfplots@tokb=\toks46
+\t@pgfplots@tokc=\toks47
 \pgfplots@tmpa=\dimen291
-\c@pgfplots@coordindex=\count315
-\c@pgfplots@scanlineindex=\count316
+\c@pgfplots@coordindex=\count316
+\c@pgfplots@scanlineindex=\count317
 
 (pgfplotssysgeneric.code.tex)) (pgfplotslibrary.code.tex)
 (pgfplotsoldpgfsupp_loader.code.tex (pgflibraryfpu.code.tex))
 (pgfplotsutil.code.tex (pgfplotsliststructure.code.tex)
 (pgfplotsliststructureext.code.tex) (pgfplotsarray.code.tex
-\c@pgfplotsarray@tmp=\count317
+\c@pgfplotsarray@tmp=\count318
 )
 (pgfplotsmatrix.code.tex) (pgfplotstableshared.code.tex
-\c@pgfplotstable@counta=\count318
-\t@pgfplotstable@a=\toks46
+\c@pgfplotstable@counta=\count319
+\t@pgfplotstable@a=\toks48
 )
 (pgfplotsdeque.code.tex) (pgfplotsbinary.code.tex (pgfplotsbinary.data.code.tex
 )) (pgfplotsutil.verb.code.tex) (pgflibrarypgfplots.surfshading.code.tex
-\c@pgfplotslibrarysurf@no=\count319
+\c@pgfplotslibrarysurf@no=\count320
 
 (pgflibrarypgfplots.surfshading.pgfsys-xetex.def
 (pgflibrarypgfplots.surfshading.pgfsys-dvipdfmx.def
-\c@pgfplotslibrarysurf@streamlen=\count320
+\c@pgfplotslibrarysurf@streamlen=\count321
 ))))
 (pgfplotscolormap.code.tex (pgfplotscolor.code.tex))
 (pgfplotsstackedplots.code.tex) (pgfplotsplothandlers.code.tex
@@ -572,18 +580,18 @@ Package: pgfplots 2021/05/15 v1.18.1 Data Visualization (1.18.1)
 \pgfdecoratedinputsegmentcompleteddistance=\dimen294
 \pgfdecoratedinputsegmentremainingdistance=\dimen295
 \pgf@decorate@distancetomove=\dimen296
-\pgf@decorate@repeatstate=\count321
+\pgf@decorate@repeatstate=\count322
 \pgfdecorationsegmentamplitude=\dimen297
 \pgfdecorationsegmentlength=\dimen298
 )
-\tikz@lib@dec@box=\box66
+\tikz@lib@dec@box=\box68
 )
 (tikzlibrarydecorations.pathmorphing.code.tex
 (pgflibrarydecorations.pathmorphing.code.tex))
 (tikzlibrarydecorations.pathreplacing.code.tex
 (pgflibrarydecorations.pathreplacing.code.tex))
 (tikzlibrarypgfplots.contourlua.code.tex)
-\pgfplots@numplots=\count322
+\pgfplots@numplots=\count323
 \pgfplots@xmin@reg=\dimen299
 \pgfplots@xmax@reg=\dimen300
 \pgfplots@ymin@reg=\dimen301
@@ -602,47 +610,47 @@ File: pgflibraryarrows.meta.code.tex 2021/05/15 v3.1.9a (3.1.9a)
 \pgfarrowwidth=\dimen307
 \pgfarrowlinewidth=\dimen308
 )
-Package hyperref Info: Option `colorlinks' set `true' on input line 23.
-\c@theorem=\count323
+Package hyperref Info: Option `colorlinks' set `true' on input line 24.
+\c@theorem=\count324
 
 (l3backend-xetex.def
 File: l3backend-xetex.def 2022-02-07 L3 backend support: XeTeX
-\c__kernel_sys_dvipdfmx_version_int=\count324
-\l__color_backend_stack_int=\count325
-\g__color_backend_stack_int=\count326
-\g__graphics_track_int=\count327
-\l__pdf_internal_box=\box67
-\g__pdf_backend_object_int=\count328
-\g__pdf_backend_annotation_int=\count329
-\g__pdf_backend_link_int=\count330
+\c__kernel_sys_dvipdfmx_version_int=\count325
+\l__color_backend_stack_int=\count326
+\g__color_backend_stack_int=\count327
+\g__graphics_track_int=\count328
+\l__pdf_internal_box=\box69
+\g__pdf_backend_object_int=\count329
+\g__pdf_backend_annotation_int=\count330
+\g__pdf_backend_link_int=\count331
 ) (dth_exact_solution.aux)
 \openout1 = `dth_exact_solution.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 63.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 65.
 LaTeX Font Info:    Trying to load font information for TS1+cmr on input line 6
-3.
+5.
  (ts1cmr.fd
 File: ts1cmr.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 63.
-LaTeX Font Info:    ... okay on input line 63.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 65.
+LaTeX Font Info:    ... okay on input line 65.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: xetex
@@ -678,7 +686,7 @@ LaTeX Font Info:    ... okay on input line 63.
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-Package hyperref Info: Link coloring ON on input line 63.
+Package hyperref Info: Link coloring ON on input line 65.
 (nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
  (refcount.sty
@@ -686,21 +694,21 @@ Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
 ) (gettitlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
-\c@section@level=\count331
+\c@section@level=\count332
 )
-LaTeX Info: Redefining \ref on input line 63.
-LaTeX Info: Redefining \pageref on input line 63.
-LaTeX Info: Redefining \nameref on input line 63.
+LaTeX Info: Redefining \ref on input line 65.
+LaTeX Info: Redefining \pageref on input line 65.
+LaTeX Info: Redefining \nameref on input line 65.
  (dth_exact_solution.out)
 (dth_exact_solution.out)
 \@outlinefile=\write4
 \openout4 = `dth_exact_solution.out'.
 
-LaTeX Info: Redefining \microtypecontext on input line 63.
-Package microtype Info: Applying patch `item' on input line 63.
-Package microtype Info: Applying patch `toc' on input line 63.
-Package microtype Info: Applying patch `eqnum' on input line 63.
-Package microtype Info: Applying patch `footnote' on input line 63.
+LaTeX Info: Redefining \microtypecontext on input line 65.
+Package microtype Info: Applying patch `item' on input line 65.
+Package microtype Info: Applying patch `toc' on input line 65.
+Package microtype Info: Applying patch `eqnum' on input line 65.
+Package microtype Info: Applying patch `footnote' on input line 65.
 Package microtype Info: Character protrusion enabled (level 2).
 Package microtype Info: Using default protrusion set `alltext'.
 Package microtype Info: No adjustment of tracking.
@@ -720,14 +728,14 @@ s been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
 (RS)
 )
-LaTeX Font Info:    Trying to load font information for U+msa on input line 65.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 67.
 
  (umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 ) (mt-msa.cfg
 File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 65.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 67.
 
  (umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
@@ -735,7 +743,12 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 ) [1
 
-] [2]
+]
+Package microtype Info: Loading generic protrusion settings for font family
+(microtype)             `cmss' (encoding: OT1).
+(microtype)             For optimal results, create family-specific settings.
+(microtype)             See the microtype manual for details.
+ [2]
 File: build/figures/seaborn/fig1_revival_probability.pdf Graphic file (type pdf
 )
 <use build/figures/seaborn/fig1_revival_probability.pdf>
@@ -745,27 +758,19 @@ File: build/figures/seaborn/fig2_toeplitz_structure.pdf Graphic file (type pdf)
 <use build/figures/seaborn/fig2_toeplitz_structure.pdf>
  [4]
 [5] [6]
-Package microtype Info: Loading generic protrusion settings for font family
-(microtype)             `cmss' (encoding: OT1).
-(microtype)             For optimal results, create family-specific settings.
-(microtype)             See the microtype manual for details.
- [7] [8]
-Package pgfplots info on input line 671: Using 'lua backend=false' for axis: ym
+PGFPlots: reading {build/figures/layer_widths.dat}
+ [7] [8] [9]
+Package pgfplots info on input line 804: Using 'lua backend=false' for axis: ym
 ode=log unsupported (yet).
 PGFPlots: reading {build/figures/root_strategies.dat}
 PGFPlots: reading {build/figures/root_strategies.dat}
-File: build/figures/seaborn/fig5_strategy_and_value.pdf Graphic file (type pdf)
-
-<use build/figures/seaborn/fig5_strategy_and_value.pdf>
- [9] [10]
+ [10] [11]
 Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `lmtt' (encoding: TU).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
- [11
-
-] (dth_exact_solution.aux)
+ [12] (dth_exact_solution.aux)
 Package rerunfilecheck Info: File `dth_exact_solution.out' has not changed.
-(rerunfilecheck)             Checksum: 6EA439464F39F665BA4E16F62F5D4F13;1959.
+(rerunfilecheck)             Checksum: A799CD4939C63E8E2B02ED3EDFC9DB78;2538.
  )
-Output written on dth_exact_solution.xdv (11 pages, 335100 bytes).
+Output written on dth_exact_solution.xdv (12 pages, 396364 bytes).

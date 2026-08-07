@@ -16,10 +16,10 @@ Chart contracts
 ---------------
 1. Revival: expose the two decay mechanisms and the survivability cliff.
 2. Toeplitz: connect matrix structure to the O(60) saddle scan.
-3. Surfaces: expose ST-dependent strategy shifts and value cliffs.
 
-The quotient and root-strategy figures are deliberately rendered in TeX; their
-simpler geometry is clearer in the paper than the Seaborn alternatives.
+The quotient, potential-DAG, and root-strategy figures are deliberately
+rendered in TeX; their simpler geometry is clearer in the paper than the
+Seaborn alternatives.
 
 All figures use a white paper surface, explicit palette roots, and line style
 or geometry in addition to color. Outputs are vector PDF/SVG plus PNG previews.
@@ -35,7 +35,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 from matplotlib import patches
-from matplotlib.colors import BoundaryNorm, ListedColormap, TwoSlopeNorm
+from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.patches import ConnectionPatch
 import numpy as np
 import pandas as pd
@@ -121,20 +121,36 @@ def save_figure(fig: plt.Figure, stem: str, *, tight: bool = True) -> None:
 
 
 def make_revival_probability() -> None:
-    """Show the revival law as one tall, perspective-correct 3D surface."""
+    """Show the revival law and its zero plateau over the full ST-TTD domain."""
 
     fig = plt.figure(figsize=(TEXT_WIDTH, 3.55))
     ax = fig.add_subplot(111, projection="3d")
 
     st = np.linspace(0, 240, 61)
     fraction = np.linspace(0, 1, 51)
-    S, U = np.meshgrid(st, fraction)
-    T = U * (240 - S)
-    P = 0.95 * (1 - S / 240) * 0.75 ** (T / 60)
+    ST, U = np.meshgrid(st, fraction)
+    TTD = U * (240 - ST)
+    P = 0.95 * (1 - ST / 240) * 0.75 ** (TTD / 60)
+
+    # The formula applies on ST + TTD <= 240.  Parameterize the complementary
+    # triangle separately so the full-domain plot shows the exact p=0 plateau,
+    # including the (240, 240) corner, without interpolating across the cliff.
+    zero_ttd = 240 - ST + U * ST
+    ax.plot_surface(
+        ST,
+        zero_ttd,
+        np.zeros_like(ST),
+        color=PALE_GRAY,
+        edgecolor="#D6D6D6",
+        linewidth=0.18,
+        antialiased=True,
+        alpha=0.90,
+        shade=False,
+    )
 
     surface = ax.plot_surface(
-        S,
-        T,
+        ST,
+        TTD,
         P,
         cmap=sns.color_palette("crest", as_cmap=True),
         vmin=0,
@@ -175,7 +191,7 @@ def make_revival_probability() -> None:
         xlabel="ST $s$",
         ylabel="TTD $t$",
         zlabel="$p(s,t)$",
-        title="Revival probability on the survivable region",
+        title="Frozen revival probability over ST and TTD",
     )
     ax.set_xticks((0, 60, 120, 180, 240))
     ax.set_yticks((0, 60, 120, 180, 240))
@@ -188,7 +204,7 @@ def make_revival_probability() -> None:
     ax.zaxis.pane.set_facecolor((1, 1, 1, 0))
     ax.scatter([0], [0], [0.95], color=ORANGE, edgecolor="white", s=28, zorder=8)
     ax.text(4, 6, 0.98, "$p(0,0)=0.95$", color=ORANGE, fontsize=8.5)
-    ax.text(110, 170, 0.035, "$s+t=240$", color=ORANGE, fontsize=8)
+    ax.text(98, 142, 0.36, "$s+t=240$", color=ORANGE, fontsize=8)
     fig.subplots_adjust(left=0.06, right=0.92, bottom=0.16, top=0.90)
     save_figure(fig, "fig1_revival_probability", tight=False)
 
@@ -253,10 +269,10 @@ def make_toeplitz_structure() -> None:
             if column >= row:
                 lag = column - row + 1
                 values[row, column] = lag
-                labels[row, column] = f"$S_{{{lag}}}$"
+                labels[row, column] = f"$v^{{\\mathrm{{s}}}}_{{{lag}}}$"
             else:
                 values[row, column] = 0
-                labels[row, column] = "$F$"
+                labels[row, column] = "$v^{\\mathrm{f}}$"
 
     teal_ramp = sns.light_palette(TEAL, n_colors=n, reverse=False)
     cmap = ListedColormap([LIGHT_GRAY, *teal_ramp])
@@ -326,7 +342,7 @@ def make_toeplitz_structure() -> None:
         (0.06, 0.42),
         0.88,
         0.19,
-        "at most $61$ distinct values\n$S_1,\\ldots,S_{60}$ and $F$",
+        "at most $61$ distinct values\n$v^{\\mathrm{s}}_1,\\ldots,v^{\\mathrm{s}}_{60}$ and $v^{\\mathrm{f}}$",
         facecolor="#E8F4F0",
         edgecolor=TEAL,
     )
@@ -404,9 +420,9 @@ def make_quotient_geometry() -> None:
     fibers.axis("off")
     fibers.set_title("Collapse each dead TTD fiber", pad=5)
     sample_x = (0.17, 0.50, 0.83)
-    sample_loads = (60, 150, 230)
-    for x, load_value in zip(sample_x, sample_loads, strict=True):
-        threshold = (240 - load_value) / 300
+    sample_st = (60, 150, 230)
+    for x, st_value in zip(sample_x, sample_st, strict=True):
+        threshold = (240 - st_value) / 300
         alive_y = np.linspace(0.08, max(0.09, threshold), 3)
         dead_y = np.linspace(max(threshold + 0.08, 0.27), 0.92, 5)
         fibers.scatter(
@@ -444,7 +460,7 @@ def make_quotient_geometry() -> None:
             linewidths=0.6,
             zorder=4,
         )
-        fibers.text(x, -0.055, f"$s={load_value}$", ha="center", fontsize=7.2)
+        fibers.text(x, -0.055, f"$s={st_value}$", ha="center", fontsize=7.2)
     counts = fig.add_subplot(grid[0, 2])
     counts.axis("off")
     counts.set_xlim(0, 1)
@@ -614,160 +630,10 @@ def make_root_strategies() -> None:
     save_figure(fig, "fig4_root_strategies")
 
 
-def make_strategy_and_value_surfaces() -> None:
-    """Render exact zero-TTD slices with floor contours and boundary guides."""
-
-    strategy = load_table("diag_strategy.dat", ("s", "action", "prob"))
-    value = load_table("value_surface.dat", ("sc", "sd", "value"))
-
-    strategy_grid = strategy.pivot(index="s", columns="action", values="prob")
-    expected_st = np.arange(0, 300, 10)
-    expected_actions = np.arange(1, 61)
-    if not np.array_equal(strategy_grid.index.to_numpy(), expected_st):
-        raise ValueError("diag_strategy.dat must contain ST 0 through 290 by 10")
-    if not np.array_equal(strategy_grid.columns.to_numpy(), expected_actions):
-        raise ValueError("diag_strategy.dat must contain actions 1 through 60")
-    if not np.allclose(strategy_grid.sum(axis=1), 1.0, atol=1e-8):
-        raise ValueError("one or more diagonal strategies do not sum to one")
-    if (strategy_grid.to_numpy() <= 0).any():
-        raise ValueError("one or more diagonal strategies are not full support")
-
-    value_grid = value.pivot(index="sc", columns="sd", values="value")
-    if not np.array_equal(value_grid.index.to_numpy(), expected_st):
-        raise ValueError("value_surface.dat must contain Checker ST 0 through 290")
-    if not np.array_equal(value_grid.columns.to_numpy(), expected_st):
-        raise ValueError("value_surface.dat must contain Dropper ST 0 through 290")
-    if (np.abs(value_grid.to_numpy()) > 1 + 1e-10).any():
-        raise ValueError("value surface leaves the zero-sum range [-1, 1]")
-
-    fig = plt.figure(figsize=(TEXT_WIDTH, 3.40))
-    ax_strategy = fig.add_subplot(1, 2, 1, projection="3d")
-    ax_value = fig.add_subplot(1, 2, 2, projection="3d")
-
-    actions, st_values = np.meshgrid(
-        strategy_grid.columns.to_numpy(), strategy_grid.index.to_numpy()
-    )
-    probabilities = strategy_grid.to_numpy()
-    strategy_cmap = sns.color_palette("crest", as_cmap=True)
-    ax_strategy.plot_surface(
-        actions,
-        st_values,
-        probabilities,
-        cmap=strategy_cmap,
-        linewidth=0,
-        antialiased=True,
-        alpha=0.96,
-        vmin=0,
-        vmax=probabilities.max(),
-    )
-    ax_strategy.contourf(
-        actions,
-        st_values,
-        probabilities,
-        zdir="z",
-        offset=0,
-        levels=8,
-        cmap=strategy_cmap,
-        alpha=0.68,
-    )
-    boundary_row = strategy_grid.loc[240].to_numpy()
-    ax_strategy.plot(
-        expected_actions,
-        np.full(expected_actions.size, 240),
-        boundary_row + 0.004,
-        color=ORANGE,
-        lw=1.2,
-        ls="--",
-        zorder=10,
-    )
-    ax_strategy.text(56, 262, 0.43, "$s=240$", color=ORANGE, ha="center", fontsize=7)
-    ax_strategy.set(
-        title="(a) Dropper strategy",
-        xlabel="Second",
-        ylabel="Equal ST $s$",
-        zlabel=r"$\sigma_d$",
-        xlim=(1, 60),
-        ylim=(0, 290),
-        zlim=(0, max(0.55, probabilities.max() * 1.05)),
-    )
-    ax_strategy.set_xticks((1, 20, 40, 60))
-    ax_strategy.set_yticks((0, 120, 240, 290))
-    ax_strategy.set_zticks((0, 0.25, 0.5))
-    ax_strategy.view_init(elev=28, azim=-126)
-    ax_strategy.set_box_aspect((1, 1, 0.72))
-
-    dropper_st, checker_st = np.meshgrid(
-        value_grid.columns.to_numpy(), value_grid.index.to_numpy()
-    )
-    values = value_grid.to_numpy()
-    value_cmap = sns.diverging_palette(250, 25, s=80, l=52, as_cmap=True)
-    norm = TwoSlopeNorm(vmin=-1, vcenter=0, vmax=1)
-    value_surface = ax_value.plot_surface(
-        dropper_st,
-        checker_st,
-        values,
-        cmap=value_cmap,
-        norm=norm,
-        linewidth=0,
-        antialiased=True,
-        alpha=0.96,
-    )
-    ax_value.contourf(
-        dropper_st,
-        checker_st,
-        values,
-        zdir="z",
-        offset=-1,
-        levels=np.linspace(-1, 1, 11),
-        cmap=value_cmap,
-        norm=norm,
-        alpha=0.75,
-    )
-    ax_value.plot([240, 240], [0, 290], [-1, -1], color=ORANGE, lw=1.2, ls="--")
-    ax_value.plot([0, 290], [240, 240], [-1, -1], color=ORANGE, lw=1.2, ls="--")
-    ax_value.set(
-        title="(b) Certified state value",
-        xlabel="Dropper ST $s_d$",
-        ylabel="Checker ST $s_c$",
-        zlabel=r"$\widehat V$",
-        xlim=(0, 290),
-        ylim=(0, 290),
-        zlim=(-1, 1),
-    )
-    ax_value.set_xticks((0, 120, 240, 290))
-    ax_value.set_yticks((0, 120, 240, 290))
-    ax_value.set_zticks((-1, 0, 1))
-    ax_value.view_init(elev=27, azim=-132)
-    ax_value.set_box_aspect((1, 1, 0.72))
-
-    for axis in (ax_strategy, ax_value):
-        axis.xaxis.pane.set_facecolor((1, 1, 1, 0))
-        axis.yaxis.pane.set_facecolor((1, 1, 1, 0))
-        axis.zaxis.pane.set_facecolor((1, 1, 1, 0))
-        axis.tick_params(pad=0, labelsize=6.5)
-        axis.xaxis.labelpad = 2
-        axis.yaxis.labelpad = 2
-        axis.zaxis.labelpad = 1
-
-    colorbar = fig.colorbar(
-        value_surface,
-        ax=ax_value,
-        shrink=0.52,
-        pad=0.03,
-        aspect=13,
-        ticks=(-1, 0, 1),
-    )
-    colorbar.set_label("Value", fontsize=7.5)
-    colorbar.ax.tick_params(labelsize=6.5)
-    fig.subplots_adjust(left=0.01, right=0.96, bottom=0.06, top=0.95, wspace=0.18)
-    save_figure(fig, "fig5_strategy_and_value")
-
-
 def main() -> None:
     configure_style()
     make_revival_probability()
     make_toeplitz_structure()
-    make_strategy_and_value_surfaces()
     print(f"Wrote figures to {OUTPUT_DIR}")
 
 

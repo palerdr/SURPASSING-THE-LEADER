@@ -1,4 +1,4 @@
-"""Generate the sampled data used by the paper's strategy figures."""
+"""Generate the exact data used by the paper's root-strategy figure."""
 
 from pathlib import Path
 
@@ -16,9 +16,26 @@ VALUE_TABLE = (
 OUTPUT = REPOSITORY / "paper" / "build" / "figures"
 
 
+def write_layer_widths(profiles: object) -> None:
+    """Write the exact number of quotient classes in every potential layer."""
+
+    bucket_sizes = np.asarray(
+        [len(bucket) for bucket in profiles.bucket_profiles], dtype=np.int64
+    )
+    widths = np.convolve(bucket_sizes, bucket_sizes)
+    if widths.size != 1201 or int(widths.sum()) != PROFILE_COUNT**2:
+        raise RuntimeError("potential-layer widths do not cover the quotient table")
+
+    with (OUTPUT / "layer_widths.dat").open("w", encoding="ascii") as handle:
+        handle.write("potential classes\n")
+        for potential, width in enumerate(widths):
+            handle.write(f"{potential} {int(width)}\n")
+
+
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     profiles = build_profile_table()
+    write_layer_widths(profiles)
     values = np.load(VALUE_TABLE, mmap_mode="r")
 
     def class_matrix(checker: int, dropper: int) -> np.ndarray:
@@ -53,30 +70,6 @@ def main() -> None:
             handle.write(
                 f"{action + 1} {drop[action]:.10f} {check[action]:.10f}\n"
             )
-
-    with (OUTPUT / "diag_strategy.dat").open("w", encoding="ascii") as handle:
-        handle.write("s action prob\n")
-        for st in range(0, 300, 10):
-            pid = profile_id(st, 0)
-            _, drop_at_st, _, _ = solve_certified_matrix_fast(
-                class_matrix(pid, pid)
-            )
-            for action in range(60):
-                handle.write(
-                    f"{st} {action + 1} {drop_at_st[action]:.10f}\n"
-                )
-            handle.write("\n")
-
-    sampled_st = range(0, 300, 10)
-    with (OUTPUT / "value_surface.dat").open("w", encoding="ascii") as handle:
-        handle.write("sc sd value\n")
-        for checker_st in sampled_st:
-            checker = profile_id(checker_st, 0)
-            for dropper_st in sampled_st:
-                dropper = profile_id(dropper_st, 0)
-                value = float(values[checker * PROFILE_COUNT + dropper])
-                handle.write(f"{checker_st} {dropper_st} {value:.10f}\n")
-            handle.write("\n")
 
 
 if __name__ == "__main__":
