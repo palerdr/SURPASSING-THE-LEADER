@@ -23,6 +23,7 @@ graphify-out/
 multirun/
 logs/
 demos/
+tmp/
 paper/build/
 src/stl/outputs/
 src/dth/outputs/
