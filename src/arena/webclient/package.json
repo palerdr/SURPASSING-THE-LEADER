@@ -1,0 +1,17 @@
+{
+  "name": "stl-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser front end for canonical Surpassing The Leader play",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

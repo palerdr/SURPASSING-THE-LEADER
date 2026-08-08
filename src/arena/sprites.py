@@ -396,11 +396,12 @@ def _unpack_indices(line: bytearray, width: int, depth: int) -> list[int]:
     return indices[:width]
 
 
-def write_png(sprite: Sprite, path: str | Path) -> None:
-    """Write a sprite as an 8-bit RGBA PNG with no row filtering.
+def encode_png(sprite: Sprite) -> bytes:
+    """Encode a sprite as an 8-bit RGBA PNG with no row filtering.
 
-    Used only for the prepared-frame cache, where the images are small and
-    decode speed matters far more than file size.
+    Used for the prepared-frame cache, where the images are small and decode
+    speed matters far more than file size, and by the web server, which serves
+    the same frames without a disk round trip.
     """
     raw = bytearray()
     for row in sprite.rows:
@@ -416,12 +417,18 @@ def write_png(sprite: Sprite, path: str | Path) -> None:
             + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF)
         )
 
-    Path(path).write_bytes(
+    return (
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", sprite.width, sprite.height, 8, 6, 0, 0, 0))
         + chunk(b"IDAT", zlib.compress(bytes(raw), 6))
         + chunk(b"IEND", b"")
     )
+
+
+def write_png(sprite: Sprite, path: str | Path) -> None:
+    """Write a sprite to disk as an 8-bit RGBA PNG."""
+
+    Path(path).write_bytes(encode_png(sprite))
 
 
 def load_sprite(path: str | Path, max_edge: int | None = None) -> Sprite | None:

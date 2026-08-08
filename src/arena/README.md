@@ -39,6 +39,27 @@ must not import one another in return.
 - Projection adapters may not alter canonical game state or transitions.
 - Keep generated artifacts in the owning project, never under `src/arena/`.
 
+## Play surfaces and the session
+
+`session.py` owns the phase machine every interactive surface drives:
+`RULES -> AWAITING_ACTION -> AWAITING_ACK -> GAME_OVER`. It performs no I/O and
+no rendering; it only sequences the referee calls. `cli.py` and `web/app.py` are
+both thin adapters over it, so a rules change lands in one place.
+
+Hal's action is chosen inside `PlaySession.submit`, after the human's second has
+been accepted and validated. That ordering is the hidden-information guarantee,
+not a convenience: while a client is deciding, Hal's second does not exist in
+the process, so no snapshot can leak it. Do not hoist that call earlier to
+"prepare" a move.
+
+`web/app.py` serves the TypeScript client in `webclient/`. It builds its
+provider once at startup — provider construction memory-maps a
+multi-gigabyte artifact and the `abstract` provider can build a tablebase
+outright, so neither may happen on a request path; `python -m arena.web`
+refuses `--hal-agent abstract` for that reason. `web/schema.py` holds the only
+serializer that faces the browser, so the seat-scoping rule has exactly one
+place to be enforced and one place to be tested.
+
 ## Exact, Adaptive, and Exploit Hal
 
 All three live providers return a distribution over literal seconds;

@@ -22,6 +22,11 @@ IGNORED_PARTS = {
     "target",
     "build",
     "__pycache__",
+    # Vendored front-end dependencies. These are not repository sources, and a
+    # package that happens to ship a .py or a stray README should not be judged
+    # against contracts written for code this repository owns.
+    "node_modules",
+    "dist",
 }
 
 

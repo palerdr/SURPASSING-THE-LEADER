@@ -8,15 +8,9 @@ import sys
 from pathlib import Path
 
 from arena.abstract_adapter import AbstractTablebasePolicyProvider
-from arena.agent import PolicyDrivenAgent, public_state_from_game
-from arena.contracts import (
-    PublicGameOutcome,
-    PublicHalfRound,
-    end_provider_game,
-    observe_provider,
-    reset_provider_game,
-)
-from stl.engine.actions import validate_action
+from arena.agent import PolicyDrivenAgent
+from arena.contracts import reset_provider_game
+from arena.session import Phase, PlaySession
 from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
 DEFAULT_DTH_COMPLETE_TABLEBASE = "src/dth/artifacts/complete_full_v1"
@@ -233,15 +227,6 @@ def _show_rules(args: argparse.Namespace) -> None:
         return
 
 
-def _public_player_state(player: Player) -> dict[str, float | int | str]:
-    return {
-        "name": player.name,
-        "cylinder_seconds": float(player.cylinder),
-        "ttd_seconds": float(player.ttd),
-        "deaths": int(player.deaths),
-    }
-
-
 def _write_play_transcript(destination: str | Path, transcript: dict[str, object]) -> Path:
     path = Path(destination)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,105 +331,50 @@ def _play_one_game(
     elif args.games > 1:
         print(f"\nGame {game_index + 1}/{args.games}")
 
-    half_rounds = 0
-    public_history: list[dict[str, object]] = []
-    while not game.game_over and (args.max_half_rounds is None or half_rounds < args.max_half_rounds):
+    session = PlaySession(
+        game=game,
+        hal_agent=hal_agent,
+        hal=hal,
+        human=human,
+        game_index=game_index,
+        game_seed=game_seed,
+        start_clock=start_clock,
+        max_half_rounds=args.max_half_rounds,
+    )
+    session.begin()
+    while session.phase is Phase.AWAITING_ACTION:
         if view is not None:
             view()
         else:
             _print_state(game)
-        dropper, checker = game.get_roles_for_half(game.current_half)
-        turn_duration = game.get_turn_duration()
-        lifecycle_state = public_state_from_game(game, turn_duration=turn_duration)
-        public_state = {
-            "clock_seconds": float(game.game_clock),
-            "clock_display": game.format_game_clock(),
-            "round": int(game.round_num + 1),
-            "half": int(game.current_half),
-            "turn_duration": int(turn_duration),
-            "players": [
-                _public_player_state(game.player1),
-                _public_player_state(game.player2),
-            ],
-        }
-        if dropper is hal:
-            drop = hal_agent.choose_action(game, "dropper", turn_duration)
-            if view is None:
-                print("Hal has selected a drop time.")
-        else:
-            from stl.engine.actions import legal_seconds
-            drop = _human_action(actor=dropper.name, role="dropper", legal=legal_seconds(dropper.name, "dropper", turn_duration))
-        # The Dropper's second stays hidden until the half-round resolves; only
-        # the Checker's own selection is echoed back while choosing.
-        if checker is hal:
-            check = hal_agent.choose_action(game, "checker", turn_duration)
-            if view is None:
-                print(f"Hal checks at second {check}.")
-        else:
-            from stl.engine.actions import legal_seconds
-            check = _human_action(actor=checker.name, role="checker", legal=legal_seconds(checker.name, "checker", turn_duration))
-        validate_action(drop, actor=dropper.name, role="dropper", turn_duration=turn_duration)
-        validate_action(check, actor=checker.name, role="checker", turn_duration=turn_duration)
-        result = game.play_half_round(drop, check)
-        observe_provider(
-            hal_agent.provider,
-            PublicHalfRound(
-                game_index=game_index,
-                half_round_index=half_rounds,
-                pre_decision_state=lifecycle_state,
-                dropper_name=result.dropper,
-                checker_name=result.checker,
-                drop_time=int(result.drop_time),
-                check_time=int(result.check_time),
-                outcome=result.result.value,
-                game_over=bool(game.game_over),
-                winner_name=(
-                    game.winner.name if game.winner is not None else None
-                ),
-            ),
-        )
-        public_history.append(
-            {
-                "public_state_before": public_state,
-                "dropper": result.dropper,
-                "checker": result.checker,
-                "drop_second": int(result.drop_time),
-                "check_second": int(result.check_time),
-                "result": result.result.value,
-                "squandered_seconds": float(result.st_gained),
-                "death_duration_seconds": float(result.death_duration),
-                "survived": result.survived,
-                "survival_probability": result.survival_probability,
-            }
+        # Hal acts inside submit(), after this returns, so nothing about its
+        # choice exists while the human is deciding.
+        record = session.submit(
+            _human_action(
+                actor=session.human.name,
+                role=session.human_role(),
+                legal=session.legal_actions(),
+            )
         )
         if show_outcome is not None:
-            show_outcome(result)
+            show_outcome(record)
         else:
-            print(f"{dropper.name} dropped at {drop}; {checker.name} checked at {check}; {result.result.value}.")
-        half_rounds += 1
+            print(
+                f"{record.dropper} dropped at {record.drop_time}; "
+                f"{record.checker} checked at {record.check_time}; "
+                f"{record.result.value}."
+            )
+        session.acknowledge()
     if game.game_over:
         if show_victory is not None and game.winner is not None:
             show_victory()
-        print(f"Game over: {game.winner.name} wins.")
+        if game.winner is not None:
+            print(f"Game over: {game.winner.name} wins.")
+        else:
+            print("Game over: no surviving winner.")
     else:
-        print(f"Session stopped after {half_rounds} half-rounds.")
-    end_provider_game(
-        hal_agent.provider,
-        PublicGameOutcome(
-            game_index=game_index,
-            winner_name=game.winner.name if game.winner is not None else None,
-            half_rounds=half_rounds,
-        ),
-    )
-    return {
-        "game_index": game_index,
-        "seed": game_seed,
-        "start_clock": start_clock,
-        "winner": game.winner.name if game.winner is not None else None,
-        "stopped": not game.game_over,
-        "half_rounds": half_rounds,
-        "public_history": public_history,
-    }
+        print(f"Session stopped after {session.half_rounds} half-rounds.")
+    return session.finish()
 
 
 def command_play(args: argparse.Namespace) -> int:

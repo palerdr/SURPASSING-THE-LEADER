@@ -43,6 +43,16 @@ src/dth_ocaml/bisect*.coverage
 
 # Generated media
 *.png
+# Character sprites are source art, not generated output: the browser front end
+# and the terminal scene both read them, and a fresh clone without them renders
+# labelled placeholders instead of a game.
+!art/sprites/**/*.png
+# The prepared-frame cache stays derived — its filenames carry a pipeline hash.
+art/.sprite-cache/
+
+# Browser front end
+src/arena/webclient/node_modules/
+src/arena/webclient/dist/
 
 # OS/editor noise
 .DS_Store

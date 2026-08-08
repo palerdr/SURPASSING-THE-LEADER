@@ -18,8 +18,13 @@
   or one another.
 - `src/crates/` is a shared Rust workspace; Python remains behavioral authority
   until an explicit parity contract says otherwise.
+- `src/arena/webclient/` is the TypeScript browser client and `src/arena/web/`
+  is its server. Both are arena play surfaces, like `cli.py` and `tui.py`. The
+  client renders state and collects input; it never derives game rules and
+  never receives an unrevealed action.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.
-- Generated data must remain gitignored.
+- Generated data must remain gitignored. Character sprites under `art/sprites/`
+  are source art, not generated data, and are tracked.
 
 Read the nearest nested `README.md` only when working in that subtree. Do not
 place subsystem status, plans, or invariants in the repository root.
@@ -60,9 +65,14 @@ validation to make a change pass.
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 cargo test --workspace
+npm --prefix src/arena/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 ```
+
+The typecheck needs `npm --prefix src/arena/webclient install` once. The browser
+client is not covered by `pytest`, so skipping it leaves the front end
+unchecked.
 
 `pytest` runs distributed at `-n 8`; that width is deliberate, because one
 worker per logical core exhausts Windows handles importing torch's

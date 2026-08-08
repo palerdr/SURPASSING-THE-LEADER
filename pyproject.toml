@@ -5,6 +5,7 @@ description = "Exact-second solver and AlphaZero-style training loop for Surpass
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "fastapi>=0.141.1",
     "gymnasium>=1.0,<2",
     "hydra-core>=1.3,<2",
     "numpy>=2.0,<3",
@@ -12,6 +13,7 @@ dependencies = [
     "scipy>=1.14,<2",
     "stable-baselines3>=2.9,<3",
     "torch>=2.5",
+    "uvicorn>=0.52.1",
 ]
 
 [build-system]
@@ -23,6 +25,7 @@ packages = ["src/stl", "src/dth", "src/abstract", "src/arena"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "maturin>=1.14.1",
     "pytest>=8.0",
     "pytest-xdist>=3.6",
