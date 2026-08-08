@@ -9,6 +9,11 @@ from dth.complete_tablebase import (
     recertify_class,
 )
 from dth.tests.test_complete_sweep_python import make_synthetic_table
+from dth.audit_complete import (
+    _audit_equalizer_class,
+    _audit_oracle_class,
+    _stratified_kind_ids,
+)
 
 
 @pytest.fixture(scope="module")
@@ -83,3 +88,35 @@ def test_lp_residue_uses_ipm_before_tightened_fallback(monkeypatch) -> None:
         0.0,
         float(np.max(matrix @ full_check) - np.min(matrix.T @ full_drop)),
     ) <= 1e-6
+
+
+def test_hard_tail_audit_stratifies_and_cross_checks_equalizers(
+    synthetic_artifact,
+) -> None:
+    table, target = synthetic_artifact
+    tablebase = CompleteTablebase(target)
+    values = tablebase._arrays["value"]
+    kind = tablebase._arrays["solver_kind"]
+    candidates = _stratified_kind_ids(kind, 1, requested=16)
+    assert len(candidates) >= 12
+    assert candidates[0] < candidates[-1]
+
+    screened = [
+        _audit_equalizer_class(table, values, int(class_id))
+        for class_id in candidates
+    ]
+    accepted = [row for row in screened if row["accepted"]]
+    assert accepted
+    selected = min(
+        accepted,
+        key=lambda row: (float(row["minimum_mass"]), int(row["class_id"])),
+    )
+    oracle = _audit_oracle_class(
+        table,
+        values,
+        int(selected["class_id"]),
+        float(selected["equalizer_value"]),
+    )
+    assert oracle["stored_deviation"] <= 1e-6
+    assert oracle["equalizer_deviation"] <= 1e-6
+    assert oracle["saddle_gap"] <= 1e-6

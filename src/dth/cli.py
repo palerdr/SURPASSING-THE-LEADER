@@ -9,6 +9,7 @@ import sys
 
 COMMANDS = {
     "complete": "dth.complete_tablebase",
+    "complete-audit": "dth.audit_complete",
     "dataset": "dth.generate_dataset",
     "train": "dth.train",
     "self-play": "dth.self_play",

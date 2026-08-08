@@ -65,6 +65,12 @@ dead-band solver pins `V(240,0,240,0) = 0.3372132166291093`, and Python/Rust
 synthetic sweeps must be byte identical under
 [`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md).
 
+The post-build `complete-audit` workflow targets the numerical tail rather
+than repeating the finalizer's layer-stratified sample. It re-solves every
+LP-routed class, screens full-size equalizers at deterministic class-stratified
+anchors, and sends the lowest-mass strict-full-support cases to the independent
+two-LP oracle. Its generated report binds the audited array digests.
+
 These properties certify the complete pure-DTH quotient—not the leap-aware L2
 game. In canonical arena play the only additional prospective action is Baku's
 Dropper action 61 during the public leap window.

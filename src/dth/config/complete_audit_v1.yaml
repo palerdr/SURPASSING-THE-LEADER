@@ -1,0 +1,22 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+artifact_dir: src/dth/artifacts/complete_full_v1
+output_path: src/dth/artifacts/complete_full_v1_hard_tail_audit.json
+workers: 10
+chunksize: 64
+progress_every: 25000
+
+# Screen full-size equalizers at evenly spaced class ids, then send the
+# lowest-mass strict-full-support cases to the independent two-LP oracle.
+equalizer_candidates: 4096
+equalizer_crosscheck: 256
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

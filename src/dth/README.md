@@ -5,6 +5,7 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
 
 - `solver.py` is the pure-DTH transition and Bellman authority.
 - `complete_tablebase.py` owns the completed 289,374,121-class exact sweep.
+- `audit_complete.py` owns the reproducible post-build hard-tail audit.
 - `agent.py` is the play-time exact facade and has no approximate fallback.
   `CompleteDTHAgent.stage_game(state)` is the public downstream seam: it
   returns an immutable `CertifiedStageGame` containing the complete-tablebase
@@ -35,3 +36,7 @@ surfaces downstream of the solved game. Their tracked presets are classified in
 `docs/RESEARCH_CONFIGS.md`; none is production value authority. The packed
 tablebase's Rust kernel must satisfy `docs/DTH_COMPLETE_PARITY.md` before it can
 become a default backend. Run `uv run python -m pytest src/dth/tests -q`.
+
+After a canonical complete build, `uv run python -m dth complete-audit`
+re-solves the full LP-routed tail and independently checks the lowest-mass
+full-support certificates from a deterministic class-stratified screen.
