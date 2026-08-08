@@ -1,7 +1,6 @@
 defaults:
-  - command: train
+  - command: none
   - experiment: smoke
-  - rl: baseline_v1
   - _self_
 
 hydra:

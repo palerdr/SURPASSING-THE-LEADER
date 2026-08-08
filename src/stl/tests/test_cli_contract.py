@@ -1,66 +1,67 @@
-"""Static contract checks for the Hydra-to-argparse command surface."""
+"""Contract tests for the neutral Hydra experiment harness."""
 
 from __future__ import annotations
 
-import argparse
-import importlib
+import sys
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
 
-import pytest
 from hydra import compose, initialize_config_dir
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
+
+from stl.cli import _argv_from_command, dispatch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-COMMAND_DIR = ROOT / "config" / "command"
+CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 
 
-class _ParserCaptured(Exception):
-    def __init__(self, parser: argparse.ArgumentParser) -> None:
-        self.parser = parser
+def test_default_config_is_neutral() -> None:
+    with initialize_config_dir(version_base="1.3", config_dir=str(CONFIG_DIR)):
+        cfg = compose(config_name="config")
+
+    assert cfg.command.name == "none"
+    assert cfg.command.module is None
 
 
-def _capture_parse_args(parser: argparse.ArgumentParser, *args, **kwargs):
-    raise _ParserCaptured(parser)
-
-
-def _parser_for(module) -> argparse.ArgumentParser:
-    build_parser = getattr(module, "build_parser", None)
-    if callable(build_parser):
-        return build_parser()
-
-    with patch.object(argparse.ArgumentParser, "parse_args", _capture_parse_args):
-        with pytest.raises(_ParserCaptured) as captured:
-            module.main()
-    return captured.value.parser
-
-
-def _command_config(path: Path) -> DictConfig:
-    config = OmegaConf.load(path)
-    assert isinstance(config, DictConfig)
-    return config
-
-
-@pytest.mark.parametrize("config_path", sorted(COMMAND_DIR.glob("*.yaml")), ids=lambda path: path.stem)
-def test_hydra_command_matches_argparse_contract(config_path: Path) -> None:
-    config = _command_config(config_path)
-    module = importlib.import_module(str(config.module))
-    assert callable(getattr(module, "main", None))
-
-    parser = _parser_for(module)
-    parser_destinations = {
-        action.dest
-        for action in parser._actions
-        if action.option_strings and action.dest != "help"
-    }
-    config_destinations = set(config.keys()) - {"name", "module", "args", "description"}
-    assert config_destinations <= parser_destinations
-
-    if config.get("args") is None:
-        required_destinations = {
-            action.dest
-            for action in parser._actions
-            if action.option_strings and action.required
+def test_command_values_translate_to_argparse_tokens() -> None:
+    command = OmegaConf.create(
+        {
+            "name": "example",
+            "module": "example.command",
+            "count": 3,
+            "enabled": True,
+            "disabled": False,
+            "items": ["a", "b"],
+            "optional": None,
         }
-        assert required_destinations <= config_destinations
+    )
+
+    assert _argv_from_command(command) == [
+        "--count",
+        "3",
+        "--enabled",
+        "--no-disabled",
+        "--items",
+        "a",
+        "--items",
+        "b",
+    ]
+
+
+def test_dispatch_imports_configured_module(monkeypatch) -> None:
+    observed: list[list[str]] = []
+
+    def command_main() -> None:
+        observed.append(sys.argv[:])
+
+    monkeypatch.setattr(
+        "stl.cli.importlib.import_module",
+        lambda name: SimpleNamespace(main=command_main),
+    )
+    cfg = OmegaConf.create(
+        {"command": {"name": "example", "module": "example.command", "seed": 7}}
+    )
+
+    dispatch(cfg)
+
+    assert observed == [["example.command", "--seed", "7"]]

@@ -1,6 +1,0 @@
-name: eval
-module: stl.commands.strength_gate
-args: null
-checkpoint: ???
-games: 8
-seed: 0

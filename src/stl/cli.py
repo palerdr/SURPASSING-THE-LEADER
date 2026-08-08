@@ -1,4 +1,4 @@
-"""Hydra command dispatcher for the compact STL package."""
+"""Generic Hydra command dispatcher for future STL experiments."""
 
 from __future__ import annotations
 
@@ -59,24 +59,28 @@ def _patched_argv(module_name: str, args: list[str]):
         sys.argv = original
 
 
-@hydra.main(version_base="1.3", config_path="config", config_name="config")
-def main(cfg: DictConfig) -> None:
+def dispatch(cfg: DictConfig) -> Any:
+    """Run the configured module, or do nothing for the neutral config."""
     if "command" not in cfg or "module" not in cfg.command:
-        raise ValueError("Hydra config must select a command with a module")
-    if "rl" not in cfg:
-        raise ValueError("Hydra config must select a versioned rl contract")
-    from stl.learning.contracts import validate_rl_config
-
-    validate_rl_config(cfg.rl)
-    module_name = str(cfg.command.module)
+        raise ValueError("Hydra config must select a command")
+    module = cfg.command.module
+    if module is None or str(module).strip() == "":
+        return None
+    module_name = str(module)
     args = _argv_from_command(cfg.command)
-    module = importlib.import_module(module_name)
-    if not hasattr(module, "main"):
+    command_module = importlib.import_module(module_name)
+    if not hasattr(command_module, "main"):
         raise AttributeError(f"{module_name} has no main()")
     with _patched_argv(module_name, args):
-        result = module.main()
+        result = command_module.main()
     if isinstance(result, int) and result:
         raise SystemExit(result)
+    return result
+
+
+@hydra.main(version_base="1.3", config_path="config", config_name="config")
+def main(cfg: DictConfig) -> None:
+    dispatch(cfg)
 
 
 if __name__ == "__main__":
