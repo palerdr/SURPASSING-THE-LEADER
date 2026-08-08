@@ -56,8 +56,7 @@
 \newcommand{\gap}{\operatorname{gap}}
 \newcommand{\tol}{\tau_0}
 
-\title{Exact State Compression and Certified Backward Induction\\
-for the Drop-the-Handkerchief Timing Model}
+\title{An Exact Approach to Solving the Drop the Handkerchief Game}
 \author{James Cenawood\thanks{Code and instructions to reproduce the results
 are available in the project repository.}}
 \date{July 31, 2026}
@@ -77,11 +76,11 @@ $5.27\times10^{9}$-state transition-closed domain down to $289{,}374{,}121$
 equivalence classes (a factor of $18.2$). A potential function organizes those classes
 into $1{,}201$ layers and permits one backward sweep over the finite DAG.
 Every local value is accepted with a mixed-strategy gap of at most $10^{-6}$
-against its full $60\times60$ stage matrix. The same local certificates bound
-the exploitability of the resulting full-game policy. At the initial state,
+against its full $60\times60$ stage matrix. At the initial state,
 $V=0.08985\pm0.00061$, so the first Dropper wins with probability
-$0.54493\pm0.00031$ under optimal play; the selected policy has full-game
-payoff gap at most $1.201\times10^{-3}$. The largest continuous run covered
+$0.54493\pm0.00031$ under optimal play. No unilateral change to the selected
+policy can improve win probability by more than $6.005\times10^{-4}$.
+The largest continuous run covered
 $98.1\%$ of the table in $5{,}432$ seconds on one twelve-core desktop.
 \end{abstract}
 
@@ -254,12 +253,12 @@ actions and state-dependent entries.
 Fix a live state $x$ and let $V$ assign values to its children. Write the
 Dropper's continuation payoff after a success of lag $\ell$ or a failure as
 \begin{align*}
-v^{\mathrm{succ}}_\ell&=
+S_\ell&=
 \begin{cases}
 +1,& s_c+\ell\ge300,\\
 -V(s_d,t_d,s_c+\ell,t_c),&\text{else},
 \end{cases}\\[3pt]
-v^{\mathrm{fail}}&=
+F&=
 \begin{cases}
 +1,& (s_c,t_c)\ \text{failure-fatal},\\
 p\,\bigl(-V(s_d,t_d,0,t_c+s_c+60)\bigr)+(1-p),&\text{else}.
@@ -269,8 +268,8 @@ Then the $60\times60$ stage matrix of $x$, with the Dropper as row player, is
 \begin{equation}\label{eq:toeplitz}
 M(x)_{d,c}=
 \begin{cases}
-v^{\mathrm{succ}}_{c-d+1}, & c\ge d,\\
-v^{\mathrm{fail}}, & c<d,
+S_{c-d+1}, & c\ge d,\\
+F, & c<d,
 \end{cases}
 \end{equation}
 and $V(x)=\val(M(x))$. In particular $M(x)$ carries at most $61$ distinct
@@ -286,23 +285,20 @@ the role swap. The Bellman equation is Corollary~\ref{cor:finite}.
 
 \begin{lemma}[$O(60)$ saddle reductions]\label{lem:toeplitz}
 Row $d$ of \eqref{eq:toeplitz} contains exactly the prefix
-$v^{\mathrm{succ}}_1,\dots,v^{\mathrm{succ}}_{61-d}$ together with
-$v^{\mathrm{fail}}$ when $d>1$, and column $c$ contains the prefix through
-$v^{\mathrm{succ}}_c$ together with $v^{\mathrm{fail}}$ when $c<60$. Hence
-with prefix scans
-$m_j=\min_{i\le j}v^{\mathrm{succ}}_i$ and
-$M_j=\max_{i\le j}v^{\mathrm{succ}}_i$,
+$S_1,\dots,S_{61-d}$ together with $F$ when $d>1$, and column $c$ contains
+the prefix $S_1,\dots,S_c$ together with $F$ when $c<60$. Hence with
+prefix scans $m_j=\min_{i\le j}S_i$ and $M_j=\max_{i\le j}S_i$,
 \begin{align*}
 \max_d\min_c M(x)_{d,c}
 &=\max_d
 \begin{cases}
 m_{60}, & d=1,\\
-\min(m_{61-d},v^{\mathrm{fail}}), & d>1,
+\min(m_{61-d},F), & d>1,
 \end{cases}\\[3pt]
 \min_c\max_d M(x)_{d,c}
 &=\min_c
 \begin{cases}
-\max(M_{c},v^{\mathrm{fail}}), & c<60,\\
+\max(M_{c},F), & c<60,\\
 M_{60}, & c=60,
 \end{cases}
 \end{align*}
@@ -312,7 +308,7 @@ alone.
 \end{lemma}
 
 Figure~\ref{fig:toeplitz} draws the layout. Each row contains a prefix of the
-success values, never an arbitrary subset. Two linear scans therefore
+$S$ array, never an arbitrary subset. Two linear scans therefore
 reproduce every row minimum and column maximum without materializing the
 matrix.
 
@@ -320,8 +316,8 @@ matrix.
 \centering
 \includegraphics[width=0.98\textwidth]{build/figures/seaborn/fig2_toeplitz_structure.pdf}
 \caption{An $8\times8$ view of the stage matrix \eqref{eq:toeplitz}. The lag
-$\ell=c-d+1$ is constant on diagonals, while every failed check has the same
-value $v^{\mathrm{fail}}$. Row minima and column maxima reduce to prefix scans
+$\ell=c-d+1$ is constant on diagonals, while every failed check has value
+$F$. Row minima and column maxima reduce to prefix scans
 (Lemma~\ref{lem:toeplitz}), giving the same result as a scan of all
 $3{,}600$ cells.}
 \label{fig:toeplitz}
@@ -364,7 +360,7 @@ fixes its child's classification, and a failure-fatal profile stays so by
 Lemma~\ref{lem:absorbing}. So success classes map to
 $\varphi$-identified children.
 The failure class reads the checker's TTD only through $p$: if the checker
-profile is failure-fatal, $p\equiv0$ and $v^{\mathrm{fail}}=+1$ with no child;
+profile is failure-fatal, $p\equiv0$ and $F=+1$ with no child;
 if revival-eligible, the TTD is not quotiented and the value is unchanged.
 Induction over the
 finite acyclic graph (Corollary~\ref{cor:finite}) closes the argument.
@@ -693,58 +689,98 @@ live-to-live transition raises $\Phi$ by at least one
 $1200-\Phi(x)$ of them plus one terminal transition, bounding $\delta$.
 \end{proof}
 
-\subsection{From local certificates to a policy}
+\subsection{Policy certification}
 
-Choose at every class the mixed pair whose accepted midpoint is
-$\widehat V(x)$. These choices form a behavioral policy
-$\widehat\pi=(\widehat\pi_d,\widehat\pi_c)$ for the whole game. Let
-$J_x(\pi_d,\pi_c)$ be the current Dropper's expected terminal payoff under
-two full behavioral strategies. The subscripts name the players' roles at
-$x$; each strategy also specifies play after later role swaps. Define
+At each live class $x$, let
+$(\widehat\sigma_d(x),\widehat\sigma_c(x))$ be the accepted mixed pair.
+Using that pair whenever $x$ is reached defines a behavioral policy
+$\widehat\pi$. A deviation may replace every remaining choice, not only the
+next action.
+
+\begin{definition}[Policy security values]\label{def:policy-gap}
+For two complete policies, extend the value notation by
 \[
-\underline J_{\widehat\pi}(x)
-=\inf_{\pi_c}J_x(\widehat\pi_d,\pi_c),\qquad
-\overline J_{\widehat\pi}(x)
-=\sup_{\pi_d}J_x(\pi_d,\widehat\pi_c).
+V_x(\pi_d,\pi_c)
+=\mathbb E[\text{terminal payoff}\mid x,\pi_d,\pi_c].
 \]
-Their difference
-$\Gamma_{\widehat\pi}(x)=\overline J_{\widehat\pi}(x)
--\underline J_{\widehat\pi}(x)$ is the full-game policy gap: deviations may
-change every later action, not only the next one.
+The subscripts $d,c$ identify the players by their roles at $x$; both policies
+include play after later role swaps. The selected policies have security
+values
+\begin{align*}
+\underline V_{\widehat\pi}(x)
+&=\min_{\pi_c}
+  V_x(\widehat\pi_d,\pi_c),\\
+\overline V_{\widehat\pi}(x)
+&=\max_{\pi_d}
+  V_x(\pi_d,\widehat\pi_c).
+\end{align*}
+\end{definition}
 
-\begin{proposition}[Propagated policy certificate]\label{prop:policy}
-Let $g(x)$ be the accepted local gap at class $x$. Under the certificate
-convention of Definition~\ref{def:certificate}, the selected policy satisfies
+The policy's own payoff lies between these values:
 \[
-\Gamma_{\widehat\pi}(x)
-\le
-\max_{\mathcal P:x\leadsto\mathrm{terminal}}
-\sum_{z\in\mathcal P}g(z)
-\le \delta(x)\tol
-\le(1201-\Phi(x))\tol.
+\underline V_{\widehat\pi}(x)
+\le V_x(\widehat\pi_d,\widehat\pi_c)
+\le\overline V_{\widehat\pi}(x).
+\]
+Hence either player's gain from a unilateral deviation is bounded by
+$\overline V_{\widehat\pi}(x)-\underline V_{\widehat\pi}(x)$.
+
+Let $\varepsilon(x)$ be the largest sum of accepted matrix gaps along any
+continuation from $x$ to a terminal state. For a live state $x$, let $y$ be a
+live child of $x$. Then
+\begin{equation}\label{eq:policy-epsilon}
+\varepsilon(x)=
+\begin{cases}
+0, & x\text{ terminal},\\[2pt]
+(U_x-L_x)
++\displaystyle\max_y
+ \varepsilon(y), & x\text{ live}.
+\end{cases}
+\end{equation}
+The maximum is zero when $x$ has no live child.
+
+\begin{proposition}[Full-policy bound]\label{prop:policy}
+The selected policy satisfies
+\begin{align*}
+\underline V_{\widehat\pi}(x)
+&\ge \widehat V(x)-\tfrac12\varepsilon(x),\\
+\overline V_{\widehat\pi}(x)
+&\le \widehat V(x)+\tfrac12\varepsilon(x).
+\end{align*}
+Consequently,
+\[
+\overline V_{\widehat\pi}(x)-\underline V_{\widehat\pi}(x)
+\le \varepsilon(x)
+\le (1201-\Phi(x))\tol.
 \]
 At the initial state, the payoff gap is at most
-$1.201\times10^{-3}$. Thus no unilateral deviation can improve a player's
-win probability by more than $6.005\times10^{-4}$.
+$1.201\times10^{-3}$, so no unilateral deviation can improve win probability
+by more than $6.005\times10^{-4}$.
 \end{proposition}
 
+\begin{samepage}
 \begin{proof}
-Let $B(x)$ be half the largest path sum in the first bound. We prove backward
-that
-\[
-\underline J_{\widehat\pi}(x)\ge\widehat V(x)-B(x),
-\qquad
-\overline J_{\widehat\pi}(x)\le\widehat V(x)+B(x).
-\]
-The claim is exact at a terminal. At a live state, the role swap only negates
-the child payoff, and revival only averages it. Neither operation enlarges
-the largest child bound. The selected Dropper strategy therefore guarantees
-$L_x-\max_y B(y)$, while the selected Checker strategy caps the payoff at
-$U_x+\max_y B(y)$. Since
-$\widehat V(x)=(L_x+U_x)/2$ and $U_x-L_x\le g(x)$, these imply the two
-displayed bounds. Subtracting them gives the path sum. Finally, a path contains at most
-$\delta(x)\le1201-\Phi(x)$ live states.
+At a terminal,
+$\underline V_{\widehat\pi}
+=\overline V_{\widehat\pi}=\widehat V$ and $\varepsilon=0$.
+Suppose the two bounds hold for every live child of $x$. Negation at a role
+swap and averaging after revival preserve the largest child bound. Therefore
+\begin{align*}
+\underline V_{\widehat\pi}(x)
+&\ge L_x-\tfrac12
+  \max_y\varepsilon(y),\\
+\overline V_{\widehat\pi}(x)
+&\le U_x+\tfrac12
+  \max_y\varepsilon(y).
+\end{align*}
+Since $\widehat V(x)=(L_x+U_x)/2$, recurrence
+\eqref{eq:policy-epsilon} gives the two stated bounds.
+
+Finally, $U_x-L_x\le\tol$ at every live state, and every continuing transition
+raises $\Phi$ by at least one. Hence no path from $x$ contains more than
+$1201-\Phi(x)$ live states.
 \end{proof}
+\end{samepage}
 
 \section{The computation}\label{sec:computation}
 
@@ -809,18 +845,16 @@ $0.066\%$ of classes.
 \legend{Dropper $\sigma_d$, Checker $\sigma_c$}
 \end{axis}
 \end{tikzpicture}
-\caption{The root component of the selected behavioral policy. Its local gap
-against the assembled root matrix is $3.2\times10^{-15}$; Proposition
-\ref{prop:policy} bounds deviations through the rest of the game. Both
-strategies have full support.}
+\caption{The first-round strategies of the selected full-game policy. Their
+local gap is $3.2\times10^{-15}$; Proposition~\ref{prop:policy} shows how
+later gaps accumulate. Both strategies have full support.}
 \label{fig:root}
 \end{figure}
 
-As a check against a silent implementation error, the Python and Rust sweeps
-agreed byte-for-byte wherever both computed the same region, and re-solving
-$4{,}792$ sampled Bellman equations gave a worst deviation of
-$4.84\times10^{-7}$. These checks support the implementation; the theorem's
-error bound comes from Proposition~\ref{prop:accumulated}.
+The Python and Rust sweeps agreed byte-for-byte on their overlapping regions;
+$4{,}792$ sampled Bellman re-solves differed by at most
+$4.84\times10^{-7}$. The error bound itself is
+Proposition~\ref{prop:accumulated}.
 
 \begin{theorem}[Main result]\label{thm:main}
 The complete 60-action timing model of Section~\ref{sec:game} has a certified
@@ -832,41 +866,36 @@ V(0,0,0,0)=0.08985\pm0.00061,
 \qquad
 P(\text{first Dropper wins})=0.54493\pm0.00031.
 \]
-The selected behavioral policy also satisfies
-$\Gamma_{\widehat\pi}(0,0,0,0)\le1.201\times10^{-3}$.
+For the selected full-game policy,
+\[
+\overline V_{\widehat\pi}(0,0,0,0)
+-\underline V_{\widehat\pi}(0,0,0,0)
+\le1.201\times10^{-3}.
+\]
 \end{theorem}
 
 \FloatBarrier
 \section{Scope of the claims}\label{sec:claims}
 
 \begin{itemize}[leftmargin=*]
-\item \textbf{Rules-relative.} The theorems are about the game defined in
-  Section~\ref{sec:game} with the frozen revival surface
-  \eqref{eq:revival}. Nothing here solves the leap-aware ``Surpassing the
-  Leader'' game, which adds an asymmetric 61st second and is a different
-  game.
-\item \textbf{Certified numerics, not rational arithmetic.} Values are
-  IEEE double midpoints with explicit saddle-gap certificates and the
-  accumulated bound of Proposition~\ref{prop:accumulated}; this is a
-  certified-numerics result, not an exact rational or interval-arithmetic
-  proof, and the certificate calculus is evaluated in round-to-nearest
-  float64 without directed rounding. The structural theorems (quotient,
-  potential, finiteness, Toeplitz form) are exact; their finite
-  hypotheses --- the survival predicate, absorption, the counts, and the
-  potential increase --- are machine-enumerated exhaustively over all
-  profiles and profile transitions.
+\item \textbf{Rules-relative.} The results concern Section~\ref{sec:game} and
+  the frozen revival surface \eqref{eq:revival}, not the leap-aware game with
+  its asymmetric 61st second.
+\item \textbf{Certified numerics.} Values are round-to-nearest float64
+  midpoints with saddle-gap certificates, not rational or interval
+  arithmetic. The structural theorems are exact; survival, absorption,
+  counting, and potential increase were exhaustively enumerated.
 \item \textbf{Domain.} The table covers the transition-closed quotient
   domain; states containing a revival-eligible profile with TTD in $1..59$
   are outside it and are rejected, not approximated
   (Lemma~\ref{lem:closure}).
-\item \textbf{Values stored, policies reconstructed.} The table stores values
-  and routing, not every local strategy. A policy component is re-derived
-  from stored child values when needed. Proposition~\ref{prop:policy} applies
-  to a full selection of accepted local pairs; Figure~\ref{fig:root} shows its
-  root component.
+\item \textbf{Policies.} The table stores values and routing; accepted
+  strategies are re-derived from child values. Figure~\ref{fig:root} shows
+  the first pair.
 \end{itemize}
 
 \appendix
+\begin{samepage}
 \section{Computational details}\label{sec:details}
 
 \subsection{Sweep}
@@ -877,8 +906,7 @@ $P=1200,1199,\dots,0$, the solver:
 
 \begin{enumerate}[leftmargin=*]
 \item enumerates the rectangles $B_a\times B_{P-a}$;
-\item builds $v^{\mathrm{succ}}_1,\dots,v^{\mathrm{succ}}_{60}$ and
-  $v^{\mathrm{fail}}$ from already solved children;
+\item builds $S_1,\dots,S_{60}$ and $F$ from already solved children;
 \item tries the pure, equalizer, and LP rungs in order;
 \item recomputes $L$ and $U$ against the full matrix and stores their midpoint
   only when $U-L\le\tol$;
@@ -887,15 +915,14 @@ $P=1200,1199,\dots,0$, the solver:
 
 Revival probabilities are evaluated once. Classes within one layer are
 independent.
+\end{samepage}
 
 \subsection{Equalizer and LP fallbacks}
 
-Warm supports come from the two lag-one neighbours $(T_1p_c,p_d)$ and
-$(p_c,T_1p_d)$. Here $T_1$ adds one second of ST and applies the quotient.
-Actions with mass at most $10^{-9}$ are removed; if more than twelve remain,
-the twelve largest masses are kept and sorted. If the two support sizes
-differ, let $k=\min(|D|,|C|)$ and use the first $k$ actions in ascending
-order. The equalizer then solves
+Warm supports come from $(T_1p_c,p_d)$ and $(p_c,T_1p_d)$, where $T_1$ adds
+one second of ST and applies the quotient. Masses at most $10^{-9}$ are
+removed and each support is capped at its twelve largest actions. Let
+$k=\min(|D|,|C|)$; the first $k$ actions in each support give
 \[
 \begin{pmatrix}M_{D,C}&-\mathbf 1\\ \mathbf 1^{\mathsf T}&0\end{pmatrix}
 \begin{pmatrix}\sigma_{c,C}\\ u_c\end{pmatrix}
@@ -920,14 +947,13 @@ The residue is solved by the standard zero-sum pair
 \mathbf1^{\mathsf T}\sigma_c=1,\quad\sigma_c\ge0.
 \end{aligned}
 \]
-Solver retries change the numerical path, not the acceptance gap.
 
 \section{Reproducibility}
 
-From the repository head: \texttt{uv run python -m dth complete} builds the
-artifact (checkpointed, resumable; the configuration is
-\texttt{src/dth/config/complete\_full\_v1.yaml}). The stored float64 root
-midpoint is \texttt{0.0898500728095116}.
+From the repository root, \texttt{uv run python -m dth complete} builds the
+checkpointed artifact with
+\texttt{src/dth/config/complete\_full\_v1.yaml}; its stored root midpoint is
+\texttt{0.0898500728095116}.
 
 \vspace{-0.8em}
 \begin{thebibliography}{9}

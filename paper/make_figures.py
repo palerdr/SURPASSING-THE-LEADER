@@ -269,10 +269,10 @@ def make_toeplitz_structure() -> None:
             if column >= row:
                 lag = column - row + 1
                 values[row, column] = lag
-                labels[row, column] = f"$v^{{\\mathrm{{s}}}}_{{{lag}}}$"
+                labels[row, column] = f"$S_{{{lag}}}$"
             else:
                 values[row, column] = 0
-                labels[row, column] = "$v^{\\mathrm{f}}$"
+                labels[row, column] = "$F$"
 
     teal_ramp = sns.light_palette(TEAL, n_colors=n, reverse=False)
     cmap = ListedColormap([LIGHT_GRAY, *teal_ramp])
@@ -342,7 +342,7 @@ def make_toeplitz_structure() -> None:
         (0.06, 0.42),
         0.88,
         0.19,
-        "at most $61$ distinct values\n$v^{\\mathrm{s}}_1,\\ldots,v^{\\mathrm{s}}_{60}$ and $v^{\\mathrm{f}}$",
+        "at most $61$ distinct values\n$S_1,\\ldots,S_{60}$ and $F$",
         facecolor="#E8F4F0",
         edgecolor=TEAL,
     )
