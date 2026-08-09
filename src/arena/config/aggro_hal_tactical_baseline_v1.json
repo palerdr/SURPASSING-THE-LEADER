@@ -1,0 +1,111 @@
+{
+  "schema_version": "arena-aggro-hal-tactical-baseline-freeze-v1",
+  "baseline_id": "aggro-hal-corrected-v1-tactical",
+  "immutable": true,
+  "frozen_on": "2026-08-09",
+  "scope": "pure-dth-synthetic-opponent-league",
+  "artifact": {
+    "path": "outputs/aggro-hal-v1/corrected-v1/checkpoint.pt",
+    "sha256": "925cb9b63e88911e711e911ab5faa3918c27bf13c2731de1233c4ffe762f49d4",
+    "bytes": 3849319,
+    "checkpoint_schema": "arena-aggro-hal-checkpoint-v1",
+    "observation_schema": "arena-aggro-hal-public-sequence-v1",
+    "training_updates": {
+      "warmstart": 60,
+      "ppo": 30
+    }
+  },
+  "bindings": {
+    "training_config": {
+      "path": "src/arena/config/aggro_hal_v1.yaml",
+      "sha256": "6f5ab3f206e24f2e22dad828c17bf9f851473bb19aa38ad8ded9dabbd83497bc",
+      "hash_semantics": "executed_file_bytes_at_freeze",
+      "canonical_yaml_sha256": "d023c07eedf10fce91f37f6f41aba68a2b70f3d14dd23892fedd8be4b83712d8"
+    },
+    "training_report": {
+      "path": "outputs/aggro-hal-v1/corrected-v1/training-report.json",
+      "sha256": "5ecf9c43719972584f5f2e9068e2bfd3857d2758f7b542ca9fceb525294e8e13"
+    },
+    "selection_and_audit_summary": {
+      "path": "outputs/aggro-hal-v1/corrected-v1/selection-and-audit-summary.json",
+      "sha256": "e9d63f96e903ac7ce8b04b76ad83e987bd2806a602268a3fefaa813563115545"
+    },
+    "latent_twin_protocol": {
+      "path": "outputs/aggro-hal-v1/corrected-v1/memory-latent-twin-protocol.json",
+      "sha256": "386c0c774748348dae4cfd24afda5bfd090c7653a98e62b6b5e9640090936f61"
+    },
+    "latent_twin_report": {
+      "path": "outputs/aggro-hal-v1/corrected-v1/memory-latent-twin-report.json",
+      "sha256": "bcbede1c9d2fe92988d41ade0eafa503c2c459984324b812de289951819a6e9e"
+    }
+  },
+  "dth_compatibility": {
+    "schema_version": "arena-aggro-hal-dth-compatibility-v1",
+    "ladder": "pure/warm-support/full-support/lp-v1",
+    "profile_count": 17011,
+    "class_count": 289374121,
+    "max_support": 12,
+    "saddle_gap_tolerance": 1e-6,
+    "solver_schema_hash": "5f6dd98d239ea8006a087668155cd1964bcd16966ee383ad2e607373d8dea934",
+    "manifest_path": "src/dth/artifacts/complete_full_v1/tablebase.json",
+    "manifest_sha256": "89a2f56aa624748bd75a25291406e46867d4eddd1c3acd06e42b1dc6ea2d3e47",
+    "table_digest": "73c7c2a2cac2fb5f5e8a51a6281a8c33e3022e2b5bf119c0566a153f37e2d85e",
+    "arrays": {
+      "solver_kind.npy": "f9efa51f124d89b78095fcd83bf664d7d0f9916abaf0e7ab034092bc410e1e57",
+      "value.npy": "6afe4d03ab513646e2dc8ad41e9c38bfbe86e7296f56ca4fcfdda42af540e77e"
+    }
+  },
+  "evidence": {
+    "validation": {
+      "aggro_record": "29-3",
+      "exact_record": "16-16",
+      "paired_all_game_score_uplift": 0.40625,
+      "opponent_seed_bootstrap_95": [
+        0.15625,
+        0.625
+      ]
+    },
+    "audit": {
+      "aggro_record": "64-0",
+      "exact_record": "30-31-3",
+      "paired_all_game_score_uplift": 0.5078125,
+      "opponent_seed_bootstrap_95": [
+        0.3904296875,
+        0.625
+      ],
+      "expected_nll": 4.4142727021553,
+      "uniform_expected_nll": 4.0943445622221
+    },
+    "memory_ablations": {
+      "learned_memory_aggro_record": "64-0",
+      "learned_reset_each_game_aggro_record": "64-0",
+      "fast_history_free_aggro_record": "64-0",
+      "causal_recurrent_action_use_supported": false,
+      "causal_recurrent_forecast_use_supported": false,
+      "forecast_to_control_adaptation_supported": false,
+      "long_horizon_adaptation_supported": false,
+      "practical_no_adaptation_equivalence_supported": true
+    }
+  },
+  "claim_boundary": {
+    "supported": [
+      "The checkpoint is a strong unrestricted tactical exploit policy in the audited synthetic pure-DTH league."
+    ],
+    "not_supported": [
+      "A learned recurrent-memory advantage over history-free control.",
+      "Causal long-horizon adaptation.",
+      "Generalization to human or language-model opponent populations."
+    ]
+  },
+  "selection": {
+    "condition": "learned-memory",
+    "fast_adaptation": false,
+    "validation_manifest_sha256": "7fd6d0d724939b727e51314fdf550399a90890b054e1794a32f46409ad69a929",
+    "audit_manifest_sha256": "ecaa9bb8ec8ca94702cd44779999e524fd1760fa16ae5c4f5b9b070c1f298305"
+  },
+  "immutability": {
+    "generated_artifacts_remain_gitignored": true,
+    "future_training_must_write_a_new_output_directory": true,
+    "this_manifest_must_not_be_rebound_to_new_bytes": true
+  }
+}

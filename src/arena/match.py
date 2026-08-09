@@ -28,6 +28,7 @@ from arena.contracts import (
     observe_provider,
     reset_provider_game,
 )
+from arena.dth_adapter import PureDTHGame
 from stl.engine.actions import validate_action
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 
@@ -53,12 +54,18 @@ def play_match_game(
     start_clock: int,
     max_half_rounds: int,
     game_index: int = 0,
+    pure_dth: bool = False,
 ) -> tuple[str | None, int]:
-    """Play one full game; provider_one holds the Hal seat."""
+    """Play one full game; provider_one holds the Hal seat.
+
+    ``pure_dth=True`` removes only STL's leap-window action 61 while retaining
+    the shared canonical engine mechanics.
+    """
 
     seat_one = Player(name="Hal", physicality=PHYSICALITY_HAL)
     seat_two = Player(name="Baku", physicality=PHYSICALITY_BAKU)
-    game = Game(
+    game_type = PureDTHGame if pure_dth else Game
+    game = game_type(
         player1=seat_one,
         player2=seat_two,
         referee=Referee(),
@@ -78,8 +85,12 @@ def play_match_game(
         public_state = public_state_from_game(game, turn_duration=turn_duration)
         drop = agents[dropper.name].choose_action(game, "dropper", turn_duration)
         check = agents[checker.name].choose_action(game, "checker", turn_duration)
-        validate_action(drop, actor=dropper.name, role="dropper", turn_duration=turn_duration)
-        validate_action(check, actor=checker.name, role="checker", turn_duration=turn_duration)
+        validate_action(
+            drop, actor=dropper.name, role="dropper", turn_duration=turn_duration
+        )
+        validate_action(
+            check, actor=checker.name, role="checker", turn_duration=turn_duration
+        )
         result = game.play_half_round(drop, check)
         public_record = PublicHalfRound(
             game_index=game_index,
@@ -96,7 +107,9 @@ def play_match_game(
         observe_provider(provider_one, public_record)
         observe_provider(provider_two, public_record)
         half_rounds += 1
-    winner_name = game.winner.name if game.game_over and game.winner is not None else None
+    winner_name = (
+        game.winner.name if game.game_over and game.winner is not None else None
+    )
     outcome = PublicGameOutcome(
         game_index=game_index,
         winner_name=winner_name,
@@ -144,8 +157,10 @@ def run_paired_series(
     make_opponent: Callable[[], object],
     *,
     base_seeds: int,
+    seed_start: int = 0,
     start_clock: int,
     max_half_rounds: int,
+    pure_dth: bool = False,
     stop_early: bool = True,
 ) -> dict[str, object]:
     """Play seat-swapped pairs until the SPRT decides or seeds run out."""
@@ -160,7 +175,7 @@ def run_paired_series(
         "candidate_first_seat": {"wins": 0, "decisive": 0},
         "candidate_second_seat": {"wins": 0, "decisive": 0},
     }
-    for seed in range(base_seeds):
+    for seed in range(seed_start, seed_start + base_seeds):
         for candidate_first in (True, False):
             provider_one = candidate if candidate_first else opponent
             provider_two = opponent if candidate_first else candidate
@@ -171,6 +186,7 @@ def run_paired_series(
                 start_clock=start_clock,
                 max_half_rounds=max_half_rounds,
                 game_index=len(outcomes),
+                pure_dth=pure_dth,
             )
             if winner_seat is None:
                 winner_agent = None
@@ -206,9 +222,7 @@ def run_paired_series(
 
     sprt = sprt_verdict(wins, losses)
     seating_rates = {
-        name: (
-            counts["wins"] / counts["decisive"] if counts["decisive"] else None
-        )
+        name: (counts["wins"] / counts["decisive"] if counts["decisive"] else None)
         for name, counts in per_seating.items()
     }
     gates = {
@@ -223,6 +237,8 @@ def run_paired_series(
         "opponent": opponent_name,
         "start_clock": start_clock,
         "max_half_rounds": max_half_rounds,
+        "pure_dth": bool(pure_dth),
+        "seed_start": seed_start,
         "games": [outcome.__dict__ for outcome in outcomes],
         "stopped_games": stopped,
         "per_seating": {

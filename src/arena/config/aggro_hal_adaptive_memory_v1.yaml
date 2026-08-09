@@ -1,0 +1,67 @@
+schema_version: arena-aggro-hal-training-config-v2
+
+experiment:
+  schema_version: arena-aggro-hal-adaptive-memory-experiment-v1
+  goal_manifest: src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json
+  goal_manifest_canonical_json_sha256: 44d09c9cd4e1bc765a5a095ab2f7fdf62ce9f89061f51a4a18b2c59cc80b66ec
+  tactical_baseline: src/arena/config/aggro_hal_tactical_baseline_v1.json
+  initial_checkpoint: outputs/aggro-hal-v1/corrected-v1/checkpoint.pt
+  generated_output: outputs/aggro-hal-v1/adaptive-memory-v1
+  phase: warmstart-only
+  ppo_locked: true
+
+model:
+  hidden_size: 128
+  gru_layers: 2
+  head_hidden_size: 96
+  gru_dropout: 0.0
+  tactical_logit_scale: 12.0
+
+training:
+  seed: 20260809
+  device: cpu
+  cpu_threads: 6
+  dth_artifact: src/dth/artifacts/complete_full_v1
+  games_per_session: 17
+  max_half_rounds: 1
+  start_clocks: [600, 720]
+  sessions_per_update: 8
+  warmstart_updates: 60
+  ppo_updates: 0
+  ppo_epochs: 3
+  learning_rate: 0.0008
+  gamma: 0.995
+  gae_lambda: 0.95
+  ppo_clip: 0.20
+  value_coef: 0.0
+  entropy_coef: 0.003
+  prediction_coef: 5.0
+  ppo_prediction_coef: 0.25
+  tactical_coef: 0.5
+  direct_tactical_coef: 0.25
+  ppo_tactical_coef: 0.15
+  max_grad_norm: 1.0
+  snapshot_interval: 10
+
+session_collector:
+  schema_version: arena-aggro-hal-session-collector-config-v1
+  type: memory-necessity
+  split: train
+
+promotion_gate:
+  schema_version: arena-aggro-hal-adaptive-promotion-gate-v1
+  split: validation
+  held_out_cover_games: 8
+  bootstrap_unit: example_seed
+  bootstrap_seed: 20260809
+  bootstrap_replicates: 5000
+  require_byte_identical_current_target: true
+  required_roles: [dropper, checker]
+  required_modes: [a, b]
+  required_ablations: [swapped_memory, zero_memory, history_free]
+  per_role_mode_no_pooled_rescue:
+    normalized_payoff_gain_lower_95_strictly_above: 0.02
+    forecast_nll_gain_lower_95_strictly_above_nats: 0.01
+  expansion:
+    pass: require_tactical_regression_before_capped_30_ppo_updates
+    fail: keep_corrected_v1_and_require_a_new_protocol_version_before_retry
