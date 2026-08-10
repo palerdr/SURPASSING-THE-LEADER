@@ -177,6 +177,49 @@ cylinder without going overboard”.
 84, 154 and 60 seconds, totalling 298 of the available 300. No probability
 assumption is needed to explain the ceiling — the cap alone produces it.
 
+<!-- evidence:E-STL-OPENING -->
+<a id="e-stl-opening"></a>
+## E-STL-OPENING — the match opens at 8:12 with Hal as Dropper
+
+Source: `Leader-Deviation-Strategy.pdf`, PDF page 2, and
+[`IN_DEPTH_SUMMARY.md`](IN_DEPTH_SUMMARY.md), Round 1 Turn 1. The route analysis
+labels the first node `R1T1, 8:12 AM`. The ledger identifies Leader/Hal as
+Dropper and Baku as Checker, with both players at zero accumulation and zero
+prior near-death time.
+
+<!-- evidence:E-LSR-VARIANTS -->
+<a id="e-lsr-variants"></a>
+## E-LSR-VARIANTS — four exact route congruence classes
+
+Source: `Leader-Deviation-Strategy.pdf`, PDF pages 2--9. Round starts divide
+into four minute classes: V1 starts at minutes `12 mod 4`, V2 at `13 mod 4`, V3
+at `14 mod 4`, and V4 at `15 mod 4`. V2 is the active route. The analysis
+tracks the canonical deaths from V1 to V4 to V3 and finally V2, with the active
+round beginning at 8:57.
+
+The labels are a presentation of exact clock arithmetic, not independent game
+state. A counterfactual death must advance the clock by its actual duration and
+then derive the new class.
+
+<!-- evidence:E-HAL-MEMORY-SEQUENCE -->
+<a id="e-hal-memory-sequence"></a>
+## E-HAL-MEMORY-SEQUENCE — two distinct forgetting events precede the leap
+
+Sources: `SURPASSING THE LEADER- HAL DOC.pdf`, PDF pages 17--18 and 73--74;
+`Leader-Deviation-Strategy.pdf`, PDF pages 119--121; and the Round 2, Round 8,
+and Round 9 entries in [`IN_DEPTH_SUMMARY.md`](IN_DEPTH_SUMMARY.md).
+
+The analyses place Hal's deliberate first near-death in Round 2 after he has
+recognized and opened the leap route, followed by suppression or forgetting of
+that realization. Hal later recognizes the plan again before his Round 8
+near-death. That second Hal near-death is explicitly labeled as leaving his TTD
+at `3M58S`; the scheduled broad memory loss follows before Round 9. Yakou then
+recaps the rules and prior events. Hal's Round 9 leap injection is his third
+near-death and therefore cannot cause the forgetting that preceded it.
+
+The sources disagree about the degree of subconscious carryover after each
+event. They support the chronology, not a numerical off-path cognition model.
+
 <!-- evidence:E-LEDGER-ERRATUM -->
 <a id="e-ledger-erratum"></a>
 ## E-LEDGER-ERRATUM — one transcription error in the summary

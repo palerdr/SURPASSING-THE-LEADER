@@ -11,6 +11,9 @@ supported claim.
 
 Timing is owned by [`ACTION_TIMING.md`](ACTION_TIMING.md); state and transition
 boundaries by [`CANONICAL_EXTENSIVE_FORM.md`](CANONICAL_EXTENSIVE_FORM.md).
+The exact-opening, history, LSR, and information-state contract for the full
+STL match is
+[`src/stl/docs/GAME_AND_SOLVER.md`](../src/stl/docs/GAME_AND_SOLVER.md).
 
 ## Shared core — true at every rung
 
@@ -82,18 +85,26 @@ Owner: `src/stl/`. Adds one mechanic: within the leap window, the
 Dropper may additionally choose second 61; the Checker stays capped at 60, so
 `(drop = 61, check ≤ 60)` always fails.
 
-The state gains a leap phase, because the window is a wall-clock event and each
-half-round consumes a fixed 60 seconds:
+The sufficient public state gains the exact wall clock because the window is a
+wall-clock event. Half-rounds, procedure time, and near-deaths advance that
+clock according to the full-game transition:
 
 ```text
-x = (checker_load, checker_ttd, dropper_load, dropper_ttd, phase)
-phase ∈ {k half-rounds before the window, …, in the window, after the window}
+x = (baku_load, baku_ttd, hal_load, hal_ttd, half, clock)
 ```
 
-Only the distance to the window matters, and after it the coordinate is
-absorbing, so `phase` is bounded by the number of half-rounds a match can reach
-the window from. Size is `L1 × |phase|`. Both players know the leap rule from
-initialization; knowledge does not alter structural legality.
+Identity and `half` are structural here: Hal drops in half 1, Baku drops in
+half 2, and only Baku as Dropper can use second 61. A role-relative
+Checker/Dropper tuple would therefore lose information needed to determine the
+legal action set.
+
+The four LSR variants are derived congruence classes of exact round-start time,
+not independent mutable state. A full replay also retains every revealed public
+action and outcome as specified by
+[`src/stl/docs/GAME_AND_SOLVER.md`](../src/stl/docs/GAME_AND_SOLVER.md); a Markov
+solver may use a sufficient compression when it does not model opponent
+history. Both players know the leap rule from initialization; knowledge does
+not alter structural legality.
 
 All loads, TTD, checks, doses, eligibility guards, revival probabilities, role
 swaps, and actions 1..60 are exactly L1. The prospective action 61 for Baku as
@@ -104,9 +115,12 @@ induction can address in principle.
 
 ### L3 — private leap knowledge and memory loss
 
-Adds genuinely unobserved state: which player currently holds the leap
-realization, and the scheduled memory-loss event that can remove it. Players no
-longer share a common posterior, so L3 is an imperfect-information game and
+Adds genuinely unobserved state: Hal's binary access to the concrete leap
+realization and the memory events that can remove it. The exact realized-trace
+labels and the boundary between evidence and off-path opponent modeling are
+frozen in
+[`src/stl/docs/GAME_AND_SOLVER.md`](../src/stl/docs/GAME_AND_SOLVER.md). Players
+no longer share a common posterior, so L3 is an imperfect-information game and
 `V(x)` is replaced by values over information sets.
 
 Backward induction does not apply. This is the first rung requiring

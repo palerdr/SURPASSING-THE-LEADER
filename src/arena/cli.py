@@ -11,7 +11,14 @@ from arena.abstract_adapter import AbstractTablebasePolicyProvider
 from arena.agent import PolicyDrivenAgent
 from arena.contracts import reset_provider_game
 from arena.session import Phase, PlaySession
-from stl.engine.game import OPENING_START_CLOCK, PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
+from stl.engine.game import (
+    OPENING_START_CLOCK,
+    PHYSICALITY_BAKU,
+    PHYSICALITY_HAL,
+    Game,
+    Player,
+    Referee,
+)
 
 DEFAULT_DTH_COMPLETE_TABLEBASE = "src/dth/artifacts/complete_full_v1"
 
@@ -30,7 +37,11 @@ def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
 
 
 def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
-    allowed = f"{legal[0]}-{legal[-1]}" if legal == tuple(range(legal[0], legal[-1] + 1)) else str(legal)
+    allowed = (
+        f"{legal[0]}-{legal[-1]}"
+        if legal == tuple(range(legal[0], legal[-1] + 1))
+        else str(legal)
+    )
     while True:
         try:
             action = int(input(f"{actor} ({role}) choose second [{allowed}]: "))
@@ -116,6 +127,19 @@ def _make_exploit_hal_provider(args: argparse.Namespace):
     )
 
 
+def _make_aggro_hal_provider(args: argparse.Namespace):
+    if not args.aggro_hal_checkpoint:
+        raise ValueError("--aggro-hal-checkpoint is required for --hal-agent aggro-hal")
+    from arena.policies.aggro_hal import make_live_provider
+
+    return make_live_provider(
+        artifact_dir=_dth_artifact_dir(args),
+        checkpoint=args.aggro_hal_checkpoint,
+        device=args.aggro_hal_device,
+        fast_adaptation=args.aggro_hal_fast_adaptation,
+    )
+
+
 def _make_provider(kind: str, args: argparse.Namespace):
     if kind == "abstract":
         tablebase_path, ruleset_id = _abstract_artifact(args)
@@ -152,7 +176,9 @@ def _make_provider(kind: str, args: argparse.Namespace):
                 command.extend(("--backend", args.abstract_backend))
             result = abstract_main(command)
             if result != 0:
-                raise RuntimeError(f"abstract tablebase build exited with status {result}")
+                raise RuntimeError(
+                    f"abstract tablebase build exited with status {result}"
+                )
         return AbstractTablebasePolicyProvider(
             tablebase_path,
             bucket_seconds=args.buckets,
@@ -164,6 +190,8 @@ def _make_provider(kind: str, args: argparse.Namespace):
         return _make_adaptive_dth_provider(args)
     if kind == "exploit-hal":
         return _make_exploit_hal_provider(args)
+    if kind == "aggro-hal":
+        return _make_aggro_hal_provider(args)
     if kind == "stl-mcts":
         if not args.checkpoint:
             raise ValueError("--checkpoint is required for --hal-agent stl-mcts")
@@ -190,7 +218,9 @@ def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
 def _print_state(game: Game) -> None:
     print(f"\nClock {game.format_game_clock()} | round {game.round_num + 1}")
     for player in (game.player1, game.player2):
-        print(f"  {player.name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}")
+        print(
+            f"  {player.name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}"
+        )
 
 
 def _show_rules(args: argparse.Namespace) -> None:
@@ -227,7 +257,9 @@ def _show_rules(args: argparse.Namespace) -> None:
         return
 
 
-def _write_play_transcript(destination: str | Path, transcript: dict[str, object]) -> Path:
+def _write_play_transcript(
+    destination: str | Path, transcript: dict[str, object]
+) -> Path:
     path = Path(destination)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -505,19 +537,41 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="sample candidates during evaluation instead of deterministic argmax",
     )
+    parser.add_argument(
+        "--aggro-hal-checkpoint",
+        default=None,
+        help="required direct recurrent Aggro Hal checkpoint",
+    )
+    parser.add_argument(
+        "--aggro-hal-device",
+        choices=("cpu", "cuda"),
+        default="cpu",
+        help="explicit Aggro Hal inference device; defaults to CPU",
+    )
+    parser.add_argument(
+        "--aggro-hal-fast-adaptation",
+        action="store_true",
+        help="blend concentrated public action evidence into Aggro Hal's forecast",
+    )
 
 
 def command_match(args: argparse.Namespace) -> int:
     from arena.match import run_paired_series, write_report
 
+    if "aggro-hal" in {args.candidate, args.opponent} and not args.pure_dth:
+        raise ValueError(
+            "aggro-hal is a pure-DTH policy; pass --pure-dth so action 61 is impossible"
+        )
     report = run_paired_series(
         args.candidate,
         args.opponent,
         make_candidate=lambda: _make_provider(args.candidate, args),
         make_opponent=lambda: _make_provider(args.opponent, args),
         base_seeds=args.games,
+        seed_start=args.seed,
         start_clock=args.start_clock,
         max_half_rounds=args.max_half_rounds,
+        pure_dth=args.pure_dth,
     )
     destination = write_report(report, args.output)
     sprt = report["sprt"]
@@ -535,7 +589,9 @@ def command_match(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m arena")
     commands = parser.add_subparsers(dest="command", required=True)
-    play = commands.add_parser("play", help="play canonical STL against a pluggable Hal policy")
+    play = commands.add_parser(
+        "play", help="play canonical STL against a pluggable Hal policy"
+    )
     play.add_argument(
         "--hal-agent",
         choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
@@ -579,8 +635,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="optional per-game start clocks; length must equal --games",
     )
-    play.add_argument("--max-half-rounds", type=int, default=None, help="stop after this many half-rounds")
-    play.add_argument("--tui", action="store_true", help="render the terminal interface instead of plain text")
+    play.add_argument(
+        "--max-half-rounds",
+        type=int,
+        default=None,
+        help="stop after this many half-rounds",
+    )
+    play.add_argument(
+        "--tui",
+        action="store_true",
+        help="render the terminal interface instead of plain text",
+    )
     play.add_argument(
         "--no-colour",
         action="store_true",
@@ -624,19 +689,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     match.add_argument(
         "--candidate",
-        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        choices=(
+            "abstract",
+            "dth",
+            "adaptive-dth",
+            "exploit-hal",
+            "aggro-hal",
+            "stl-mcts",
+        ),
         required=True,
     )
     match.add_argument(
         "--opponent",
-        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        choices=(
+            "abstract",
+            "dth",
+            "adaptive-dth",
+            "exploit-hal",
+            "aggro-hal",
+            "stl-mcts",
+        ),
         required=True,
     )
     _add_agent_arguments(match)
-    match.add_argument("--games", type=int, default=50, help="maximum base seeds; each is played in both seatings")
+    match.add_argument(
+        "--games",
+        type=int,
+        default=50,
+        help="maximum base seeds; each is played in both seatings",
+    )
     match.add_argument("--seed", type=int, default=0)
     match.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
     match.add_argument("--max-half-rounds", type=int, default=200)
+    match.add_argument(
+        "--pure-dth",
+        action="store_true",
+        help="run the pure 1..60 DTH action contract (required for aggro-hal)",
+    )
     match.add_argument(
         "--output",
         required=True,

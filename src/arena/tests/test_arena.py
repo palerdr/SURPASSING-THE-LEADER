@@ -9,7 +9,10 @@ import pytest
 
 from abstract.rules import Bucket12Frozen95Rules
 from arena import abstract_adapter, cli
-from arena.abstract_adapter import AbstractTablebasePolicyProvider, project_to_abstract_state
+from arena.abstract_adapter import (
+    AbstractTablebasePolicyProvider,
+    project_to_abstract_state,
+)
 from arena.agent import PolicyDrivenAgent, decision_from_game, normalize_legal_policy
 from arena.contracts import CanonicalDecision
 from stl.engine.game import Game, Player, Referee
@@ -31,12 +34,22 @@ def _decision(*, legal: tuple[int, ...] = (1, 2, 3)) -> CanonicalDecision:
 
 def test_projection_floors_seconds_to_role_relative_ten_second_buckets() -> None:
     state = project_to_abstract_state(_decision())
-    assert (state.checker_load, state.checker_ttd, state.dropper_load, state.dropper_ttd) == (1, 12, 2, 7)
+    assert (
+        state.checker_load,
+        state.checker_ttd,
+        state.dropper_load,
+        state.dropper_ttd,
+    ) == (1, 12, 2, 7)
 
 
 def test_projection_floors_seconds_to_role_relative_five_second_buckets() -> None:
     state = project_to_abstract_state(_decision(), Bucket12Frozen95Rules())
-    assert (state.checker_load, state.checker_ttd, state.dropper_load, state.dropper_ttd) == (
+    assert (
+        state.checker_load,
+        state.checker_ttd,
+        state.dropper_load,
+        state.dropper_ttd,
+    ) == (
         3,
         24,
         5,
@@ -330,6 +343,46 @@ def test_exploit_hal_cli_requires_an_explicit_checkpoint() -> None:
         cli._make_provider("exploit-hal", args)
 
 
+def test_aggro_hal_is_not_exposed_on_canonical_stl_play() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["play", "--hal-agent", "aggro-hal", "--skip-rules"])
+
+
+def test_aggro_hal_match_requires_an_explicit_checkpoint_and_defaults_to_cpu() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "match",
+            "--candidate",
+            "aggro-hal",
+            "--opponent",
+            "dth",
+            "--pure-dth",
+            "--output",
+            "unused.json",
+        ]
+    )
+    assert args.aggro_hal_device == "cpu"
+    with pytest.raises(ValueError, match="aggro-hal-checkpoint"):
+        cli._make_provider("aggro-hal", args)
+
+
+def test_aggro_hal_match_requires_the_pure_dth_surface() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "match",
+            "--candidate",
+            "aggro-hal",
+            "--opponent",
+            "dth",
+            "--output",
+            "unused.json",
+        ]
+    )
+    with pytest.raises(ValueError, match="--pure-dth"):
+        cli.command_match(args)
+
+
 def test_match_lifecycle_delivers_each_public_reveal_exactly_once() -> None:
     from arena.match import play_match_game
 
@@ -372,7 +425,9 @@ def test_match_lifecycle_delivers_each_public_reveal_exactly_once() -> None:
 
 
 def test_policy_normalization_discards_illegal_zero_mass_entries() -> None:
-    actions, probabilities = normalize_legal_policy({0: 4.0, 1: 1.0, 2: 3.0, 61: 2.0}, (1, 2))
+    actions, probabilities = normalize_legal_policy(
+        {0: 4.0, 1: 1.0, 2: 3.0, 61: 2.0}, (1, 2)
+    )
     assert actions.tolist() == [1, 2]
     assert probabilities.tolist() == pytest.approx([0.25, 0.75])
 
@@ -392,7 +447,11 @@ def test_algorithm_agnostic_agent_samples_only_a_legal_engine_action() -> None:
 
 
 def test_decision_uses_engine_role_relative_state() -> None:
-    game = Game(Player("Hal", cylinder=20, ttd=30), Player("Baku", cylinder=40, ttd=50), Referee())
+    game = Game(
+        Player("Hal", cylinder=20, ttd=30),
+        Player("Baku", cylinder=40, ttd=50),
+        Referee(),
+    )
     game.first_dropper = game.player1
     decision = decision_from_game(game, role="dropper", turn_duration=60)
     assert decision.actor_name == "Hal"
@@ -441,7 +500,9 @@ def test_dth_projection_is_the_exact_literal_second_identity() -> None:
         project_to_dth_state(wide)
 
 
-def test_dth_provider_serves_only_complete_exact_policies(monkeypatch, tmp_path) -> None:
+def test_dth_provider_serves_only_complete_exact_policies(
+    monkeypatch, tmp_path
+) -> None:
     import arena.dth_adapter as adapter
     from dth.agent import MoveDecision
 
@@ -477,6 +538,7 @@ def test_dth_cli_dispatch_builds_a_policy_driven_agent(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         cli._make_hal(args)
 
+
 def test_match_series_pairs_seats_and_reports_sprt(tmp_path) -> None:
     from arena.match import run_paired_series
 
@@ -493,13 +555,26 @@ def test_match_series_pairs_seats_and_reports_sprt(tmp_path) -> None:
         make_candidate=lambda: _Fixed(60),
         make_opponent=lambda: _Fixed(1),
         base_seeds=4,
+        seed_start=41,
         start_clock=720,
         max_half_rounds=120,
         stop_early=False,
     )
 
     assert report["schema_version"] == "arena-match-report-v1"
+    assert report["pure_dth"] is False
+    assert report["seed_start"] == 41
     assert len(report["games"]) == 8
+    assert [game["seed"] for game in report["games"]] == [
+        41,
+        41,
+        42,
+        42,
+        43,
+        43,
+        44,
+        44,
+    ]
     first_seats = [game["first_seat_agent"] for game in report["games"]]
     assert first_seats.count("late") == 4 and first_seats.count("early") == 4
     sprt = report["sprt"]

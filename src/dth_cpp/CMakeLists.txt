@@ -43,9 +43,16 @@ find_package(Threads REQUIRED)
 add_library(
     dth_solver
     STATIC
+        durable_store.cpp
         exact.cpp
         matrix_game.cpp
 )
+
+if(WIN32)
+    target_sources(dth_solver PRIVATE mapped_file_win32.cpp)
+else()
+    target_sources(dth_solver PRIVATE mapped_file_posix.cpp)
+endif()
 
 target_link_libraries(
     dth_solver
