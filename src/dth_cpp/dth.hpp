@@ -101,4 +101,11 @@ struct RouteCounters {
     std::uint64_t full_support{};
     std::uint64_t linear_program{};
 };
+
+[[nodiscard]] bool revival_eligibility(int st, int ttd);
+[[nodiscard]] double revival_probability(int st, int ttd);
+
+ProfileTable begin_canonical_profile_table();
+ProfileId quotient_profile_id(const ProfileTable& table, int st, int ttd);
+
 } //namespace dth
