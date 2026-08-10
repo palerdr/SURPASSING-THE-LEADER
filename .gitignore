@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.so
 target/
+/build/
 
 # Virtualenvs / local tooling
 .venv/
