@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace dth {
-
+//SECTION 1: TYPE DEFINTIONS AND CONSTANTS
 using ProfileId = std::uint32_t;
 using ChildId = std::int32_t;
 using ClassId = std::uint64_t;
@@ -101,11 +101,13 @@ struct RouteCounters {
     std::uint64_t full_support{};
     std::uint64_t linear_program{};
 };
-
+//SECTION 2: SCALAR GAME RULES
 [[nodiscard]] bool revival_eligibility(int st, int ttd);
 [[nodiscard]] double revival_probability(int st, int ttd);
-
+//SECTION 3: ENUMERATE FAILURE-FATAL QUOTIENT
 ProfileTable begin_canonical_profile_table();
 ProfileId quotient_profile_id(const ProfileTable& table, int st, int ttd);
+//SECTION 4: PER-PROFILE TRANSITION TABLE
+void finish_profile_table(ProfileTable& table);
 
 } //namespace dth
