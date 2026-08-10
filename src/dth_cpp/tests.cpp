@@ -1,11 +1,15 @@
 #include "dth.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 // Inclusive lag is not part of the public Section 2 interface yet.
 int lag(int drop, int check);
@@ -515,6 +519,229 @@ void test_profile_transition_table_exhaustively()
         "live failure-child count is not exactly 16,711");
 }
 
+void test_class_encoding_gate()
+{
+    using namespace dth;
+
+    ProfileTable table = begin_canonical_profile_table();
+    const auto last_profile = static_cast<ProfileId>(
+        table.profile_count - 1);
+    const ClassId last_class = kCanonicalClasses - 1;
+
+    const auto verify_pair = [&table](
+                                 const ProfileId checker,
+                                 const ProfileId dropper) {
+        const ClassId expected =
+            ClassId{checker}
+                * static_cast<ClassId>(table.profile_count)
+            + ClassId{dropper};
+        const ClassId encoded = encode_class(table, checker, dropper);
+
+        require(
+            encoded == expected,
+            "class encoding does not use checker-major row order");
+
+        const auto [decoded_checker, decoded_dropper] =
+            decode_class(table, encoded);
+        require(
+            decoded_checker == checker && decoded_dropper == dropper,
+            "class encode/decode did not round-trip its profile pair");
+    };
+
+    verify_pair(ProfileId{0}, ProfileId{0});
+    const auto [first_checker, first_dropper] =
+        decode_class(table, ClassId{0});
+    require(
+        first_checker == ProfileId{0} && first_dropper == ProfileId{0},
+        "the first class does not decode to the first profile pair");
+
+    verify_pair(last_profile, last_profile);
+    const auto [last_checker, last_dropper] =
+        decode_class(table, last_class);
+    require(
+        last_checker == last_profile && last_dropper == last_profile,
+        "the last class does not decode to the last profile pair");
+
+    const std::array<std::pair<ProfileId, ProfileId>, 4> corners{{
+        {ProfileId{0}, ProfileId{0}},
+        {ProfileId{0}, last_profile},
+        {last_profile, ProfileId{0}},
+        {last_profile, last_profile},
+    }};
+    for (const auto& [checker, dropper] : corners) {
+        verify_pair(checker, dropper);
+    }
+
+    constexpr std::size_t sample_count = 100'000;
+    static_assert(sample_count >= 100'000);
+
+    const ClassId profile_count =
+        static_cast<ClassId>(table.profile_count);
+    const ClassId sample_stride = profile_count + 1;
+    ClassId sampled_class = 12'345;
+
+    for (std::size_t sample = 0; sample < sample_count; ++sample) {
+        const auto expected_checker = static_cast<ProfileId>(
+            sampled_class / profile_count);
+        const auto expected_dropper = static_cast<ProfileId>(
+            sampled_class % profile_count);
+        const auto [checker, dropper] =
+            decode_class(table, sampled_class);
+
+        require(
+            checker == expected_checker && dropper == expected_dropper,
+            "sampled class did not decode by quotient and remainder");
+        require(
+            encode_class(table, checker, dropper) == sampled_class,
+            "sampled profile pair did not round-trip through class encoding");
+
+        sampled_class =
+            (sampled_class + sample_stride) % kCanonicalClasses;
+    }
+
+    const ProfileId origin_profile = quotient_profile_id(table, 0, 0);
+    require(
+        origin_profile == ProfileId{0}
+            && encode_class(table, origin_profile, origin_profile)
+                == ClassId{0},
+        "canonical state (0,0,0,0) does not encode to class zero");
+}
+
+void test_potential_bucket_dag_gate()
+{
+    using namespace dth;
+
+    ProfileTable table = begin_canonical_profile_table();
+    finish_profile_table(table);
+    build_buckets(table);
+    validate_profile_edges(table);
+
+    std::array<std::vector<ProfileId>, kMaxProfilePotential + 1>
+        expected_buckets{};
+
+    for (std::size_t profile = 0;
+         profile < table.profile_count;
+         ++profile) {
+        const int st = table.st[profile];
+        const int ttd = table.ttd[profile];
+        const int rho = ttd >= 0
+            ? ttd
+            : static_cast<int>(kDeadRho);
+        const auto expected_potential = static_cast<Potential>(st + rho);
+
+        expected_buckets[expected_potential].push_back(
+            static_cast<ProfileId>(profile));
+    }
+
+    for (std::size_t potential = 0;
+         potential <= kMaxProfilePotential;
+         ++potential) {
+        require(
+            table.buckets[potential] == expected_buckets[potential],
+            "potential bucket contents differ from the quotient structure");
+    }
+
+    for (std::size_t potential = 241; potential <= 300; ++potential) {
+        require(
+            table.buckets[potential].empty(),
+            "a structurally impossible bucket in 241..300 is nonempty");
+    }
+
+    std::size_t live_success = 0;
+    std::size_t live_failure = 0;
+
+    for (std::size_t profile = 0;
+         profile < table.profile_count;
+         ++profile) {
+        const Potential parent_potential = table.potential[profile];
+        const std::size_t row_begin = profile * kActions;
+        const std::size_t row_end = row_begin + kActions;
+
+        for (std::size_t index = row_begin; index < row_end; ++index) {
+            const ChildId child = table.success_child[index];
+            if (child < 0) {
+                continue;
+            }
+
+            ++live_success;
+            const auto child_id = static_cast<std::size_t>(child);
+            require(
+                table.potential[child_id] > parent_potential,
+                "a live success edge has equal or lower potential");
+        }
+
+        const ChildId child = table.failure_child[profile];
+        if (child >= 0) {
+            ++live_failure;
+            const auto child_id = static_cast<std::size_t>(child);
+            require(
+                table.potential[child_id] > parent_potential,
+                "a live failure edge has equal or lower potential");
+        }
+    }
+
+    require(
+        live_success + live_failure == 1'035'541,
+        "total live profile-transition count is not 1,035,541");
+
+    ClassId total_classes = 0;
+    int largest_layer_size = -1;
+    std::size_t largest_layer_potential = 0;
+    std::size_t largest_layer_count = 0;
+
+    for (std::size_t potential = 0;
+         potential <= kMaxClassPotential;
+         ++potential) {
+        const int actual = layer_size(
+            table,
+            static_cast<Potential>(potential));
+
+        require(actual > 0, "a canonical class layer is empty");
+
+        const std::size_t first = potential > kMaxProfilePotential
+            ? potential - kMaxProfilePotential
+            : 0;
+        const std::size_t last =
+            std::min(potential, kMaxProfilePotential);
+        ClassId expected = 0;
+
+        for (std::size_t checker_potential = first;
+             checker_potential <= last;
+             ++checker_potential) {
+            const std::size_t dropper_potential =
+                potential - checker_potential;
+            expected +=
+                static_cast<ClassId>(
+                    expected_buckets[checker_potential].size())
+                * static_cast<ClassId>(
+                    expected_buckets[dropper_potential].size());
+        }
+
+        require(
+            static_cast<ClassId>(actual) == expected,
+            "layer size differs from the independent bucket product");
+
+        total_classes += static_cast<ClassId>(actual);
+
+        if (actual > largest_layer_size) {
+            largest_layer_size = actual;
+            largest_layer_potential = potential;
+            largest_layer_count = 1;
+        } else if (actual == largest_layer_size) {
+            ++largest_layer_count;
+        }
+    }
+
+    require(
+        total_classes == kCanonicalClasses,
+        "the 1,201 layers do not partition all canonical classes");
+    require(
+        largest_layer_potential == 374
+            && largest_layer_size == 1'678'715
+            && largest_layer_count == 1,
+        "the unique largest layer is not P=374 with 1,678,715 classes");
+}
+
 } // namespace
 
 int main()
@@ -530,6 +757,8 @@ int main()
         test_inclusive_lag();
         test_failure_fatal_quotient_exhaustively();
         test_profile_transition_table_exhaustively();
+        test_class_encoding_gate();
+        test_potential_bucket_dag_gate();
 
         std::cout << "All DTH tests passed\n";
         return 0;

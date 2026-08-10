@@ -101,13 +101,32 @@ struct RouteCounters {
     std::uint64_t full_support{};
     std::uint64_t linear_program{};
 };
+
 //SECTION 2: SCALAR GAME RULES
 [[nodiscard]] bool revival_eligibility(int st, int ttd);
 [[nodiscard]] double revival_probability(int st, int ttd);
+
 //SECTION 3: ENUMERATE FAILURE-FATAL QUOTIENT
 ProfileTable begin_canonical_profile_table();
 ProfileId quotient_profile_id(const ProfileTable& table, int st, int ttd);
+
 //SECTION 4: PER-PROFILE TRANSITION TABLE
 void finish_profile_table(ProfileTable& table);
+
+//SECTION 5: DEFINE CLASS ENCODING AND BELLMAN ROLE SWAPS
+ClassId encode_class(ProfileTable& table, ProfileId checker, ProfileId dropper);
+std::pair<ProfileId, ProfileId> decode_class(ProfileTable& table, ClassId class_id);
+ClassId swapped_child_class(ProfileTable& table, ProfileId dropper, ProfileId child_profile);
+Potential class_potential(ProfileTable& table, ClassId class_id);
+
+//SECTION 6: BUILD POTENTIAL BUCKETS AND PROVE DAG SCHEDULE
+void build_buckets(ProfileTable& table);
+void validate_profile_edges(ProfileTable& table);
+int layer_size(ProfileTable& table, Potential potential);
+
+//SECTION 7: CREATE DURABLE DENSE VALUE AND ROUTING STORES
+
+
+
 
 } //namespace dth

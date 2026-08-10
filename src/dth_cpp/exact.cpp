@@ -4,7 +4,7 @@
 #include <cmath>
 #include <ranges>
 
-//helpers and shit
+//helpers and whatnot
 namespace {
     //private validation functions for st,ttd
     void validate_st(int st) {
@@ -32,9 +32,10 @@ namespace {
         validate_ttd(ttd);
         return static_cast<std::size_t>(ttd) * dth::kCapacity + static_cast<std::size_t>(st);
     }
-    std::size_t index_success_child(int id, int lag) {
-        return static_cast<std::size_t>(id) * dth::kActions + static_cast<std::size_t>(lag-1);
+    std::size_t index_success_child(std::size_t id, int lag) {
+        return id * dth::kActions + static_cast<std::size_t>(lag-1);
     }
+
 }
 
 //SECTION 2
@@ -52,7 +53,7 @@ double dth::revival_probability(int st, int ttd) {
         return 0.0;
     }
     double acute = 1.0 - (static_cast<double>(st) / 240.0);
-    double chronic = pow(0.75, static_cast<double>(ttd) / 60.0);
+    double chronic = std::pow(0.75, static_cast<double>(ttd) / 60.0);
     double p = 0.95 * acute * chronic;
     if (!std::isfinite(p) || p <= 0.0 || p >= 1.0) {
         throw std::invalid_argument("p must be a finite number between 0.0 and 1.0 (exclusive)");
@@ -61,10 +62,10 @@ double dth::revival_probability(int st, int ttd) {
 }
 
 int lag (int drop, int check) {
-    validate_action(drop);
-    validate_action(check);
-    return check - drop + 1;
-}
+        validate_action(drop);
+        validate_action(check);
+        return check - drop + 1;
+    }
 
 //SECTION 3
 dth::ProfileTable dth::begin_canonical_profile_table() {
@@ -88,12 +89,12 @@ dth::ProfileTable dth::begin_canonical_profile_table() {
 
     std::size_t next = 0;
 
-    auto fill_profile = [&](const int ttd) {
+    auto fill_profile = [&table, &next, capacity](const int ttd) {
         for (int st : std::views::iota(0, capacity)) {
             if (!revival_eligibility(st, ttd)) {
                 continue;
                 }
-            table.alive_id[index_alive_id(st, ttd)] = static_cast<dth::ChildId>(next);
+            table.alive_id[index_alive_id(st, ttd)] = static_cast<ChildId>(next);
                 table.st[next] = static_cast<std::int16_t>(st);
                 table.ttd[next] = static_cast<std::int16_t>(ttd);
                 ++next;
@@ -104,7 +105,7 @@ dth::ProfileTable dth::begin_canonical_profile_table() {
     for (int ttd : std::views::iota(penalty, capacity + 1)) {
         fill_profile(ttd);
     }
-    
+
     if (next != dth::kAliveProfiles) {
         throw std::logic_error("canonical alive profile count mismatch");
     }
@@ -130,12 +131,15 @@ dth::ProfileId dth::quotient_profile_id(const ProfileTable& table, int st, int t
     if (id == -1) {
         throw std::logic_error("eligible profile has off-domain TTD 1..59");
     }
+    if (id <  0) {
+        throw std::logic_error("id cannot be negative");
+    }
     return static_cast<dth::ProfileId>(id);
 }
 
 //SECTION 4
 void dth::finish_profile_table(ProfileTable& table) {
-    for (int id: std::views::iota(0, static_cast<int>(table.profile_count))) {
+    for (std::size_t id: std::views::iota(std::size_t{0}, table.profile_count)) {
             int st = table.st[id];
             int ttd = table.ttd[id];
             bool failure_fatal = (ttd < 0);
@@ -152,13 +156,16 @@ void dth::finish_profile_table(ProfileTable& table) {
                 int new_st = st + lag;
                 if (new_st >= 300) {
                     //SUCCESS CASE 1: absolute death child
-                    table.success_child[index_success_child(id, lag)] = -1;
+                    table.success_child[index_success_child(id, lag)] = ChildId{-1};
                 } else if (!failure_fatal) {
                     //SUCCESS CASE 2: still able to tank a failure
-                    table.success_child[index_success_child(id, lag)] = static_cast<ChildId>(quotient_profile_id(table, new_st, ttd));
+                    const ProfileId profile = quotient_profile_id(table, new_st, ttd);
+                    const ChildId child = static_cast<ChildId>(profile);
+                    table.success_child[index_success_child(id, lag)] = child;
                 } else {
                     //SUCCESS CASE 3: already failure_fatal so -1 -> -1; (new_st, -1) profile represented as 16,711 + new_st
-                    table.success_child[index_success_child(id, lag)] = static_cast<ChildId>(dth::kDeadProfileBase + static_cast<size_t>(new_st));
+                    const ChildId child = static_cast<ChildId>(dth::kDeadProfileBase + static_cast<std::size_t>(new_st));
+                    table.success_child[index_success_child(id, lag)] = child;
                 }
             }
             //1 failed check profile
@@ -168,8 +175,90 @@ void dth::finish_profile_table(ProfileTable& table) {
                 table.failure_child[id] = static_cast<ChildId>(quotient_profile_id(table, 0, new_ttd));
             } else {
                 //REVIVAL CASE 2: if a failure is fatal then the child id is just sentinel
-                table.failure_child[id] = -1;
+                table.failure_child[id] = ChildId{-1};
             }          
     }
 }
 
+//SECTION 5
+dth::ClassId dth::encode_class(ProfileTable& table, ProfileId checker, ProfileId dropper) {
+    //17,011 x 17,011 matrix of profile indexed by classId
+    if (checker >= table.profile_count) {
+        throw std::out_of_range("checker ID must be within profile range");
+    }
+    if (dropper >= table.profile_count) {
+        throw std::out_of_range("dropper ID must be within profile range");
+    }
+    return ClassId{checker} * static_cast<ClassId>(table.profile_count) + ClassId{dropper};
+}
+
+std::pair<dth::ProfileId, dth::ProfileId> dth::decode_class(dth::ProfileTable &table, dth::ClassId class_id) {
+    if (class_id >= kCanonicalClasses) {
+        throw std::out_of_range("class_id must be within the cross product of profile_counts");
+    }
+    ProfileId checker = static_cast<ProfileId>(class_id / table.profile_count);
+    ProfileId dropper = static_cast<ProfileId>(class_id % table.profile_count);
+    return std::make_pair(checker, dropper);
+}
+
+dth::ClassId dth::swapped_child_class(ProfileTable& table, ProfileId dropper, ProfileId child_profile) {
+    //current checker moves -> child_profile post half round, must swap roles for bellman recursion
+    return encode_class(table, dropper, child_profile);
+}
+
+dth::Potential dth::class_potential(ProfileTable& table, ClassId class_id) {
+    auto [checker, dropper] = decode_class(table, class_id);
+    return table.potential[static_cast<std::size_t>(checker)] + table.potential[static_cast<std::size_t>(dropper)];
+}
+
+//SECTION 6
+void dth::build_buckets(ProfileTable& table) {
+    for (std::size_t profile : std::views::iota(std::size_t{0}, table.profile_count)) {
+        table.buckets[table.potential[profile]].push_back(profile);
+    }
+}
+void dth::validate_profile_edges(ProfileTable& table) {
+    int live_success{0};
+    int live_failure{0};
+    for (std::size_t profile: std::views::iota(std::size_t{0}, table.profile_count)) {
+        const Potential parent_phi = table.potential[profile];
+        const std::size_t row_begin = profile * kActions;
+        const std::size_t row_end = row_begin + kActions;
+
+        for (std::size_t i : std::views::iota(row_begin, row_end)) {
+            const ChildId success_child = table.success_child[i];
+            //validate child
+            if (success_child >= 0) {
+                if (table.potential[success_child] <= parent_phi) {
+                    throw std::logic_error("successful child potential must be strictly monotonically increasing");
+                }
+                ++live_success;
+            }
+        }
+        const ChildId fail_child = table.failure_child[profile];
+        if (fail_child >= 0) {
+            if (table.potential[fail_child] <= parent_phi) {
+                throw std::logic_error("failed child potentital must be strictly monotonically increasing");
+            }
+            ++live_failure;
+        }
+    }
+    if (live_success != 1'018'830) {
+        throw std::logic_error("live successes differ from the canonical number");
+    }
+    if (live_failure != 16'711) {
+        throw std::logic_error("live failures differ from the canonical number");
+    }
+}
+
+int dth::layer_size(ProfileTable& table, Potential potential) {
+    int total{0};
+    const size_t first = std::size_t{std::max(0, int{potential} - 600)};
+    const size_t last = std::size_t{std::min(600, int{potential})};
+    for (std::size_t a: std::views::iota(first, last + 1)) {
+        total += table.buckets[a].size() * table.buckets[potential - a].size();
+    }
+    return total;
+}
+
+//SECTION 7
