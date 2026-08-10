@@ -124,9 +124,4 @@ void build_buckets(ProfileTable& table);
 void validate_profile_edges(ProfileTable& table);
 int layer_size(ProfileTable& table, Potential potential);
 
-//SECTION 7: CREATE DURABLE DENSE VALUE AND ROUTING STORES
-
-
-
-
 } //namespace dth

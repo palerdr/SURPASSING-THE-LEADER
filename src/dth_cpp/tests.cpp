@@ -1,15 +1,37 @@
 #include "dth.hpp"
+#include "durable_store.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <cerrno>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 // Inclusive lag is not part of the public Section 2 interface yet.
 int lag(int drop, int check);
@@ -48,6 +70,165 @@ void require_logic_error(Function&& function, const char* const message)
         threw = true;
     }
     require(threw, message);
+}
+
+template <typename Function>
+void require_exception(Function&& function, const char* const message)
+{
+    bool threw = false;
+    try {
+        function();
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    require(threw, message);
+}
+
+class TemporaryDirectory {
+public:
+    TemporaryDirectory()
+    {
+        const auto stamp =
+            std::chrono::high_resolution_clock::now()
+                .time_since_epoch()
+                .count();
+        path_ = std::filesystem::temp_directory_path()
+            / ("dth-cpp-section7-" + std::to_string(stamp));
+        if (!std::filesystem::create_directory(path_)) {
+            throw std::runtime_error("could not create Section 7 test directory");
+        }
+    }
+
+    ~TemporaryDirectory()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(path_, ignored);
+    }
+
+    TemporaryDirectory(const TemporaryDirectory&) = delete;
+    TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
+
+    const std::filesystem::path& path() const noexcept
+    {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
+};
+
+constexpr std::uint64_t kSection7ProfileCount = 17'011;
+constexpr dth::ClassId kSection7ClassCount = 1'000;
+constexpr std::size_t kCrashValueIndex = 17;
+constexpr double kCrashValue = 91.25;
+constexpr std::uint8_t kCrashSolverKind = 2;
+constexpr int kCrashExitCode = 73;
+
+[[noreturn]] void run_section7_crash_child(
+    const std::filesystem::path& output_dir)
+{
+    dth::DurableStores stores = dth::open_resume(
+        output_dir,
+        kSection7ProfileCount,
+        kSection7ClassCount);
+    stores.values[kCrashValueIndex] = kCrashValue;
+    stores.solver_kind[kCrashValueIndex] = kCrashSolverKind;
+    stores.values.flush();
+    stores.solver_kind.flush();
+    std::_Exit(kCrashExitCode);
+}
+
+int run_section7_crash_process(
+    const std::filesystem::path& test_executable,
+    const std::filesystem::path& output_dir)
+{
+#ifdef _WIN32
+    const std::filesystem::path absolute_executable =
+        std::filesystem::absolute(test_executable);
+    std::wstring command_line =
+        L"\"" + absolute_executable.wstring()
+        + L"\" --section7-crash-child \"" + output_dir.wstring() + L"\"";
+    std::vector<wchar_t> mutable_command(
+        command_line.begin(),
+        command_line.end());
+    mutable_command.push_back(L'\0');
+
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(
+            absolute_executable.c_str(),
+            mutable_command.data(),
+            nullptr,
+            nullptr,
+            FALSE,
+            0,
+            nullptr,
+            nullptr,
+            &startup,
+            &process)) {
+        throw std::system_error(
+            static_cast<int>(GetLastError()),
+            std::system_category(),
+            "could not start Section 7 crash child");
+    }
+    CloseHandle(process.hThread);
+
+    if (WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0) {
+        const DWORD error = GetLastError();
+        CloseHandle(process.hProcess);
+        throw std::system_error(
+            static_cast<int>(error),
+            std::system_category(),
+            "could not wait for Section 7 crash child");
+    }
+
+    DWORD exit_code = 0;
+    if (!GetExitCodeProcess(process.hProcess, &exit_code)) {
+        const DWORD error = GetLastError();
+        CloseHandle(process.hProcess);
+        throw std::system_error(
+            static_cast<int>(error),
+            std::system_category(),
+            "could not read Section 7 crash-child status");
+    }
+    CloseHandle(process.hProcess);
+    return static_cast<int>(exit_code);
+#else
+    const std::filesystem::path absolute_executable =
+        std::filesystem::absolute(test_executable);
+    const pid_t child = ::fork();
+    if (child == -1) {
+        throw std::system_error(
+            errno,
+            std::generic_category(),
+            "could not fork Section 7 crash child");
+    }
+    if (child == 0) {
+        ::execl(
+            absolute_executable.c_str(),
+            absolute_executable.c_str(),
+            "--section7-crash-child",
+            output_dir.c_str(),
+            static_cast<char*>(nullptr));
+        std::_Exit(127);
+    }
+
+    int status = 0;
+    while (::waitpid(child, &status, 0) == -1) {
+        if (errno == EINTR) {
+            continue;
+        }
+        throw std::system_error(
+            errno,
+            std::generic_category(),
+            "could not wait for Section 7 crash child");
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    return -1;
+#endif
 }
 
 void test_constant_products()
@@ -742,10 +923,242 @@ void test_potential_bucket_dag_gate()
         "the unique largest layer is not P=374 with 1,678,715 classes");
 }
 
+void require_checkpoint_matches(
+    const dth::CheckpointRecord& actual,
+    const dth::CheckpointRecord& expected)
+{
+    require(
+        actual.profile_count == expected.profile_count,
+        "checkpoint profile count changed");
+    require(
+        actual.class_count == expected.class_count,
+        "checkpoint class count changed");
+    require(
+        actual.completed_potential == expected.completed_potential,
+        "checkpoint completed potential changed");
+    require(
+        actual.counters.pure == expected.counters.pure,
+        "checkpoint pure counter changed");
+    require(
+        actual.counters.warm_support == expected.counters.warm_support,
+        "checkpoint warm-support counter changed");
+    require(
+        actual.counters.full_support == expected.counters.full_support,
+        "checkpoint full-support counter changed");
+    require(
+        actual.counters.linear_program == expected.counters.linear_program,
+        "checkpoint linear-program counter changed");
+}
+
+void test_durable_store_gate(
+    const std::filesystem::path& test_executable)
+{
+    using namespace dth;
+
+    TemporaryDirectory temporary;
+    const std::filesystem::path output_dir = temporary.path();
+    const std::filesystem::path values_path = output_dir / "values.bin";
+    const std::filesystem::path kinds_path = output_dir / "solver_kind.bin";
+    const std::filesystem::path checkpoint_path =
+        output_dir / "checkpoint.bin";
+    CheckpointRecord initial_checkpoint{};
+
+    {
+        DurableStores stores = create_stores(
+            output_dir,
+            kSection7ProfileCount,
+            kSection7ClassCount);
+        initial_checkpoint = stores.checkpoint;
+
+        require(stores.values.size() == 1'000, "values mapping size is wrong");
+        require(
+            stores.solver_kind.size() == 1'000,
+            "solver-kind mapping size is wrong");
+        require(
+            stores.checkpoint.completed_potential
+                == kInitialCompletedPotential,
+            "initial checkpoint does not report potential 1201");
+        require(
+            stores.checkpoint.counters.pure == 0
+                && stores.checkpoint.counters.warm_support == 0
+                && stores.checkpoint.counters.full_support == 0
+                && stores.checkpoint.counters.linear_program == 0,
+            "initial checkpoint counters are not zero");
+
+        for (std::size_t index = 0; index < stores.values.size(); ++index) {
+            require(
+                std::isnan(stores.values[index]),
+                "a newly created value is not NaN");
+            require(
+                stores.solver_kind[index] == kUnsolvedKind,
+                "a newly created solver kind is not 255");
+        }
+
+        stores.values[0] = 1.25;
+        stores.values[499] = -7.5;
+        stores.values[999] = 42.0;
+        stores.solver_kind[0] = static_cast<std::uint8_t>(SolverKind::Pure);
+        stores.solver_kind[499] =
+            static_cast<std::uint8_t>(SolverKind::Support);
+        stores.solver_kind[999] =
+            static_cast<std::uint8_t>(SolverKind::LinearProgram);
+        stores.values.flush();
+        stores.solver_kind.flush();
+    }
+
+    require(
+        std::filesystem::file_size(values_path) == 1'000 * sizeof(double),
+        "values.bin does not have exactly 1,000 doubles");
+    require(
+        std::filesystem::file_size(kinds_path) == 1'000,
+        "solver_kind.bin does not have exactly 1,000 bytes");
+
+    require_exception(
+        [&] {
+            auto duplicate = create_stores(
+                output_dir,
+                kSection7ProfileCount,
+                kSection7ClassCount);
+        },
+        "store creation overwrote an existing artifact");
+
+    {
+        DurableStores stores = open_resume(
+            output_dir,
+            kSection7ProfileCount,
+            kSection7ClassCount);
+        require_checkpoint_matches(stores.checkpoint, initial_checkpoint);
+        require(
+            stores.values[0] == 1.25
+                && stores.values[499] == -7.5
+                && stores.values[999] == 42.0,
+            "mapped values did not survive close and reopen");
+        require(
+            stores.solver_kind[0]
+                    == static_cast<std::uint8_t>(SolverKind::Pure)
+                && stores.solver_kind[499]
+                    == static_cast<std::uint8_t>(SolverKind::Support)
+                && stores.solver_kind[999]
+                    == static_cast<std::uint8_t>(SolverKind::LinearProgram),
+            "solver kinds did not survive close and reopen");
+
+        stores.values[0] = 1.25;
+        stores.values[499] = -7.5;
+        stores.values[999] = 42.0;
+        stores.solver_kind[0] = static_cast<std::uint8_t>(SolverKind::Pure);
+        stores.solver_kind[499] =
+            static_cast<std::uint8_t>(SolverKind::Support);
+        stores.solver_kind[999] =
+            static_cast<std::uint8_t>(SolverKind::LinearProgram);
+        stores.values.flush();
+        stores.solver_kind.flush();
+    }
+
+    {
+        const DurableStores stores = open_resume(
+            output_dir,
+            kSection7ProfileCount,
+            kSection7ClassCount);
+        require(
+            stores.values[0] == 1.25
+                && stores.values[499] == -7.5
+                && stores.values[999] == 42.0,
+            "idempotent value rewrite changed persisted data");
+    }
+
+    const std::uintmax_t correct_value_bytes =
+        std::filesystem::file_size(values_path);
+    std::filesystem::resize_file(values_path, correct_value_bytes + 1);
+    require_exception(
+        [&] {
+            auto wrong_size = open_resume(
+                output_dir,
+                kSection7ProfileCount,
+                kSection7ClassCount);
+        },
+        "resume accepted a values file with the wrong byte size");
+    std::filesystem::resize_file(values_path, correct_value_bytes);
+
+    constexpr std::streamoff config_offset = 8 + 4 + 4;
+    {
+        std::fstream checkpoint(
+            checkpoint_path,
+            std::ios::in | std::ios::out | std::ios::binary);
+        require(
+            static_cast<bool>(checkpoint),
+            "could not open checkpoint for config corruption test");
+        checkpoint.seekp(config_offset);
+        checkpoint.put('X');
+        checkpoint.flush();
+        require(
+            static_cast<bool>(checkpoint),
+            "could not corrupt checkpoint config id");
+    }
+    require_exception(
+        [&] {
+            auto wrong_config = open_resume(
+                output_dir,
+                kSection7ProfileCount,
+                kSection7ClassCount);
+        },
+        "resume accepted a checkpoint with the wrong config id");
+
+    atomically_write_checkpoint(output_dir, initial_checkpoint);
+    atomically_write_checkpoint(output_dir, initial_checkpoint);
+    {
+        const DurableStores stores = open_resume(
+            output_dir,
+            kSection7ProfileCount,
+            kSection7ClassCount);
+        require_checkpoint_matches(stores.checkpoint, initial_checkpoint);
+    }
+
+    CheckpointRecord prior_checkpoint = initial_checkpoint;
+    prior_checkpoint.completed_potential = 777;
+    prior_checkpoint.counters.pure = 11;
+    prior_checkpoint.counters.warm_support = 22;
+    prior_checkpoint.counters.full_support = 33;
+    prior_checkpoint.counters.linear_program = 44;
+    atomically_write_checkpoint(output_dir, prior_checkpoint);
+
+    require(
+        run_section7_crash_process(test_executable, output_dir)
+            == kCrashExitCode,
+        "Section 7 crash child did not stop at the fault-injection point");
+
+    {
+        const DurableStores stores = open_resume(
+            output_dir,
+            kSection7ProfileCount,
+            kSection7ClassCount);
+        require_checkpoint_matches(stores.checkpoint, prior_checkpoint);
+        require(
+            stores.values[kCrashValueIndex] == kCrashValue,
+            "crash child did not durably flush its mapped value");
+        require(
+            stores.solver_kind[kCrashValueIndex] == kCrashSolverKind,
+            "crash child did not durably flush its routing byte");
+    }
+
+    require(
+        !std::filesystem::exists(output_dir / "checkpoint.tmp"),
+        "atomic checkpoint replacement left checkpoint.tmp behind");
+}
+
 } // namespace
 
-int main()
+int main(const int argc, char* argv[])
 {
+    if (argc == 3
+        && std::string_view(argv[1]) == "--section7-crash-child") {
+        try {
+            run_section7_crash_child(argv[2]);
+        } catch (const std::exception& error) {
+            std::cerr << "Section 7 crash child failure: " << error.what() << '\n';
+            return 2;
+        }
+    }
+
     try {
         test_constant_products();
         test_default_construction();
@@ -759,6 +1172,7 @@ int main()
         test_profile_transition_table_exhaustively();
         test_class_encoding_gate();
         test_potential_bucket_dag_gate();
+        test_durable_store_gate(argv[0]);
 
         std::cout << "All DTH tests passed\n";
         return 0;

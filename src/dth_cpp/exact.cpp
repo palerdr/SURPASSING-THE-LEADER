@@ -1,8 +1,9 @@
 #include "dth.hpp"
 
-#include <stdexcept>
+#include <algorithm>
 #include <cmath>
 #include <ranges>
+#include <stdexcept>
 
 //helpers and whatnot
 namespace {
@@ -261,4 +262,4 @@ int dth::layer_size(ProfileTable& table, Potential potential) {
     return total;
 }
 
-//SECTION 7
+//SECTION 8
