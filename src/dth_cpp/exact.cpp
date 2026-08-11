@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <ranges>
 #include <stdexcept>
 
@@ -215,7 +216,8 @@ dth::Potential dth::class_potential(ProfileTable& table, ClassId class_id) {
 //SECTION 6
 void dth::build_buckets(ProfileTable& table) {
     for (std::size_t profile : std::views::iota(std::size_t{0}, table.profile_count)) {
-        table.buckets[table.potential[profile]].push_back(profile);
+        table.buckets[table.potential[profile]].push_back(
+            static_cast<ProfileId>(profile));
     }
 }
 void dth::validate_profile_edges(ProfileTable& table) {
@@ -230,7 +232,8 @@ void dth::validate_profile_edges(ProfileTable& table) {
             const ChildId success_child = table.success_child[i];
             //validate child
             if (success_child >= 0) {
-                if (table.potential[success_child] <= parent_phi) {
+                const auto child = static_cast<std::size_t>(success_child);
+                if (table.potential[child] <= parent_phi) {
                     throw std::logic_error("successful child potential must be strictly monotonically increasing");
                 }
                 ++live_success;
@@ -238,7 +241,8 @@ void dth::validate_profile_edges(ProfileTable& table) {
         }
         const ChildId fail_child = table.failure_child[profile];
         if (fail_child >= 0) {
-            if (table.potential[fail_child] <= parent_phi) {
+            const auto child = static_cast<std::size_t>(fail_child);
+            if (table.potential[child] <= parent_phi) {
                 throw std::logic_error("failed child potentital must be strictly monotonically increasing");
             }
             ++live_failure;
@@ -253,13 +257,24 @@ void dth::validate_profile_edges(ProfileTable& table) {
 }
 
 int dth::layer_size(ProfileTable& table, Potential potential) {
-    int total{0};
-    const size_t first = std::size_t{std::max(0, int{potential} - 600)};
-    const size_t last = std::size_t{std::min(600, int{potential})};
-    for (std::size_t a: std::views::iota(first, last + 1)) {
-        total += table.buckets[a].size() * table.buckets[potential - a].size();
+    const auto p = static_cast<std::size_t>(potential);
+    if (p > kMaxClassPotential) {
+        throw std::out_of_range("class potential must be within 0..1200");
     }
-    return total;
+
+    ClassId total{0};
+    const std::size_t first = p > kMaxProfilePotential
+        ? p - kMaxProfilePotential
+        : 0;
+    const std::size_t last = std::min(p, kMaxProfilePotential);
+    for (std::size_t a: std::views::iota(first, last + 1)) {
+        total += static_cast<ClassId>(table.buckets[a].size())
+            * static_cast<ClassId>(table.buckets[p - a].size());
+    }
+    if (total > static_cast<ClassId>(std::numeric_limits<int>::max())) {
+        throw std::overflow_error("class layer size does not fit in int");
+    }
+    return static_cast<int>(total);
 }
 
 //SECTION 8
