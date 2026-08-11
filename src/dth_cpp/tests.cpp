@@ -1,5 +1,5 @@
 #include "dth.hpp"
-#include "durable_store.hpp"
+#include "storage/durable_store.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1145,6 +1145,161 @@ void test_durable_store_gate(
         "atomic checkpoint replacement left checkpoint.tmp behind");
 }
 
+void test_transition_value_assembly_gate()
+{
+    using namespace dth;
+
+    constexpr std::size_t profile_count = 64;
+    constexpr ProfileId checker{1};
+    constexpr ProfileId dropper{2};
+    constexpr ProfileId first_success_child{3};
+    constexpr ProfileId failure_child{63};
+    constexpr double default_stored_value = 0.9375;
+    constexpr double failure_stored_value = 0.5;
+    constexpr double revival_chance = 0.25;
+    constexpr double expected_failed = 0.625;
+
+    ProfileTable table{};
+    table.profile_count = profile_count;
+    table.revival.assign(profile_count, 0.0);
+    table.success_child.assign(
+        profile_count * kActions,
+        ChildId{-1});
+    table.failure_child.assign(profile_count, ChildId{-1});
+
+    const std::size_t checker_index = static_cast<std::size_t>(checker);
+    const std::size_t success_row = checker_index * kActions;
+    table.revival[checker_index] = revival_chance;
+    table.failure_child[checker_index] =
+        static_cast<ChildId>(failure_child);
+
+    std::array<double, kActions> expected_success{};
+    for (std::size_t action = 0; action < kActions; ++action) {
+        const auto child_profile = static_cast<ProfileId>(
+            static_cast<std::size_t>(first_success_child) + action);
+        table.success_child[success_row + action] =
+            static_cast<ChildId>(child_profile);
+
+        const double stored_value =
+            -0.75 + static_cast<double>(action) / 40.0;
+        expected_success[action] = -stored_value;
+    }
+
+    TemporaryDirectory temporary;
+    MappedArray<double> values = MappedArray<double>::create(
+        temporary.path() / "section8-values.bin",
+        profile_count * profile_count,
+        default_stored_value);
+
+    for (std::size_t action = 0; action < kActions; ++action) {
+        const auto child_profile = static_cast<ProfileId>(
+            table.success_child[success_row + action]);
+        const ClassId child_class = encode_class(
+            table,
+            dropper,
+            child_profile);
+        values[static_cast<std::size_t>(child_class)] =
+            -expected_success[action];
+    }
+
+    const ClassId failed_child_class = encode_class(
+        table,
+        dropper,
+        failure_child);
+    values[static_cast<std::size_t>(failed_child_class)] =
+        failure_stored_value;
+
+    TransitionValues transitions = assemble_transition_values(
+        table,
+        values,
+        checker,
+        dropper);
+
+    for (std::size_t action = 0; action < kActions; ++action) {
+        require(
+            transitions.success[action] == expected_success[action],
+            "success continuation did not read the role-swapped child class");
+    }
+    require(
+        transitions.failed == expected_failed,
+        "probabilistic failure does not match the hand-computed expectation");
+
+    std::size_t checked_cells = 0;
+    for (int drop = 0; drop < static_cast<int>(kActions); ++drop) {
+        for (int check = 0; check < static_cast<int>(kActions); ++check) {
+            const double expected = check < drop
+                ? expected_failed
+                : expected_success[static_cast<std::size_t>(check - drop)];
+            require(
+                matrix_cell(transitions, drop, check) == expected,
+                "implicit matrix cell differs from literal action expansion");
+            ++checked_cells;
+        }
+    }
+    require(
+        checked_cells == kActions * kActions,
+        "the Section 8 gate did not check all 3,600 matrix cells");
+
+    for (int action = 0; action < static_cast<int>(kActions); ++action) {
+        require(
+            matrix_cell(transitions, action, action)
+                == expected_success[0],
+            "a main-diagonal cell does not read success[0]");
+    }
+    require(
+        matrix_cell(
+            transitions,
+            0,
+            static_cast<int>(kActions) - 1)
+            == expected_success[kActions - 1],
+        "the top-right cell does not read success[59]");
+    for (int drop = 1; drop < static_cast<int>(kActions); ++drop) {
+        for (int check = 0; check < drop; ++check) {
+            require(
+                matrix_cell(transitions, drop, check) == expected_failed,
+                "a below-diagonal cell does not read the common failure value");
+        }
+    }
+
+    ProfileTable terminal_table = table;
+    constexpr std::size_t terminal_success_index = 17;
+    terminal_table.success_child[
+        success_row + terminal_success_index] = ChildId{-1};
+    terminal_table.failure_child[checker_index] = ChildId{-1};
+
+    TransitionValues terminal = assemble_transition_values(
+        terminal_table,
+        values,
+        checker,
+        dropper);
+    require(
+        terminal.success[terminal_success_index] == 1.0,
+        "terminal success is not a Dropper payoff of +1");
+    require(
+        terminal.failed == 1.0,
+        "terminal failure is not a Dropper payoff of +1");
+
+    constexpr std::size_t unsolved_action = 23;
+    const auto unsolved_child = static_cast<ProfileId>(
+        table.success_child[success_row + unsolved_action]);
+    const ClassId unsolved_class = encode_class(
+        table,
+        dropper,
+        unsolved_child);
+    values[static_cast<std::size_t>(unsolved_class)] =
+        std::numeric_limits<double>::quiet_NaN();
+
+    require_logic_error(
+        [&] {
+            static_cast<void>(assemble_transition_values(
+                table,
+                values,
+                checker,
+                dropper));
+        },
+        "an unsolved NaN child was not rejected immediately");
+}
+
 } // namespace
 
 int main(const int argc, char* argv[])
@@ -1173,6 +1328,7 @@ int main(const int argc, char* argv[])
         test_class_encoding_gate();
         test_potential_bucket_dag_gate();
         test_durable_store_gate(argv[0]);
+        test_transition_value_assembly_gate();
 
         std::cout << "All DTH tests passed\n";
         return 0;

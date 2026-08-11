@@ -6,6 +6,10 @@
 #include <vector>
 
 namespace dth {
+
+template <typename T>
+class MappedArray;
+
 //SECTION 1: TYPE DEFINTIONS AND CONSTANTS
 using ProfileId = std::uint32_t;
 using ChildId = std::int32_t;
@@ -124,4 +128,7 @@ void build_buckets(ProfileTable& table);
 void validate_profile_edges(ProfileTable& table);
 int layer_size(ProfileTable& table, Potential potential);
 
+//SECTTION 8: ASSEMBLE THE 61 CONTINUATION VALUES FOR A CLASS
+TransitionValues assemble_transition_values(ProfileTable& table, const MappedArray<double>& values, ProfileId checker, ProfileId dropper);
+double matrix_cell(TransitionValues& t, int drop, int check);
 } //namespace dth

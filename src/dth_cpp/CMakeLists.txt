@@ -43,15 +43,21 @@ find_package(Threads REQUIRED)
 add_library(
     dth_solver
     STATIC
-        durable_store.cpp
+        storage/durable_store.cpp
         exact.cpp
         matrix_game.cpp
 )
 
+target_include_directories(
+    dth_solver
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 if(WIN32)
-    target_sources(dth_solver PRIVATE mapped_file_win32.cpp)
+    target_sources(dth_solver PRIVATE storage/mapped_file_win32.cpp)
 else()
-    target_sources(dth_solver PRIVATE mapped_file_posix.cpp)
+    target_sources(dth_solver PRIVATE storage/mapped_file_posix.cpp)
 endif()
 
 target_link_libraries(

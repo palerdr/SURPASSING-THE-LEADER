@@ -703,13 +703,13 @@ Class counts and layer bounds from Section 6, plus `SolverKind` from Section 1.
 Keep storage separate from the exact game sweep:
 
 - declare `MappedFile`, `MappedArray<T>`, checkpoint records, and store
-  lifecycle functions in `durable_store.hpp`;
-- implement `MappedArray<T>` in `mapped_array.tpp` because template definitions
-  must be visible wherever the template is instantiated;
+  lifecycle functions in `storage/durable_store.hpp`;
+- implement `MappedArray<T>` in `storage/mapped_array.tpp` because template
+  definitions must be visible wherever the template is instantiated;
 - implement checkpoint serialization and store lifecycle in
-  `durable_store.cpp`;
-- implement the mapping system calls in `mapped_file_posix.cpp` and
-  `mapped_file_win32.cpp`, with CMake selecting the matching backend.
+  `storage/durable_store.cpp`;
+- implement the mapping system calls in `storage/mapped_file_posix.cpp` and
+  `storage/mapped_file_win32.cpp`, with CMake selecting the matching backend.
 
 Implement a move-only `MappedArray<T>` with:
 
@@ -2253,12 +2253,12 @@ Format and run the debug suite:
 ```sh
 xcrun clang-format -i \
   src/dth_cpp/dth.hpp \
-  src/dth_cpp/durable_store.hpp \
-  src/dth_cpp/durable_store.cpp \
+  src/dth_cpp/storage/durable_store.hpp \
+  src/dth_cpp/storage/durable_store.cpp \
   src/dth_cpp/exact.cpp \
-  src/dth_cpp/mapped_array.tpp \
-  src/dth_cpp/mapped_file_posix.cpp \
-  src/dth_cpp/mapped_file_win32.cpp \
+  src/dth_cpp/storage/mapped_array.tpp \
+  src/dth_cpp/storage/mapped_file_posix.cpp \
+  src/dth_cpp/storage/mapped_file_win32.cpp \
   src/dth_cpp/matrix_game.cpp \
   src/dth_cpp/solve_tablebase.cpp \
   src/dth_cpp/tests.cpp

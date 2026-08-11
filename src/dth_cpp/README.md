@@ -30,12 +30,12 @@ That document owns this project's construction sequence and numerical design.
   matrix solver.
 - `exact.cpp` owns rules, quotient profiles, transitions, potential layers,
   and backward induction.
-- `durable_store.hpp` declares mapped files, mapped arrays, checkpoints, and
-  durable stores. `durable_store.cpp` owns checkpoint serialization and store
-  lifecycle.
-- `mapped_array.tpp` implements the typed mapped-array template. The
-  `mapped_file_posix.cpp` and `mapped_file_win32.cpp` backends own the operating
-  system calls used to map and flush files.
+- `storage/` owns persistent tablebase storage. Its `durable_store.hpp` declares
+  mapped files, mapped arrays, checkpoints, and durable stores, while
+  `durable_store.cpp` owns checkpoint serialization and store lifecycle.
+- `storage/mapped_array.tpp` implements the typed mapped-array template. The
+  `storage/mapped_file_posix.cpp` and `storage/mapped_file_win32.cpp` backends
+  own the operating system calls used to map and flush files.
 - `matrix_game.cpp` owns the implicit stage matrix, certificate, O(60) pure
   reduction, equalizer systems, and dual-simplex fallback.
 - `solve_tablebase.cpp` owns the command-line executable.
