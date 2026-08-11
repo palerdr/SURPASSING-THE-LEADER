@@ -248,7 +248,7 @@ void dth::validate_profile_edges(ProfileTable& table) {
             const auto child_index = static_cast<std::size_t>(fail_child);
             if (table.potential[child_index] <= parent_phi) {
                 throw std::logic_error(
-                    "failed child potentital must be strictly monotonically increasing");
+                    "failed child potential must be strictly monotonically increasing");
             }
             ++live_failure;
         }
@@ -262,19 +262,20 @@ void dth::validate_profile_edges(ProfileTable& table) {
 }
 
 int dth::layer_size(ProfileTable& table, Potential potential) {
-    std::size_t total{0};
-    const int potential_value = static_cast<int>(potential);
-    const int max_profile_potential = static_cast<int>(kMaxProfilePotential);
-    const std::size_t first =
-        static_cast<std::size_t>(std::max(0, potential_value - max_profile_potential));
-    const std::size_t last =
-        static_cast<std::size_t>(std::min(max_profile_potential, potential_value));
-    for (std::size_t a : std::views::iota(first, last + 1)) {
-        const std::size_t other = static_cast<std::size_t>(potential) - a;
-        total += table.buckets[a].size() * table.buckets[other].size();
+    const auto p = static_cast<std::size_t>(potential);
+    if (p > kMaxClassPotential) {
+        throw std::out_of_range("class potential must be within 0..1200");
     }
-    if (total > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-        throw std::overflow_error("layer size exceeds the int return range");
+
+    ClassId total{0};
+    const std::size_t first = p > kMaxProfilePotential ? p - kMaxProfilePotential : 0;
+    const std::size_t last = std::min(p, kMaxProfilePotential);
+    for (std::size_t a : std::views::iota(first, last + 1)) {
+        total += static_cast<ClassId>(table.buckets[a].size()) *
+                 static_cast<ClassId>(table.buckets[p - a].size());
+    }
+    if (total > static_cast<ClassId>(std::numeric_limits<int>::max())) {
+        throw std::overflow_error("class layer size does not fit in int");
     }
     return static_cast<int>(total);
 }
