@@ -38,7 +38,7 @@ int lag(int drop, int check);
 
 namespace {
 
-using dth::revival_eligibility;
+using dth::survives_injection;
 using dth::revival_probability;
 
 void require(const bool condition, const char* const message)
@@ -341,35 +341,35 @@ void test_solver_kind_mapping()
         "linear-program route mapping is incorrect");
 }
 
-void test_revival_eligibility_boundaries()
+void test_survives_injection_boundaries()
 {
     require(
-        revival_eligibility(0, 0),
+        survives_injection(0, 0),
         "fresh profile should be revival-eligible");
     require(
-        revival_eligibility(239, 0),
+        survives_injection(239, 0),
         "largest individually survivable dose should be eligible");
     require(
-        revival_eligibility(239, 1),
+        survives_injection(239, 1),
         "cumulative load exactly 300 should be eligible");
     require(
-        revival_eligibility(0, 240),
+        survives_injection(0, 240),
         "zero ST at cumulative load 300 should be eligible");
     require(
-        revival_eligibility(180, 60),
+        survives_injection(180, 60),
         "interior cumulative-load boundary should be eligible");
 
     require(
-        !revival_eligibility(240, 0),
+        !survives_injection(240, 0),
         "individual dose exactly 300 should be fatal");
     require(
-        !revival_eligibility(239, 2),
+        !survives_injection(239, 2),
         "cumulative load above 300 should be fatal");
     require(
-        !revival_eligibility(0, 241),
+        !survives_injection(0, 241),
         "TTD beyond the cumulative boundary should be fatal");
     require(
-        !revival_eligibility(299, 0),
+        !survives_injection(299, 0),
         "ST above the dose boundary should be fatal");
 }
 
@@ -406,7 +406,7 @@ void test_revival_surface_exhaustively()
     for (int st = 0; st < capacity; ++st) {
         for (int ttd = 0; ttd <= capacity; ++ttd) {
             const bool expected = st <= 239 && st + ttd <= 240;
-            const bool actual = revival_eligibility(st, ttd);
+            const bool actual = survives_injection(st, ttd);
             require(
                 actual == expected,
                 "revival eligibility disagrees with the frozen predicate");
@@ -432,16 +432,16 @@ void test_revival_surface_exhaustively()
 void test_scalar_coordinate_validation()
 {
     require_out_of_range(
-        [] { static_cast<void>(revival_eligibility(-1, 0)); },
+        [] { static_cast<void>(survives_injection(-1, 0)); },
         "negative ST should be rejected");
     require_out_of_range(
-        [] { static_cast<void>(revival_eligibility(300, 0)); },
+        [] { static_cast<void>(survives_injection(300, 0)); },
         "ST at capacity should be rejected");
     require_out_of_range(
-        [] { static_cast<void>(revival_eligibility(0, -1)); },
+        [] { static_cast<void>(survives_injection(0, -1)); },
         "negative TTD should be rejected");
     require_out_of_range(
-        [] { static_cast<void>(revival_eligibility(0, 301)); },
+        [] { static_cast<void>(survives_injection(0, 301)); },
         "TTD above capacity should be rejected");
 
     require_out_of_range(
@@ -527,7 +527,7 @@ void test_failure_fatal_quotient_exhaustively()
         const int ttd = table.ttd[id];
 
         require(
-            revival_eligibility(st, ttd),
+            survives_injection(st, ttd),
             "canonical eligible range contains a fatal profile");
         require(
             ttd == 0 || ttd >= static_cast<int>(kPenalty),
@@ -546,7 +546,7 @@ void test_failure_fatal_quotient_exhaustively()
             kDeadProfileBase + static_cast<std::size_t>(st));
 
         for (int ttd = 0; ttd <= capacity; ++ttd) {
-            if (!revival_eligibility(st, ttd)) {
+            if (!survives_injection(st, ttd)) {
                 require(
                     quotient_profile_id(table, st, ttd) == dead_id,
                     "fatal coordinates did not collapse to Dead(st)");
@@ -556,7 +556,7 @@ void test_failure_fatal_quotient_exhaustively()
 
     for (int ttd = 1; ttd < penalty; ++ttd) {
         for (int st = 0; st < capacity; ++st) {
-            if (revival_eligibility(st, ttd)) {
+            if (survives_injection(st, ttd)) {
                 require_logic_error(
                     [&table, st, ttd] {
                         static_cast<void>(
@@ -645,7 +645,7 @@ void test_profile_transition_table_exhaustively()
                 continue;
             }
 
-            if (revival_eligibility(grown_st, ttd)) {
+            if (survives_injection(grown_st, ttd)) {
                 require(
                     table.ttd[child_id] == ttd,
                     "alive success did not preserve TTD");
@@ -1318,7 +1318,7 @@ int main(const int argc, char* argv[])
         test_constant_products();
         test_default_construction();
         test_solver_kind_mapping();
-        test_revival_eligibility_boundaries();
+        test_survives_injection_boundaries();
         test_revival_probability_boundaries();
         test_revival_surface_exhaustively();
         test_scalar_coordinate_validation();

@@ -42,7 +42,7 @@ std::size_t index_success_child(std::size_t id, int lag) {
 } // namespace
 
 // SECTION 2
-bool dth::revival_eligibility(int st, int ttd) {
+bool dth::survives_injection(int st, int ttd) {
     validate_st(st);
     validate_ttd(ttd);
     bool eligible = (st <= 239) && (st + ttd <= 240);
@@ -52,7 +52,7 @@ bool dth::revival_eligibility(int st, int ttd) {
 double dth::revival_probability(int st, int ttd) {
     validate_st(st);
     validate_ttd(ttd);
-    if (!revival_eligibility(st, ttd)) {
+    if (!survives_injection(st, ttd)) {
         return 0.0;
     }
     double acute = 1.0 - (static_cast<double>(st) / 240.0);
@@ -91,7 +91,7 @@ dth::ProfileTable dth::begin_canonical_profile_table() {
 
     auto fill_profile = [&table, &next, capacity](const int ttd) {
         for (int st : std::views::iota(0, capacity)) {
-            if (!revival_eligibility(st, ttd)) {
+            if (!survives_injection(st, ttd)) {
                 continue;
             }
             table.alive_id[index_alive_id(st, ttd)] = static_cast<ChildId>(next);
@@ -124,7 +124,7 @@ dth::ProfileTable dth::begin_canonical_profile_table() {
 
 dth::ProfileId dth::quotient_profile_id(const ProfileTable& table, int st, int ttd) {
     validate_profile(st, ttd);
-    if (!revival_eligibility(st, ttd)) {
+    if (!survives_injection(st, ttd)) {
         return static_cast<dth::ProfileId>(dth::kDeadProfileBase + static_cast<std::size_t>(st));
     }
     dth::ChildId id = table.alive_id[index_alive_id(st, ttd)];

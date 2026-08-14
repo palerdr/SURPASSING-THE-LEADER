@@ -107,7 +107,7 @@ struct RouteCounters {
 };
 
 //SECTION 2: SCALAR GAME RULES
-[[nodiscard]] bool revival_eligibility(int st, int ttd);
+[[nodiscard]] bool survives_injection(int st, int ttd);
 [[nodiscard]] double revival_probability(int st, int ttd);
 
 //SECTION 3: ENUMERATE FAILURE-FATAL QUOTIENT
