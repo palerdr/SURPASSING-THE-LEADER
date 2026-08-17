@@ -6,13 +6,14 @@ against an independent per-class resolution through the certified ladder.
 """
 
 import json
-from pathlib import Path
+from dataclasses import replace
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+import dth.complete_tablebase as complete_tablebase_module
 from dth.complete_tablebase import (
-    COMPLETE_TABLEBASE_SCHEMA,
     CompleteTablebase,
     CompleteTablebaseBuilder,
     attempt_support_solution,
@@ -202,6 +203,97 @@ def test_checkpoint_rejects_a_different_configuration(tmp_path) -> None:
         )
 
 
+def test_checkpoint_rejects_changed_implementation_source(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table = make_synthetic_table(count=20)
+    target = tmp_path / "source-bound-build"
+    CompleteTablebaseBuilder(output_dir=target, backend="python", table=table).sweep(
+        stop_after_layers=2
+    )
+    original = complete_tablebase_module._implementation_digest
+    monkeypatch.setattr(
+        complete_tablebase_module,
+        "_implementation_digest",
+        lambda *, include_rust: "0" * 64,
+    )
+    assert original(include_rust=False) != "0" * 64
+    with pytest.raises(ValueError, match="configuration"):
+        CompleteTablebaseBuilder(output_dir=target, backend="python", table=table)
+
+
+def test_rust_backend_rejects_a_stale_loaded_binary(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale = SimpleNamespace(
+        PARITY_CONTRACT_VERSION="dth-complete-parity-v1",
+        SOURCE_BUNDLE_DIGEST_ALGORITHM="sha256-framed-source-bundle-v1",
+        SOURCE_BUNDLE_DIGEST="0" * 64,
+    )
+    monkeypatch.setattr(
+        complete_tablebase_module.importlib,
+        "import_module",
+        lambda name: stale,
+    )
+    with pytest.raises(RuntimeError, match="current Rust source bundle"):
+        CompleteTablebaseBuilder(
+            output_dir=tmp_path / "stale",
+            backend="auto",
+            table=make_synthetic_table(count=8),
+        )
+
+
+def test_profile_table_digest_binds_bucket_schedule_and_array_contracts() -> None:
+    table = make_synthetic_table(count=10)
+    altered = replace(table, bucket_profiles=tuple(reversed(table.bucket_profiles)))
+    assert complete_tablebase_module._table_digest(table) != (
+        complete_tablebase_module._table_digest(altered)
+    )
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_interrupted_warm_supports_fail_closed(tmp_path, damage) -> None:
+    table = make_synthetic_table(count=10)
+    target = tmp_path / damage
+    first = CompleteTablebaseBuilder(
+        output_dir=target, backend="python", table=table
+    )
+    assert first.sweep(stop_after_layers=2) is False
+    supports_path = target / "warm-supports.npz"
+    if damage == "missing":
+        supports_path.unlink()
+    else:
+        payload = bytearray(supports_path.read_bytes())
+        payload[-1] ^= 0xFF
+        supports_path.write_bytes(payload)
+    resumed = CompleteTablebaseBuilder(
+        output_dir=target, backend="python", table=table
+    )
+    with pytest.raises(RuntimeError, match="warm-support"):
+        resumed.sweep()
+
+
+@pytest.mark.parametrize("damage", ["manifest", "array"])
+def test_completed_builder_reverifies_artifact_before_returning(tmp_path, damage) -> None:
+    table = make_synthetic_table(count=8)
+    target = tmp_path / damage
+    CompleteTablebaseBuilder(
+        output_dir=target, backend="python", table=table
+    ).sweep()
+    if damage == "manifest":
+        (target / "tablebase.json").unlink()
+    else:
+        value_path = target / "value.npy"
+        payload = bytearray(value_path.read_bytes())
+        payload[-1] ^= 0xFF
+        value_path.write_bytes(payload)
+    resumed = CompleteTablebaseBuilder(
+        output_dir=target, backend="python", table=table
+    )
+    with pytest.raises(RuntimeError, match="completed DTH"):
+        resumed.sweep()
+
+
 def test_corrupted_artifact_fails_closed(tmp_path) -> None:
     table = make_synthetic_table(count=20)
     target = tmp_path / "artifact"
@@ -220,6 +312,35 @@ def test_corrupted_artifact_fails_closed(tmp_path) -> None:
     manifest["schema_version"] = "dth.complete-tablebase.v0"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match="schema"):
+        CompleteTablebase(target)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda manifest: manifest["metadata"].__setitem__("solver_schema_hash", "0" * 64), "rules hash"),
+        (lambda manifest: manifest["metadata"].__setitem__("ladder", "unverified"), "ladder"),
+        (lambda manifest: manifest["metadata"].__setitem__("build_config_digest", "0" * 64), "configuration"),
+        (lambda manifest: manifest["metadata"].__setitem__("code_config_digest", "0" * 64), "code/configuration"),
+        (lambda manifest: manifest["arrays"].pop("solver_kind"), "array set"),
+        (lambda manifest: manifest["arrays"]["value"].__setitem__("dtype", "float32"), "array contract"),
+        (lambda manifest: manifest.__setitem__("extra", None), "manifest key set"),
+        (lambda manifest: manifest["metadata"].__setitem__("extra", None), "malformed"),
+        (lambda manifest: manifest["metadata"].pop("recertified_samples"), "malformed"),
+        (lambda manifest: manifest["metadata"]["solver_kinds"].__setitem__("extra", 3), "solver-kind"),
+        (lambda manifest: manifest["metadata"].__setitem__("execution_backends", ["python", "rust"]), "execution provenance"),
+        (lambda manifest: manifest["metadata"].__setitem__("warm_hits", manifest["metadata"]["warm_attempts"] + 1), "detailed routing"),
+    ],
+)
+def test_manifest_contract_fields_fail_closed(tmp_path, mutate, message) -> None:
+    table = make_synthetic_table(count=12)
+    target = tmp_path / "manifest-contract"
+    CompleteTablebaseBuilder(output_dir=target, backend="python", table=table).sweep()
+    manifest_path = target / "tablebase.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mutate(manifest)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
         CompleteTablebase(target)
 
 

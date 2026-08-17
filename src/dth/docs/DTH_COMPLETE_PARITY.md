@@ -119,10 +119,20 @@ per class (0 pure, 1 support-certified, 2 lp) must be equal across backends,
 and `test_complete_rust_parity.py` compares full synthetic sweeps byte for
 byte, primitive calls bit for bit, and counter sets exactly.
 
+## Public binding firewall
+
+Every exported Rust primitive rejects non-finite or out-of-range class values,
+non-canonical supports, and any saddle tolerance other than the frozen `1e-6`
+gate. The layer binding validates table shapes, child/profile indices, revival
+probabilities, sorted padded supports, and work-item bounds before computation.
+Parallel workers stage results without mutating NumPy arrays; overlapping work
+items are rejected before staged values are committed, so malformed callers
+cannot create concurrent writes or partial layer output.
+
 ## Artifact and resume parity
 
-- Schema strings: artifact `dth.complete-tablebase.v1`, build checkpoint
-  `dth.complete-tablebase-build.v1`. Arrays: `value.npy` float64 and
+- Schema strings: artifact `dth.complete-tablebase.v2`, build checkpoint
+  `dth.complete-tablebase-build.v2`. Arrays: `value.npy` float64 and
   `solver_kind.npy` uint8, both dense over class indices, NaN /
   implicit-zero before solving. No per-class certificates are stored:
   given the child values any certificate is re-derivable on demand
@@ -138,11 +148,19 @@ byte, primitive calls bit for bit, and counter sets exactly.
 - Interrupt/resume must be byte-for-byte against an uninterrupted build of
   the same backend, verified with stops in at least two distinct layers
   (`test_complete_sweep_python.py`, `test_complete_rust_parity.py`).
+- The resume digest includes the Python implementation sources and `uv.lock`
+  and, when used, the Rust crate, build script, and workspace lockfile. The
+  loaded extension exposes a compile-time source-bundle digest that Python
+  independently recomputes before accepting the backend. Changing source,
+  dependencies, or the installed binary rejects partial layers instead of
+  mixing them into a newly stamped artifact.
 - The finalize manifest embeds the build config digest inputs, per-array
   SHA-256, the routing counters, and a `code_config_digest` over
-  `packed.py`, `complete_tablebase.py` and — when Rust executed — the crate's
-  `Cargo.toml`, `lib.rs`, and the workspace `Cargo.lock`. The read facade
-  re-verifies shape, dtype, schema, and digests on open and fails closed.
+  the packed rules, solver ladder, builder and — when Rust executed — the
+  crate's `Cargo.toml`, `build.rs`, `lib.rs`, and workspace `Cargo.lock`. The read facade
+  derives and re-verifies the exact array set, shape, dtype, class encoding,
+  rule hash, ladder, tolerance, build fingerprint, and current source digest
+  on open and fails closed.
 
 ## External anchors
 
@@ -159,3 +177,7 @@ for both the Python fallback and the compiled extension, and after a
 completed canonical build passes its finalize gates and external anchors.
 Per `src/crates/README.md`, no Python runtime behavior may depend on an
 unchecked Rust path.
+
+Set `STL_REQUIRE_RUST_PARITY=1` in CI or a release-validation shell. With that
+gate enabled, a missing `dth_complete_rs` extension is a hard test-collection
+failure instead of an ordinary Python-development skip.

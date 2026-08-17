@@ -5,6 +5,7 @@ must reproduce class values and solver routing bit for bit on the same
 inputs. Contract: ``src/dth/docs/DTH_COMPLETE_PARITY.md``.
 """
 
+import importlib
 import os
 import subprocess
 import sys
@@ -13,11 +14,26 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-dth_complete_rs = pytest.importorskip("dth_complete_rs")
+def _load_rust_extension():
+    try:
+        return importlib.import_module("dth_complete_rs")
+    except ModuleNotFoundError as error:
+        if error.name != "dth_complete_rs":
+            raise
+        if os.environ.get("STL_REQUIRE_RUST_PARITY") == "1":
+            raise RuntimeError(
+                "dth_complete_rs is required by STL_REQUIRE_RUST_PARITY=1; "
+                "build it before running parity tests"
+            ) from error
+        pytest.skip("dth_complete_rs is not installed", allow_module_level=True)
+
+
+dth_complete_rs = _load_rust_extension()
 
 from dth.complete_tablebase import (  # noqa: E402
     CompleteTablebase,
     CompleteTablebaseBuilder,
+    _rust_source_bundle_digest,
     attempt_support_solution,
     support_of_policy,
     toeplitz_saddle,
@@ -29,6 +45,49 @@ from dth.tests.test_complete_sweep_python import make_synthetic_table  # noqa: E
 
 def test_parity_contract_version() -> None:
     assert dth_complete_rs.PARITY_CONTRACT_VERSION == "dth-complete-parity-v1"
+    assert (
+        dth_complete_rs.SOURCE_BUNDLE_DIGEST_ALGORITHM
+        == "sha256-framed-source-bundle-v1"
+    )
+    assert dth_complete_rs.SOURCE_BUNDLE_DIGEST == _rust_source_bundle_digest()
+
+
+def test_rust_public_boundary_rejects_nonfinite_and_uncertified_inputs() -> None:
+    success = np.zeros(60, dtype=np.float64)
+    invalid = success.copy()
+    invalid[7] = np.nan
+    with pytest.raises(ValueError, match="finite class values"):
+        dth_complete_rs.toeplitz_saddle_rs(invalid, 0.0)
+    with pytest.raises(ValueError, match="0..60"):
+        dth_complete_rs.attempt_support_rs(success, 0.0, [-1], [0], 1e-6)
+    with pytest.raises(ValueError, match="strictly ascending"):
+        dth_complete_rs.attempt_support_rs(success, 0.0, [2, 1], [0, 1], 1e-6)
+    with pytest.raises(ValueError, match="frozen"):
+        dth_complete_rs.attempt_support_rs(success, 0.0, [0], [0], 1e-5)
+
+
+def test_rust_sweep_rejects_overlapping_work_without_partial_writes() -> None:
+    value = np.array([np.nan], dtype=np.float64)
+    solver_kind = np.zeros(1, dtype=np.uint8)
+    with pytest.raises(ValueError, match="overlap"):
+        dth_complete_rs.sweep_layer_rs(
+            np.array([0, 1, 0, 1, 0, 1, 0, 1], dtype=np.uint64),
+            np.array([0], dtype=np.uint32),
+            np.full(60, -1, dtype=np.int32),
+            np.array([-1], dtype=np.int32),
+            np.array([0.0], dtype=np.float64),
+            1,
+            np.zeros(0, dtype=np.uint64),
+            np.zeros(0, dtype=np.int32),
+            np.zeros(0, dtype=np.int32),
+            value,
+            solver_kind,
+            1e-6,
+            12,
+            False,
+        )
+    assert np.isnan(value[0])
+    assert solver_kind[0] == 0
 
 
 def test_toeplitz_saddle_is_bit_identical() -> None:

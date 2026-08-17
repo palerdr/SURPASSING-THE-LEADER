@@ -34,11 +34,13 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import math
 import os
 import tempfile
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from numbers import Integral
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +83,8 @@ __all__ = [
     "recertify_class",
 ]
 
-COMPLETE_TABLEBASE_SCHEMA = "dth.complete-tablebase.v1"
-COMPLETE_BUILD_SCHEMA = "dth.complete-tablebase-build.v1"
+COMPLETE_TABLEBASE_SCHEMA = "dth.complete-tablebase.v2"
+COMPLETE_BUILD_SCHEMA = "dth.complete-tablebase-build.v2"
 WARM_START_POLICY = "prev-layer-neighbor-v1"
 SOLVER_KIND_PURE = 0
 SOLVER_KIND_SUPPORT = 1
@@ -93,6 +95,40 @@ _SUPPORTS_FILE = "warm-supports.npz"
 _FULL_SUPPORT = tuple(range(60))
 # The pinned rung order; part of every build's config digest.
 LADDER_ID = "pure/warm-support/full-support/lp-v1"
+_RUST_SOURCE_BUNDLE_ALGORITHM = "sha256-framed-source-bundle-v1"
+_RUST_SOURCE_BUNDLE_DOMAIN = b"stl-rust-source-bundle-v1\0"
+
+_COMPLETE_METADATA_KEYS = {
+    "class_encoding",
+    "canonical_table",
+    "table_digest",
+    "profile_count",
+    "class_count",
+    "max_class_potential",
+    "solver_schema_hash",
+    "saddle_gap_tolerance",
+    "build_config_digest",
+    "warm_start",
+    "warm_start_policy",
+    "max_support",
+    "policy_mass_eps",
+    "ladder",
+    "solver_kinds",
+    "pure_states",
+    "support_states",
+    "warm_hits",
+    "full_support_hits",
+    "lp_states",
+    "lp_single_dual",
+    "lp_highs",
+    "lp_ipm",
+    "lp_tightened",
+    "warm_attempts",
+    "execution_backends",
+    "recertified_samples",
+    "recertified_worst_gap",
+    "code_config_digest",
+}
 
 
 # --------------------------------------------------------------------------
@@ -116,13 +152,118 @@ def _sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _update_frame(digest: Any, label: str, payload: bytes) -> None:
+    label_bytes = label.encode("utf-8")
+    digest.update(len(label_bytes).to_bytes(8, "big"))
+    digest.update(label_bytes)
+    digest.update(len(payload).to_bytes(8, "big"))
+    digest.update(payload)
+
+
 def _digest_files(paths: list[Path], *, config: object) -> str:
-    digest = hashlib.sha256()
-    for path in paths:
-        digest.update(str(path.name).encode("utf-8"))
-        digest.update(path.read_bytes())
-    digest.update(_canonical_json(config).encode("utf-8"))
+    resolved = [path.resolve() for path in paths]
+    if not resolved:
+        raise ValueError("at least one source path is required")
+    common_root = Path(os.path.commonpath([str(path) for path in resolved]))
+    if common_root in resolved:
+        common_root = common_root.parent
+    digest = hashlib.sha256(b"dth-source-config-bundle-v1\0")
+    for path in resolved:
+        _update_frame(
+            digest,
+            path.relative_to(common_root).as_posix(),
+            path.read_bytes(),
+        )
+    _update_frame(digest, "config", _canonical_json(config).encode("utf-8"))
     return digest.hexdigest()
+
+
+def _rust_source_bundle_digest() -> str:
+    """Digest the exact compile-time source bundle embedded by build.rs."""
+
+    source_workspace = Path(__file__).resolve().parent.parent
+    repository_root = source_workspace.parent
+    crate_root = source_workspace / "crates" / "dth_complete"
+    entries = (
+        ("Cargo.toml", crate_root / "Cargo.toml"),
+        ("build.rs", crate_root / "build.rs"),
+        ("src/lib.rs", crate_root / "src" / "lib.rs"),
+        ("Cargo.lock", repository_root / "Cargo.lock"),
+    )
+    digest = hashlib.sha256(_RUST_SOURCE_BUNDLE_DOMAIN)
+    for label, path in entries:
+        _update_frame(digest, label, path.read_bytes())
+    return digest.hexdigest()
+
+
+def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
+    """Return every implementation input that can affect persisted values."""
+
+    source_root = Path(__file__).resolve().parent
+    repository_root = source_root.parent.parent
+    inputs = [
+        source_root / "packed.py",
+        source_root / "solver.py",
+        source_root / "support_solver.py",
+        source_root / "complete_tablebase.py",
+        repository_root / "uv.lock",
+    ]
+    if include_rust:
+        source_workspace = source_root.parent
+        inputs.extend(
+            (
+                source_workspace / "crates" / "dth_complete" / "Cargo.toml",
+                source_workspace / "crates" / "dth_complete" / "build.rs",
+                source_workspace / "crates" / "dth_complete" / "src" / "lib.rs",
+                repository_root / "Cargo.lock",
+            )
+        )
+    return inputs
+
+
+def _implementation_digest(*, include_rust: bool) -> str:
+    return _digest_files(
+        _source_digest_inputs(include_rust=include_rust),
+        config={
+            "artifact_schema": COMPLETE_TABLEBASE_SCHEMA,
+            "build_schema": COMPLETE_BUILD_SCHEMA,
+            "execution_backend": "rust" if include_rust else "python",
+        },
+    )
+
+
+def _build_config_payload(
+    *,
+    canonical_table: bool,
+    table_digest: str,
+    warm_start: bool,
+    max_support: int,
+    include_rust: bool,
+) -> dict[str, object]:
+    """Construct the source-bound resume contract used by builders and readers."""
+
+    return {
+        "schema": COMPLETE_BUILD_SCHEMA,
+        "class_encoding": PACKED_CLASS_ENCODING,
+        "canonical_table": canonical_table,
+        "table_digest": table_digest,
+        "solver_schema_hash": solver_schema_hash(),
+        "saddle_gap_tolerance": SADDLE_GAP_TOLERANCE,
+        "ladder": LADDER_ID,
+        "warm_start": warm_start,
+        "warm_start_policy": WARM_START_POLICY if warm_start else None,
+        "max_support": max_support,
+        "policy_mass_eps": _POLICY_MASS_EPS,
+        "implementation_digest": _implementation_digest(include_rust=include_rust),
+    }
 
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -179,17 +320,40 @@ def buckets_from_potential(potential: np.ndarray) -> tuple[np.ndarray, ...]:
 
 
 def _table_digest(table: QuotientProfileTable) -> str:
-    digest = hashlib.sha256()
-    digest.update(PACKED_CLASS_ENCODING.encode("utf-8"))
-    for array in (
-        table.st_by_profile,
-        table.ttd_by_profile,
-        table.potential_by_profile,
-        table.revival_by_profile,
-        table.success_child_by_profile,
-        table.failure_child_by_profile,
+    digest = hashlib.sha256(b"dth-quotient-profile-table-v2\0")
+    _update_frame(digest, "class_encoding", PACKED_CLASS_ENCODING.encode("utf-8"))
+    for name in (
+        "alive_id_by_st_ttd",
+        "st_by_profile",
+        "ttd_by_profile",
+        "potential_by_profile",
+        "revival_by_profile",
+        "success_child_by_profile",
+        "failure_child_by_profile",
     ):
-        digest.update(np.ascontiguousarray(array).tobytes())
+        array = np.ascontiguousarray(getattr(table, name))
+        _update_frame(digest, f"{name}.dtype", str(array.dtype).encode("ascii"))
+        _update_frame(
+            digest,
+            f"{name}.shape",
+            _canonical_json(list(array.shape)).encode("ascii"),
+        )
+        _update_frame(digest, f"{name}.data", array.tobytes())
+    _update_frame(
+        digest,
+        "bucket_profiles.count",
+        len(table.bucket_profiles).to_bytes(8, "big"),
+    )
+    for index, raw_bucket in enumerate(table.bucket_profiles):
+        bucket = np.ascontiguousarray(raw_bucket)
+        prefix = f"bucket_profiles[{index}]"
+        _update_frame(digest, f"{prefix}.dtype", str(bucket.dtype).encode("ascii"))
+        _update_frame(
+            digest,
+            f"{prefix}.shape",
+            _canonical_json(list(bucket.shape)).encode("ascii"),
+        )
+        _update_frame(digest, f"{prefix}.data", bucket.tobytes())
     return digest.hexdigest()
 
 
@@ -619,23 +783,16 @@ class CompleteTablebaseBuilder:
         self._buckets = self._table.bucket_profiles
         self._max_class_potential = 2 * (len(self._buckets) - 1)
         self._progress_path = self.output_dir / "build-progress.json"
-        self._config_digest = _digest_json(
-            {
-                "schema": COMPLETE_BUILD_SCHEMA,
-                "class_encoding": PACKED_CLASS_ENCODING,
-                "canonical_table": self._canonical,
-                "table_digest": _table_digest(self._table),
-                "solver_schema_hash": solver_schema_hash(),
-                "saddle_gap_tolerance": SADDLE_GAP_TOLERANCE,
-                "ladder": LADDER_ID,
-                "warm_start": bool(self.warm_start),
-                "warm_start_policy": WARM_START_POLICY if self.warm_start else None,
-                "max_support": int(self.max_support),
-                "policy_mass_eps": _POLICY_MASS_EPS,
-            }
-        )
         self._rust_kernel = self._load_rust_kernel()
         self._active_backend = "rust" if self._rust_kernel is not None else "python"
+        self._build_config = _build_config_payload(
+            canonical_table=self._canonical,
+            table_digest=_table_digest(self._table),
+            warm_start=bool(self.warm_start),
+            max_support=int(self.max_support),
+            include_rust=self._active_backend == "rust",
+        )
+        self._config_digest = _digest_json(self._build_config)
         if self._progress_path.exists():
             self._progress = json.loads(self._progress_path.read_text(encoding="utf-8"))
             if self._progress.get("schema_version") != COMPLETE_BUILD_SCHEMA:
@@ -665,6 +822,15 @@ class CompleteTablebaseBuilder:
             raise RuntimeError(
                 "dth_complete_rs does not match the Python parity contract"
             )
+        if (
+            getattr(module, "SOURCE_BUNDLE_DIGEST_ALGORITHM", None)
+            != _RUST_SOURCE_BUNDLE_ALGORITHM
+            or getattr(module, "SOURCE_BUNDLE_DIGEST", None)
+            != _rust_source_bundle_digest()
+        ):
+            raise RuntimeError(
+                "dth_complete_rs was not compiled from the current Rust source bundle"
+            )
         return module
 
     @property
@@ -673,6 +839,20 @@ class CompleteTablebaseBuilder:
 
     def _save_progress(self) -> None:
         _atomic_json(self._progress_path, self._progress)
+
+    def _verify_completed_artifact(self) -> None:
+        """Verify that a completed checkpoint still names an intact artifact."""
+
+        expected = self._progress.get("manifest_sha256")
+        manifest_path = self.output_dir / "tablebase.json"
+        if not _is_sha256(expected):
+            raise RuntimeError("completed DTH checkpoint has no valid manifest digest")
+        if not manifest_path.is_file() or _sha256_file(manifest_path) != expected:
+            raise RuntimeError("completed DTH checkpoint manifest is missing or corrupt")
+        try:
+            CompleteTablebase(self.output_dir, verify_hashes=True)
+        except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+            raise RuntimeError("completed DTH tablebase failed verification") from exc
 
     def _array_specs(self) -> dict[str, tuple[str, tuple[int, ...]]]:
         return {
@@ -713,24 +893,68 @@ class CompleteTablebaseBuilder:
             "lp_tightened": 0,
             "warm_attempts": 0,
             "execution_backends": [],
+            "warm_supports_sha256": None,
         }
         self._save_progress()
 
     # ------------------------------------------------------- warm-start table
     def _load_prev_supports(self) -> dict[int, tuple[tuple[int, ...], tuple[int, ...]]]:
         path = self.output_dir / _SUPPORTS_FILE
-        if not self.warm_start or not path.exists():
+        if not self.warm_start or self.phase == "complete":
             return {}
-        with np.load(path) as payload:
-            if int(payload["potential"]) != int(self._progress["completed_potential"]):
-                # A checkpoint from before the last completed layer; the next
-                # layer would mis-route, so fail closed rather than degrade.
-                raise RuntimeError(
-                    "warm-support checkpoint does not match completed_potential"
-                )
-            classes = payload["classes"]
-            rows = payload["rows"]
-            cols = payload["cols"]
+        completed = int(self._progress["completed_potential"])
+        expected_digest = self._progress.get("warm_supports_sha256")
+        if completed == self._max_class_potential + 1:
+            if expected_digest is not None:
+                raise RuntimeError("initial DTH checkpoint has an unexpected support digest")
+            return {}
+        if not path.is_file():
+            raise RuntimeError("warm-support checkpoint is missing")
+        if not _is_sha256(expected_digest) or _sha256_file(path) != expected_digest:
+            raise RuntimeError("warm-support checkpoint digest is missing or corrupt")
+        try:
+            with np.load(path, allow_pickle=False) as payload:
+                if set(payload.files) != {"potential", "classes", "rows", "cols"}:
+                    raise RuntimeError("warm-support checkpoint array set is invalid")
+                potential = np.asarray(payload["potential"])
+                classes = np.asarray(payload["classes"])
+                rows = np.asarray(payload["rows"])
+                cols = np.asarray(payload["cols"])
+        except (OSError, TypeError, ValueError) as exc:
+            raise RuntimeError("warm-support checkpoint cannot be decoded") from exc
+        if potential.shape != () or potential.dtype != np.dtype("int64"):
+            raise RuntimeError("warm-support potential tag is malformed")
+        if int(potential) != completed:
+            raise RuntimeError(
+                "warm-support checkpoint does not match completed_potential"
+            )
+        if classes.dtype != np.dtype("uint64") or classes.ndim != 1:
+            raise RuntimeError("warm-support class IDs are malformed")
+        expected_shape = (len(classes), self.max_support)
+        if (
+            rows.dtype != np.dtype("int32")
+            or cols.dtype != np.dtype("int32")
+            or rows.shape != expected_shape
+            or cols.shape != expected_shape
+        ):
+            raise RuntimeError("warm-support rows or columns are malformed")
+        if len(classes):
+            if int(classes[-1]) >= self._class_count or np.any(
+                classes[1:] <= classes[:-1]
+            ):
+                raise RuntimeError("warm-support class IDs are not sorted and unique")
+        for support_matrix in (rows, cols):
+            for support in support_matrix:
+                sentinels = np.flatnonzero(support == -1)
+                stop = int(sentinels[0]) if len(sentinels) else len(support)
+                values = support[:stop]
+                if (
+                    np.any(support[stop:] != -1)
+                    or np.any(values < 0)
+                    or np.any(values > 59)
+                    or (len(values) > 1 and np.any(np.diff(values) <= 0))
+                ):
+                    raise RuntimeError("warm-support padding or ordering is invalid")
         supports = {}
         for index in range(len(classes)):
             supports[int(classes[index])] = (
@@ -743,9 +967,9 @@ class CompleteTablebaseBuilder:
         self,
         potential: int,
         supports: dict[int, tuple[tuple[int, ...], tuple[int, ...]]],
-    ) -> None:
+    ) -> str | None:
         if not self.warm_start:
-            return
+            return None
         classes = np.array(sorted(supports), dtype=np.uint64)
         rows = np.full((len(classes), self.max_support), -1, dtype=np.int32)
         cols = np.full((len(classes), self.max_support), -1, dtype=np.int32)
@@ -753,10 +977,12 @@ class CompleteTablebaseBuilder:
             drop_support, check_support = supports[int(class_id)]
             rows[index, : len(drop_support)] = drop_support
             cols[index, : len(check_support)] = check_support
+        path = self.output_dir / _SUPPORTS_FILE
         _atomic_npz(
-            self.output_dir / _SUPPORTS_FILE,
+            path,
             {"potential": np.int64(potential), "classes": classes, "rows": rows, "cols": cols},
         )
+        return _sha256_file(path)
 
     def _warm_guesses(self, checker: int, dropper: int) -> tuple[int, ...]:
         """Neighbour classes one potential step up, checker shift then dropper."""
@@ -776,6 +1002,7 @@ class CompleteTablebaseBuilder:
 
         self.initialize()
         if self.phase == "complete":
+            self._verify_completed_artifact()
             return True
         arrays = self._open_arrays("r+")
         prev_supports = self._load_prev_supports()
@@ -798,10 +1025,11 @@ class CompleteTablebaseBuilder:
                 solved_at = time.perf_counter()
                 for array in arrays.values():
                     array.flush()
-                self._store_supports(potential, next_supports)
+                support_digest = self._store_supports(potential, next_supports)
                 for key, delta in counters.items():
                     self._progress[key] = int(self._progress.get(key, 0)) + delta
                 self._progress["completed_potential"] = potential
+                self._progress["warm_supports_sha256"] = support_digest
                 if self._active_backend not in self._progress["execution_backends"]:
                     self._progress["execution_backends"].append(self._active_backend)
                 self._save_progress()
@@ -1179,17 +1407,8 @@ class CompleteTablebaseBuilder:
 
         recertified, worst_gap = self._sampled_recertification(value, kind)
 
-        source_root = Path(__file__).resolve().parent
-        digest_inputs = [source_root / "packed.py", source_root / "complete_tablebase.py"]
-        if "rust" in self._progress["execution_backends"]:
-            workspace = source_root.parent
-            digest_inputs.extend(
-                (
-                    workspace / "crates" / "dth_complete" / "Cargo.toml",
-                    workspace / "crates" / "dth_complete" / "src" / "lib.rs",
-                    workspace.parent / "Cargo.lock",
-                )
-            )
+        include_rust = "rust" in self._progress["execution_backends"]
+        digest_inputs = _source_digest_inputs(include_rust=include_rust)
         code_config_digest = _digest_files(
             digest_inputs, config={"build_config_digest": self._config_digest}
         )
@@ -1213,9 +1432,11 @@ class CompleteTablebaseBuilder:
                 "max_class_potential": self._max_class_potential,
                 "solver_schema_hash": solver_schema_hash(),
                 "saddle_gap_tolerance": SADDLE_GAP_TOLERANCE,
+                "build_config_digest": self._config_digest,
                 "warm_start": bool(self.warm_start),
                 "warm_start_policy": WARM_START_POLICY if self.warm_start else None,
                 "max_support": int(self.max_support),
+                "policy_mass_eps": _POLICY_MASS_EPS,
                 "ladder": LADDER_ID,
                 "solver_kinds": {"pure": 0, "support": 1, "lp": 2},
                 "pure_states": int(self._progress["pure_states"]),
@@ -1238,9 +1459,11 @@ class CompleteTablebaseBuilder:
         _atomic_json(self.output_dir / "tablebase.json", manifest)
         supports_path = self.output_dir / _SUPPORTS_FILE
         supports_path.unlink(missing_ok=True)
+        self._progress["warm_supports_sha256"] = None
         self._progress["phase"] = "complete"
         self._progress["manifest_sha256"] = _sha256_file(self.output_dir / "tablebase.json")
         self._save_progress()
+        self._verify_completed_artifact()
 
     def _sampled_recertification(
         self, value: np.memmap, kind: np.memmap, *, per_layer: int = 4
@@ -1305,34 +1528,209 @@ class CompleteTablebase:
         if not manifest_path.exists():
             raise FileNotFoundError(f"no complete tablebase manifest at {manifest_path}")
         self._manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(self._manifest, dict) or set(self._manifest) != {
+            "schema_version",
+            "metadata",
+            "arrays",
+        }:
+            raise ValueError("malformed complete-tablebase manifest key set")
         if self._manifest.get("schema_version") != COMPLETE_TABLEBASE_SCHEMA:
             raise ValueError(
                 f"unsupported complete-tablebase schema "
                 f"{self._manifest.get('schema_version')!r}"
             )
-        metadata = self._manifest["metadata"]
-        self._class_count = int(metadata["class_count"])
-        self._profile_count = int(metadata["profile_count"])
-        self._canonical = bool(metadata["canonical_table"])
+        try:
+            metadata = self._manifest["metadata"]
+            array_manifest = self._manifest["arrays"]
+            if not isinstance(metadata, dict) or not isinstance(array_manifest, dict):
+                raise TypeError
+            if set(metadata) != _COMPLETE_METADATA_KEYS:
+                raise ValueError("complete-tablebase metadata key set is incompatible")
+            canonical_table = metadata["canonical_table"]
+            if not isinstance(canonical_table, bool):
+                raise ValueError("canonical_table must be a JSON boolean")
+            self._canonical = canonical_table
+            profile_count = metadata["profile_count"]
+            class_count = metadata["class_count"]
+            if any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (profile_count, class_count)
+            ):
+                raise ValueError("profile and class counts must be integers")
+            self._profile_count = profile_count
+            self._class_count = class_count
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("malformed complete-tablebase manifest") from exc
+
+        if self._profile_count <= 0 or self._class_count != self._profile_count**2:
+            raise ValueError("complete-tablebase class dimensions are inconsistent")
+        if metadata.get("class_encoding") != PACKED_CLASS_ENCODING:
+            raise ValueError("complete-tablebase class encoding is incompatible")
+        if metadata.get("solver_schema_hash") != solver_schema_hash():
+            raise ValueError("complete-tablebase rules hash does not match current DTH")
+        if metadata.get("saddle_gap_tolerance") != SADDLE_GAP_TOLERANCE:
+            raise ValueError("complete-tablebase saddle-gap tolerance is incompatible")
+        if metadata.get("ladder") != LADDER_ID:
+            raise ValueError("complete-tablebase solve ladder is incompatible")
+        if metadata.get("solver_kinds") != {"pure": 0, "support": 1, "lp": 2}:
+            raise ValueError("complete-tablebase solver-kind encoding is incompatible")
+        if metadata.get("policy_mass_eps") != _POLICY_MASS_EPS:
+            raise ValueError("complete-tablebase policy-mass threshold is incompatible")
+
+        warm_start = metadata.get("warm_start")
+        if not isinstance(warm_start, bool):
+            raise ValueError("complete-tablebase warm_start must be a JSON boolean")
+        expected_warm_policy = WARM_START_POLICY if warm_start else None
+        if metadata.get("warm_start_policy") != expected_warm_policy:
+            raise ValueError("complete-tablebase warm-start policy is incompatible")
+        max_support = metadata.get("max_support")
+        if isinstance(max_support, bool) or not isinstance(max_support, int) or not 1 <= max_support <= 60:
+            raise ValueError("complete-tablebase max_support is invalid")
+
+        backends = metadata.get("execution_backends")
+        if backends not in (["python"], ["rust"]):
+            raise ValueError("complete-tablebase execution provenance is invalid")
+        include_rust = "rust" in backends
+        table_digest = metadata.get("table_digest")
+        if not _is_sha256(table_digest):
+            raise ValueError("complete-tablebase table digest is missing")
+        for field_name in (
+            "solver_schema_hash",
+            "build_config_digest",
+            "code_config_digest",
+        ):
+            if not _is_sha256(metadata.get(field_name)):
+                raise ValueError(
+                    f"complete-tablebase {field_name} digest is malformed"
+                )
+        maximum_potential = metadata.get("max_class_potential")
+        if (
+            isinstance(maximum_potential, bool)
+            or not isinstance(maximum_potential, int)
+            or maximum_potential < 0
+        ):
+            raise ValueError("complete-tablebase maximum potential is invalid")
+        if self._canonical:
+            if self._profile_count != PROFILE_COUNT:
+                raise ValueError("canonical manifest disagrees with the profile count")
+            if metadata.get("max_class_potential") != 1200:
+                raise ValueError("canonical manifest has the wrong potential schedule")
+            current_table_digest = _table_digest(build_profile_table())
+            if table_digest != current_table_digest:
+                raise ValueError("canonical profile table does not match current DTH rules")
+
+        expected_build_config = _build_config_payload(
+            canonical_table=self._canonical,
+            table_digest=table_digest,
+            warm_start=warm_start,
+            max_support=max_support,
+            include_rust=include_rust,
+        )
+        build_config_digest = metadata.get("build_config_digest")
+        if build_config_digest != _digest_json(expected_build_config):
+            raise ValueError(
+                "complete-tablebase build configuration or implementation source is stale"
+            )
+        expected_code_digest = _digest_files(
+            _source_digest_inputs(include_rust=include_rust),
+            config={"build_config_digest": build_config_digest},
+        )
+        if metadata.get("code_config_digest") != expected_code_digest:
+            raise ValueError("complete-tablebase code/configuration digest is stale")
+
+        route_counts = tuple(
+            metadata.get(name) for name in ("pure_states", "support_states", "lp_states")
+        )
+        if any(
+            isinstance(count, bool) or not isinstance(count, int) or count < 0
+            for count in route_counts
+        ):
+            raise ValueError("complete-tablebase routing counts are invalid")
+        route_total = sum(route_counts)
+        if route_total != self._class_count:
+            raise ValueError("complete-tablebase routing counts are inconsistent")
+        detail_names = (
+            "warm_hits",
+            "full_support_hits",
+            "lp_single_dual",
+            "lp_highs",
+            "lp_ipm",
+            "lp_tightened",
+            "warm_attempts",
+        )
+        detail_counts = {name: metadata.get(name) for name in detail_names}
+        if any(
+            isinstance(count, bool) or not isinstance(count, int) or count < 0
+            for count in detail_counts.values()
+        ):
+            raise ValueError("complete-tablebase detailed routing counts are invalid")
+        if (
+            detail_counts["warm_hits"] + detail_counts["full_support_hits"]
+            != metadata["support_states"]
+            or sum(
+                detail_counts[name]
+                for name in ("lp_single_dual", "lp_highs", "lp_ipm", "lp_tightened")
+            )
+            != metadata["lp_states"]
+            or detail_counts["warm_hits"] > detail_counts["warm_attempts"]
+        ):
+            raise ValueError("complete-tablebase detailed routing counts are inconsistent")
+        recertified_samples = metadata.get("recertified_samples")
+        if (
+            isinstance(recertified_samples, bool)
+            or not isinstance(recertified_samples, int)
+            or recertified_samples <= 0
+        ):
+            raise ValueError("complete-tablebase recertified sample count is invalid")
+        recertified_gap = metadata.get("recertified_worst_gap")
+        if (
+            isinstance(recertified_gap, bool)
+            or not isinstance(recertified_gap, (int, float))
+            or not math.isfinite(float(recertified_gap))
+            or not 0.0 <= float(recertified_gap) <= SADDLE_GAP_TOLERANCE
+        ):
+            raise ValueError("complete-tablebase recertification metadata is invalid")
+
+        expected_arrays = {
+            "value": {"file": "value.npy", "shape": [self._class_count], "dtype": "float64"},
+            "solver_kind": {
+                "file": "solver_kind.npy",
+                "shape": [self._class_count],
+                "dtype": "uint8",
+            },
+        }
+        if set(array_manifest) != set(expected_arrays):
+            raise ValueError("complete-tablebase array set is incompatible")
         self._arrays = {}
-        for name, spec in self._manifest["arrays"].items():
+        for name, expected in expected_arrays.items():
+            spec = array_manifest[name]
+            if (
+                not isinstance(spec, dict)
+                or set(spec) != {*expected, "sha256"}
+                or any(spec.get(field) != value for field, value in expected.items())
+            ):
+                raise ValueError(f"complete-tablebase array contract is invalid for {name}")
+            digest = spec.get("sha256")
+            if not _is_sha256(digest):
+                raise ValueError(f"complete-tablebase array digest is invalid for {name}")
             path = self.artifact_dir / spec["file"]
-            if self.verify_hashes and _sha256_file(path) != spec["sha256"]:
+            if self.verify_hashes and _sha256_file(path) != digest:
                 raise ValueError(f"complete-tablebase array {name} fails its manifest digest")
             self._arrays[name] = _open_npy(
                 path, mode="r", dtype=spec["dtype"], shape=tuple(spec["shape"])
             )
-        if self._canonical and self._profile_count != PROFILE_COUNT:
-            raise ValueError("canonical manifest disagrees with the profile count")
 
     @property
     def metadata(self) -> dict[str, Any]:
         return dict(self._manifest["metadata"])
 
     def value_of_class(self, index: int) -> float:
-        if not 0 <= int(index) < self._class_count:
+        if isinstance(index, (bool, np.bool_)) or not isinstance(index, Integral):
+            raise LookupError(f"class index {index!r} must be a literal integer")
+        normalized = int(index)
+        if not 0 <= normalized < self._class_count:
             raise LookupError(f"class index {index} is outside this artifact")
-        return float(self._arrays["value"][int(index)])
+        return float(self._arrays["value"][normalized])
 
     def lookup(self, state, *, recertify: bool = False) -> dict[str, Any]:
         """Resolve one live state; raises ``LookupError`` off the domain."""

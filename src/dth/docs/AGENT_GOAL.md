@@ -8,7 +8,7 @@ policy for every arena state.
 ## Canonical artifact
 
 - Directory: `src/dth/artifacts/complete_full_v1/`
-- Schema: `dth.complete-tablebase.v1`
+- Schema: `dth.complete-tablebase.v2`
 - Quotient classes: 289,374,121
 - Values: one float64 per class
 - Routing audit: one uint8 solver-kind value per class

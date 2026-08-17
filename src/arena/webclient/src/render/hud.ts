@@ -5,6 +5,8 @@
 // `_player_column` builds in src/arena/tui.py.
 
 import type { PlayerView, Snapshot } from "../types";
+import { escapeHtml } from "./escape";
+import { roleTitle } from "./identity";
 
 const el = (id: string): HTMLElement => {
   const node = document.getElementById(id);
@@ -21,15 +23,10 @@ function bar(value: number, maximum: number): string {
 
 function column(player: PlayerView, snapshot: Snapshot): string {
   const you = player.is_human ? ' <span class="you">(you)</span>' : "";
-  const role =
-    player.name === snapshot.dropper_name
-      ? "Dropper"
-      : player.name === snapshot.checker_name
-        ? "Checker"
-        : "";
+  const role = roleTitle(player);
   return `
     <div class="player">
-      <h2>${player.name}${you} <span class="you">${role}</span></h2>
+      <h2>${escapeHtml(player.name)}${you} <span class="you">${escapeHtml(role)}</span></h2>
       <div class="stat">
         <span>Cylinder</span>${bar(player.cylinder_seconds, snapshot.cylinder_max)}
         <span class="value">${player.cylinder_seconds.toFixed(0)}s</span>
@@ -52,7 +49,7 @@ export function drawHud(snapshot: Snapshot): void {
     .filter(Boolean)
     .join("");
   el("roles").innerHTML =
-    `<span>DROPPER <strong>${snapshot.dropper_name}</strong></span>` +
-    `<span>CHECKER <strong>${snapshot.checker_name}</strong></span>`;
+    `<span>DROPPER <strong>${escapeHtml(snapshot.dropper_name)}</strong></span>` +
+    `<span>CHECKER <strong>${escapeHtml(snapshot.checker_name)}</strong></span>`;
   el("stats").innerHTML = snapshot.players.map((player) => column(player, snapshot)).join("");
 }

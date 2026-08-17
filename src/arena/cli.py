@@ -10,7 +10,13 @@ from pathlib import Path
 from arena.abstract_adapter import AbstractTablebasePolicyProvider
 from arena.agent import PolicyDrivenAgent
 from arena.contracts import reset_provider_game
-from arena.session import Phase, PlaySession
+from arena.session import (
+    CANONICAL_HAL_NAME,
+    CANONICAL_HUMAN_NAME,
+    Phase,
+    PlaySession,
+    validate_human_display_name,
+)
 from stl.engine.game import (
     OPENING_START_CLOCK,
     PHYSICALITY_BAKU,
@@ -193,18 +199,9 @@ def _make_provider(kind: str, args: argparse.Namespace):
     if kind == "aggro-hal":
         return _make_aggro_hal_provider(args)
     if kind == "stl-mcts":
-        if not args.checkpoint:
-            raise ValueError("--checkpoint is required for --hal-agent stl-mcts")
-        from arena.stl_adapter import STLSolverPolicyProvider
-        from stl.play.agent import SolverAgent
-
-        return STLSolverPolicyProvider(
-            SolverAgent(
-                args.checkpoint,
-                player_name="Hal",
-                iterations=args.iterations,
-                seed=0 if args.seed is None else args.seed,
-            )
+        raise ValueError(
+            "stl-mcts is retired: the STL play/solver stack it depended on no "
+            "longer exists"
         )
     raise ValueError(f"unknown agent kind {kind!r}")
 
@@ -215,11 +212,12 @@ def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
     )
 
 
-def _print_state(game: Game) -> None:
+def _print_state(game: Game, *, human_display_name: str = CANONICAL_HUMAN_NAME) -> None:
     print(f"\nClock {game.format_game_clock()} | round {game.round_num + 1}")
     for player in (game.player1, game.player2):
+        name = human_display_name if player.name == CANONICAL_HUMAN_NAME else player.name
         print(
-            f"  {player.name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}"
+            f"  {name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}"
         )
 
 
@@ -283,8 +281,8 @@ def _play_one_game(
         if args.start_clock_sequence is not None
         else args.start_clock
     )
-    hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
-    human = Player(name=args.human_name, physicality=PHYSICALITY_BAKU)
+    hal = Player(name=CANONICAL_HAL_NAME, physicality=PHYSICALITY_HAL)
+    human = Player(name=CANONICAL_HUMAN_NAME, physicality=PHYSICALITY_BAKU)
     game = Game(
         player1=hal,
         player2=human,
@@ -319,6 +317,7 @@ def _play_one_game(
                     game,
                     art=art,
                     human_name=human.name,
+                    human_label=args.human_name,
                     frame=view.frame,
                     layout=layout,
                     colour=colour,
@@ -335,6 +334,7 @@ def _play_one_game(
                     record,
                     game,
                     human_name=human.name,
+                    human_label=args.human_name,
                     layout=layout,
                     colour=colour,
                 )
@@ -355,6 +355,7 @@ def _play_one_game(
                     game,
                     art=art,
                     human_name=human.name,
+                    human_label=args.human_name,
                     layout=layout,
                     colour=colour,
                     glyphs=args.glyphs,
@@ -368,6 +369,7 @@ def _play_one_game(
         hal_agent=hal_agent,
         hal=hal,
         human=human,
+        human_display_name=args.human_name,
         game_index=game_index,
         game_seed=game_seed,
         start_clock=start_clock,
@@ -378,12 +380,12 @@ def _play_one_game(
         if view is not None:
             view()
         else:
-            _print_state(game)
+            _print_state(game, human_display_name=args.human_name)
         # Hal acts inside submit(), after this returns, so nothing about its
         # choice exists while the human is deciding.
         record = session.submit(
             _human_action(
-                actor=session.human.name,
+                actor=session.human_display_name,
                 role=session.human_role(),
                 legal=session.legal_actions(),
             )
@@ -391,9 +393,11 @@ def _play_one_game(
         if show_outcome is not None:
             show_outcome(record)
         else:
+            dropper = session.display_canonical_name(record.dropper)
+            checker = session.display_canonical_name(record.checker)
             print(
-                f"{record.dropper} dropped at {record.drop_time}; "
-                f"{record.checker} checked at {record.check_time}; "
+                f"{dropper} dropped at {record.drop_time}; "
+                f"{checker} checked at {record.check_time}; "
                 f"{record.result.value}."
             )
         session.acknowledge()
@@ -401,7 +405,7 @@ def _play_one_game(
         if show_victory is not None and game.winner is not None:
             show_victory()
         if game.winner is not None:
-            print(f"Game over: {game.winner.name} wins.")
+            print(f"Game over: {session.display_name(game.winner)} wins.")
         else:
             print("Game over: no surviving winner.")
     else:
@@ -410,6 +414,7 @@ def _play_one_game(
 
 
 def command_play(args: argparse.Namespace) -> int:
+    args.human_name = validate_human_display_name(args.human_name)
     if args.games <= 0:
         raise ValueError("--games must be positive")
     if args.tui and args.games != 1:
@@ -472,8 +477,6 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         default="auto",
         help="backend used when a missing abstract tablebase must be built",
     )
-    parser.add_argument("--checkpoint")
-    parser.add_argument("--iterations", type=int, default=200)
     parser.add_argument(
         "--dth-complete-tablebase",
         default=DEFAULT_DTH_COMPLETE_TABLEBASE,
@@ -529,7 +532,7 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--exploit-hal-config",
-        default="src/arena/config/exploit_hal_v1.yaml",
+        default="src/arena/config/exploit_hal_v2.yaml",
         help="tracked Exploit Hal configuration used for checkpoint validation",
     )
     parser.add_argument(
@@ -594,7 +597,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     play.add_argument(
         "--hal-agent",
-        choices=("abstract", "dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        choices=("abstract", "dth", "adaptive-dth", "exploit-hal"),
         default="dth",
     )
     _add_agent_arguments(play)
@@ -695,7 +698,6 @@ def build_parser() -> argparse.ArgumentParser:
             "adaptive-dth",
             "exploit-hal",
             "aggro-hal",
-            "stl-mcts",
         ),
         required=True,
     )
@@ -707,7 +709,6 @@ def build_parser() -> argparse.ArgumentParser:
             "adaptive-dth",
             "exploit-hal",
             "aggro-hal",
-            "stl-mcts",
         ),
         required=True,
     )

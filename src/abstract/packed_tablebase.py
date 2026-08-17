@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import math
 import os
 import tempfile
 from dataclasses import dataclass
@@ -18,6 +20,8 @@ from abstract.matrix import solve_matrix
 from abstract.packed import PackedStateCodec, packed_live_successors
 from abstract.rules import (
     FROZEN_REVIVAL_MODEL,
+    REVIVAL_BASELINE,
+    REVIVAL_TTD_DECAY_PER_DEATH_DOSE,
     AbstractRuleset,
     TIMING_CONVENTION_ID,
 )
@@ -25,9 +29,11 @@ from abstract.state import AbstractState
 from abstract.tablebase import state_id
 
 
-PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v4"
-PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v3"
+PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v5"
+PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v4"
 UNREACHABLE_ORDINAL = np.iinfo(np.uint32).max
+_RUST_SOURCE_BUNDLE_ALGORITHM = "sha256-framed-source-bundle-v1"
+_RUST_SOURCE_BUNDLE_DOMAIN = b"stl-rust-source-bundle-v1\0"
 
 _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
     "state_index": ("uint32", ("reachable",)),
@@ -39,6 +45,147 @@ _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
     "dropper_win_probability": ("float64", ("reachable",)),
     "checker_win_probability": ("float64", ("reachable",)),
 }
+
+_PACKED_METADATA_KEYS = {
+    "ruleset_id",
+    "state_schema",
+    "state_encoding",
+    "state_field_names",
+    "action_values",
+    "action_seconds",
+    "timing_convention_id",
+    "bucket_seconds",
+    "load_cap_units",
+    "load_cap_seconds",
+    "failed_check_penalty_units",
+    "revival_model",
+    "root_state_index",
+    "reachable_state_count",
+    "physical_state_upper_bound",
+    "maximum_potential",
+    "potential_counts",
+    "solver",
+    "matrix_solver",
+    "state_ids",
+    "checkpoint_states",
+    "execution_backends",
+    "persisted_policy_max_saddle_gap",
+    "packed_build_config_digest",
+    "code_config_digest",
+}
+
+_MATRIX_SOLVER_KEYS = {
+    "pure_saddle_states",
+    "mixed_lp_states",
+    "lp_shape",
+    "policy_saddle_gap",
+    "primal_feasibility",
+    "dual_feasibility",
+    "ipm_optimality",
+}
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _rust_source_bundle_digest() -> str:
+    """Digest the exact compile-time source bundle embedded by build.rs."""
+
+    source_workspace = Path(__file__).resolve().parent.parent
+    repository_root = source_workspace.parent
+    crate_root = source_workspace / "crates" / "abstract_solver"
+    entries = (
+        ("Cargo.toml", crate_root / "Cargo.toml"),
+        ("build.rs", crate_root / "build.rs"),
+        ("src/lib.rs", crate_root / "src" / "lib.rs"),
+        ("Cargo.lock", repository_root / "Cargo.lock"),
+    )
+    digest = hashlib.sha256(_RUST_SOURCE_BUNDLE_DOMAIN)
+    for label, path in entries:
+        label_bytes = label.encode("utf-8")
+        payload = path.read_bytes()
+        digest.update(len(label_bytes).to_bytes(8, "big"))
+        digest.update(label_bytes)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
+    """Return every implementation input that can affect persisted rows."""
+
+    source_root = Path(__file__).resolve().parent
+    repository_root = source_root.parent.parent
+    inputs = [
+        source_root / "artifacts.py",
+        source_root / "state.py",
+        source_root / "rules.py",
+        source_root / "matrix.py",
+        source_root / "packed.py",
+        source_root / "tablebase.py",
+        source_root / "packed_tablebase.py",
+        repository_root / "uv.lock",
+    ]
+    if include_rust:
+        source_workspace = source_root.parent
+        inputs.extend(
+            (
+                source_workspace / "crates" / "abstract_solver" / "Cargo.toml",
+                source_workspace / "crates" / "abstract_solver" / "build.rs",
+                source_workspace / "crates" / "abstract_solver" / "src" / "lib.rs",
+                repository_root / "Cargo.lock",
+            )
+        )
+    return inputs
+
+
+def _implementation_digest(*, include_rust: bool) -> str:
+    return digest_files(
+        _source_digest_inputs(include_rust=include_rust),
+        config={
+            "artifact_schema": PACKED_TABLEBASE_SCHEMA,
+            "build_schema": PACKED_BUILD_SCHEMA,
+            "execution_backend": "rust" if include_rust else "python",
+        },
+    )
+
+
+def _build_config_payload(
+    rules: AbstractRuleset,
+    *,
+    include_rust: bool,
+) -> dict[str, object]:
+    return {
+        "schema": PACKED_BUILD_SCHEMA,
+        "ruleset_id": rules.ruleset_id,
+        "action_values": rules.action_values,
+        "bucket_seconds": rules.bucket_seconds,
+        "load_cap_units": rules.load_cap_units,
+        "failed_check_penalty_units": rules.failed_check_penalty_units,
+        "revival_model": rules.revival_model_metadata,
+        "implementation_digest": _implementation_digest(include_rust=include_rust),
+    }
+
+
+def _resolved_array_specs(
+    rules: AbstractRuleset,
+    *,
+    reachable: int,
+) -> dict[str, tuple[str, tuple[int, ...]]]:
+    dimensions = {
+        "reachable": reachable,
+        "physical": rules.physical_state_upper_bound,
+        "actions": rules.action_size,
+    }
+    return {
+        name: (dtype, tuple(dimensions[dimension] for dimension in symbolic_shape))
+        for name, (dtype, symbolic_shape) in _ARRAY_SPECS.items()
+    }
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -105,19 +252,13 @@ class PackedTablebaseBuilder:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._codec = PackedStateCodec(self.rules.load_cap_units)
         self._progress_path = self.output_dir / "build-progress.json"
-        self._config_digest = digest_json(
-            {
-                "schema": PACKED_BUILD_SCHEMA,
-                "ruleset_id": self.rules.ruleset_id,
-                "action_values": self.rules.action_values,
-                "bucket_seconds": self.rules.bucket_seconds,
-                "load_cap_units": self.rules.load_cap_units,
-                "failed_check_penalty_units": self.rules.failed_check_penalty_units,
-                "revival_model": self.rules.revival_model_metadata,
-            }
-        )
         self._rust_kernel = self._load_rust_kernel()
         self._active_backend = "rust" if self._rust_kernel is not None else "python"
+        self._build_config = _build_config_payload(
+            self.rules,
+            include_rust=self._active_backend == "rust",
+        )
+        self._config_digest = digest_json(self._build_config)
         if self._progress_path.exists():
             self._progress = json.loads(self._progress_path.read_text(encoding="utf-8"))
             if self._progress.get("config_digest") != self._config_digest:
@@ -143,6 +284,15 @@ class PackedTablebaseBuilder:
         expected = "abstract-packed-parity-v3"
         if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
             raise RuntimeError("Rust packed solver does not match the Python parity contract")
+        if (
+            getattr(module, "SOURCE_BUNDLE_DIGEST_ALGORITHM", None)
+            != _RUST_SOURCE_BUNDLE_ALGORITHM
+            or getattr(module, "SOURCE_BUNDLE_DIGEST", None)
+            != _rust_source_bundle_digest()
+        ):
+            raise RuntimeError(
+                "abstract_solver_rs was not compiled from the current Rust source bundle"
+            )
         return module
 
     @property
@@ -160,6 +310,20 @@ class PackedTablebaseBuilder:
 
     def _save_progress(self) -> None:
         _atomic_json(self._progress_path, self._progress)
+
+    def _verify_completed_artifact(self) -> None:
+        """Verify that a completed checkpoint still names an intact artifact."""
+
+        expected = self._progress.get("manifest_sha256")
+        manifest_path = self.output_dir / "tablebase.json"
+        if not _is_sha256(expected):
+            raise RuntimeError("completed packed checkpoint has no valid manifest digest")
+        if not manifest_path.is_file() or sha256_file(manifest_path) != expected:
+            raise RuntimeError("completed packed checkpoint manifest is missing or corrupt")
+        try:
+            PackedTablebase(self.output_dir, verify_hashes=True)
+        except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+            raise RuntimeError("completed packed tablebase failed verification") from exc
 
     def _initialize_reachability(self) -> dict[str, Any]:
         physical = self.codec.state_count
@@ -607,6 +771,7 @@ class PackedTablebaseBuilder:
         """Advance descending-potential backups; return whether solving finished."""
 
         if self.phase == "complete":
+            self._verify_completed_artifact()
             return True
         if self.phase != "solve":
             return False
@@ -653,27 +818,8 @@ class PackedTablebaseBuilder:
 
     def _finalize(self, arrays: dict[str, np.memmap]) -> None:
         persisted_policy_max_saddle_gap = self._validate_hot_arrays(arrays)
-        source_root = Path(__file__).resolve().parent
-        digest_inputs = [
-            source_root / name
-            for name in (
-                "state.py",
-                "rules.py",
-                "matrix.py",
-                "packed.py",
-                "packed_tablebase.py",
-            )
-        ]
-        if "rust" in self._progress["execution_backends"]:
-            source_workspace = source_root.parent
-            repository_root = source_workspace.parent
-            digest_inputs.extend(
-                (
-                    source_workspace / "crates" / "abstract_solver" / "Cargo.toml",
-                    source_workspace / "crates" / "abstract_solver" / "src" / "lib.rs",
-                    repository_root / "Cargo.lock",
-                )
-            )
+        include_rust = "rust" in self._progress["execution_backends"]
+        digest_inputs = _source_digest_inputs(include_rust=include_rust)
         code_config_digest = digest_files(
             digest_inputs,
             config={
@@ -729,6 +875,7 @@ class PackedTablebaseBuilder:
                 "checkpoint_states": self.checkpoint_states,
                 "execution_backends": self._progress["execution_backends"],
                 "persisted_policy_max_saddle_gap": persisted_policy_max_saddle_gap,
+                "packed_build_config_digest": self._config_digest,
                 "code_config_digest": code_config_digest,
             },
             "arrays": array_manifest,
@@ -738,6 +885,7 @@ class PackedTablebaseBuilder:
         self._progress["solve_cursor"] = 0
         self._progress["manifest_sha256"] = sha256_file(self.output_dir / "tablebase.json")
         self._save_progress()
+        self._verify_completed_artifact()
 
     def _validate_hot_arrays(self, arrays: dict[str, np.memmap]) -> float:
         reachable = int(self._progress["reachable_state_count"])
@@ -911,55 +1059,208 @@ class PackedTablebase:
     def __post_init__(self) -> None:
         self.artifact_dir = Path(self.artifact_dir)
         manifest_path = self.artifact_dir / "tablebase.json"
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"no packed tablebase manifest at {manifest_path}")
         self.manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(self.manifest, dict) or set(self.manifest) != {
+            "schema_version",
+            "metadata",
+            "arrays",
+        }:
+            raise ValueError("malformed packed tablebase manifest key set")
         if self.manifest.get("schema_version") != PACKED_TABLEBASE_SCHEMA:
             raise ValueError("unsupported packed tablebase artifact schema")
-        metadata = self.manifest["metadata"]
+        metadata = self.manifest.get("metadata")
+        array_manifest = self.manifest.get("arrays")
+        if not isinstance(metadata, dict) or not isinstance(array_manifest, dict):
+            raise ValueError("malformed packed tablebase manifest")
+        if set(metadata) != _PACKED_METADATA_KEYS:
+            raise ValueError("packed tablebase metadata key set is incompatible")
         self.rules = self._rules_for_manifest(metadata)
         self.codec = PackedStateCodec(self.rules.load_cap_units)
+
+        expected_metadata = {
+            "state_schema": self.rules.schema_version,
+            "state_encoding": "mixed_radix_packed_uint32_v1",
+            "state_field_names": list(self.rules.state_field_names),
+            "action_values": list(self.rules.action_values),
+            "action_seconds": [
+                self.rules.action_seconds(action) for action in self.rules.action_values
+            ],
+            "timing_convention_id": TIMING_CONVENTION_ID,
+            "bucket_seconds": self.rules.bucket_seconds,
+            "load_cap_units": self.rules.load_cap_units,
+            "load_cap_seconds": self.rules.load_cap_seconds,
+            "failed_check_penalty_units": self.rules.failed_check_penalty_units,
+            "revival_model": self.rules.revival_model_metadata,
+            "root_state_index": 0,
+            "physical_state_upper_bound": self.rules.physical_state_upper_bound,
+            "maximum_potential": self.codec.maximum_potential,
+            "solver": "packed_reachable_acyclic_bottom_up_dynamic_programming",
+            "state_ids": "derived_on_lookup_or_export_sha256",
+        }
+        for field, expected in expected_metadata.items():
+            if metadata.get(field) != expected:
+                raise ValueError(f"packed tablebase metadata is incompatible at {field}")
+
+        reachable = metadata.get("reachable_state_count")
+        if (
+            isinstance(reachable, bool)
+            or not isinstance(reachable, int)
+            or not 0 < reachable <= self.rules.physical_state_upper_bound
+        ):
+            raise ValueError("packed tablebase reachable-state count is invalid")
+        potential_counts = metadata.get("potential_counts")
+        if (
+            not isinstance(potential_counts, list)
+            or len(potential_counts) != self.codec.maximum_potential + 1
+            or any(isinstance(count, bool) or not isinstance(count, int) or count < 0 for count in potential_counts)
+            or sum(potential_counts) != reachable
+        ):
+            raise ValueError("packed tablebase potential counts are inconsistent")
+
+        matrix_solver = metadata.get("matrix_solver")
+        if not isinstance(matrix_solver, dict) or set(matrix_solver) != _MATRIX_SOLVER_KEYS:
+            raise ValueError("packed tablebase matrix-solver metadata is missing")
+        expected_matrix_contract = {
+            "lp_shape": [self.rules.action_size, self.rules.action_size],
+            "policy_saddle_gap": 2e-7,
+            "primal_feasibility": 1e-9,
+            "dual_feasibility": 1e-9,
+            "ipm_optimality": 1e-10,
+        }
+        for field, expected in expected_matrix_contract.items():
+            if matrix_solver.get(field) != expected:
+                raise ValueError(f"packed tablebase matrix contract is incompatible at {field}")
+        route_counts = (
+            matrix_solver.get("pure_saddle_states"),
+            matrix_solver.get("mixed_lp_states"),
+        )
+        if any(isinstance(count, bool) or not isinstance(count, int) or count < 0 for count in route_counts):
+            raise ValueError("packed tablebase solver routing counts are invalid")
+        if sum(route_counts) != reachable:
+            raise ValueError("packed tablebase solver routing counts are inconsistent")
+
+        maximum_gap = metadata.get("persisted_policy_max_saddle_gap")
+        if (
+            isinstance(maximum_gap, bool)
+            or not isinstance(maximum_gap, (int, float))
+            or not math.isfinite(float(maximum_gap))
+            or not 0.0 <= float(maximum_gap) <= 2e-7
+        ):
+            raise ValueError("packed tablebase persisted saddle gap is invalid")
+        backends = metadata.get("execution_backends")
+        if backends not in (["python"], ["rust"]):
+            raise ValueError("packed tablebase execution provenance is invalid")
+        checkpoint_states = metadata.get("checkpoint_states")
+        if (
+            isinstance(checkpoint_states, bool)
+            or not isinstance(checkpoint_states, int)
+            or checkpoint_states <= 0
+        ):
+            raise ValueError("packed tablebase checkpoint size is invalid")
+        include_rust = "rust" in backends
+        expected_build_digest = digest_json(
+            _build_config_payload(self.rules, include_rust=include_rust)
+        )
+        build_config_digest = metadata.get("packed_build_config_digest")
+        if build_config_digest != expected_build_digest:
+            raise ValueError(
+                "packed tablebase build configuration or implementation source is stale"
+            )
+        expected_code_digest = digest_files(
+            _source_digest_inputs(include_rust=include_rust),
+            config={
+                "ruleset_id": self.rules.ruleset_id,
+                "root": (0, 0, 0, 0),
+                "packed_build_config_digest": build_config_digest,
+            },
+        )
+        if metadata.get("code_config_digest") != expected_code_digest:
+            raise ValueError("packed tablebase code/configuration digest is stale")
+
+        expected_arrays = _resolved_array_specs(self.rules, reachable=reachable)
+        if set(array_manifest) != set(expected_arrays):
+            raise ValueError("packed tablebase array set is incompatible")
         self.arrays: dict[str, np.ndarray] = {}
-        for name, spec in self.manifest["arrays"].items():
+        for name, (dtype, shape) in expected_arrays.items():
+            spec = array_manifest[name]
+            expected = {
+                "file": f"{name}.npy",
+                "shape": list(shape),
+                "dtype": dtype,
+            }
+            if not isinstance(spec, dict) or any(
+                spec.get(field) != value for field, value in expected.items()
+            ) or set(spec) != {"file", "shape", "dtype", "sha256"}:
+                raise ValueError(f"packed tablebase array contract is invalid for {name}")
+            digest = spec.get("sha256")
+            if not _is_sha256(digest):
+                raise ValueError(f"packed tablebase array digest is invalid for {name}")
             path = self.artifact_dir / spec["file"]
-            if self.verify_hashes and sha256_file(path) != spec["sha256"]:
+            if self.verify_hashes and sha256_file(path) != digest:
                 raise ValueError(f"packed tablebase digest mismatch for {name}")
             array = np.load(path, mmap_mode="r", allow_pickle=False)
-            if list(array.shape) != spec["shape"] or str(array.dtype) != spec["dtype"]:
+            if tuple(array.shape) != shape or str(array.dtype) != dtype:
                 raise ValueError(f"packed tablebase shape/dtype mismatch for {name}")
             self.arrays[name] = array
-        if "state_id" in self.arrays:
-            raise ValueError("packed hot artifacts must not contain per-state IDs")
 
     @staticmethod
     def _rules_for_manifest(metadata: dict[str, Any]) -> AbstractRuleset:
-        revival = metadata["revival_model"]
+        revival = metadata.get("revival_model")
         if revival != {
             "kind": FROZEN_REVIVAL_MODEL,
-            "baseline": 0.95,
+            "baseline": REVIVAL_BASELINE,
             "st_shape": "linear_pre_failure_load",
-            "ttd_decay_per_death_dose": 0.75,
+            "ttd_decay_per_death_dose": REVIVAL_TTD_DECAY_PER_DEATH_DOSE,
         }:
             raise ValueError("packed tablebase does not use the frozen revival model")
+        ruleset_id = metadata.get("ruleset_id")
+        action_values = metadata.get("action_values")
+        integer_fields = {
+            name: metadata.get(name)
+            for name in (
+                "bucket_seconds",
+                "load_cap_units",
+                "failed_check_penalty_units",
+            )
+        }
+        if not isinstance(ruleset_id, str) or not ruleset_id:
+            raise ValueError("packed tablebase ruleset ID is invalid")
+        if (
+            not isinstance(action_values, list)
+            or not action_values
+            or any(isinstance(value, bool) or not isinstance(value, int) for value in action_values)
+        ):
+            raise ValueError("packed tablebase action values are invalid")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in integer_fields.values()
+        ):
+            raise ValueError("packed tablebase ruleset dimensions are invalid")
         return AbstractRuleset(
-            ruleset_id=str(metadata["ruleset_id"]),
-            action_values=tuple(int(value) for value in metadata["action_values"]),
-            bucket_seconds=int(metadata["bucket_seconds"]),
-            load_cap_units=int(metadata["load_cap_units"]),
-            failed_check_penalty_units=int(metadata["failed_check_penalty_units"]),
+            ruleset_id=ruleset_id,
+            action_values=tuple(action_values),
+            bucket_seconds=integer_fields["bucket_seconds"],
+            load_cap_units=integer_fields["load_cap_units"],
+            failed_check_penalty_units=integer_fields["failed_check_penalty_units"],
         )
 
     def lookup(self, state: AbstractState | tuple[int, int, int, int] | int) -> dict[str, Any]:
         if isinstance(state, AbstractState):
+            self.rules.validate_state(state)
             fields = self.rules.state_fields(state)
             index = self.codec.encode(*fields)
             state_object = state
         elif isinstance(state, tuple):
             if len(state) != 4:
                 raise ValueError("packed state tuple must have four fields")
-            fields = tuple(int(value) for value in state)
+            state_object = AbstractState(*state)
+            self.rules.validate_state(state_object)
+            fields = self.rules.state_fields(state_object)
             index = self.codec.encode(*fields)
-            state_object = AbstractState(*fields)
         else:
-            index = int(state)
+            index = state
             fields = self.codec.decode(index)
             state_object = AbstractState(*fields)
         row = int(self.arrays["ordinal_by_index"][index])

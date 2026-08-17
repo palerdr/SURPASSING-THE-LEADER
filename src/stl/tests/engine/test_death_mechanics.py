@@ -142,6 +142,26 @@ class TestCylinderOverflow:
         assert rec.result in (HalfRoundResult.CYLINDER_OVERFLOW_SURVIVED,
                                HalfRoundResult.CYLINDER_OVERFLOW_DIED)
 
+    def test_zero_probability_survival_cannot_be_forced(self):
+        hal = Player(name="Hal")
+        baku = Player(name="Baku", cylinder=299)
+        game = Game(player1=hal, player2=baku, referee=Referee(), first_dropper=hal)
+        before = (baku.cylinder, baku.ttd, baku.deaths, baku.alive)
+
+        with pytest.raises(ValueError, match="probability is zero"):
+            game.resolve_half_round(1, 1, survived_outcome=True)
+
+        assert (baku.cylinder, baku.ttd, baku.deaths, baku.alive) == before
+        assert game.history == []
+        assert not game.game_over
+
+    @pytest.mark.parametrize("forced", [0, 1, "yes"])
+    def test_forced_survival_outcome_must_be_a_literal_bool(self, forced):
+        game = Game(Player("Hal"), Player("Baku"), Referee())
+        with pytest.raises(ValueError, match="bool or None"):
+            game.resolve_half_round(2, 1, survived_outcome=forced)
+        assert game.history == []
+
 
 class TestSafeStrategy:
     def test_safe_strategies_remaining_fresh(self, baku):

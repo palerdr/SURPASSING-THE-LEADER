@@ -60,6 +60,17 @@ refuses `--hal-agent abstract` for that reason. `web/schema.py` holds the only
 serializer that faces the browser, so the seat-scoping rule has exactly one
 place to be enforced and one place to be tested.
 
+Engine identities remain exactly `Hal` and `Baku`. `--human-name` and the web
+session's `human_name` are presentation labels only; they never replace Baku's
+rule-bearing identity. `Hal` is reserved as a display label. Browser session
+replacement is a sequenced mutation, is allowed only before play or after a
+terminal acknowledgement, and advances the sequence across the replacement.
+The browser server's live provider set is `dth`, `adaptive-dth`, and
+`exploit-hal`; terminal `arena play` additionally offers `abstract`. The
+retired `stl-mcts` surface is not advertised. Browser snapshots carry
+server-owned character, role, and winner-seat fields, so the client never
+infers identity from presentation labels.
+
 ## Exact, Adaptive, Exploit, and Aggro Hal
 
 All policy providers return a distribution over literal seconds;
@@ -69,7 +80,7 @@ action.
 - **Exact Hal** is the default. It plays the complete pure-DTH equilibrium.
 - **Adaptive Hal** generates DTH-certified opponent-directed candidates and
   applies the hand-written posterior-confidence gate.
-- **Exploit Hal v1** gives the same fixed candidates to a feed-forward
+- **Exploit Hal** gives the same fixed candidates to a feed-forward
   actor-critic. The network chooses a candidate index, never a literal second
   or an arbitrary action distribution. Its public observation contains the
   canonical state, role-separated Bayesian posterior, per-game safety budget,
@@ -87,7 +98,7 @@ local epsilon allowance to spend. It does not learn transitions, literal
 actions, the tablebase, or the opponent posterior.
 
 The candidate family always starts with exact equilibrium, followed by one
-LP-constrained response for each configured epsilon. The tracked v1 grid is
+LP-constrained response for each configured epsilon. The tracked grid is
 `0, .0025, .005, .01, .02, .05, .10`; the per-game budget is configured
 separately and is never increased to admit a larger candidate. Independent
 post-solve checks recompute every candidate's worst-case loss, and cumulative
@@ -99,7 +110,7 @@ each public reveal through explicit `reset_game`, `observe`, and `end_game`
 hooks. The old history-scraping path remains only as compatibility for callers
 that have not migrated.
 
-Exploit Hal v1 falls back to exact DTH and spends no epsilon whenever either
+Exploit Hal falls back to exact DTH and spends no epsilon whenever either
 relevant action space includes Baku's leap-only Dropper action 61. The reveal
 remains in public transcripts and diagnostics but is not inserted into a
 60-action posterior. No candidate is claimed to optimize action 61.
@@ -132,11 +143,25 @@ opt in with `arena match --pure-dth`.
 ## Training, checkpoints, and evaluation
 
 Tracked configurations live in `src/arena/config/`; generated checkpoints,
-trajectories, and reports belong under gitignored `outputs/exploit-hal-v1/`.
+trajectories, and reports belong under gitignored `outputs/exploit-hal-v2/`.
+The supported training-protocol schema is v2. The three v1 configuration files
+are retained byte-for-byte as historical declarations, but are intentionally
+incompatible because they name scripted opponents from the removed STL play
+stack; the loader fails before opening an exact artifact. They are not silently
+rewritten to describe a different experiment.
+The live checkpoint schema remains independently versioned, while v2 protocol
+runs and their recovery state stay under `outputs/exploit-hal-v2/`.
 Checkpoints bind model shapes to the named observation schema and exact ordered
 feature list, epsilon grid, safety budget, activation, action count, and DTH
 artifact compatibility. Loading is strict: missing, partial, incompatible, or
 randomly initialized live actors are rejected.
+
+Exploit Hal training accepts only the in-tree opponent kinds `categorical`,
+`switching`, `uniform`, and `exact`. Oracle-backed validation and evaluation
+accept `categorical`, `switching`, and `uniform`; `exact` is excluded because it
+does not expose the state-independent truth callback required by the one-step
+oracle. Removed STL scripted opponents are rejected while loading the
+configuration, before an exact artifact or training runtime is initialized.
 
 Training uses Gymnasium plus `sb3-contrib` `MaskablePPO`. The Gym action is a
 candidate-policy index (`Discrete(8)` in the tracked configuration), not a
@@ -167,7 +192,7 @@ the overnight orchestrator ignores partially written latest files after an
 interruption. The every-25-update snapshots are longer-lived experiment
 landmarks rather than the recovery transaction.
 
-The tracked overnight protocol runs four independent 500-update seeds
+The tracked v2 overnight protocol runs four independent 500-update seeds
 sequentially. Each update still contains 24 repeated-opponent sessions of eight
 games. It writes a complete snapshot every 25 updates and evaluates every 50
 updates on 64 held-out sessions of eight games. Best-checkpoint eligibility
@@ -189,29 +214,29 @@ Reproducible commands from the repository root:
 
 ```bash
 # 1. Throughput-calibration smoke training.
-uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_smoke_v1.yaml --output-dir outputs/exploit-hal-v1/smoke
+uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_smoke_v2.yaml --output-dir outputs/exploit-hal-v2/smoke
 
-# 2. One resumable v1 seed (500-update total target).
-uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_v1.yaml --output-dir outputs/exploit-hal-v1/v1 --resume outputs/exploit-hal-v1/v1/maskable-ppo.zip
+# 2. One resumable v2-protocol seed (500-update total target).
+uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/v2 --resume outputs/exploit-hal-v2/v2/maskable-ppo.zip
 
 # 3. Complete/resume the predeclared four-seed overnight protocol.
-uv run python -m arena.policies.train_exploit_hal overnight --config src/arena/config/exploit_hal_v1.yaml --output-dir outputs/exploit-hal-v1/overnight-4x500
+uv run python -m arena.policies.train_exploit_hal overnight --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/overnight-4x500
 
 # 4. Validation evaluation of the smoke checkpoint.
-uv run python -m arena.policies.train_exploit_hal evaluate --config src/arena/config/exploit_hal_smoke_v1.yaml --checkpoint outputs/exploit-hal-v1/smoke/checkpoint.pt --output-dir outputs/exploit-hal-v1/smoke-validation
+uv run python -m arena.policies.train_exploit_hal evaluate --config src/arena/config/exploit_hal_smoke_v2.yaml --checkpoint outputs/exploit-hal-v2/smoke/checkpoint.pt --output-dir outputs/exploit-hal-v2/smoke-validation
 
-# 5. Paired Exact/Adaptive/Exploit/oracle v1 final benchmark.
-uv run python -m arena.policies.train_exploit_hal benchmark --config src/arena/config/exploit_hal_v1.yaml --checkpoint outputs/exploit-hal-v1/v1/checkpoint.pt --output-dir outputs/exploit-hal-v1/v1-benchmark
+# 5. Paired Exact/Adaptive/Exploit/oracle v2-protocol final benchmark.
+uv run python -m arena.policies.train_exploit_hal benchmark --config src/arena/config/exploit_hal_v2.yaml --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt --output-dir outputs/exploit-hal-v2/v2-benchmark
 
 # 6. Checkpoint metadata inspection.
-uv run python -m arena.policies.train_exploit_hal inspect --checkpoint outputs/exploit-hal-v1/v1/checkpoint.pt
+uv run python -m arena.policies.train_exploit_hal inspect --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
 
 # 7. Interactive deterministic Exploit Hal play.
-uv run python -m arena play --hal-agent exploit-hal --exploit-hal-config src/arena/config/exploit_hal_v1.yaml --exploit-hal-checkpoint outputs/exploit-hal-v1/v1/checkpoint.pt
+uv run python -m arena play --hal-agent exploit-hal --exploit-hal-config src/arena/config/exploit_hal_v2.yaml --exploit-hal-checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
 ```
 
-For a fresh run, omit `--resume` from command 2. The tracked outcome-only
-ablation is `src/arena/config/exploit_hal_outcome_only_smoke_v1.yaml` and sets
+For a fresh run, omit `--resume` from command 2. The supported outcome-only
+ablation is `src/arena/config/exploit_hal_outcome_only_smoke_v2.yaml` and sets
 the exploit shaping weight to zero. Evaluation uses opponent seeds and latent
 parameters disjoint from training, pairs seats/seeds/start clocks, and treats a
 repeated-opponent session as the independent bootstrap unit. Small smoke runs

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Iterator
 
 from abstract.state import AbstractBranch, AbstractState
@@ -29,8 +30,39 @@ class AbstractRuleset:
     failed_check_penalty_units: int
 
     def __post_init__(self) -> None:
-        if not self.ruleset_id:
+        if not isinstance(self.ruleset_id, str) or not self.ruleset_id:
             raise ValueError("ruleset_id must be non-empty")
+        if any(
+            isinstance(value, bool) or not isinstance(value, Integral)
+            for value in (
+                self.bucket_seconds,
+                self.load_cap_units,
+                self.failed_check_penalty_units,
+            )
+        ):
+            raise ValueError("ruleset dimensions must be literal integers")
+        if not isinstance(self.action_values, tuple):
+            raise ValueError("action_values must be a non-empty sorted tuple")
+        if any(
+            isinstance(action, bool) or not isinstance(action, Integral)
+            for action in self.action_values
+        ):
+            raise ValueError("action_values must contain literal integers")
+        # ``numbers.Integral`` deliberately admits integer scalar types such
+        # as ``numpy.int64`` at the public boundary.  Persisted metadata is
+        # JSON, however, so canonicalize every accepted value immediately.
+        object.__setattr__(
+            self,
+            "action_values",
+            tuple(int(action) for action in self.action_values),
+        )
+        object.__setattr__(self, "bucket_seconds", int(self.bucket_seconds))
+        object.__setattr__(self, "load_cap_units", int(self.load_cap_units))
+        object.__setattr__(
+            self,
+            "failed_check_penalty_units",
+            int(self.failed_check_penalty_units),
+        )
         if not self.action_values or tuple(sorted(self.action_values)) != self.action_values:
             raise ValueError("action_values must be a non-empty sorted tuple")
         if len(set(self.action_values)) != len(self.action_values):
@@ -89,6 +121,34 @@ class AbstractRuleset:
             state.dropper_ttd,
         )
 
+    def validate_state(self, state: AbstractState) -> AbstractState:
+        """Reject states outside this ruleset's live physical domain."""
+
+        if not isinstance(state, AbstractState):
+            raise TypeError("state must be an AbstractState")
+        checker_load, checker_ttd, dropper_load, dropper_ttd = self.state_fields(state)
+        if not (0 <= checker_load < self.load_cap_units):
+            raise ValueError("checker_load is outside the live ruleset domain")
+        if not (0 <= dropper_load < self.load_cap_units):
+            raise ValueError("dropper_load is outside the live ruleset domain")
+        if not (0 <= checker_ttd <= self.load_cap_units):
+            raise ValueError("checker_ttd is outside the live ruleset domain")
+        if not (0 <= dropper_ttd <= self.load_cap_units):
+            raise ValueError("dropper_ttd is outside the live ruleset domain")
+        return state
+
+    def validate_action(self, action: int, *, role: str) -> int:
+        """Return a canonical ordinal action or fail closed on coercible values."""
+
+        if isinstance(action, bool) or not isinstance(action, Integral):
+            raise ValueError(f"{role} action must be a literal integer")
+        normalized = int(action)
+        if normalized not in self.action_values:
+            raise ValueError(
+                f"illegal {role} action {action!r}; legal={self.action_values}"
+            )
+        return normalized
+
     @property
     def state_field_names(self) -> tuple[str, ...]:
         return ("checker_load", "checker_ttd", "dropper_load", "dropper_ttd")
@@ -129,12 +189,9 @@ class AbstractRuleset:
         return max(0.0, min(1.0, REVIVAL_BASELINE * dose_factor * ttd_factor))
 
     def expand_joint_action(self, state: AbstractState, drop: int, check: int) -> tuple[AbstractBranch, ...]:
-        legal_drop = self.legal_drop_actions(state)
-        legal_check = self.legal_check_actions(state)
-        if drop not in legal_drop:
-            raise ValueError(f"illegal drop action {drop}; legal={legal_drop}")
-        if check not in legal_check:
-            raise ValueError(f"illegal check action {check}; legal={legal_check}")
+        state = self.validate_state(state)
+        drop = self.validate_action(drop, role="drop")
+        check = self.validate_action(check, role="check")
 
         if check >= drop:
             squandered_units = check - drop + 1

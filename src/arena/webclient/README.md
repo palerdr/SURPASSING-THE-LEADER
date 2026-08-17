@@ -23,7 +23,17 @@ file; arena's binding guidance is `src/arena/README.md`.
   `Sprite.keyed` or the sheet splitter in TypeScript; both are subtle
   (`src/arena/sprites.py`) and already validated by the terminal front end.
 - `src/types.ts` mirrors `src/arena/web/schema.py` by hand. A Python test
-  asserts the two field sets match, so drift fails the suite. Update both.
+  asserts field names, types, nullability, and requiredness, so drift fails the
+  suite. Update both.
+- Text received from the API must be assigned with `textContent` or passed
+  through `src/render/escape.ts` before entering an HTML template.
+- Display labels are presentation data only. Canonical Hal/Baku identity stays
+  on the server and is never inferred from a display label. Each player carries
+  an authoritative `character` and `role`, and `winner_is_human` decides the
+  victory treatment.
+- `last_outcome.game_over` mirrors the canonical referee. The separate
+  `session_ending` flag also covers a configured half-round cap and controls the
+  acknowledgement button.
 - Keep dependencies minimal. The repository hand-rolls a PNG codec rather than
   take Pillow; a framework or game engine here would be out of keeping.
 
@@ -47,4 +57,10 @@ uv run python -m arena.web                        # server on 127.0.0.1:8000
 npm --prefix src/arena/webclient run dev          # client on 127.0.0.1:5173
 ```
 
-Validate with `npm --prefix src/arena/webclient run typecheck`.
+Validate with:
+
+```bash
+npm --prefix src/arena/webclient test
+npm --prefix src/arena/webclient run typecheck
+npm --prefix src/arena/webclient run build
+```

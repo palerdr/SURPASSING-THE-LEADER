@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
         "--hal-agent",
-        choices=("dth", "adaptive-dth", "exploit-hal", "stl-mcts"),
+        choices=("dth", "adaptive-dth", "exploit-hal"),
         default="dth",
         help="'abstract' is unavailable here: it may build a tablebase on first use",
     )
@@ -30,8 +30,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
     parser.add_argument("--max-half-rounds", type=int, default=None)
     parser.add_argument("--dth-complete-tablebase", default=None)
-    parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--iterations", type=int, default=200)
     parser.add_argument("--exploit-hal-config", default=None)
     parser.add_argument("--exploit-hal-checkpoint", default=None)
     parser.add_argument("--adaptive-prior-json", default=None)
@@ -49,8 +47,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         for name in (
             "dth_complete_tablebase",
-            "checkpoint",
-            "iterations",
             "exploit_hal_config",
             "exploit_hal_checkpoint",
             "adaptive_prior_json",

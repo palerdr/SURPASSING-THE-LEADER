@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import pytest
 import numpy as np
 from pathlib import Path
 
 import dth.agent as agent_module
 from dth.agent import CompleteDTHAgent, MoveDecision
+from dth.complete_tablebase import COMPLETE_TABLEBASE_SCHEMA
 
 
 class _Complete:
@@ -105,8 +107,12 @@ def test_stage_game_fails_closed_when_saddle_gap_is_too_large(monkeypatch) -> No
 
 def test_real_complete_stage_facade_when_canonical_artifact_is_available() -> None:
     artifact = Path("src/dth/artifacts/complete_full_v1")
-    if not (artifact / "tablebase.json").is_file():
+    manifest_path = artifact / "tablebase.json"
+    if not manifest_path.is_file():
         pytest.skip("canonical complete tablebase artifact is not available")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != COMPLETE_TABLEBASE_SCHEMA:
+        pytest.skip("canonical complete tablebase artifact requires regeneration")
     agent = CompleteDTHAgent(artifact)
     decision = agent.decide((0, 0, 0, 0))
     stage = agent.stage_game((0, 0, 0, 0))

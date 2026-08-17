@@ -26,6 +26,8 @@ logs/
 demos/
 tmp/
 paper/build/
+paper/*.log
+paper/*.synctex.gz
 src/stl/outputs/
 src/dth/outputs/
 src/abstract/outputs/

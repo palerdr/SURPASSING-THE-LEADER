@@ -31,13 +31,27 @@ def sha256_file(path: str | Path) -> str:
 def digest_files(paths: list[str | Path], *, config: object | None = None) -> str:
     """Hash ordered source/config inputs for artifact provenance."""
 
-    digest = hashlib.sha256()
-    for path in paths:
-        path = Path(path)
-        digest.update(str(path).encode("utf-8"))
-        digest.update(path.read_bytes())
+    resolved = [Path(path).resolve() for path in paths]
+    if not resolved:
+        raise ValueError("at least one source path is required")
+    common_root = Path(os.path.commonpath([str(path) for path in resolved]))
+    if common_root in resolved:
+        common_root = common_root.parent
+    digest = hashlib.sha256(b"abstract-source-config-bundle-v1\0")
+    for path in resolved:
+        label = path.relative_to(common_root).as_posix().encode("utf-8")
+        payload = path.read_bytes()
+        digest.update(len(label).to_bytes(8, "big"))
+        digest.update(label)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
     if config is not None:
-        digest.update(canonical_json(config).encode("utf-8"))
+        label = b"config"
+        payload = canonical_json(config).encode("utf-8")
+        digest.update(len(label).to_bytes(8, "big"))
+        digest.update(label)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
     return digest.hexdigest()
 
 
@@ -89,6 +103,13 @@ def load_npz_artifact(
     npz_path = Path(npz_path)
     manifest_path = Path(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or set(manifest) != {
+        "schema_version",
+        "metadata",
+        "arrays",
+        "npz_sha256",
+    }:
+        raise ValueError("artifact manifest key set is malformed")
     if expected_schema_version is not None and manifest.get("schema_version") != expected_schema_version:
         raise ValueError(
             f"artifact schema mismatch: expected {expected_schema_version!r}, "
@@ -100,7 +121,14 @@ def load_npz_artifact(
 
     with np.load(npz_path, allow_pickle=False) as loaded:
         arrays = {name: np.asarray(loaded[name]) for name in loaded.files}
-    for name, spec in manifest.get("arrays", {}).items():
+    manifest_arrays = manifest.get("arrays")
+    if not isinstance(manifest_arrays, dict):
+        raise ValueError("artifact manifest must declare its arrays")
+    if set(arrays) != set(manifest_arrays):
+        raise ValueError("NPZ and manifest array sets do not match exactly")
+    for name, spec in manifest_arrays.items():
+        if not isinstance(spec, dict) or set(spec) != {"shape", "dtype"}:
+            raise ValueError(f"manifest array contract is malformed for {name!r}")
         if name not in arrays:
             raise ValueError(f"manifest array {name!r} is missing from NPZ")
         if list(arrays[name].shape) != spec["shape"] or str(arrays[name].dtype) != spec["dtype"]:

@@ -32,6 +32,10 @@ def test_class_lookup_and_bounds(synthetic_artifact) -> None:
     assert np.isfinite(tablebase.value_of_class(count * count - 1))
     with pytest.raises(LookupError):
         tablebase.value_of_class(count * count)
+    assert np.isfinite(tablebase.value_of_class(np.int64(0)))
+    for invalid in (True, 0.0, "0"):
+        with pytest.raises(LookupError, match="literal integer"):
+            tablebase.value_of_class(invalid)
 
 
 def test_state_lookup_requires_the_canonical_table(synthetic_artifact) -> None:

@@ -37,6 +37,7 @@ by the doc (60, 84, 93, 154, 60), so all clock gaps are forced.
 
 from typing import NamedTuple, Optional
 
+import numpy as np
 import pytest
 
 from stl.engine.game import Player
@@ -160,12 +161,38 @@ def test_leap_turn_action_space():
     assert legal_max_second("Hal", "checker", 61) == 60
     assert legal_max_second("Hal", "dropper", 61) == 60
     assert legal_max_second("Baku", "checker", 61) == 60
+    assert legal_max_second("Alice", "dropper", 61) == 60
 
     # The engine accepts Baku's drop at 61; Hal's check at 60 < 61 fails.
     record = game.resolve_half_round(61, 60, survived_outcome=True)
     assert record.turn_duration == 61
     assert record.result == HalfRoundResult.CHECK_FAIL_SURVIVED
     assert record.death_duration == pytest.approx(60.0)
+
+
+@pytest.mark.parametrize("action", [1.0, True, np.float64(1.0)])
+def test_engine_rejects_coercible_noninteger_actions_without_mutation(action) -> None:
+    game = _make_game()
+    with pytest.raises(ValueError, match="integer"):
+        game.resolve_half_round(action, 1)
+    assert game.history == []
+    assert game.game_clock == 720.0
+
+
+def test_engine_normalizes_integral_scalar_actions() -> None:
+    game = _make_game()
+    record = game.resolve_half_round(np.int64(1), np.int32(1))
+    assert type(record.drop_time) is int
+    assert type(record.check_time) is int
+
+
+@pytest.mark.parametrize("validator", ["validate_drop_time", "validate_check_time"])
+def test_actorless_action_validation_is_strict_and_normalizing(validator) -> None:
+    game = _make_game()
+    validate = getattr(game, validator)
+    assert type(validate(np.int64(1), 60)) is int
+    with pytest.raises(ValueError, match="integer"):
+        validate(1.0, 60)
 
 
 def test_r9h2_survival_probability():

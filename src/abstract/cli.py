@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     exact.add_argument(
         "--packed",
         action="store_true",
-        help="use the resumable packed v4 builder (automatic for production rulesets)",
+        help="use the resumable packed v5 artifact builder (automatic for production rulesets)",
     )
     exact.add_argument(
         "--checkpoint-states",

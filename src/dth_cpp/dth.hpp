@@ -3,7 +3,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <tuple>
+#include <utility>
 #include <vector>
+#include <tuple>
+#include <utility>
+#include <optional>
 
 namespace dth {
 
@@ -23,6 +29,7 @@ inline constexpr std::size_t kAliveProfiles = 16'711;
 inline constexpr std::size_t kDeadProfileBase = 16'711;
 inline constexpr std::size_t kCanonicalProfiles = 17'011;
 inline constexpr ClassId kCanonicalClasses = 289'374'121ULL;
+//kDeadRho must be strictly more than any other TTD
 inline constexpr std::size_t kDeadRho = 301;
 inline constexpr std::size_t kMaxProfilePotential = 600;
 inline constexpr std::size_t kMaxClassPotential = 1'200;
@@ -63,11 +70,24 @@ struct Policy {
     std::array<double, kActions> mass{};
 };
 
+struct PureSaddleScan {
+    double maximin;
+    double minimax;
+    std::size_t best_drop;
+    std::size_t best_check; 
+};
+
 struct Certificate {
     double lower{};
     double upper{};
     double midpoint{};
     double gap{};
+};
+
+struct Certified {
+  Policy drop{};
+  Policy check{};
+  Certificate certificate{};
 };
 
 enum class SolverKind : std::uint8_t {
@@ -118,17 +138,28 @@ ProfileId quotient_profile_id(const ProfileTable& table, int st, int ttd);
 void finish_profile_table(ProfileTable& table);
 
 //SECTION 5: DEFINE CLASS ENCODING AND BELLMAN ROLE SWAPS
-ClassId encode_class(ProfileTable& table, ProfileId checker, ProfileId dropper);
-std::pair<ProfileId, ProfileId> decode_class(ProfileTable& table, ClassId class_id);
-ClassId swapped_child_class(ProfileTable& table, ProfileId dropper, ProfileId child_profile);
-Potential class_potential(ProfileTable& table, ClassId class_id);
+ClassId encode_class(const ProfileTable& table, ProfileId checker, ProfileId dropper);
+std::pair<ProfileId, ProfileId> decode_class(const ProfileTable& table, ClassId class_id);
+ClassId swapped_child_class(const ProfileTable& table, ProfileId dropper, ProfileId child_profile);
+Potential class_potential(const ProfileTable& table, ClassId class_id);
 
 //SECTION 6: BUILD POTENTIAL BUCKETS AND PROVE DAG SCHEDULE
 void build_buckets(ProfileTable& table);
-void validate_profile_edges(ProfileTable& table);
-int layer_size(ProfileTable& table, Potential potential);
+void validate_profile_edges(const ProfileTable& table);
+int layer_size(const ProfileTable& table, Potential potential);
 
 //SECTTION 8: ASSEMBLE THE 61 CONTINUATION VALUES FOR A CLASS
-TransitionValues assemble_transition_values(ProfileTable& table, const MappedArray<double>& values, ProfileId checker, ProfileId dropper);
-double matrix_cell(TransitionValues& t, int drop, int check);
+TransitionValues assemble_transition_values(const ProfileTable& table, const MappedArray<double>& values, ProfileId checker, ProfileId dropper);
+double matrix_cell(const TransitionValues& t, int drop, int check);
+
+//SECTION 9: NORMALIZE POLICIES AND CERIFY AGAINST THE FULL MATRIX
+[[nodiscard]] std::optional<Policy> normalize_policy(Policy raw, double negative_limit) noexcept;
+[[nodiscard]] std::optional<Certified> certify(const TransitionValues& t, Policy raw_drop, Policy raw_check, double negative_limit);
+
+//SECTION 10: O(60) PURE SADDLE REDUCTIONS
+[[nodiscard]] PureSaddleScan scan_pure_saddle(const TransitionValues& t);
+[[nodiscard]] std::optional<Certified>  try_pure_saddle(const TransitionValues& t);
+
+//SECTION 11: DETERMINISTIC DENSE LINEAR-SYSTEM SOLVER
+bool solve_linear(std::span<double> A, std::span<double> b, std::size_t n, std::span<double> x);
 } //namespace dth

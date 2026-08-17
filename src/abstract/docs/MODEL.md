@@ -108,13 +108,13 @@ program as recursive memoization: every live child is already solved, terminal
 branches are exact, and every simultaneous matrix is solved to the configured
 saddle-gap tolerance. There is no depth horizon or approximate leaf value.
 
-The production 10-second tablebase uses the packed, resumable v4 builder:
+The production 10-second tablebase uses the packed, resumable v5 artifact builder:
 
 ```powershell
 uv run python -m abstract exact --ruleset bucket6_frozen95
 ```
 
-The full 5-second tablebase uses the same packed, resumable v4 builder:
+The full 5-second tablebase uses the same packed, resumable v5 artifact builder:
 
 ```powershell
 uv run python -m abstract exact `
@@ -128,8 +128,8 @@ installed):
 
 ```powershell
 cd src/crates/abstract_solver
-uv run --project ../.. maturin develop --release
-cd ../..
+uv run --project ../../.. maturin develop --release
+cd ../../..
 uv run python -m abstract exact `
   --ruleset bucket12_frozen95 `
   --backend rust

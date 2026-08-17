@@ -2,13 +2,31 @@ from __future__ import annotations
 
 import ast
 import re
+import tomllib
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = ROOT / "src"
-PROJECTS = ("stl", "dth", "abstract")
-IMPLEMENTATIONS = (*PROJECTS, "crates", "dth_ocaml", "arena")
+PROJECT_REGISTRY = ROOT / "docs" / "PROJECTS.toml"
+
+
+def _project_entries() -> tuple[dict[str, object], ...]:
+    document = tomllib.loads(PROJECT_REGISTRY.read_text(encoding="utf-8"))
+    assert document.get("schema_version") == 1
+    entries = tuple(document.get("project", ()))
+    assert entries, "project registry is empty"
+    return entries
+
+
+PROJECT_ENTRIES = _project_entries()
+IMPLEMENTATIONS = tuple(str(entry["id"]) for entry in PROJECT_ENTRIES)
+PYTHON_PEERS = tuple(
+    str(entry["id"])
+    for entry in PROJECT_ENTRIES
+    if entry["kind"] == "peer" and "python" in entry["languages"]
+)
 IGNORED_PARTS = {
     ".git",
     ".venv",
@@ -21,6 +39,8 @@ IGNORED_PARTS = {
     "artifacts",
     "target",
     "build",
+    "_build",
+    "_opam",
     "__pycache__",
     # Vendored front-end dependencies. These are not repository sources, and a
     # package that happens to ship a .py or a stray README should not be judged
@@ -40,8 +60,35 @@ def _source_files(suffix: str):
 # ones CLAUDE.md imports. A README deeper inside a subtree is ordinary
 # documentation and is deliberately not an instruction file.
 INSTRUCTION_READMES = frozenset(
-    [f"src/{name}/README.md" for name in IMPLEMENTATIONS] + ["docs/papers/README.md"]
+    [str(entry["instruction_readme"]) for entry in PROJECT_ENTRIES]
+    + ["docs/papers/README.md"]
 )
+
+
+def test_project_registry_is_complete_and_well_formed():
+    ids = [str(entry["id"]) for entry in PROJECT_ENTRIES]
+    paths = [str(entry["path"]) for entry in PROJECT_ENTRIES]
+    assert len(ids) == len(set(ids)), "duplicate project id"
+    assert len(paths) == len(set(paths)), "duplicate project path"
+
+    for entry in PROJECT_ENTRIES:
+        project_id = str(entry["id"])
+        project_path = str(entry["path"])
+        readme = str(entry["instruction_readme"])
+        assert project_path == f"src/{project_id}", entry
+        assert readme == f"{project_path}/README.md", entry
+        assert (ROOT / project_path).is_dir(), project_path
+        assert (ROOT / readme).is_file(), readme
+        assert entry["languages"], entry
+        assert entry["rung"], entry
+        assert entry["status"], entry
+        assert isinstance(entry["root_validation"], bool), entry
+        commands = entry["validation"]
+        assert isinstance(commands, list), entry
+        if entry["root_validation"]:
+            assert commands, f"{project_id} has no root validation command"
+        else:
+            assert entry.get("validation_deferred_reason"), entry
 
 
 def test_readmes_are_owned_by_root_or_a_subtree():
@@ -65,6 +112,22 @@ def test_markdown_is_owned_by_an_approved_context_root():
             if relative.parts[0] == "src":
                 assert len(relative.parts) >= 3
                 assert relative.parts[1] in IMPLEMENTATIONS, relative
+
+
+def test_local_markdown_links_resolve():
+    link = re.compile(r"!?\[[^\]]*\]\((?P<target><[^>]+>|[^)\s]+)(?:\s+['\"][^)]*['\"])?\)")
+    for document in _source_files(".md"):
+        text = document.read_text(encoding="utf-8")
+        for match in link.finditer(text):
+            raw = match.group("target").strip("<>")
+            parsed = urlsplit(raw)
+            if parsed.scheme or raw.startswith("#"):
+                continue
+            target = unquote(parsed.path)
+            if not target:
+                continue
+            resolved = (document.parent / target).resolve()
+            assert resolved.exists(), f"{document.relative_to(ROOT)} -> {raw}"
 
 
 EVIDENCE = ROOT / "docs" / "game-sources" / "EVIDENCE.md"
@@ -124,9 +187,9 @@ def test_claude_md_imports_every_subtree_readme():
     assert imported == on_disk, f"missing {on_disk - imported}, stale {imported - on_disk}"
 
 
-def test_solver_projects_do_not_import_each_other():
-    for project in PROJECTS:
-        forbidden = set(PROJECTS) - {project}
+def test_solver_projects_do_not_import_each_other_or_arena():
+    for project in PYTHON_PEERS:
+        forbidden = (set(PYTHON_PEERS) - {project}) | {"arena"}
         for path in (SOURCE_ROOT / project).rglob("*.py"):
             if IGNORED_PARTS.intersection(path.relative_to(ROOT).parts):
                 continue

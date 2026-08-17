@@ -1,8 +1,104 @@
 use numpy::{PyArray1, PyReadonlyArray1, PyReadwriteArray1};
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use std::collections::HashSet;
 
 const PARITY_CONTRACT_VERSION: &str = "abstract-packed-parity-v3";
+pub const SOURCE_BUNDLE_DIGEST: &str = env!("SOURCE_BUNDLE_DIGEST");
+pub const SOURCE_BUNDLE_DIGEST_ALGORITHM: &str = env!("SOURCE_BUNDLE_DIGEST_ALGORITHM");
 const UNREACHABLE: u32 = u32::MAX;
+const VALUE_EPS: f64 = 1e-12;
+const PROBABILITY_EPS: f64 = 1e-12;
+
+fn packed_state_count(cap: u32) -> Option<usize> {
+    let cap = u64::from(cap);
+    let ttd_size = cap.checked_add(1)?;
+    let count = cap
+        .checked_mul(ttd_size)?
+        .checked_mul(cap)?
+        .checked_mul(ttd_size)?;
+    if count > u64::from(u32::MAX) + 1 {
+        return None;
+    }
+    usize::try_from(count).ok()
+}
+
+fn validate_rules(cap: u32, action_size: u32, penalty: u32) -> PyResult<usize> {
+    if cap == 0 || action_size == 0 || penalty == 0 || penalty >= cap {
+        return Err(PyValueError::new_err("invalid packed rules parameters"));
+    }
+    if action_size != penalty {
+        return Err(PyValueError::new_err(
+            "action_size must equal the failed-check penalty for this parity contract",
+        ));
+    }
+    packed_state_count(cap)
+        .ok_or_else(|| PyValueError::new_err("packed rules exceed the uint32 state-index domain"))
+}
+
+fn validate_index(index: u32, physical: usize, name: &str) -> PyResult<usize> {
+    let index = index as usize;
+    if index >= physical {
+        return Err(PyValueError::new_err(format!(
+            "{name} must be in the packed physical state domain"
+        )));
+    }
+    Ok(index)
+}
+
+fn validate_child_row(
+    child: u32,
+    parent_potential: u32,
+    cap: u32,
+    ordinal: &[u32],
+    values: &[f64],
+    dropper_wins: &[f64],
+    checker_wins: &[f64],
+) -> PyResult<(f64, f64, f64)> {
+    let child_index = child as usize;
+    let row = *ordinal
+        .get(child_index)
+        .ok_or_else(|| PyRuntimeError::new_err("child index out of range"))?;
+    if row == UNREACHABLE {
+        return Err(PyRuntimeError::new_err(
+            "live child missing from reachable closure",
+        ));
+    }
+    let row = row as usize;
+    let value = *values
+        .get(row)
+        .ok_or_else(|| PyRuntimeError::new_err("child ordinal exceeds value arrays"))?;
+    let dropper_win = *dropper_wins
+        .get(row)
+        .ok_or_else(|| PyRuntimeError::new_err("child ordinal exceeds value arrays"))?;
+    let checker_win = *checker_wins
+        .get(row)
+        .ok_or_else(|| PyRuntimeError::new_err("child ordinal exceeds value arrays"))?;
+    if !value.is_finite()
+        || !(-1.0 - VALUE_EPS..=1.0 + VALUE_EPS).contains(&value)
+        || !dropper_win.is_finite()
+        || !(0.0..=1.0).contains(&dropper_win)
+        || !checker_win.is_finite()
+        || !(0.0..=1.0).contains(&checker_win)
+    {
+        return Err(PyRuntimeError::new_err(
+            "child value or win probability is unsolved or outside its contract domain",
+        ));
+    }
+    if (dropper_win + checker_win - 1.0).abs() > PROBABILITY_EPS {
+        return Err(PyRuntimeError::new_err(
+            "child win probabilities do not sum to one",
+        ));
+    }
+    let child_fields = decode(child, cap);
+    let child_potential = child_fields.0 + child_fields.1 + child_fields.2 + child_fields.3;
+    if child_potential <= parent_potential {
+        return Err(PyRuntimeError::new_err(
+            "live child does not strictly increase packed potential",
+        ));
+    }
+    Ok((value, dropper_win, checker_win))
+}
 
 fn encode(
     checker_load: u32,
@@ -99,11 +195,8 @@ fn pure_saddle(matrix: &[f64], size: usize) -> Option<(usize, usize, f64)> {
 
 #[pyfunction]
 fn live_successors_rs(index: u32, cap: u32, action_size: u32, penalty: u32) -> PyResult<Vec<u32>> {
-    if cap == 0 || action_size == 0 || penalty == 0 || penalty >= cap {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "invalid packed rules parameters",
-        ));
-    }
+    let physical = validate_rules(cap, action_size, penalty)?;
+    validate_index(index, physical, "index")?;
     Ok(live_successors(index, cap, action_size, penalty))
 }
 
@@ -119,16 +212,37 @@ fn expand_reachability_chunk_rs(
     action_size: u32,
     penalty: u32,
 ) -> PyResult<(usize, usize)> {
+    let physical = validate_rules(cap, action_size, penalty)?;
     let queue = queue.as_slice_mut()?;
     let seen = seen.as_slice_mut()?;
-    if head > tail || tail > queue.len() {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "invalid reachability queue bounds",
+    if queue.len() != physical {
+        return Err(PyValueError::new_err(
+            "reachability queue length must equal the packed physical state count",
         ));
+    }
+    let expected_seen = physical
+        .checked_add(7)
+        .ok_or_else(|| PyValueError::new_err("packed state count overflow"))?
+        / 8;
+    if seen.len() != expected_seen {
+        return Err(PyValueError::new_err(
+            "reachability bitset length disagrees with the packed physical state count",
+        ));
+    }
+    if head > tail || tail > queue.len() {
+        return Err(PyValueError::new_err("invalid reachability queue bounds"));
     }
     let stop = head.saturating_add(max_dequeues);
     while head < tail && head < stop {
         let index = queue[head];
+        let index_usize = validate_index(index, physical, "queued index")?;
+        let queued_byte = index_usize >> 3;
+        let queued_mask = 1_u8 << (index_usize & 7);
+        if seen[queued_byte] & queued_mask == 0 {
+            return Err(PyValueError::new_err(
+                "queued index is not present in the reachability bitset",
+            ));
+        }
         for child in live_successors(index, cap, action_size, penalty) {
             let byte_index = (child >> 3) as usize;
             let mask = 1_u8 << (child & 7);
@@ -136,7 +250,7 @@ fn expand_reachability_chunk_rs(
                 continue;
             }
             if tail >= queue.len() {
-                return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                return Err(PyRuntimeError::new_err(
                     "reachability queue exceeded physical domain",
                 ));
             }
@@ -174,13 +288,45 @@ fn backup_chunk_rs<'py>(
     Bound<'py, PyArray1<f64>>,
     Bound<'py, PyArray1<f64>>,
 )> {
+    let physical = validate_rules(cap, action_size, penalty)?;
     let indices = state_indices.as_slice()?;
     let ordinal = ordinal_by_index.as_slice()?;
     let values = values.as_slice()?;
     let dropper_wins = dropper_wins.as_slice()?;
     let checker_wins = checker_wins.as_slice()?;
     let size = action_size as usize;
-    let cells = size * size;
+    let cells = size
+        .checked_mul(size)
+        .ok_or_else(|| PyValueError::new_err("action matrix size overflow"))?;
+    if ordinal.len() != physical {
+        return Err(PyValueError::new_err(
+            "ordinal_by_index length must equal the packed physical state count",
+        ));
+    }
+    if values.len() != dropper_wins.len() || values.len() != checker_wins.len() {
+        return Err(PyValueError::new_err(
+            "value and win-probability arrays must have identical lengths",
+        ));
+    }
+    if values.len() > u32::MAX as usize {
+        return Err(PyValueError::new_err(
+            "reachable row arrays exceed the uint32 ordinal domain",
+        ));
+    }
+    if indices.len() > u32::MAX as usize {
+        return Err(PyValueError::new_err(
+            "backup chunk exceeds the uint32 mixed-position domain",
+        ));
+    }
+    let mut unique_indices = HashSet::with_capacity(indices.len());
+    for &index in indices {
+        validate_index(index, physical, "state index")?;
+        if !unique_indices.insert(index) {
+            return Err(PyValueError::new_err(
+                "backup chunk contains a duplicate state index",
+            ));
+        }
+    }
 
     let mut pure_mask = vec![0_u8; indices.len()];
     let mut pure_value = vec![f64::NAN; indices.len()];
@@ -195,23 +341,24 @@ fn backup_chunk_rs<'py>(
 
     for (position, index) in indices.iter().copied().enumerate() {
         let (checker_load, checker_ttd, dropper_load, dropper_ttd) = decode(index, cap);
+        let parent_potential = checker_load + checker_ttd + dropper_load + dropper_ttd;
         let dose = checker_load + penalty;
         let revive = revival_probability(checker_ttd, dose, cap, penalty);
         let (failure_value, failure_dropper_win, failure_checker_win) = if revive > 0.0 {
             let child = encode(dropper_load, dropper_ttd, 0, checker_ttd + dose, cap);
-            let row = *ordinal.get(child as usize).ok_or_else(|| {
-                pyo3::exceptions::PyRuntimeError::new_err("child index out of range")
-            })?;
-            if row == UNREACHABLE {
-                return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                    "live child missing from reachable closure",
-                ));
-            }
-            let row = row as usize;
+            let (child_value, child_dropper_win, child_checker_win) = validate_child_row(
+                child,
+                parent_potential,
+                cap,
+                ordinal,
+                values,
+                dropper_wins,
+                checker_wins,
+            )?;
             (
-                revive * -values[row] + (1.0 - revive),
-                revive * checker_wins[row] + (1.0 - revive),
-                revive * dropper_wins[row],
+                revive * -child_value + (1.0 - revive),
+                revive * child_checker_win + (1.0 - revive),
+                revive * child_dropper_win,
             )
         } else {
             (1.0, 1.0, 0.0)
@@ -225,14 +372,16 @@ fn backup_chunk_rs<'py>(
                 continue;
             }
             let child = encode(dropper_load, dropper_ttd, candidate, checker_ttd, cap);
-            let row = ordinal[child as usize];
-            if row == UNREACHABLE {
-                return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                    "live child missing from reachable closure",
-                ));
-            }
-            let row = row as usize;
-            success.push((-values[row], checker_wins[row], dropper_wins[row]));
+            let (child_value, child_dropper_win, child_checker_win) = validate_child_row(
+                child,
+                parent_potential,
+                cap,
+                ordinal,
+                values,
+                dropper_wins,
+                checker_wins,
+            )?;
+            success.push((-child_value, child_checker_win, child_dropper_win));
         }
 
         let mut payoff = vec![0.0_f64; cells];
@@ -285,6 +434,11 @@ fn backup_chunk_rs<'py>(
 #[pymodule]
 fn abstract_solver_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("PARITY_CONTRACT_VERSION", PARITY_CONTRACT_VERSION)?;
+    m.add("SOURCE_BUNDLE_DIGEST", SOURCE_BUNDLE_DIGEST)?;
+    m.add(
+        "SOURCE_BUNDLE_DIGEST_ALGORITHM",
+        SOURCE_BUNDLE_DIGEST_ALGORITHM,
+    )?;
     m.add_function(wrap_pyfunction!(live_successors_rs, m)?)?;
     m.add_function(wrap_pyfunction!(expand_reachability_chunk_rs, m)?)?;
     m.add_function(wrap_pyfunction!(backup_chunk_rs, m)?)?;
@@ -294,6 +448,20 @@ fn abstract_solver_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_source_bundle_digest_has_contract_shape() {
+        assert_eq!(
+            SOURCE_BUNDLE_DIGEST_ALGORITHM,
+            "sha256-framed-source-bundle-v1"
+        );
+        assert_eq!(SOURCE_BUNDLE_DIGEST.len(), 64);
+        assert!(
+            SOURCE_BUNDLE_DIGEST
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        );
+    }
 
     #[test]
     fn packed_codec_round_trips_boundaries() {
@@ -326,5 +494,20 @@ mod tests {
         assert!((ten_second - (0.95 * 0.5 * 0.75_f64.powi(2))).abs() < 1e-12);
         assert!((ten_second - five_second).abs() < 1e-12);
         assert_eq!(revival_probability(0, 6, 30, 6), 0.95);
+    }
+
+    #[test]
+    fn packed_domain_validation_rejects_invalid_or_overflowing_rules() {
+        assert!(validate_rules(60, 12, 12).is_ok());
+        assert!(validate_rules(60, 11, 12).is_err());
+        assert!(validate_rules(60, 12, 60).is_err());
+        assert!(validate_rules(u32::MAX, 1, 1).is_err());
+    }
+
+    #[test]
+    fn packed_index_validation_rejects_the_exclusive_upper_bound() {
+        let physical = packed_state_count(4).unwrap();
+        assert!(validate_index((physical - 1) as u32, physical, "index").is_ok());
+        assert!(validate_index(physical as u32, physical, "index").is_err());
     }
 }

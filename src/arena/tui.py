@@ -534,6 +534,8 @@ def _scene(
     colour: bool,
     layout: Layout,
     glyphs: str = "sextant",
+    human_name: str = "Baku",
+    human_label: str | None = None,
 ) -> list[str]:
     """Stage the half-round as panel ``stl1`` does.
 
@@ -552,20 +554,26 @@ def _scene(
     players trade places while Yakou and the chair hold their positions.
     """
     scene_rows = layout.scene_rows
+    checker_label = _display_name(
+        checker.name, human_name=human_name, human_label=human_label
+    )
+    dropper_label = _display_name(
+        dropper.name, human_name=human_name, human_label=human_label
+    )
     cast = (
-        (art.for_action(checker.name, "seated"), checker.name, "seated"),
+        (art.for_action(checker.name, "seated"), checker_label, "seated"),
         (
             art.frame("yakou", "idle", frame) or art.frame("yakou", "standing"),
             "Yakou",
             "standing",
         ),
-        (art.for_action(dropper.name, "dropping"), dropper.name, "dropping"),
+        (art.for_action(dropper.name, "dropping"), dropper_label, "dropping"),
     )
-    players = (checker.name, dropper.name)
+    players = ((checker.name, checker_label), (dropper.name, dropper_label))
     occupants = (
-        tuple((art.for_action(name, "seated"), name) for name in players),
+        tuple((art.for_action(name, "seated"), label) for name, label in players),
         ((cast[1][0], "Yakou"),),
-        tuple((art.for_action(name, "dropping"), name) for name in players),
+        tuple((art.for_action(name, "dropping"), label) for name, label in players),
     )
 
     # Each figure claims only the width its own shape needs at its own height,
@@ -637,8 +645,10 @@ def _scene(
     return [field] * top_pad + band + [field] * (scene_rows - band_rows - top_pad)
 
 
-def _player_column(player: Player, *, tag: str, width: int) -> list[str]:
-    name = f"{player.name.upper()} {tag}".strip()
+def _player_column(
+    player: Player, *, tag: str, width: int, display_name: str | None = None
+) -> list[str]:
+    name = f"{(display_name or player.name).upper()} {tag}".strip()
     return [
         name[:width].ljust(width),
         f"ST     {_bar(player.cylinder, CYLINDER_MAX)} {int(player.cylinder):>3}/{CYLINDER_MAX}"[:width].ljust(width),
@@ -658,17 +668,33 @@ def _row(text: str, inner: int, *, pad: bool = False) -> str:
     return f"║ {text[:inner].ljust(inner)} ║"
 
 
-def _stat_rows(game: Game, human_name: str, inner: int) -> list[str]:
+def _display_name(name: str, *, human_name: str, human_label: str | None) -> str:
+    return human_label if human_label is not None and name == human_name else name
+
+
+def _stat_rows(
+    game: Game,
+    human_name: str,
+    inner: int,
+    *,
+    human_label: str | None = None,
+) -> list[str]:
     column_width = (inner - 3) // 2
     left = _player_column(
         game.player1,
         tag="(you)" if game.player1.name == human_name else "",
         width=column_width,
+        display_name=_display_name(
+            game.player1.name, human_name=human_name, human_label=human_label
+        ),
     )
     right = _player_column(
         game.player2,
         tag="(you)" if game.player2.name == human_name else "",
         width=column_width,
+        display_name=_display_name(
+            game.player2.name, human_name=human_name, human_label=human_label
+        ),
     )
     return [_row(f"{a} │ {b}", inner) for a, b in zip(left, right)]
 
@@ -738,6 +764,7 @@ def render_frame(
     *,
     art: SceneArt,
     human_name: str = "Baku",
+    human_label: str | None = None,
     frame: int = 0,
     layout: Layout = DEFAULT_LAYOUT,
     colour: bool = True,
@@ -759,7 +786,13 @@ def render_frame(
     status = f"Round {game.round_num + 1} · Half {game.current_half}"
     if game.is_leap_second_turn():
         status += "  ⚠ LEAP WINDOW"
-    roles = f"DROPPER {dropper.name}    CHECKER {checker.name}"
+    dropper_label = _display_name(
+        dropper.name, human_name=human_name, human_label=human_label
+    )
+    checker_label = _display_name(
+        checker.name, human_name=human_name, human_label=human_label
+    )
+    roles = f"DROPPER {dropper_label}    CHECKER {checker_label}"
 
     span = "═" * (layout.width - 2)
     top, rule, bottom = f"╔{span}╗", f"╠{span}╣", f"╚{span}╝"
@@ -768,13 +801,21 @@ def render_frame(
     lines.extend(
         _row(line, inner, pad=True)
         for line in _scene(
-            dropper, checker, art, frame=frame, colour=colour, layout=layout, glyphs=glyphs
+            dropper,
+            checker,
+            art,
+            frame=frame,
+            colour=colour,
+            layout=layout,
+            glyphs=glyphs,
+            human_name=human_name,
+            human_label=human_label,
         )
     )
     lines.append(rule)
-    lines.extend(_stat_rows(game, human_name, inner))
+    lines.extend(_stat_rows(game, human_name, inner, human_label=human_label))
     lines.append(rule)
-    lines.append(_row(f"{dropper.name} drops · {checker.name} checks", inner))
+    lines.append(_row(f"{dropper_label} drops · {checker_label} checks", inner))
     lines.append(bottom)
     return lines
 
@@ -784,6 +825,7 @@ def render_outcome(
     game: Game,
     *,
     human_name: str = "Baku",
+    human_label: str | None = None,
     layout: Layout = DEFAULT_LAYOUT,
     colour: bool = True,
 ) -> list[str]:
@@ -798,9 +840,15 @@ def render_outcome(
     heading = f"ROUND {record.round_num + 1} · HALF {record.half}"
     heading = f"{heading}{game.format_game_clock().rjust(inner - len(heading))}"
 
+    dropper_label = _display_name(
+        record.dropper, human_name=human_name, human_label=human_label
+    )
+    checker_label = _display_name(
+        record.checker, human_name=human_name, human_label=human_label
+    )
     body = [
-        f"{record.dropper} dropped at second {record.drop_time}",
-        f"{record.checker} checked at second {record.check_time}",
+        f"{dropper_label} dropped at second {record.drop_time}",
+        f"{checker_label} checked at second {record.check_time}",
         "",
         _RESULT_TEXT.get(record.result, record.result.value),
     ]
@@ -808,7 +856,7 @@ def render_outcome(
         # Inclusive elapsed time, spelled out so the rule is visible in play.
         body.append(
             f"squandered time  ST = {record.check_time} - {record.drop_time} + 1"
-            f" = {int(record.st_gained)}s into {record.checker}'s ST"
+            f" = {int(record.st_gained)}s into {checker_label}'s ST"
         )
     if record.death_duration:
         body.append("")
@@ -827,10 +875,13 @@ def render_outcome(
     lines = [top, _row(heading, inner), rule]
     lines.extend(_row(line, inner) for line in body)
     lines.append(rule)
-    lines.extend(_stat_rows(game, human_name, inner))
+    lines.extend(_stat_rows(game, human_name, inner, human_label=human_label))
     lines.append(rule)
     if game.game_over and game.winner is not None:
-        lines.append(_row(f"GAME OVER — {game.winner.name} wins", inner))
+        winner_label = _display_name(
+            game.winner.name, human_name=human_name, human_label=human_label
+        )
+        lines.append(_row(f"GAME OVER — {winner_label} wins", inner))
     else:
         lines.append(_row("press Enter to continue", inner))
     lines.append(bottom)
@@ -842,6 +893,7 @@ def render_victory(
     *,
     art: SceneArt,
     human_name: str = "Baku",
+    human_label: str | None = None,
     layout: Layout = DEFAULT_LAYOUT,
     colour: bool = True,
     glyphs: str = "sextant",
@@ -861,13 +913,20 @@ def render_victory(
     clock = game.format_game_clock()
     header = f"{title}{clock.rjust(inner - len(title))}"
     status = "GAME OVER"
-    verdict = f"{winner.name.upper()} WINS" if winner is not None else "NO WINNER"
+    winner_label = (
+        _display_name(
+            winner.name, human_name=human_name, human_label=human_label
+        )
+        if winner is not None
+        else None
+    )
+    verdict = f"{winner_label.upper()} WINS" if winner_label is not None else "NO WINNER"
 
     span = "═" * (layout.width - 2)
     top, rule, bottom = f"╔{span}╗", f"╠{span}╣", f"╚{span}╝"
 
     sprite = art.for_action(winner.name, "idle") if winner is not None else None
-    label = winner.name if winner is not None else "?"
+    label = winner_label if winner_label is not None else "?"
     band_rows = min(layout.scene_rows, max(3, round(layout.scene_rows * SCENE_FILL)))
     columns = _figure_columns(sprite, band_rows)
     if sprite is None:
@@ -891,9 +950,9 @@ def render_victory(
     lines = [top, _row(header, inner), _row(status, inner), _row(verdict, inner), rule]
     lines.extend(_row(line, inner, pad=True) for line in scene)
     lines.append(rule)
-    lines.extend(_stat_rows(game, human_name, inner))
+    lines.extend(_stat_rows(game, human_name, inner, human_label=human_label))
     lines.append(rule)
-    footer = f"{winner.name} wins the match" if winner is not None else "match over"
+    footer = f"{winner_label} wins the match" if winner_label is not None else "match over"
     lines.append(_row(footer, inner))
     lines.append(bottom)
     return lines

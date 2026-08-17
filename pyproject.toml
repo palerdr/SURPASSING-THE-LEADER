@@ -1,7 +1,7 @@
 [project]
 name = "stl-solver"
 version = "0.1.0"
-description = "Exact-second solver and AlphaZero-style training loop for Surpassing The Leader."
+description = "Independent exact-game implementations, accelerators, and neutral play surfaces for Surpassing The Leader."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [

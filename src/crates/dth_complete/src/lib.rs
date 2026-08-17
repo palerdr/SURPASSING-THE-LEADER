@@ -8,20 +8,99 @@
 //! arithmetic — every revival probability arrives precomputed from Python.
 
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadwriteArray1};
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use rayon::prelude::*;
+use std::collections::HashSet;
 
 pub const PARITY_CONTRACT_VERSION: &str = "dth-complete-parity-v1";
+pub const SOURCE_BUNDLE_DIGEST: &str = env!("SOURCE_BUNDLE_DIGEST");
+pub const SOURCE_BUNDLE_DIGEST_ALGORITHM: &str = env!("SOURCE_BUNDLE_DIGEST_ALGORITHM");
 const POLICY_MASS_EPS: f64 = 1e-9;
 const PIVOT_EPS: f64 = 1e-12;
 const ACTIONS: usize = 60;
+const SADDLE_GAP_TOLERANCE: f64 = 1e-6;
+const VALUE_EPS: f64 = 1e-12;
 
-/// Raw shared view of the value/kind stores.  Safe because every class index
-/// is written by exactly one work item and children live in strictly higher
-/// (already completed, never concurrently written) potential layers.
-struct SharedPtr<T>(*mut T);
-unsafe impl<T> Send for SharedPtr<T> {}
-unsafe impl<T> Sync for SharedPtr<T> {}
+fn validate_tolerance(tolerance: f64) -> PyResult<()> {
+    if tolerance.to_bits() != SADDLE_GAP_TOLERANCE.to_bits() {
+        return Err(PyValueError::new_err(format!(
+            "saddle_tolerance must equal the frozen {SADDLE_GAP_TOLERANCE} gate"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_class_value(value: f64, name: &str) -> PyResult<()> {
+    if !value.is_finite() || !(-1.0 - VALUE_EPS..=1.0 + VALUE_EPS).contains(&value) {
+        return Err(PyValueError::new_err(format!(
+            "{name} must contain finite class values in [-1, 1]"
+        )));
+    }
+    Ok(())
+}
+
+fn checked_table_lengths(profile_count: u64) -> PyResult<(usize, usize, usize)> {
+    let count = usize::try_from(profile_count)
+        .map_err(|_| PyValueError::new_err("profile_count exceeds the platform index domain"))?;
+    if count == 0 {
+        return Err(PyValueError::new_err("profile_count must be positive"));
+    }
+    let transition_count = count
+        .checked_mul(ACTIONS)
+        .ok_or_else(|| PyValueError::new_err("profile transition-table size overflow"))?;
+    let class_count = count
+        .checked_mul(count)
+        .ok_or_else(|| PyValueError::new_err("class table size overflow"))?;
+    Ok((count, transition_count, class_count))
+}
+
+fn validate_support(values: &[i64], name: &str) -> PyResult<Vec<usize>> {
+    let mut result = Vec::with_capacity(values.len());
+    let mut previous = None;
+    for &value in values {
+        if !(0..ACTIONS as i64).contains(&value) {
+            return Err(PyValueError::new_err(format!(
+                "{name} entries must be action indices in 0..60"
+            )));
+        }
+        let value = value as usize;
+        if previous.is_some_and(|prior| value <= prior) {
+            return Err(PyValueError::new_err(format!(
+                "{name} entries must be unique and strictly ascending"
+            )));
+        }
+        previous = Some(value);
+        result.push(value);
+    }
+    Ok(result)
+}
+
+fn validate_padded_supports(values: &[i32], width: usize, name: &str) -> PyResult<()> {
+    for support in values.chunks_exact(width) {
+        let mut previous = None;
+        let mut padding = false;
+        for &value in support {
+            if value == -1 {
+                padding = true;
+                continue;
+            }
+            if padding || !(0..ACTIONS as i32).contains(&value) {
+                return Err(PyValueError::new_err(format!(
+                    "{name} must contain an ascending action prefix followed by -1 padding"
+                )));
+            }
+            let value = value as usize;
+            if previous.is_some_and(|prior| value <= prior) {
+                return Err(PyValueError::new_err(format!(
+                    "{name} action prefixes must be unique and strictly ascending"
+                )));
+            }
+            previous = Some(value);
+        }
+    }
+    Ok(())
+}
 
 #[inline]
 fn matrix_cell(success: &[f64; ACTIONS], failed: f64, drop: usize, check: usize) -> f64 {
@@ -33,6 +112,7 @@ fn matrix_cell(success: &[f64; ACTIONS], failed: f64, drop: usize, check: usize)
 }
 
 /// O(60) pure-saddle reductions; returns `(gap, maximin, minimax)`.
+#[allow(clippy::needless_range_loop)] // Pinned index order is part of parity.
 fn toeplitz_saddle(success: &[f64; ACTIONS], failed: f64) -> (f64, f64, f64) {
     let mut prefix_min = [0.0_f64; ACTIONS];
     let mut running = f64::INFINITY;
@@ -125,6 +205,7 @@ struct SupportSolution {
 
 /// The square-support equalizer solve plus full-matrix certificate; the
 /// `k = 60` case is the full-support structured solve.
+#[allow(clippy::needless_range_loop)] // Pinned index order is part of parity.
 fn attempt_support(
     success: &[f64; ACTIONS],
     failed: f64,
@@ -172,7 +253,11 @@ fn attempt_support(
         return None;
     }
     for index in 0..k {
-        if check_solution[index] < -PIVOT_EPS || drop_solution[index] < -PIVOT_EPS {
+        if !check_solution[index].is_finite()
+            || !drop_solution[index].is_finite()
+            || check_solution[index] < -PIVOT_EPS
+            || drop_solution[index] < -PIVOT_EPS
+        {
             return None;
         }
     }
@@ -190,7 +275,11 @@ fn attempt_support(
         }
         drop_total += drop_solution[index];
     }
-    if check_total <= 0.0 || drop_total <= 0.0 {
+    if !check_total.is_finite()
+        || !drop_total.is_finite()
+        || check_total <= 0.0
+        || drop_total <= 0.0
+    {
         return None;
     }
     let mut drop_policy = [0.0_f64; ACTIONS];
@@ -220,7 +309,11 @@ fn attempt_support(
         }
     }
     let gap = upper - lower;
-    if (if gap > 0.0 { gap } else { 0.0 }) > tolerance {
+    if !lower.is_finite()
+        || !upper.is_finite()
+        || !gap.is_finite()
+        || (if gap > 0.0 { gap } else { 0.0 }) > tolerance
+    {
         return None;
     }
     Some(SupportSolution {
@@ -251,6 +344,10 @@ fn support_of_policy(policy: &[f64; ACTIONS], max_support: usize) -> Vec<i32> {
 
 #[derive(Default)]
 struct ItemOutput {
+    processed_classes: Vec<u64>,
+    solved_classes: Vec<u64>,
+    solved_values: Vec<f64>,
+    solved_kinds: Vec<u8>,
     residue_classes: Vec<u64>,
     residue_success: Vec<f64>,
     residue_failed: Vec<f64>,
@@ -279,7 +376,7 @@ struct LayerInputs {
     warm_start: bool,
 }
 
-fn guess_lookup<'a>(inputs: &'a LayerInputs, class_id: u64) -> Option<(Vec<usize>, Vec<usize>)> {
+fn guess_lookup(inputs: &LayerInputs, class_id: u64) -> Option<(Vec<usize>, Vec<usize>)> {
     let index = inputs.guess_classes.binary_search(&class_id).ok()?;
     let start = index * inputs.max_support;
     let end = start + inputs.max_support;
@@ -296,12 +393,8 @@ fn guess_lookup<'a>(inputs: &'a LayerInputs, class_id: u64) -> Option<(Vec<usize
     Some((rows, cols))
 }
 
-fn solve_item(
-    inputs: &LayerInputs,
-    item: usize,
-    value: &SharedPtr<f64>,
-    kind: &SharedPtr<u8>,
-) -> ItemOutput {
+#[allow(clippy::needless_range_loop)] // Pinned index order is part of parity.
+fn solve_item(inputs: &LayerInputs, item: usize, value: &[f64]) -> ItemOutput {
     let count = inputs.profile_count;
     let checker_offset = inputs.work_items[item * 4] as usize;
     let checker_len = inputs.work_items[item * 4 + 1] as usize;
@@ -315,6 +408,7 @@ fn solve_item(
         for checker_slot in 0..checker_len {
             let checker = inputs.profile_pool[checker_offset + checker_slot] as usize;
             let class_id = (checker * count + dropper) as u64;
+            output.processed_classes.push(class_id);
 
             let mut success = [0.0_f64; ACTIONS];
             for lag in 0..ACTIONS {
@@ -322,8 +416,10 @@ fn solve_item(
                 if child < 0 {
                     success[lag] = 1.0;
                 } else {
-                    let stored = unsafe { *value.0.add(dropper * count + child as usize) };
-                    if !stored.is_finite() {
+                    let stored = value[dropper * count + child as usize];
+                    if !stored.is_finite()
+                        || !(-1.0 - VALUE_EPS..=1.0 + VALUE_EPS).contains(&stored)
+                    {
                         output.missing_child = true;
                         return output;
                     }
@@ -334,8 +430,8 @@ fn solve_item(
             let failed = if failure < 0 {
                 1.0
             } else {
-                let stored = unsafe { *value.0.add(dropper * count + failure as usize) };
-                if !stored.is_finite() {
+                let stored = value[dropper * count + failure as usize];
+                if !stored.is_finite() || !(-1.0 - VALUE_EPS..=1.0 + VALUE_EPS).contains(&stored) {
                     output.missing_child = true;
                     return output;
                 }
@@ -345,10 +441,9 @@ fn solve_item(
 
             let (gap, maximin, minimax) = toeplitz_saddle(&success, failed);
             if gap <= inputs.tolerance {
-                unsafe {
-                    *value.0.add(class_id as usize) = (maximin + minimax) / 2.0;
-                    *kind.0.add(class_id as usize) = 0;
-                }
+                output.solved_classes.push(class_id);
+                output.solved_values.push((maximin + minimax) / 2.0);
+                output.solved_kinds.push(0);
                 output.pure += 1;
                 continue;
             }
@@ -385,10 +480,9 @@ fn solve_item(
 
             match solution {
                 Some(solved) => {
-                    unsafe {
-                        *value.0.add(class_id as usize) = solved.value;
-                        *kind.0.add(class_id as usize) = 1;
-                    }
+                    output.solved_classes.push(class_id);
+                    output.solved_values.push(solved.value);
+                    output.solved_kinds.push(1);
                     let drop_support = support_of_policy(&solved.drop_policy, inputs.max_support);
                     let check_support = support_of_policy(&solved.check_policy, inputs.max_support);
                     output.hit_classes.push(class_id);
@@ -443,7 +537,13 @@ fn sweep_layer_rs<'py>(
     u64,
     u64,
 )> {
-    let count = profile_count as usize;
+    validate_tolerance(saddle_tolerance)?;
+    let (count, transition_count, class_count) = checked_table_lengths(profile_count)?;
+    let max_support = usize::try_from(max_support)
+        .map_err(|_| PyValueError::new_err("max_support exceeds the platform index domain"))?;
+    if !(1..=ACTIONS).contains(&max_support) {
+        return Err(PyValueError::new_err("max_support must be in 1..60"));
+    }
     let inputs = LayerInputs {
         work_items: work_items.as_slice()?.to_vec(),
         profile_pool: profile_pool.as_slice()?.to_vec(),
@@ -455,51 +555,165 @@ fn sweep_layer_rs<'py>(
         guess_rows: guess_rows.as_slice()?.to_vec(),
         guess_cols: guess_cols.as_slice()?.to_vec(),
         tolerance: saddle_tolerance,
-        max_support: max_support as usize,
+        max_support,
         warm_start,
     };
-    if inputs.work_items.len() % 4 != 0 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+    if !inputs.work_items.len().is_multiple_of(4) {
+        return Err(PyValueError::new_err(
             "work_items must be flat (offset, len, offset, len) quadruples",
         ));
     }
-    if inputs.success_child.len() != count * ACTIONS
+    if inputs.success_child.len() != transition_count
         || inputs.failure_child.len() != count
         || inputs.revival.len() != count
     {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+        return Err(PyValueError::new_err(
             "profile tables disagree with profile_count",
         ));
     }
-    if inputs.guess_rows.len() != inputs.guess_classes.len() * inputs.max_support
+    let padded_guess_count = inputs
+        .guess_classes
+        .len()
+        .checked_mul(inputs.max_support)
+        .ok_or_else(|| PyValueError::new_err("guess support-table size overflow"))?;
+    if inputs.guess_rows.len() != padded_guess_count
         || inputs.guess_cols.len() != inputs.guess_rows.len()
     {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+        return Err(PyValueError::new_err(
             "guess arrays disagree with max_support padding",
         ));
     }
+    if inputs
+        .profile_pool
+        .iter()
+        .any(|&profile| profile as usize >= count)
+    {
+        return Err(PyValueError::new_err(
+            "profile_pool contains an index outside profile_count",
+        ));
+    }
+    for &child in &inputs.success_child {
+        if child < -1 || (child >= 0 && child as usize >= count) {
+            return Err(PyValueError::new_err(
+                "success_child entries must be -1 or valid profile indices",
+            ));
+        }
+    }
+    for &child in &inputs.failure_child {
+        if child < -1 || (child >= 0 && child as usize >= count) {
+            return Err(PyValueError::new_err(
+                "failure_child entries must be -1 or valid profile indices",
+            ));
+        }
+    }
+    if inputs
+        .revival
+        .iter()
+        .any(|probability| !probability.is_finite() || !(0.0..=1.0).contains(probability))
+    {
+        return Err(PyValueError::new_err(
+            "revival entries must be finite probabilities in [0, 1]",
+        ));
+    }
+    if inputs
+        .guess_classes
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+        || inputs
+            .guess_classes
+            .iter()
+            .any(|&class_id| class_id >= class_count as u64)
+    {
+        return Err(PyValueError::new_err(
+            "guess_classes must be unique, strictly ascending, and in the class domain",
+        ));
+    }
+    validate_padded_supports(&inputs.guess_rows, inputs.max_support, "guess_rows")?;
+    validate_padded_supports(&inputs.guess_cols, inputs.max_support, "guess_cols")?;
+
+    let mut validated_segments = HashSet::<(usize, usize)>::new();
+    for item in inputs.work_items.chunks_exact(4) {
+        let checker_offset = usize::try_from(item[0])
+            .map_err(|_| PyValueError::new_err("work-item offset exceeds platform limits"))?;
+        let checker_len = usize::try_from(item[1])
+            .map_err(|_| PyValueError::new_err("work-item length exceeds platform limits"))?;
+        let dropper_offset = usize::try_from(item[2])
+            .map_err(|_| PyValueError::new_err("work-item offset exceeds platform limits"))?;
+        let dropper_len = usize::try_from(item[3])
+            .map_err(|_| PyValueError::new_err("work-item length exceeds platform limits"))?;
+        if checker_len == 0 || dropper_len == 0 {
+            return Err(PyValueError::new_err(
+                "work-item profile segments must be non-empty",
+            ));
+        }
+        for (offset, length) in [(checker_offset, checker_len), (dropper_offset, dropper_len)] {
+            let end = offset
+                .checked_add(length)
+                .ok_or_else(|| PyValueError::new_err("work-item profile segment overflow"))?;
+            let segment = inputs.profile_pool.get(offset..end).ok_or_else(|| {
+                PyValueError::new_err("work-item profile segment exceeds profile_pool")
+            })?;
+            if validated_segments.insert((offset, length)) {
+                let mut unique = HashSet::with_capacity(segment.len());
+                if segment.iter().any(|profile| !unique.insert(*profile)) {
+                    return Err(PyValueError::new_err(
+                        "work-item profile segments must not contain duplicate profiles",
+                    ));
+                }
+            }
+        }
+    }
+
     let value_slice = value.as_slice_mut()?;
     let kind_slice = solver_kind.as_slice_mut()?;
-    if value_slice.len() != count * count || kind_slice.len() != count * count {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+    if value_slice.len() != class_count || kind_slice.len() != class_count {
+        return Err(PyValueError::new_err(
             "value stores disagree with profile_count",
         ));
     }
-    let value_ptr = SharedPtr(value_slice.as_mut_ptr());
-    let kind_ptr = SharedPtr(kind_slice.as_mut_ptr());
     let items = inputs.work_items.len() / 4;
 
-    let outputs: Vec<ItemOutput> = py.detach(|| {
-        (0..items)
-            .into_par_iter()
-            .map(|item| solve_item(&inputs, item, &value_ptr, &kind_ptr))
-            .collect()
-    });
+    let outputs: Vec<ItemOutput> = {
+        let value_read: &[f64] = value_slice;
+        py.detach(|| {
+            (0..items)
+                .into_par_iter()
+                .map(|item| solve_item(&inputs, item, value_read))
+                .collect()
+        })
+    };
 
     if outputs.iter().any(|output| output.missing_child) {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-            "sweep layer read an unsolved child value",
+        return Err(PyRuntimeError::new_err(
+            "sweep layer read an unsolved or out-of-range child value",
         ));
+    }
+    let processed_count = outputs
+        .iter()
+        .map(|output| output.processed_classes.len())
+        .sum();
+    let mut processed = HashSet::with_capacity(processed_count);
+    for output in &outputs {
+        if output
+            .processed_classes
+            .iter()
+            .any(|class_id| !processed.insert(*class_id))
+        {
+            return Err(PyValueError::new_err(
+                "work items overlap and would write the same class more than once",
+            ));
+        }
+    }
+    for output in &outputs {
+        for ((&class_id, &solved_value), &solved_kind) in output
+            .solved_classes
+            .iter()
+            .zip(&output.solved_values)
+            .zip(&output.solved_kinds)
+        {
+            value_slice[class_id as usize] = solved_value;
+            kind_slice[class_id as usize] = solved_kind;
+        }
     }
     let mut residue_classes = Vec::new();
     let mut residue_success = Vec::new();
@@ -541,10 +755,14 @@ fn toeplitz_saddle_rs(
 ) -> PyResult<(f64, f64, f64)> {
     let slice = success.as_slice()?;
     if slice.len() != ACTIONS {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+        return Err(PyValueError::new_err(
             "success must hold exactly 60 class values",
         ));
     }
+    for &value in slice {
+        validate_class_value(value, "success")?;
+    }
+    validate_class_value(failed, "failed")?;
     let mut fixed = [0.0_f64; ACTIONS];
     fixed.copy_from_slice(slice);
     Ok(toeplitz_saddle(&fixed, failed))
@@ -562,14 +780,19 @@ fn attempt_support_rs<'py>(
 ) -> PyResult<Option<(f64, Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)>> {
     let slice = success.as_slice()?;
     if slice.len() != ACTIONS {
-        return Err(pyo3::exceptions::PyValueError::new_err(
+        return Err(PyValueError::new_err(
             "success must hold exactly 60 class values",
         ));
     }
+    for &value in slice {
+        validate_class_value(value, "success")?;
+    }
+    validate_class_value(failed, "failed")?;
+    validate_tolerance(tolerance)?;
     let mut fixed = [0.0_f64; ACTIONS];
     fixed.copy_from_slice(slice);
-    let rows: Vec<usize> = rows.into_iter().map(|v| v as usize).collect();
-    let cols: Vec<usize> = cols.into_iter().map(|v| v as usize).collect();
+    let rows = validate_support(&rows, "rows")?;
+    let cols = validate_support(&cols, "cols")?;
     Ok(
         attempt_support(&fixed, failed, &rows, &cols, tolerance).map(|solution| {
             (
@@ -584,6 +807,11 @@ fn attempt_support_rs<'py>(
 #[pymodule]
 fn dth_complete_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("PARITY_CONTRACT_VERSION", PARITY_CONTRACT_VERSION)?;
+    m.add("SOURCE_BUNDLE_DIGEST", SOURCE_BUNDLE_DIGEST)?;
+    m.add(
+        "SOURCE_BUNDLE_DIGEST_ALGORITHM",
+        SOURCE_BUNDLE_DIGEST_ALGORITHM,
+    )?;
     m.add_function(wrap_pyfunction!(sweep_layer_rs, m)?)?;
     m.add_function(wrap_pyfunction!(toeplitz_saddle_rs, m)?)?;
     m.add_function(wrap_pyfunction!(attempt_support_rs, m)?)?;
@@ -594,10 +822,24 @@ fn dth_complete_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn embedded_source_bundle_digest_has_contract_shape() {
+        assert_eq!(
+            SOURCE_BUNDLE_DIGEST_ALGORITHM,
+            "sha256-framed-source-bundle-v1"
+        );
+        assert_eq!(SOURCE_BUNDLE_DIGEST.len(), 64);
+        assert!(
+            SOURCE_BUNDLE_DIGEST
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        );
+    }
+
     fn ramp_matrix() -> ([f64; ACTIONS], f64) {
         let mut success = [0.0_f64; ACTIONS];
-        for index in 0..ACTIONS {
-            success[index] = -1.0 + 2.0 * (index as f64) / 59.0;
+        for (index, value) in success.iter_mut().enumerate() {
+            *value = -1.0 + 2.0 * (index as f64) / 59.0;
         }
         (success, 0.25)
     }
@@ -678,5 +920,28 @@ mod tests {
         policy[40] = 1e-12; // below the mass floor, excluded
         assert_eq!(support_of_policy(&policy, 2), vec![3, 10]);
         assert_eq!(support_of_policy(&policy, 4), vec![3, 10, 20]);
+    }
+
+    #[test]
+    fn public_support_validation_rejects_cast_and_order_hazards() {
+        assert_eq!(validate_support(&[3, 40], "rows").unwrap(), vec![3, 40]);
+        assert!(validate_support(&[-1], "rows").is_err());
+        assert!(validate_support(&[60], "rows").is_err());
+        assert!(validate_support(&[4, 4], "rows").is_err());
+        assert!(validate_support(&[9, 2], "rows").is_err());
+    }
+
+    #[test]
+    fn public_solver_gate_is_frozen() {
+        assert!(validate_tolerance(1e-6).is_ok());
+        assert!(validate_tolerance(1e-5).is_err());
+        assert!(validate_tolerance(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn padded_support_validation_requires_canonical_padding() {
+        assert!(validate_padded_supports(&[3, 10, -1, -1], 4, "rows").is_ok());
+        assert!(validate_padded_supports(&[3, -1, 10, -1], 4, "rows").is_err());
+        assert!(validate_padded_supports(&[10, 3, -1, -1], 4, "rows").is_err());
     }
 }

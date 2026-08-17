@@ -4,6 +4,11 @@ project(dth_cpp LANGUAGES CXX)
 
 include(CTest)
 
+# This project uses C++20 language features but does not use C++ modules.
+# Avoid CMake's default module-dependency scan and the associated compiler
+# mapper flags in compile_commands.json.
+set(CMAKE_CXX_SCAN_FOR_MODULES 0)
+
 # Read the preset variable even while the requested scaffold has no compile
 # targets. Once BUILD.md adds targets, CMake also uses it to emit the database.
 if(CMAKE_EXPORT_COMPILE_COMMANDS)

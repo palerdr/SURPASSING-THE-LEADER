@@ -1,6 +1,10 @@
+import json
+
+import numpy as np
 import pytest
 
 from abstract.rules import (
+    AbstractRuleset,
     FROZEN_REVIVAL_MODEL,
     Bucket6Frozen95Rules,
     Bucket12Frozen95Rules,
@@ -95,3 +99,87 @@ def test_ruleset_name_surface_contains_only_frozen_models() -> None:
     assert ruleset_for_name("bucket12_frozen95") == Bucket12Frozen95Rules()
     with pytest.raises(ValueError, match="bucket6_frozen95.*bucket12_frozen95"):
         ruleset_for_name("unsupported_pre_freeze_ruleset")
+
+
+@pytest.mark.parametrize("action", [0, 7, True, 1.0, 2.0])
+@pytest.mark.parametrize("role", ["drop", "check"])
+def test_joint_action_rejects_nonliteral_or_out_of_range_actions(action, role) -> None:
+    rules = Bucket6Frozen95Rules()
+    drop, check = (action, 1) if role == "drop" else (1, action)
+    with pytest.raises(ValueError, match=role):
+        rules.expand_joint_action(AbstractState(), drop, check)
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        AbstractState(checker_load=30),
+        AbstractState(dropper_load=30),
+        AbstractState(checker_ttd=31),
+        AbstractState(dropper_ttd=31),
+    ],
+)
+def test_joint_action_rejects_states_outside_the_ruleset_domain(state) -> None:
+    with pytest.raises(ValueError, match="ruleset domain"):
+        Bucket6Frozen95Rules().expand_joint_action(state, 1, 1)
+
+
+@pytest.mark.parametrize("action_values", [(True,), (1.0,), (1, 2.0)])
+def test_ruleset_rejects_coercible_action_domains(action_values) -> None:
+    with pytest.raises(ValueError, match="action_values must contain literal integers"):
+        AbstractRuleset(
+            ruleset_id="invalid_actions",
+            action_values=action_values,
+            bucket_seconds=10,
+            load_cap_units=30,
+            failed_check_penalty_units=len(action_values),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("bucket_seconds", True),
+        ("load_cap_units", 30.0),
+        ("failed_check_penalty_units", 6.0),
+    ],
+)
+def test_ruleset_rejects_coercible_dimensions(field, value) -> None:
+    kwargs = {
+        "ruleset_id": "invalid_dimensions",
+        "action_values": (1, 2, 3, 4, 5, 6),
+        "bucket_seconds": 10,
+        "load_cap_units": 30,
+        "failed_check_penalty_units": 6,
+    }
+    kwargs[field] = value
+    with pytest.raises(ValueError, match="ruleset dimensions must be literal integers"):
+        AbstractRuleset(**kwargs)
+
+
+def test_ruleset_normalizes_accepted_integral_scalars_for_json_metadata() -> None:
+    rules = AbstractRuleset(
+        ruleset_id="numpy_integrals",
+        action_values=(np.int64(1), np.int32(2)),
+        bucket_seconds=np.int64(5),
+        load_cap_units=np.int32(4),
+        failed_check_penalty_units=np.int64(2),
+    )
+    assert rules.action_values == (1, 2)
+    assert all(type(action) is int for action in rules.action_values)
+    assert all(
+        type(value) is int
+        for value in (
+            rules.bucket_seconds,
+            rules.load_cap_units,
+            rules.failed_check_penalty_units,
+        )
+    )
+    json.dumps(
+        {
+            "actions": rules.action_values,
+            "bucket_seconds": rules.bucket_seconds,
+            "load_cap_units": rules.load_cap_units,
+            "failed_check_penalty_units": rules.failed_check_penalty_units,
+        }
+    )

@@ -4,15 +4,14 @@ from pathlib import Path
 
 import numpy as np
 
+from dth.complete_tablebase import CompleteTablebase
 from dth.packed import PROFILE_COUNT, build_profile_table, encode_class, profile_id
 from dth.solver import reconstruct_transition_class_matrix
 from dth.support_solver import solve_certified_matrix_fast
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-VALUE_TABLE = (
-    REPOSITORY / "src" / "dth" / "artifacts" / "complete_full_v1" / "value.npy"
-)
+ARTIFACT_DIR = REPOSITORY / "src" / "dth" / "artifacts" / "complete_full_v1"
 OUTPUT = REPOSITORY / "paper" / "build" / "figures"
 
 
@@ -33,17 +32,19 @@ def write_layer_widths(profiles: object) -> None:
 
 
 def main() -> None:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
     profiles = build_profile_table()
+    tablebase = CompleteTablebase(ARTIFACT_DIR)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
     write_layer_widths(profiles)
-    values = np.load(VALUE_TABLE, mmap_mode="r")
 
     def class_matrix(checker: int, dropper: int) -> np.ndarray:
         success = np.empty(60, dtype=np.float64)
         for lag in range(1, 61):
             child = int(profiles.success_child_by_profile[checker, lag - 1])
             success[lag - 1] = (
-                1.0 if child < 0 else -float(values[dropper * PROFILE_COUNT + child])
+                1.0
+                if child < 0
+                else -tablebase.value_of_class(dropper * PROFILE_COUNT + child)
             )
 
         failure_child = int(profiles.failure_child_by_profile[checker])
@@ -51,8 +52,8 @@ def main() -> None:
             failed = 1.0
         else:
             revival = float(profiles.revival_by_profile[checker])
-            continuation = -float(
-                values[dropper * PROFILE_COUNT + failure_child]
+            continuation = -tablebase.value_of_class(
+                dropper * PROFILE_COUNT + failure_child
             )
             failed = revival * continuation + (1.0 - revival)
         return reconstruct_transition_class_matrix(success, failed)
@@ -60,7 +61,7 @@ def main() -> None:
     root_profile = profile_id(0, 0)
     root_matrix = class_matrix(root_profile, root_profile)
     root_value, drop, check, _ = solve_certified_matrix_fast(root_matrix)
-    stored_root = float(values[encode_class((0, 0, 0, 0))])
+    stored_root = tablebase.value_of_class(encode_class((0, 0, 0, 0)))
     if abs(root_value - stored_root) > 1e-6:
         raise RuntimeError("root certificate does not match the stored value")
 

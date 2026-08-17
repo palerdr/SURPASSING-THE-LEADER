@@ -13,11 +13,6 @@ export type Pose = "idle" | "dropping" | "seated" | "standing";
 const cache = new Map<string, HTMLImageElement>();
 const failed = new Set<string>();
 
-/** Map a player's engine name onto the character whose art represents them. */
-export function characterFor(name: string): Character {
-  return name.toLowerCase() === "hal" ? "hal" : "baku";
-}
-
 function key(character: Character, pose: Pose, index: number): string {
   return `${character}/${pose}/${index}`;
 }

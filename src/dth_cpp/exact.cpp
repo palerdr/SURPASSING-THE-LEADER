@@ -184,7 +184,7 @@ void dth::finish_profile_table(ProfileTable& table) {
 }
 
 // SECTION 5
-dth::ClassId dth::encode_class(ProfileTable& table, ProfileId checker, ProfileId dropper) {
+dth::ClassId dth::encode_class(const ProfileTable& table, ProfileId checker, ProfileId dropper) {
     // 17,011 x 17,011 matrix of profile indexed by classId
     if (checker >= table.profile_count) {
         throw std::out_of_range("checker ID must be within profile range");
@@ -195,7 +195,7 @@ dth::ClassId dth::encode_class(ProfileTable& table, ProfileId checker, ProfileId
     return ClassId{checker} * static_cast<ClassId>(table.profile_count) + ClassId{dropper};
 }
 
-std::pair<dth::ProfileId, dth::ProfileId> dth::decode_class(dth::ProfileTable& table,
+std::pair<dth::ProfileId, dth::ProfileId> dth::decode_class(const dth::ProfileTable& table,
                                                             dth::ClassId class_id) {
     if (class_id >= kCanonicalClasses) {
         throw std::out_of_range("class_id must be within the cross product of profile_counts");
@@ -205,13 +205,13 @@ std::pair<dth::ProfileId, dth::ProfileId> dth::decode_class(dth::ProfileTable& t
     return std::make_pair(checker, dropper);
 }
 
-dth::ClassId dth::swapped_child_class(ProfileTable& table, ProfileId dropper,
+dth::ClassId dth::swapped_child_class(const ProfileTable& table, ProfileId dropper,
                                       ProfileId child_profile) {
     // current checker moves -> child_profile post half round, must swap roles for bellman recursion
     return encode_class(table, dropper, child_profile);
 }
 
-dth::Potential dth::class_potential(ProfileTable& table, ClassId class_id) {
+dth::Potential dth::class_potential(const ProfileTable& table, ClassId class_id) {
     auto [checker, dropper] = decode_class(table, class_id);
     return table.potential[static_cast<std::size_t>(checker)] +
            table.potential[static_cast<std::size_t>(dropper)];
@@ -223,7 +223,7 @@ void dth::build_buckets(ProfileTable& table) {
         table.buckets[table.potential[profile]].push_back(static_cast<ProfileId>(profile));
     }
 }
-void dth::validate_profile_edges(ProfileTable& table) {
+void dth::validate_profile_edges(const ProfileTable& table) {
     int live_success{0};
     int live_failure{0};
     for (std::size_t profile : std::views::iota(std::size_t{0}, table.profile_count)) {
@@ -261,7 +261,7 @@ void dth::validate_profile_edges(ProfileTable& table) {
     }
 }
 
-int dth::layer_size(ProfileTable& table, Potential potential) {
+int dth::layer_size(const ProfileTable& table, Potential potential) {
     const auto p = static_cast<std::size_t>(potential);
     if (p > kMaxClassPotential) {
         throw std::out_of_range("class potential must be within 0..1200");
@@ -281,7 +281,7 @@ int dth::layer_size(ProfileTable& table, Potential potential) {
 }
 
 // SECTION 8
-dth::TransitionValues dth::assemble_transition_values(ProfileTable& table,
+dth::TransitionValues dth::assemble_transition_values(const ProfileTable& table,
                                                       const dth::MappedArray<double>& values,
                                                       ProfileId checker, ProfileId dropper) {
     TransitionValues result;
@@ -334,11 +334,13 @@ dth::TransitionValues dth::assemble_transition_values(ProfileTable& table,
     return result;
 }
 
-double dth::matrix_cell(TransitionValues& t, int drop, int check) {
-    if (check >= drop) {
-        std::size_t lag = static_cast<std::size_t>(check - drop);
-        return t.success[lag];
-    } else {
-        return t.failed;
+bool dth::solve_linear(std::span<double> a, std::span<double> b, std::size_t n, std::span<double> x) {
+    inline constexpr std::size_t kLinearDimension = kActions + 1;
+    for (std::size_t col : std::views::iota(std::size_t{0}, n-1)){
+        std::size_t pivot_row = col;
+        double best = std::abs(A[col * (kActions + 1) + col]);
+        for (std::size_t row : std::views::iota(col+1, n-1)) {
+            double magnitude = std::abs(A[row * (kActions + 1)])
+        }
     }
 }

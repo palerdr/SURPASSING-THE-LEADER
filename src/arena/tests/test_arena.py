@@ -343,10 +343,26 @@ def test_exploit_hal_cli_requires_an_explicit_checkpoint() -> None:
         cli._make_provider("exploit-hal", args)
 
 
+def test_exploit_hal_cli_defaults_to_the_supported_v2_protocol() -> None:
+    args = cli.build_parser().parse_args(
+        ["play", "--hal-agent", "exploit-hal", "--skip-rules"]
+    )
+    assert args.exploit_hal_config == "src/arena/config/exploit_hal_v2.yaml"
+
+
 def test_aggro_hal_is_not_exposed_on_canonical_stl_play() -> None:
     parser = cli.build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["play", "--hal-agent", "aggro-hal", "--skip-rules"])
+
+
+def test_retired_stl_mcts_is_not_advertised_and_fails_closed() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["play", "--hal-agent", "stl-mcts", "--skip-rules"])
+    args = parser.parse_args(["play", "--skip-rules"])
+    with pytest.raises(ValueError, match="retired"):
+        cli._make_provider("stl-mcts", args)
 
 
 def test_aggro_hal_match_requires_an_explicit_checkpoint_and_defaults_to_cpu() -> None:

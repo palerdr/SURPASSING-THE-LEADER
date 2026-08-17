@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run python -m pytest --collect-only -q
+      - run: uv run python -m pytest -q
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: cargo fmt --all -- --check
+      - name: Clippy checked accelerator crates
+        run: >-
+          cargo clippy
+          -p abstract_solver_rs
+          -p dth_complete_rs
+          --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  rust-python-parity:
+    runs-on: ubuntu-latest
+    env:
+      STL_REQUIRE_RUST_PARITY: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - name: Build Abstract extension into the repository environment
+        working-directory: src/crates/abstract_solver
+        run: uv run --project ../../.. maturin develop --release
+      - name: Build complete-DTH extension into the repository environment
+        working-directory: src/crates/dth_complete
+        run: uv run --project ../../.. maturin develop --release
+      - name: Require both compiled modules
+        run: uv run python -c "import abstract_solver_rs, dth_complete_rs"
+      - name: Run Python/Rust parity contracts
+        run: >-
+          uv run python -m pytest
+          src/abstract/tests/test_rust_parity.py
+          src/dth/tests/test_complete_rust_parity.py -q
+
+  browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/arena/webclient
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/arena/webclient/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test --if-present
+      - run: npm run build
+
+  ocaml:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/dth_ocaml
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install GLPK
+        run: sudo apt-get update && sudo apt-get install --yes libglpk-dev
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.3"
+          dune-cache: true
+          opam-local-packages: src/dth_ocaml/*.opam
+      - run: opam install . --deps-only --with-test --yes
+      - run: opam exec -- dune build
+      - run: opam exec -- dune runtest
+      - run: opam exec -- dune build @fmt

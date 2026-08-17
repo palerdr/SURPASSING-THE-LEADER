@@ -38,6 +38,11 @@ from stl.engine.actions import legal_seconds, validate_action
 from stl.engine.game import Game, HalfRoundRecord, Player
 
 
+CANONICAL_HAL_NAME = "Hal"
+CANONICAL_HUMAN_NAME = "Baku"
+MAX_DISPLAY_NAME_LENGTH = 64
+
+
 class Phase(str, Enum):
     """Where a session is waiting."""
 
@@ -49,6 +54,25 @@ class Phase(str, Enum):
 
 class SessionPhaseError(RuntimeError):
     """A transition was requested from a phase that does not allow it."""
+
+
+def validate_human_display_name(name: str) -> str:
+    """Validate a presentation label without changing rule-bearing identity."""
+
+    if not isinstance(name, str):
+        raise TypeError("human display name must be a string")
+    normalized = name.strip()
+    if not normalized:
+        raise ValueError("human display name must not be empty")
+    if len(normalized) > MAX_DISPLAY_NAME_LENGTH:
+        raise ValueError(
+            f"human display name must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
+        )
+    if normalized.casefold() == CANONICAL_HAL_NAME.casefold():
+        raise ValueError(f"{CANONICAL_HAL_NAME!r} is reserved for the opponent")
+    if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
+        raise ValueError("human display name must not contain control characters")
+    return normalized
 
 
 def public_player_state(player: Player) -> dict[str, float | int | str]:
@@ -74,10 +98,12 @@ class PlaySession:
     hal_agent: object
     hal: Player
     human: Player
+    human_display_name: str = CANONICAL_HUMAN_NAME
     game_index: int = 0
     game_seed: int | None = None
     start_clock: int = 0
     max_half_rounds: int | None = None
+    sequence_start: int = 0
 
     phase: Phase = field(default=Phase.RULES, init=False)
     sequence: int = field(default=0, init=False)
@@ -85,6 +111,39 @@ class PlaySession:
     last_record: HalfRoundRecord | None = field(default=None, init=False)
     public_history: list[dict[str, object]] = field(default_factory=list, init=False)
     _finished: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        players = (self.game.player1, self.game.player2)
+        if self.hal is self.human or not any(player is self.hal for player in players):
+            raise ValueError("hal and human must be distinct players owned by the game")
+        if not any(player is self.human for player in players):
+            raise ValueError("hal and human must be distinct players owned by the game")
+        if self.hal.name != CANONICAL_HAL_NAME or self.human.name != CANONICAL_HUMAN_NAME:
+            raise ValueError(
+                "Arena engine players must retain the canonical Hal and Baku identities"
+            )
+        self.human_display_name = validate_human_display_name(self.human_display_name)
+        if isinstance(self.sequence_start, bool) or not isinstance(self.sequence_start, int):
+            raise TypeError("sequence_start must be an integer")
+        if self.sequence_start < 0:
+            raise ValueError("sequence_start must be nonnegative")
+        self.sequence = self.sequence_start
+
+    def display_name(self, player: Player) -> str:
+        """Return the presentation label for a game-owned player."""
+
+        if player is self.human:
+            return self.human_display_name
+        if player is self.hal:
+            return self.hal.name
+        raise ValueError("player is not owned by this session")
+
+    def display_canonical_name(self, name: str | None) -> str | None:
+        """Map a canonical engine name to its public presentation label."""
+
+        if name is None:
+            return None
+        return self.human_display_name if name == self.human.name else name
 
     # ------------------------------------------------------------------
     # Pure queries
@@ -116,7 +175,11 @@ class PlaySession:
     def stopped(self) -> bool:
         """True when the session ended on the half-round cap, not a win."""
 
-        return not self.game.game_over
+        return (
+            self.phase is Phase.GAME_OVER
+            and not self.game.game_over
+            and self._cap_reached()
+        )
 
     @property
     def winner_name(self) -> str | None:
@@ -127,6 +190,12 @@ class PlaySession:
 
     def _terminal(self) -> bool:
         return self.game.game_over or self._cap_reached()
+
+    @property
+    def terminal(self) -> bool:
+        """Whether the next acknowledgement ends this session."""
+
+        return self._terminal()
 
     # ------------------------------------------------------------------
     # Transitions
@@ -161,22 +230,33 @@ class PlaySession:
             "half": int(self.game.current_half),
             "turn_duration": int(turn_duration),
             "players": [
-                public_player_state(self.game.player1),
-                public_player_state(self.game.player2),
+                {
+                    **public_player_state(player),
+                    "name": self.display_name(player),
+                }
+                for player in (self.game.player1, self.game.player2)
             ],
         }
 
         # The human's action is validated before Hal is consulted, so a rejected
         # second costs nothing and reveals nothing.
+        if isinstance(second, bool) or not isinstance(second, int):
+            raise ValueError(
+                f"Illegal action second={second!r}; seconds must be integers"
+            )
         validate_action(
-            int(second),
+            second,
             actor=self.human.name,
             role=human_role,
             turn_duration=turn_duration,
         )
         hal_second = self.hal_agent.choose_action(self.game, self.hal_role(), turn_duration)
+        if isinstance(hal_second, bool) or not isinstance(hal_second, int):
+            raise ValueError(
+                f"Illegal Hal action second={hal_second!r}; seconds must be integers"
+            )
         validate_action(
-            int(hal_second),
+            hal_second,
             actor=self.hal.name,
             role=self.hal_role(),
             turn_duration=turn_duration,
@@ -206,8 +286,8 @@ class PlaySession:
         self.public_history.append(
             {
                 "public_state_before": public_state,
-                "dropper": record.dropper,
-                "checker": record.checker,
+                "dropper": self.display_canonical_name(record.dropper),
+                "checker": self.display_canonical_name(record.checker),
                 "drop_second": int(record.drop_time),
                 "check_second": int(record.check_time),
                 "result": record.result.value,
@@ -236,6 +316,10 @@ class PlaySession:
     def finish(self) -> dict[str, object]:
         """Notify the provider once and return this game's public transcript."""
 
+        if self.phase is not Phase.GAME_OVER:
+            raise SessionPhaseError(
+                f"finish() requires {Phase.GAME_OVER}, in {self.phase}"
+            )
         if not self._finished:
             end_provider_game(
                 getattr(self.hal_agent, "provider", None),
@@ -250,7 +334,7 @@ class PlaySession:
             "game_index": self.game_index,
             "seed": self.game_seed,
             "start_clock": self.start_clock,
-            "winner": self.winner_name,
+            "winner": self.display_canonical_name(self.winner_name),
             "stopped": self.stopped,
             "half_rounds": self.half_rounds,
             "public_history": self.public_history,

@@ -13,6 +13,54 @@ from arena.web.app import SessionConfig, create_app
 from stl.engine.game import LS_WINDOW_START
 
 
+_SNAPSHOT_FIELDS = {
+    "sequence",
+    "phase",
+    "human_name",
+    "clock_display",
+    "clock_seconds",
+    "round",
+    "half",
+    "turn_duration",
+    "leap_window",
+    "dropper_name",
+    "checker_name",
+    "human_role",
+    "legal_seconds",
+    "players",
+    "cylinder_max",
+    "ttd_max",
+    "half_rounds",
+    "last_outcome",
+    "winner_name",
+    "winner_is_human",
+    "stopped",
+}
+_PLAYER_FIELDS = {
+    "name",
+    "character",
+    "role",
+    "cylinder_seconds",
+    "ttd_seconds",
+    "deaths",
+    "is_human",
+}
+_OUTCOME_FIELDS = {
+    "dropper",
+    "checker",
+    "drop_time",
+    "check_time",
+    "result",
+    "st_gained",
+    "death_duration",
+    "survived",
+    "survival_probability",
+    "game_over",
+    "session_ending",
+    "winner_name",
+}
+
+
 class _StubHal:
     """Deterministic Hal. Avoids memory-mapping the 2.4 GB DTH artifact."""
 
@@ -59,6 +107,8 @@ def test_no_unrevealed_action_reaches_the_client() -> None:
 
     assert begun["phase"] == "awaiting_action"
     assert begun["last_outcome"] is None
+    assert set(begun) == _SNAPSHOT_FIELDS
+    assert all(set(player) == _PLAYER_FIELDS for player in begun["players"])
     keys = _walk(begun)
     assert "drop_time" not in keys
     assert "check_time" not in keys
@@ -70,6 +120,7 @@ def test_no_unrevealed_action_reaches_the_client() -> None:
     assert revealed["phase"] == "awaiting_ack"
     assert revealed["last_outcome"]["drop_time"] >= 1
     assert revealed["last_outcome"]["check_time"] >= 1
+    assert set(revealed["last_outcome"]) == _OUTCOME_FIELDS
     # The same walk finds both keys once they are public, so the assertions
     # above are detecting absence rather than passing vacuously.
     revealed_keys = _walk(revealed)
@@ -102,6 +153,116 @@ def test_a_stale_sequence_is_rejected() -> None:
     client.post("/api/session/begin", json={"sequence": snapshot["sequence"]})
     replayed = client.post("/api/session/begin", json={"sequence": snapshot["sequence"]})
     assert replayed.status_code == 409
+
+
+def test_session_replacement_is_sequenced_and_cannot_abandon_live_play() -> None:
+    client = _client()
+    initial = client.get("/api/session").json()
+    assert client.post("/api/session", json={}).status_code == 422
+
+    begun = client.post(
+        "/api/session/begin", json={"sequence": initial["sequence"]}
+    ).json()
+    assert (
+        client.post("/api/session", json={"sequence": initial["sequence"]}).status_code
+        == 409
+    )
+    assert (
+        client.post("/api/session", json={"sequence": begun["sequence"]}).status_code
+        == 409
+    )
+
+
+def test_session_replacement_keeps_a_monotonic_sequence_and_display_only_name() -> None:
+    client = _client(start_clock=LS_WINDOW_START)
+    initial = client.get("/api/session").json()
+    label = "Alice <the challenger>"
+    replaced = client.post(
+        "/api/session",
+        json={"sequence": initial["sequence"], "human_name": label},
+    ).json()
+
+    assert replaced["sequence"] > initial["sequence"]
+    assert replaced["human_name"] == label
+    assert {player["name"] for player in replaced["players"]} == {"Hal", label}
+    human = next(player for player in replaced["players"] if player["is_human"])
+    opponent = next(player for player in replaced["players"] if not player["is_human"])
+    assert human["character"] == "baku"
+    assert human["role"] == replaced["human_role"]
+    assert opponent["character"] == "hal"
+    assert opponent["role"] != replaced["human_role"]
+    assert replaced["winner_is_human"] is None
+    assert client.get("/api/rules").json()["human_name"] == label
+
+
+def test_hal_is_a_reserved_human_display_name() -> None:
+    client = _client()
+    sequence = client.get("/api/session").json()["sequence"]
+    response = client.post(
+        "/api/session", json={"sequence": sequence, "human_name": " hAl "}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "body"),
+    [
+        ("/api/session/begin", {"sequence": True}),
+        ("/api/session/begin", {"sequence": 0.0}),
+        ("/api/session/action", {"sequence": 0, "second": True}),
+        ("/api/session/action", {"sequence": 0, "second": 2.0}),
+        ("/api/session", {"sequence": 0, "start_clock": 720.0}),
+        ("/api/session", {"sequence": 0, "max_half_rounds": False}),
+    ],
+)
+def test_mutation_requests_reject_coercible_non_integer_values(endpoint, body) -> None:
+    assert _client().post(endpoint, json=body).status_code == 422
+
+
+def test_terminal_replacement_finishes_then_resets_provider_once() -> None:
+    class _LifecycleProvider:
+        def __init__(self) -> None:
+            self.resets = 0
+            self.outcomes = []
+
+        def reset_game(self) -> None:
+            self.resets += 1
+
+        def end_game(self, outcome) -> None:
+            self.outcomes.append(outcome)
+
+    provider = _LifecycleProvider()
+    hal = _StubHal()
+    hal.provider = provider
+    app = create_app(
+        hal_factory=lambda: hal,
+        config=SessionConfig(seed=41, max_half_rounds=1),
+    )
+    client = TestClient(app)
+    snapshot = client.get("/api/session").json()
+    snapshot = client.post(
+        "/api/session/begin", json={"sequence": snapshot["sequence"]}
+    ).json()
+    snapshot = client.post(
+        "/api/session/action",
+        json={"sequence": snapshot["sequence"], "second": snapshot["legal_seconds"][0]},
+    ).json()
+    assert snapshot["last_outcome"]["game_over"] is False
+    assert snapshot["last_outcome"]["session_ending"] is True
+    snapshot = client.post(
+        "/api/session/ack", json={"sequence": snapshot["sequence"]}
+    ).json()
+    assert snapshot["phase"] == "game_over"
+    assert provider.resets == 1
+    assert len(provider.outcomes) == 1
+
+    replacement = client.post(
+        "/api/session", json={"sequence": snapshot["sequence"]}
+    ).json()
+    assert replacement["phase"] == "rules"
+    assert replacement["sequence"] > snapshot["sequence"]
+    assert provider.resets == 2
+    assert len(provider.outcomes) == 1
 
 
 def test_an_illegal_second_is_refused_without_advancing_the_game() -> None:

@@ -12,5 +12,8 @@ default = []
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-numpy = "*"
-pyo3 = "*"
+numpy = "0.29"
+pyo3 = "0.29"
+
+[build-dependencies]
+sha2 = "0.10"

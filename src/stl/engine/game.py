@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from enum import Enum
+from numbers import Integral
 from typing import Optional
 
 """
@@ -304,8 +305,9 @@ class Game:
         (8:59:60) still spans the inserted second.
         This is called at the START of a half-round to determine how long
         the turn lasts. The D player gets the full turn_duration to drop.
-        The C player's action space is still [1, 60] — they don't know
-        about the extra second unless they've figured it out.
+        The C player's action space is still [1, 60]. Both players know the
+        leap rule from initialization; knowledge does not widen Checker's
+        structural action set.
         """
         if LS_WINDOW_START <= self.game_clock <= LS_WINDOW_END:
             return TURN_DURATION_LEAP
@@ -423,31 +425,41 @@ class Game:
         """
         if self.game_over:
             raise GameOverError("Game is Already Over")
+        if survived_outcome is not None and not isinstance(survived_outcome, bool):
+            raise ValueError("survived_outcome must be bool or None")
         clock_at_start = self.game_clock
         dropper, checker = self.get_roles_for_half(self.current_half)
         turn_duration = self.get_turn_duration()
-        self.validate_drop_time(drop_time, turn_duration, actor=dropper.name)
-        self.validate_check_time(check_time, turn_duration, actor=checker.name)
+        drop_time = self.validate_drop_time(
+            drop_time, turn_duration, actor=dropper.name
+        )
+        check_time = self.validate_check_time(
+            check_time, turn_duration, actor=checker.name
+        )
         success = check_time >= drop_time
-        death_occurred = False
+        death_occurred = not success
         death_duration = 0.0
         survived: Optional[bool] = None
         survival_probability: Optional[float] = None
-        ST = 0.0
+        ST = check_time - drop_time + 1 if success else 0.0
         if success:
-            ST = check_time - drop_time + 1
-            overflow = checker.add_to_cylinder(ST)
-            if overflow:
-                death_occurred = True
-                death_duration = min(checker.cylinder, CYLINDER_MAX)
+            candidate_cylinder = checker.cylinder + ST
+            death_occurred = candidate_cylinder >= CYLINDER_MAX
+            if death_occurred:
+                death_duration = min(candidate_cylinder, CYLINDER_MAX)
         else:
-            checker.add_to_cylinder(FAILED_CHECK_PENALTY)
-            death_occurred = True
-            death_duration = min(checker.cylinder, CYLINDER_MAX)
+            candidate_cylinder = checker.cylinder + FAILED_CHECK_PENALTY
+            death_duration = min(candidate_cylinder, CYLINDER_MAX)
         if death_occurred:
             survival_probability = self.referee.compute_survival_probability(
                 checker, death_duration=death_duration
             )
+            if survived_outcome is True and survival_probability <= 0.0:
+                raise ValueError(
+                    "cannot force survival when the canonical revival probability is zero"
+                )
+        checker.add_to_cylinder(ST if success else FAILED_CHECK_PENALTY)
+        if death_occurred:
             if survived_outcome is None:
                 survived = self.referee.attempt_revival(
                     checker, death_duration=death_duration, rng=self.rng
@@ -515,42 +527,63 @@ class Game:
             records.append(record2)
         return records
     # VALIDATION
-    def validate_drop_time(self, drop_time: int, turn_duration: int, actor: str | None = None) -> None:
+    def validate_drop_time(
+        self, drop_time: int, turn_duration: int, actor: str | None = None
+    ) -> int:
         """
         Validate that drop_time is a legal literal second.
         Raise ValueError with descriptive message if not.
-        Note: only Baku/non-Hal dropper can use second 61 during a leap turn.
+        Note: only the canonical Baku identity as Dropper can use second 61
+        during a leap turn. Display labels must not be passed as identities.
         """
         if actor is None:
             max_second = turn_duration
-            if not (1 <= drop_time <= max_second):
+            if isinstance(drop_time, bool) or not isinstance(drop_time, Integral):
+                raise ValueError(f"drop_time must be an integer, got {drop_time!r}")
+            normalized = int(drop_time)
+            if not (1 <= normalized <= max_second):
                 raise ValueError(
                     f"drop_time must be in [1, {max_second}], got {drop_time}"
                 )
-            return
+            return normalized
         from stl.engine.actions import IllegalActionError, validate_action
 
         try:
-            validate_action(drop_time, actor=actor, role="dropper", turn_duration=turn_duration)
+            return validate_action(
+                drop_time,
+                actor=actor,
+                role="dropper",
+                turn_duration=turn_duration,
+            )
         except IllegalActionError as exc:
             raise ValueError(str(exc)) from exc
 
-    def validate_check_time(self, check_time: int, turn_duration: int, actor: str | None = None) -> None:
+    def validate_check_time(
+        self, check_time: int, turn_duration: int, actor: str | None = None
+    ) -> int:
         """
         Validate that check_time is a legal literal second.
         Checkers are capped at 60, including leap-window half-rounds.
         """
         if actor is None:
             max_second = min(turn_duration, TURN_DURATION_NORMAL)
-            if not (1 <= check_time <= max_second):
+            if isinstance(check_time, bool) or not isinstance(check_time, Integral):
+                raise ValueError(f"check_time must be an integer, got {check_time!r}")
+            normalized = int(check_time)
+            if not (1 <= normalized <= max_second):
                 raise ValueError(
                     f"check_time must be in [1, {max_second}], got {check_time}"
                 )
-            return
+            return normalized
         from stl.engine.actions import IllegalActionError, validate_action
 
         try:
-            validate_action(check_time, actor=actor, role="checker", turn_duration=turn_duration)
+            return validate_action(
+                check_time,
+                actor=actor,
+                role="checker",
+                turn_duration=turn_duration,
+            )
         except IllegalActionError as exc:
             raise ValueError(str(exc)) from exc
     # GAME STATE QUERIES

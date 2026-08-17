@@ -127,6 +127,22 @@ def test_frame_reports_every_required_field() -> None:
     assert "deaths 1" in text                        # deaths
 
 
+def test_human_display_label_does_not_replace_the_engine_identity() -> None:
+    game = _game()
+    text = "\n".join(
+        render_frame(
+            game,
+            art=SceneArt(),
+            human_name="Baku",
+            human_label="Alice",
+            colour=False,
+        )
+    )
+    assert game.player2.name == "Baku"
+    assert "CHECKER Alice" in text
+    assert "ALICE (you)" in text
+
+
 def test_live_frame_hides_the_selections_and_the_last_result() -> None:
     """The Dropper's second is secret until the half-round resolves."""
     game = _game()

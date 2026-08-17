@@ -108,6 +108,15 @@ When a user asks "what should I build next?", inspect the current Rust kernel
 first. Answer with the next smallest piece, the math object, pseudocode, and focused tests. Do not
 write the Rust implementation unless the user explicitly asks for code.
 
+## STL crate certification status
+
+`stl_solver_rs` has no exact-minimax parity contract and is not an eligible
+solver backend. Its `solve_minimax_rs` compatibility symbol raises
+`NotImplementedError`, and `EXACT_MINIMAX_AVAILABLE` is `False`; this prevents
+the former uniform-policy placeholder from being mistaken for a solution.
+The CFR+ primitives remain experimental and must not become a Python runtime
+dependency until an explicit parity contract and tests cover them.
+
 ## Abstract packed-tablebase accelerator
 
 `src/crates/abstract_solver` is an opt-in PyO3 accelerator for the abstract
@@ -117,9 +126,11 @@ contract is `src/abstract/docs/PACKED_TABLEBASE_PARITY.md`.
 
 ```powershell
 cd src/crates/abstract_solver
-uv run --project ../.. maturin develop --release
-cd ../..
+$env:STL_REQUIRE_RUST_PARITY = "1"
+uv run --project ../../.. maturin develop --release
+cd ../../..
 uv run python -m pytest src/abstract/tests/test_rust_parity.py -q
+Remove-Item Env:STL_REQUIRE_RUST_PARITY
 ```
 
 ## DTH complete-tablebase kernel
@@ -133,7 +144,20 @@ contract is `src/dth/docs/DTH_COMPLETE_PARITY.md`.
 
 ```powershell
 cd src/crates/dth_complete
+$env:STL_REQUIRE_RUST_PARITY = "1"
 uv run --project ../../.. maturin develop --release
 cd ../../..
 uv run python -m pytest src/dth/tests/test_complete_rust_parity.py -q
+Remove-Item Env:STL_REQUIRE_RUST_PARITY
 ```
+
+Without `STL_REQUIRE_RUST_PARITY=1`, these modules skip when their extension is
+not installed for ordinary Python-only development. With it set, a missing or
+unloadable extension is a hard collection failure suitable for CI.
+
+Both accelerator modules export `SOURCE_BUNDLE_DIGEST` and
+`SOURCE_BUNDLE_DIGEST_ALGORITHM`. Their build scripts hash the crate manifest,
+build script, Rust source, and workspace `Cargo.lock` with an explicitly framed
+SHA-256 format. Before a Rust backend is eligible, its Python owner recomputes
+that digest from the current checkout. A stale installed extension therefore
+fails closed instead of producing rows attributed to newer source.

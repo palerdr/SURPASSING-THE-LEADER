@@ -178,6 +178,8 @@ def canonical_state_id(raw: Sequence[int]) -> int:
 def state_from_canonical_id(raw: int) -> NTState:
     """Return the canonical public representative for a persistent state key."""
 
+    if isinstance(raw, (bool, np.bool_)) or not isinstance(raw, (int, np.integer)):
+        raise ValueError("canonical state ID must be a literal integer")
     state_id = int(raw)
     if state_id >= 0:
         return decode_raw_state_id(state_id)
@@ -216,6 +218,8 @@ def solver_schema_hash() -> str:
         revival_model,
         survive_injection,
         transition,
+        validate_live_state,
+        validate_action,
         failed_check_dose,
         overflow,
         st,
@@ -239,6 +243,9 @@ def reward(x: State):
 
 def transition(x: NTState, d: int, c: int) -> Distribution:
     """From a state and given actions, give the distribution of child states"""
+    x = validate_live_state(x)
+    d = validate_action(d, role="dropper")
+    c = validate_action(c, role="checker")
     sc, tc, sd, td = x
     # Check succeeds. Reaching the cylinder cap dumps a fatal 300-second dose.
     if successful_check(c,d):

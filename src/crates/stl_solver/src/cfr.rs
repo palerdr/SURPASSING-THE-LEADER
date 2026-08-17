@@ -139,7 +139,7 @@ pub(crate) fn solve_cfr_plus_dense(
     let mut col_regret = vec![0.0; cols];
     let mut row_strategy_sum: Vec<f64> = vec![0.0; rows];
     let mut col_strategy_sum: Vec<f64> = vec![0.0; cols];
-    for t in 1..(iterations + 1) {
+    for t in 1..=iterations {
         //updates row and col strategy
         let (p_prime, q_prime) =
             cfr_iteration(payoff, &mut row_regret, &mut col_regret, rows, cols);

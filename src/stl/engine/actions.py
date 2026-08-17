@@ -2,9 +2,9 @@
 
 Action index equals action second throughout the active codebase.
 
-Normal action seconds are 1..60. During a leap-window half-round only a
-non-Hal dropper (Baku in canonical play) may also use second 61. Checkers
-are capped at 60, Hal can never use 61 in either role, and index/second 0
+Normal action seconds are 1..60. During a leap-window half-round only the
+canonical Baku identity as Dropper may also use second 61. Checkers are
+capped at 60, every other identity is capped at 60, and index/second 0
 is permanently illegal padding in dense policy vectors. These are ordinal
 literal seconds: action 1 is an immediate first-second action. Successful ST
 is counted inclusively by the engine as ``check - drop + 1``. See
@@ -12,6 +12,8 @@ is counted inclusively by the engine as ``check - drop + 1``. See
 """
 
 from __future__ import annotations
+
+from numbers import Integral
 
 import numpy as np
 
@@ -37,9 +39,7 @@ def legal_max_second(actor: str, role: str, turn_duration: int) -> int:
     if turn_duration < TURN_DURATION_LEAP:
         return min(int(turn_duration), TURN_DURATION_NORMAL)
 
-    if role_l == "dropper":
-        if actor_l == "hal":
-            return TURN_DURATION_NORMAL
+    if role_l == "dropper" and actor_l == "baku":
         return TURN_DURATION_LEAP
 
     return TURN_DURATION_NORMAL
@@ -49,10 +49,7 @@ def can_use_leap_second(actor: str, role: str) -> bool:
     actor_l = actor.lower()
     role_l = role.lower()
 
-    if actor_l == "hal":
-        return False
-
-    return role_l == "dropper"
+    return actor_l == "baku" and role_l == "dropper"
 
 
 def legal_seconds(actor: str, role: str, turn_duration: int) -> tuple[int, ...]:
@@ -74,24 +71,18 @@ def clamp_action(second: int, *, actor: str, role: str, turn_duration: int) -> i
     return max(1, min(int(second), max_sec))
 
 
-def validate_action(second: int, *, actor: str, role: str, turn_duration: int) -> None:
-    """Validate a literal second against the actor-aware legality rule."""
+def validate_action(second: int, *, actor: str, role: str, turn_duration: int) -> int:
+    """Return a canonical literal second after actor-aware validation."""
     max_sec = legal_max_second(actor, role, turn_duration)
-    try:
-        value = int(second)
-    except (TypeError, ValueError) as exc:
+    if isinstance(second, bool) or not isinstance(second, Integral):
         raise IllegalActionError(
             f"Illegal action second={second!r} for actor={actor!r} role={role!r}; "
             "seconds must be integers."
-        ) from exc
-
-    if isinstance(second, bool) or value != second:
-        raise IllegalActionError(
-            f"Illegal action second={second!r} for actor={actor!r} role={role!r}; "
-            "seconds must be integral."
         )
+    value = int(second)
     if not (1 <= value <= max_sec):
         raise IllegalActionError(
             f"Illegal action second={second!r} for actor={actor!r} role={role!r} "
             f"turn_duration={turn_duration}; legal range is [1, {max_sec}]."
         )
+    return value

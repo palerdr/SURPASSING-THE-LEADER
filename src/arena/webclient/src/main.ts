@@ -71,7 +71,7 @@ function render(): void {
       }
       break;
     case "game_over":
-      renderVictory(panel, current, () => void commit(() => newSession()));
+      renderVictory(panel, current, () => void commit(() => newSession(current.sequence)));
       break;
   }
 }
@@ -113,9 +113,15 @@ async function start(): Promise<void> {
     render();
   } catch (error) {
     if (panel) {
-      panel.innerHTML =
-        `<h2>NO SERVER</h2><p class="lose">${error instanceof Error ? error.message : error}</p>` +
-        `<p class="hint">Start it with <code>uv run python -m arena.web</code>.</p>`;
+      const heading = document.createElement("h2");
+      heading.textContent = "NO SERVER";
+      const detail = document.createElement("p");
+      detail.className = "lose";
+      detail.textContent = error instanceof Error ? error.message : String(error);
+      const hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent = "Start it with: uv run python -m arena.web";
+      panel.replaceChildren(heading, detail, hint);
     }
   }
 }

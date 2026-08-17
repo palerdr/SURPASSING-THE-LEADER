@@ -34,7 +34,8 @@ export const getRules = (): Promise<Rules> => request<Rules>("/api/rules");
 
 export const readSession = (): Promise<Snapshot> => request<Snapshot>("/api/session");
 
-export const newSession = (): Promise<Snapshot> => post<Snapshot>("/api/session", {});
+export const newSession = (sequence: number): Promise<Snapshot> =>
+  post<Snapshot>("/api/session", { sequence });
 
 export const begin = (sequence: number): Promise<Snapshot> =>
   post<Snapshot>("/api/session/begin", { sequence });

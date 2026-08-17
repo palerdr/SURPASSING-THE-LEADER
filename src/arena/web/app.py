@@ -20,7 +20,14 @@ from typing import Callable
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from arena.session import Phase, PlaySession, SessionPhaseError
+from arena.session import (
+    CANONICAL_HAL_NAME,
+    CANONICAL_HUMAN_NAME,
+    Phase,
+    PlaySession,
+    SessionPhaseError,
+    validate_human_display_name,
+)
 from arena.web.schema import (
     ActionRequest,
     NewSessionRequest,
@@ -42,19 +49,43 @@ HalFactory = Callable[[], object]
 
 @dataclass
 class SessionConfig:
-    human_name: str = "Baku"
+    human_name: str = CANONICAL_HUMAN_NAME
     seed: int | None = None
     start_clock: int = OPENING_START_CLOCK
     max_half_rounds: int | None = None
 
+    def __post_init__(self) -> None:
+        self.human_name = validate_human_display_name(self.human_name)
+        if self.seed is not None and (
+            isinstance(self.seed, bool) or not isinstance(self.seed, int)
+        ):
+            raise TypeError("seed must be an integer or None")
+        if isinstance(self.start_clock, bool) or not isinstance(self.start_clock, int):
+            raise TypeError("start_clock must be an integer")
+        if self.start_clock < 0:
+            raise ValueError("start_clock must be nonnegative")
+        if self.max_half_rounds is not None:
+            if isinstance(self.max_half_rounds, bool) or not isinstance(
+                self.max_half_rounds, int
+            ):
+                raise TypeError("max_half_rounds must be an integer or None")
+            if self.max_half_rounds <= 0:
+                raise ValueError("max_half_rounds must be positive")
 
-def _new_session(hal_agent: object, config: SessionConfig) -> PlaySession:
+
+def _new_session(
+    hal_agent: object,
+    config: SessionConfig,
+    *,
+    sequence_start: int = 0,
+    reset_provider: bool = True,
+) -> PlaySession:
     import random
 
     from arena.contracts import reset_provider_game
 
-    hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
-    human = Player(name=config.human_name, physicality=PHYSICALITY_BAKU)
+    hal = Player(name=CANONICAL_HAL_NAME, physicality=PHYSICALITY_HAL)
+    human = Player(name=CANONICAL_HUMAN_NAME, physicality=PHYSICALITY_BAKU)
     game = Game(
         player1=hal,
         player2=human,
@@ -62,15 +93,18 @@ def _new_session(hal_agent: object, config: SessionConfig) -> PlaySession:
         rng=random.Random(config.seed),
     )
     game.game_clock = config.start_clock
-    reset_provider_game(getattr(hal_agent, "provider", None))
+    if reset_provider:
+        reset_provider_game(getattr(hal_agent, "provider", None))
     return PlaySession(
         game=game,
         hal_agent=hal_agent,
         hal=hal,
         human=human,
+        human_display_name=config.human_name,
         game_seed=config.seed,
         start_clock=config.start_clock,
         max_half_rounds=config.max_half_rounds,
+        sequence_start=sequence_start,
     )
 
 
@@ -118,7 +152,10 @@ def create_app(
     def rules() -> dict[str, object]:
         from arena.tui import rules_body
 
-        return {"human_name": _session().human.name, "lines": list(rules_body())}
+        return {
+            "human_name": _session().human_display_name,
+            "lines": list(rules_body()),
+        }
 
     @app.get("/api/session", response_model=Snapshot)
     def read_session() -> Snapshot:
@@ -128,8 +165,21 @@ def create_app(
     @app.post("/api/session", response_model=Snapshot)
     def new_session(request: NewSessionRequest) -> Snapshot:
         with lock:
+            previous = _session()
+            _require(request.sequence, previous)
+            if previous.phase not in (Phase.RULES, Phase.GAME_OVER):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"cannot replace an active session in phase {previous.phase.value}",
+                )
+            if previous.phase is Phase.GAME_OVER:
+                previous.finish()
             config = SessionConfig(
-                human_name=request.human_name or base_config.human_name,
+                human_name=(
+                    request.human_name
+                    if request.human_name is not None
+                    else base_config.human_name
+                ),
                 seed=request.seed if request.seed is not None else base_config.seed,
                 start_clock=(
                     request.start_clock
@@ -142,7 +192,12 @@ def create_app(
                     else base_config.max_half_rounds
                 ),
             )
-            state["session"] = _new_session(hal_agent, config)
+            state["session"] = _new_session(
+                hal_agent,
+                config,
+                sequence_start=previous.sequence + 1,
+                reset_provider=previous.phase is Phase.GAME_OVER,
+            )
             return snapshot_from_session(_session())
 
     @app.post("/api/session/begin", response_model=Snapshot)

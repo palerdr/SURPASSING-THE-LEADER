@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import importlib
 import json
+import os
 
 import numpy as np
 import pytest
 
 from abstract.packed import PackedStateCodec, packed_live_successors
-from abstract.packed_tablebase import PackedTablebase, PackedTablebaseBuilder
+from abstract.packed_tablebase import (
+    PackedTablebase,
+    PackedTablebaseBuilder,
+    _rust_source_bundle_digest,
+)
 from abstract.rules import (
     AbstractRuleset,
     Bucket12Frozen95Rules,
@@ -14,7 +20,21 @@ from abstract.rules import (
 from abstract.state import AbstractState
 
 
-rust = pytest.importorskip("abstract_solver_rs")
+def _load_rust_extension():
+    try:
+        return importlib.import_module("abstract_solver_rs")
+    except ModuleNotFoundError as error:
+        if error.name != "abstract_solver_rs":
+            raise
+        if os.environ.get("STL_REQUIRE_RUST_PARITY") == "1":
+            raise RuntimeError(
+                "abstract_solver_rs is required by STL_REQUIRE_RUST_PARITY=1; "
+                "build it before running parity tests"
+            ) from error
+        pytest.skip("abstract_solver_rs is not installed", allow_module_level=True)
+
+
+rust = _load_rust_extension()
 
 
 def _tiny_rules() -> AbstractRuleset:
@@ -29,6 +49,8 @@ def _tiny_rules() -> AbstractRuleset:
 
 def test_rust_contract_version_and_successor_parity() -> None:
     assert rust.PARITY_CONTRACT_VERSION == "abstract-packed-parity-v3"
+    assert rust.SOURCE_BUNDLE_DIGEST_ALGORITHM == "sha256-framed-source-bundle-v1"
+    assert rust.SOURCE_BUNDLE_DIGEST == _rust_source_bundle_digest()
     for rules in (
         _tiny_rules(),
         Bucket12Frozen95Rules(),
@@ -49,6 +71,42 @@ def test_rust_contract_version_and_successor_parity() -> None:
                 rules.failed_check_penalty_units,
             )
             assert tuple(actual) == expected
+
+
+def test_rust_public_boundary_rejects_invalid_domains_and_shapes() -> None:
+    rules = _tiny_rules()
+    codec = PackedStateCodec(rules.load_cap_units)
+    with pytest.raises(ValueError, match="physical state domain"):
+        rust.live_successors_rs(
+            codec.state_count,
+            rules.load_cap_units,
+            rules.action_size,
+            rules.failed_check_penalty_units,
+        )
+    with pytest.raises(ValueError, match="action_size must equal"):
+        rust.live_successors_rs(0, rules.load_cap_units, 1, 2)
+    with pytest.raises(ValueError, match="queue length"):
+        rust.expand_reachability_chunk_rs(
+            np.zeros(1, dtype=np.uint32),
+            np.zeros(1, dtype=np.uint8),
+            0,
+            0,
+            1,
+            rules.load_cap_units,
+            rules.action_size,
+            rules.failed_check_penalty_units,
+        )
+    with pytest.raises(ValueError, match="ordinal_by_index length"):
+        rust.backup_chunk_rs(
+            np.array([0], dtype=np.uint32),
+            np.zeros(1, dtype=np.uint32),
+            np.zeros(1, dtype=np.float64),
+            np.zeros(1, dtype=np.float64),
+            np.zeros(1, dtype=np.float64),
+            rules.load_cap_units,
+            rules.action_size,
+            rules.failed_check_penalty_units,
+        )
 
 
 def test_rust_and_python_builds_have_exact_closure_and_numeric_parity(

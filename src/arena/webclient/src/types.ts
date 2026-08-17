@@ -1,10 +1,18 @@
-// Mirrors arena/web/schema.py. Kept by hand; a Python test asserts the field
-// set matches, so drift fails the suite rather than showing up at runtime.
+// Mirrors arena/web/schema.py. Kept by hand; a Python test asserts field names,
+// types, nullability, and requiredness so drift fails before browser runtime.
 
 export type Phase = "rules" | "awaiting_action" | "awaiting_ack" | "game_over";
+export type OutcomeResult =
+  | "check_success"
+  | "check_fail_survived"
+  | "check_fail_died"
+  | "overflow_survived"
+  | "overflow_died";
 
 export interface PlayerView {
   name: string;
+  character: "hal" | "baku";
+  role: "dropper" | "checker";
   cylinder_seconds: number;
   ttd_seconds: number;
   deaths: number;
@@ -16,12 +24,13 @@ export interface OutcomeView {
   checker: string;
   drop_time: number;
   check_time: number;
-  result: string;
+  result: OutcomeResult;
   st_gained: number;
   death_duration: number;
   survived: boolean | null;
   survival_probability: number | null;
   game_over: boolean;
+  session_ending: boolean;
   winner_name: string | null;
 }
 
@@ -45,6 +54,7 @@ export interface Snapshot {
   half_rounds: number;
   last_outcome: OutcomeView | null;
   winner_name: string | null;
+  winner_is_human: boolean | null;
   stopped: boolean;
 }
 

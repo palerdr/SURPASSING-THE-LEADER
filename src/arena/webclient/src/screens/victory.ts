@@ -1,4 +1,6 @@
 import type { Snapshot } from "../types";
+import { escapeHtml } from "../render/escape";
+import { humanWon } from "../render/identity";
 
 export function renderVictory(
   panel: HTMLElement,
@@ -12,8 +14,8 @@ export function renderVictory(
   } else if (snapshot.winner_name === null) {
     headline = `<p class="lose">Game over. No surviving winner.</p>`;
   } else {
-    const won = snapshot.winner_name === snapshot.human_name;
-    headline = `<p class="${won ? "win" : "lose"}">${snapshot.winner_name} wins.</p>`;
+    const won = humanWon(snapshot);
+    headline = `<p class="${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name)} wins.</p>`;
   }
 
   panel.innerHTML = `

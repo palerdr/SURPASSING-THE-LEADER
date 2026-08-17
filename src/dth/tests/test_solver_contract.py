@@ -1,12 +1,15 @@
+import numpy as np
 import pytest
 import dth.solver as solver_module
 
 from dth.solver import (
     TState,
+    canonical_state_id,
     clear_solver_cache,
     horizon_one_cache_info,
     revival_model,
     solve,
+    state_from_canonical_id,
     transition,
 )
 
@@ -76,6 +79,38 @@ def test_resulting_total_ttd_exactly_300_remains_revival_eligible() -> None:
 def test_resulting_total_ttd_above_300_is_fatal() -> None:
     assert revival_model(0, 241) == 0.0
     assert transition((0, 241, 0, 0), 2, 1) == ((1.0, TState.W),)
+
+
+@pytest.mark.parametrize("action", [0, 61, True, 1.0])
+@pytest.mark.parametrize("role", ["dropper", "checker"])
+def test_transition_rejects_nonliteral_or_out_of_range_actions(action, role) -> None:
+    drop, check = (action, 1) if role == "dropper" else (1, action)
+    with pytest.raises(ValueError, match=role):
+        transition((0, 0, 0, 0), drop, check)
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        (0, 0, 0),
+        (-1, 0, 0, 0),
+        (300, 0, 0, 0),
+        (0, 301, 0, 0),
+        (False, 0, 0, 0),
+        (0.0, 0, 0, 0),
+    ],
+)
+def test_transition_rejects_malformed_live_states(state) -> None:
+    with pytest.raises(ValueError, match="state|coordinates|ST|TTD"):
+        transition(state, 1, 1)
+
+
+def test_canonical_state_id_round_trip_accepts_integral_scalars_only() -> None:
+    state_id = canonical_state_id((0, 0, 0, 0))
+    assert state_from_canonical_id(np.int64(state_id)) == (0, 0, 0, 0)
+    for invalid in (True, 0.0, "0"):
+        with pytest.raises(ValueError, match="literal integer"):
+            state_from_canonical_id(invalid)
 
 
 def test_horizon_one_does_not_memoize_cutoff_children() -> None:

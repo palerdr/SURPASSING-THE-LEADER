@@ -4,11 +4,12 @@ This repository contains deliberately separate game-solving projects:
 
 | Project | Purpose | Rules |
 | --- | --- | --- |
-| `src/stl/` | Full Surpassing the Leader engine, exact solver, search, learning, and play surface | Leap-aware public game; only Baku as Dropper may use second 61 |
+| `src/stl/` | Canonical leap-aware referee compatibility layer and formulation shell; no complete STL solver yet | L2 public game; only Baku as Dropper may use second 61 |
 | `src/dth/` | Completed pure Drop the Handkerchief solve and optional research tooling | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
-| `src/dth_ocaml/` | Minimal exact OCaml solver | Literal DTH seconds and the repository-wide frozen revival model |
-| `src/crates/` | Shared Rust acceleration workspace | Python remains behavioral authority until explicit parity contracts |
+| `src/dth_ocaml/` | Hand-written exact OCaml reference | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
+| `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
+| `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
 | `src/arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
 
 Repository-wide game contracts live in [`docs/`](docs/). The mathematical
@@ -17,6 +18,9 @@ paper — a certified exact solution of the complete DTH game — lives at
 [`docs/game-sources/`](docs/game-sources/) and cited research in
 [`docs/papers/`](docs/papers/). The OCaml project records its authorship in
 [`src/dth_ocaml/AUTHORS.md`](src/dth_ocaml/AUTHORS.md).
+The machine-readable project catalog is [`docs/PROJECTS.toml`](docs/PROJECTS.toml),
+and [`docs/PROJECT_TEMPLATE.md`](docs/PROJECT_TEMPLATE.md) defines the common
+language-neutral project envelope.
 
 ## Setup
 
@@ -27,12 +31,15 @@ uv sync --dev
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 cargo test --workspace
+npm --prefix src/arena/webclient run typecheck
+opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
+opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 ```
 
 ## Commands
 
 ```powershell
-# Full STL Hydra command surface
+# Neutral STL Hydra experiment harness
 uv run python -m stl.cli --help
 
 # Pure DTH complete solution and optional research tools

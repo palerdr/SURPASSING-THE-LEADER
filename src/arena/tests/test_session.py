@@ -10,11 +10,13 @@ import pytest
 
 from arena import cli
 from arena.session import Phase, PlaySession, SessionPhaseError
+from arena.web.schema import snapshot_from_session
 from stl.engine.game import (
     LS_WINDOW_START,
     OPENING_START_CLOCK,
     PHYSICALITY_BAKU,
     PHYSICALITY_HAL,
+    TOTAL_TTD_MAX,
     Game,
     Player,
     Referee,
@@ -41,6 +43,7 @@ def _session(
     seed: int | None = 41,
     start_clock: int = OPENING_START_CLOCK,
     max_half_rounds: int | None = None,
+    human_display_name: str = "Baku",
 ) -> PlaySession:
     hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
     human = Player(name="Baku", physicality=PHYSICALITY_BAKU)
@@ -56,6 +59,7 @@ def _session(
         hal_agent=hal_agent if hal_agent is not None else _RecordingHal(),
         hal=hal,
         human=human,
+        human_display_name=human_display_name,
         game_seed=seed,
         start_clock=start_clock,
         max_half_rounds=max_half_rounds,
@@ -65,8 +69,10 @@ def _session(
 def test_session_starts_on_the_rules_phase_and_begins_into_action() -> None:
     session = _session()
     assert session.phase is Phase.RULES
+    assert session.stopped is False
     session.begin()
     assert session.phase is Phase.AWAITING_ACTION
+    assert session.stopped is False
 
 
 def test_submit_outside_the_action_phase_is_rejected() -> None:
@@ -164,6 +170,91 @@ def test_finish_notifies_the_provider_only_once() -> None:
     session.finish()
     session.finish()
     assert len(hal_agent.provider.outcomes) == 1
+
+
+def test_finish_rejects_a_nonterminal_session() -> None:
+    session = _session()
+    with pytest.raises(SessionPhaseError, match="GAME_OVER"):
+        session.finish()
+    session.begin()
+    with pytest.raises(SessionPhaseError, match="GAME_OVER"):
+        session.finish()
+
+
+@pytest.mark.parametrize("second", [True, 2.0])
+def test_submit_rejects_non_integer_action_types_before_consulting_hal(second) -> None:
+    hal_agent = _RecordingHal()
+    session = _session(hal_agent=hal_agent)
+    session.begin()
+    with pytest.raises(ValueError, match="Illegal action"):
+        session.submit(second)
+    assert hal_agent.calls == []
+
+
+def test_display_label_never_replaces_bakus_rule_identity() -> None:
+    session = _session(
+        start_clock=LS_WINDOW_START,
+        human_display_name="Alice <the challenger>",
+    )
+    session.game.current_half = 2
+
+    assert session.human.name == "Baku"
+    assert session.human_display_name == "Alice <the challenger>"
+    assert session.legal_actions()[-1] == 61
+
+    session.game.current_half = 1
+    session.max_half_rounds = 1
+    session.begin()
+    session.submit(30)
+    session.acknowledge()
+    transcript = session.finish()
+    first = transcript["public_history"][0]
+    assert first["checker"] == "Alice <the challenger>"
+    assert first["public_state_before"]["players"][1]["name"] == (
+        "Alice <the challenger>"
+    )
+
+
+def test_session_rejects_reserved_display_and_foreign_players() -> None:
+    with pytest.raises(ValueError, match="reserved"):
+        _session(human_display_name="hal")
+
+    session = _session()
+    outsider = Player(name="Baku", physicality=PHYSICALITY_BAKU)
+    with pytest.raises(ValueError, match="owned by the game"):
+        PlaySession(
+            game=session.game,
+            hal_agent=_RecordingHal(),
+            hal=session.hal,
+            human=outsider,
+        )
+
+
+@pytest.mark.parametrize(
+    ("half", "human_second", "fatal_player", "winner_is_human"),
+    [
+        (1, 1, "human", False),
+        (2, 60, "hal", True),
+    ],
+)
+def test_snapshot_carries_authoritative_winner_seat(
+    half: int,
+    human_second: int,
+    fatal_player: str,
+    winner_is_human: bool,
+) -> None:
+    session = _session(human_display_name="A display label")
+    session.game.current_half = half
+    player = session.human if fatal_player == "human" else session.hal
+    player.ttd = TOTAL_TTD_MAX
+    session.begin()
+    session.submit(human_second)
+
+    snapshot = snapshot_from_session(session)
+    assert snapshot.last_outcome is not None
+    assert snapshot.last_outcome.game_over is True
+    assert snapshot.last_outcome.session_ending is True
+    assert snapshot.winner_is_human is winner_is_human
 
 
 def test_only_a_human_dropper_may_use_the_leap_second() -> None:

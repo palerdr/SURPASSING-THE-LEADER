@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <chrono>
 #include <cstdint>
@@ -1300,6 +1301,413 @@ void test_transition_value_assembly_gate()
         "an unsolved NaN child was not rejected immediately");
 }
 
+void test_policy_certification_gate()
+{
+    using namespace dth;
+
+    constexpr double tolerance = 1e-12;
+
+    const auto total_mass = [](const Policy& policy) {
+        double total = 0.0;
+        for (const double mass : policy.mass) {
+            total += mass;
+        }
+        return total;
+    };
+
+    // A uniform positive policy normalizes to 1/60 per action.
+    {
+        Policy raw{};
+        raw.mass.fill(2.0);
+        const auto normalized = normalize_policy(raw, 0.0);
+        require(
+            normalized.has_value(),
+            "a uniform positive policy was rejected");
+        for (const double mass : normalized->mass) {
+            require(
+                std::abs(mass - 1.0 / 60.0) <= tolerance,
+                "uniform normalization did not divide mass evenly");
+        }
+        require(
+            std::abs(total_mass(*normalized) - 1.0) <= tolerance,
+            "normalized policy mass does not sum to one");
+    }
+
+    // Negative rounding noise inside the limit is clipped, not rejected.
+    {
+        Policy raw{};
+        raw.mass[0] = 1.0;
+        raw.mass[1] = 1.0;
+        raw.mass[2] = -1e-15;
+        const auto normalized = normalize_policy(raw, 1e-9);
+        require(
+            normalized.has_value(),
+            "negative rounding noise inside the limit was rejected");
+        require(
+            normalized->mass[2] == 0.0,
+            "negative rounding noise was not clipped to zero");
+        require(
+            std::abs(normalized->mass[0] - 0.5) <= tolerance,
+            "clipping disturbed the surviving mass ratio");
+    }
+
+    // Materially negative, non-finite, and zero-total policies are rejected.
+    {
+        Policy materially_negative{};
+        materially_negative.mass[0] = 1.0;
+        materially_negative.mass[1] = -0.5;
+        require(
+            !normalize_policy(materially_negative, 1e-9).has_value(),
+            "materially negative mass was accepted");
+
+        Policy not_a_number{};
+        not_a_number.mass[0] = 1.0;
+        not_a_number.mass[1] = std::numeric_limits<double>::quiet_NaN();
+        require(
+            !normalize_policy(not_a_number, 1e-9).has_value(),
+            "a NaN mass was accepted");
+
+        Policy unbounded{};
+        unbounded.mass[0] = std::numeric_limits<double>::infinity();
+        require(
+            !normalize_policy(unbounded, 1e-9).has_value(),
+            "an infinite mass was accepted");
+
+        const Policy zero{};
+        require(
+            !normalize_policy(zero, 1e-9).has_value(),
+            "a zero-total policy was accepted");
+    }
+
+    // A constant matrix has that constant as its value under any policy pair.
+    {
+        TransitionValues constant{};
+        constant.success.fill(0.25);
+        constant.failed = 0.25;
+
+        Policy raw{};
+        raw.mass.fill(1.0);
+
+        const auto certified = certify(constant, raw, raw, 0.0);
+        require(
+            certified.has_value(),
+            "a constant matrix failed to certify");
+        require(
+            std::abs(certified->certificate.lower - 0.25) <= tolerance,
+            "constant matrix lower bound is not the constant");
+        require(
+            std::abs(certified->certificate.upper - 0.25) <= tolerance,
+            "constant matrix upper bound is not the constant");
+        require(
+            certified->certificate.gap <= kSaddleTolerance,
+            "constant matrix gap exceeded the acceptance tolerance");
+        require(
+            std::abs(certified->certificate.midpoint - 0.25) <= tolerance,
+            "constant matrix midpoint is not the constant");
+        require(
+            std::abs(total_mass(certified->drop) - 1.0) <= tolerance
+                && std::abs(total_mass(certified->check) - 1.0) <= tolerance,
+            "certify did not return normalized policies");
+    }
+
+    // Asymmetric matrix whose saddle sits at unequal row and column indices.
+    // Transposing the two security computations moves the upper bound to 0.5
+    // and the gap to 0.75, and negating the payoffs moves the midpoint to
+    // +0.25, so this single case pins both orientation and sign.
+    {
+        TransitionValues offset_saddle{};
+        offset_saddle.success.fill(-0.25);
+        offset_saddle.failed = 0.5;
+
+        Policy drop{};
+        drop.mass[0] = 1.0;
+        Policy check{};
+        check.mass[kActions - 1] = 1.0;
+
+        const auto certified = certify(offset_saddle, drop, check, 0.0);
+        require(
+            certified.has_value(),
+            "the offset pure saddle failed to certify");
+        require(
+            std::abs(certified->certificate.midpoint + 0.25) <= tolerance,
+            "the offset saddle value is wrong, sign, or transposed");
+        require(
+            certified->certificate.gap <= kSaddleTolerance,
+            "the offset saddle produced a nonzero gap");
+    }
+
+    // Asymmetric matrix with a strictly increasing success row. Any shift in
+    // the Toeplitz lag index changes the certified value.
+    {
+        TransitionValues rising_saddle{};
+        for (std::size_t action = 0; action < kActions; ++action) {
+            rising_saddle.success[action] =
+                -0.5 + 0.01 * static_cast<double>(action);
+        }
+        rising_saddle.failed = -1.0;
+
+        Policy drop{};
+        drop.mass[0] = 1.0;
+        Policy check{};
+        check.mass[0] = 1.0;
+
+        const auto certified = certify(rising_saddle, drop, check, 0.0);
+        require(
+            certified.has_value(),
+            "the rising pure saddle failed to certify");
+        require(
+            std::abs(certified->certificate.midpoint + 0.5) <= tolerance,
+            "the rising saddle value is not the first success entry");
+    }
+
+    // Matching pennies embedded in the first two actions. Actions 2..59 are
+    // dominated for both players, so the value is 0 at the half-half mixture.
+    {
+        TransitionValues pennies{};
+        pennies.success.fill(1.0);
+        pennies.success[1] = -1.0;
+        pennies.failed = -1.0;
+
+        Policy mixed{};
+        mixed.mass[0] = 7.0;
+        mixed.mass[1] = 7.0;
+
+        const auto certified = certify(pennies, mixed, mixed, 0.0);
+        require(
+            certified.has_value(),
+            "embedded matching pennies failed to certify");
+        require(
+            std::abs(certified->certificate.midpoint) <= tolerance,
+            "the matching pennies value is not zero");
+        require(
+            certified->certificate.gap <= kSaddleTolerance,
+            "matching pennies produced a nonzero gap");
+        require(
+            std::abs(certified->drop.mass[0] - 0.5) <= tolerance
+                && std::abs(certified->drop.mass[1] - 0.5) <= tolerance,
+            "certify did not normalize the unscaled matching pennies mixture");
+
+        // A pure pair against the same matrix is exploitable on both sides.
+        Policy pure{};
+        pure.mass[0] = 1.0;
+        const auto exploitable = certify(pennies, pure, pure, 0.0);
+        require(
+            !exploitable.has_value(),
+            "an exploitable pure pair on matching pennies was certified");
+    }
+
+    // A rejected normalization propagates as a rejected certificate.
+    {
+        TransitionValues constant{};
+        constant.success.fill(0.0);
+        constant.failed = 0.0;
+
+        Policy raw{};
+        raw.mass.fill(1.0);
+        const Policy zero{};
+        require(
+            !certify(constant, zero, raw, 0.0).has_value()
+                && !certify(constant, raw, zero, 0.0).has_value(),
+            "certify accepted a policy that normalization rejected");
+    }
+}
+
+dth::PureSaddleScan brute_force_pure_saddle_scan(
+    const dth::TransitionValues& transitions)
+{
+    using namespace dth;
+
+    PureSaddleScan result{
+        -std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),
+        0,
+        0,
+    };
+
+    for (std::size_t drop = 0; drop < kActions; ++drop) {
+        double row_minimum = std::numeric_limits<double>::infinity();
+        for (std::size_t check = 0; check < kActions; ++check) {
+            row_minimum = std::min(
+                row_minimum,
+                matrix_cell(
+                    transitions,
+                    static_cast<int>(drop),
+                    static_cast<int>(check)));
+        }
+        if (row_minimum > result.maximin) {
+            result.maximin = row_minimum;
+            result.best_drop = drop;
+        }
+    }
+
+    for (std::size_t check = 0; check < kActions; ++check) {
+        double column_maximum = -std::numeric_limits<double>::infinity();
+        for (std::size_t drop = 0; drop < kActions; ++drop) {
+            column_maximum = std::max(
+                column_maximum,
+                matrix_cell(
+                    transitions,
+                    static_cast<int>(drop),
+                    static_cast<int>(check)));
+        }
+        if (column_maximum < result.minimax) {
+            result.minimax = column_maximum;
+            result.best_check = check;
+        }
+    }
+
+    return result;
+}
+
+void test_pure_saddle_reduction_gate()
+{
+    using namespace dth;
+
+    const auto same_bits = [](const double left, const double right) {
+        return std::bit_cast<std::uint64_t>(left)
+            == std::bit_cast<std::uint64_t>(right);
+    };
+
+    // The fixed LCG and integer grid make this corpus deterministic across
+    // standard-library implementations while still covering the full payoff
+    // interval, duplicates, and exact zero.
+    std::uint64_t random_state = 0x8e9d'5aaa'27c1'4f3bULL;
+    const auto next_random_value = [&random_state] {
+        random_state = random_state * 6'364'136'223'846'793'005ULL
+            + 1'442'695'040'888'963'407ULL;
+        constexpr std::uint64_t value_count = 2'000'001ULL;
+        const auto sample = static_cast<std::int64_t>(
+            (random_state >> 32U) % value_count)
+            - 1'000'000LL;
+        return static_cast<double>(sample) / 1'000'000.0;
+    };
+
+    for (std::size_t trial = 0; trial < 10'000; ++trial) {
+        TransitionValues transitions{};
+        for (double& success : transitions.success) {
+            success = next_random_value();
+        }
+        transitions.failed = next_random_value();
+
+        const PureSaddleScan reduced = scan_pure_saddle(transitions);
+        const PureSaddleScan expanded =
+            brute_force_pure_saddle_scan(transitions);
+
+        require(
+            same_bits(reduced.maximin, expanded.maximin),
+            "O(60) maximin differs from the expanded row-minimum bound");
+        require(
+            same_bits(reduced.minimax, expanded.minimax),
+            "O(60) minimax differs from the expanded column-maximum bound");
+        require(
+            reduced.best_drop == expanded.best_drop,
+            "O(60) scan chose the wrong lowest-index maximizing row");
+        require(
+            reduced.best_check == expanded.best_check,
+            "O(60) scan chose the wrong lowest-index minimizing column");
+    }
+
+    // A strict asymmetric pure saddle is accepted with the expected one-hot
+    // actions and value.
+    {
+        TransitionValues pure{};
+        pure.success.fill(-0.25);
+        pure.failed = 0.5;
+
+        const PureSaddleScan scan = scan_pure_saddle(pure);
+        require(
+            scan.best_drop == 0 && scan.best_check == kActions - 1,
+            "pure scan chose the wrong asymmetric saddle actions");
+
+        const auto certified = try_pure_saddle(pure);
+        require(certified.has_value(), "a strict pure saddle was rejected");
+        require(
+            certified->drop.mass[0] == 1.0
+                && certified->check.mass[kActions - 1] == 1.0,
+            "pure saddle policies are not one-hot at the selected actions");
+        require(
+            certified->certificate.midpoint == -0.25,
+            "pure saddle certificate has the wrong value");
+    }
+
+    // Matching pennies in the first two actions has a strict pure-saddle gap
+    // and must advance to a mixed-strategy route.
+    {
+        TransitionValues mixed{};
+        mixed.success.fill(1.0);
+        mixed.success[1] = -1.0;
+        mixed.failed = -1.0;
+
+        const PureSaddleScan scan = scan_pure_saddle(mixed);
+        require(
+            scan.maximin == -1.0 && scan.minimax == 1.0,
+            "embedded matching pennies has the wrong pure security bounds");
+        require(
+            !try_pure_saddle(mixed).has_value(),
+            "a genuinely mixed game was accepted as a pure saddle");
+    }
+
+    // Exact ties must retain the lowest row and column indices.
+    {
+        TransitionValues tied{};
+        tied.success.fill(0.125);
+        tied.failed = 0.125;
+
+        const PureSaddleScan scan = scan_pure_saddle(tied);
+        require(
+            scan.maximin == 0.125 && scan.minimax == 0.125,
+            "constant tied matrix has the wrong pure bounds");
+        require(
+            scan.best_drop == 0 && scan.best_check == 0,
+            "exact ties did not retain the lowest action indices");
+
+        const auto certified = try_pure_saddle(tied);
+        require(certified.has_value(), "an exact tied saddle was rejected");
+        require(
+            certified->drop.mass[0] == 1.0
+                && certified->check.mass[0] == 1.0,
+            "exact tied saddle did not use the lowest-index actions");
+    }
+
+    // Row zero contains only successes. A low failure value must not leak into
+    // that row's minimum.
+    {
+        TransitionValues all_success_row{};
+        all_success_row.success.fill(0.5);
+        all_success_row.failed = -0.75;
+
+        const PureSaddleScan scan = scan_pure_saddle(all_success_row);
+        require(
+            scan.maximin == 0.5 && scan.minimax == 0.5,
+            "failure value leaked into the all-success boundary row");
+        require(
+            scan.best_drop == 0 && scan.best_check == 0,
+            "all-success boundary row chose the wrong saddle actions");
+        require(
+            try_pure_saddle(all_success_row).has_value(),
+            "all-success boundary layout was rejected");
+    }
+
+    // Column 59 contains only successes. A high failure value must affect every
+    // earlier column but not the final column.
+    {
+        TransitionValues failure_heavy_columns{};
+        failure_heavy_columns.success.fill(-0.5);
+        failure_heavy_columns.failed = 0.75;
+
+        const PureSaddleScan scan = scan_pure_saddle(failure_heavy_columns);
+        require(
+            scan.maximin == -0.5 && scan.minimax == -0.5,
+            "failure value leaked into the all-success boundary column");
+        require(
+            scan.best_drop == 0 && scan.best_check == kActions - 1,
+            "failure-heavy boundary layout chose the wrong saddle actions");
+        require(
+            try_pure_saddle(failure_heavy_columns).has_value(),
+            "failure-heavy boundary layout was rejected");
+    }
+}
+
 } // namespace
 
 int main(const int argc, char* argv[])
@@ -1329,6 +1737,8 @@ int main(const int argc, char* argv[])
         test_potential_bucket_dag_gate();
         test_durable_store_gate(argv[0]);
         test_transition_value_assembly_gate();
+        test_policy_certification_gate();
+        test_pure_saddle_reduction_gate();
 
         std::cout << "All DTH tests passed\n";
         return 0;

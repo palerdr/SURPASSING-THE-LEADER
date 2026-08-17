@@ -6,7 +6,8 @@
 // identically.
 
 import type { Snapshot } from "../types";
-import { type Character, type Pose, characterFor, frame } from "./sprites";
+import { playerForRole } from "./identity";
+import { type Character, type Pose, frame } from "./sprites";
 
 const BACKGROUND = "#000000";
 /** Fraction of the canvas the figures occupy. Framed small, as the panel is. */
@@ -31,10 +32,12 @@ interface Figure {
 }
 
 function figures(snapshot: Snapshot): Figure[] {
+  const checker = playerForRole(snapshot, "checker");
+  const dropper = playerForRole(snapshot, "dropper");
   return [
-    { character: characterFor(snapshot.checker_name), pose: "seated", flip: true },
+    { character: checker.character, pose: "seated", flip: true },
     { character: "yakou", pose: "idle", flip: false },
-    { character: characterFor(snapshot.dropper_name), pose: "dropping", flip: false },
+    { character: dropper.character, pose: "dropping", flip: false },
   ];
 }
 

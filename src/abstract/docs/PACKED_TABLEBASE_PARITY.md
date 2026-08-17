@@ -51,6 +51,12 @@ and fatality guards. The frozen model identifier and constants are part of
 every checkpoint configuration digest and artifact manifest; other metadata
 is rejected.
 
+The public Rust binding validates the packed physical-domain size, exact array
+shapes, state and child indices, child value/probability domains, and strictly
+increasing potential before performing a backup. For this contract,
+`action_size` must equal the failed-check penalty. Malformed inputs return a
+Python exception rather than reaching an unchecked index or arithmetic path.
+
 ## Reachability parity
 
 From packed root index zero, Rust must produce exactly the same bitset
@@ -93,13 +99,23 @@ and every state routed to LP in the sample.
 
 ## Artifact and resume parity
 
-The artifact schema is `abstract.packed-tablebase.v4` and the resumable
-checkpoint schema is `abstract.packed-tablebase-build.v3`. Required arrays, shapes,
-dtypes, packed ordering, SHA-256 file digests, metadata, and lookup results must
-match the Python build. Per-state SHA IDs are forbidden in hot arrays and are
-derived from `ruleset_id|state_fields` only at lookup/export.
+The artifact schema is `abstract.packed-tablebase.v5` and the resumable
+checkpoint schema is `abstract.packed-tablebase-build.v4`. Required arrays,
+shapes, dtypes, packed ordering, SHA-256 file digests, metadata, and lookup
+results must match the Python build. Resume and read-time compatibility bind
+the Python implementation sources and `uv.lock` and, when used, the Rust crate,
+build script, and workspace lockfile. The loaded extension must expose the
+compile-time source-bundle digest that Python independently recomputes from
+those Rust inputs; stale binaries, partial layers, or artifacts fail closed
+after an implementation change.
+Per-state SHA IDs are forbidden in hot arrays and are derived from
+`ruleset_id|state_fields` only at lookup/export.
 
 Interrupt/resume parity tests must stop during reachability and during at least
 two distinct backup chunks, then compare the resumed artifact byte-for-byte
 with an uninterrupted build. A Rust backend is eligible as the default only
 after these tests pass in CI for both Python fallback and compiled extension.
+
+Set `STL_REQUIRE_RUST_PARITY=1` in CI or a release-validation shell. With that
+gate enabled, a missing `abstract_solver_rs` extension is a hard
+test-collection failure instead of an ordinary Python-development skip.

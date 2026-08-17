@@ -1,0 +1,100 @@
+schema_version = 1
+
+[[project]]
+id = "stl"
+path = "src/stl"
+instruction_readme = "src/stl/README.md"
+kind = "peer"
+languages = ["python"]
+rung = "L2"
+status = "implemented-unsolved"
+public_interfaces = ["stl.engine", "stl.solver.canonical"]
+root_validation = true
+validation = ["uv run python -m pytest src/stl/tests -q"]
+
+[[project]]
+id = "dth"
+path = "src/dth"
+instruction_readme = "src/dth/README.md"
+kind = "peer"
+languages = ["python"]
+rung = "L1"
+status = "solved"
+public_interfaces = ["dth.solver", "dth.agent"]
+root_validation = true
+validation = ["uv run python -m pytest src/dth/tests -q"]
+
+[[project]]
+id = "abstract"
+path = "src/abstract"
+instruction_readme = "src/abstract/README.md"
+kind = "peer"
+languages = ["python"]
+rung = "L0"
+status = "solved"
+public_interfaces = ["abstract"]
+root_validation = true
+validation = ["uv run python -m pytest src/abstract/tests -q"]
+
+[[project]]
+id = "dth_ocaml"
+path = "src/dth_ocaml"
+instruction_readme = "src/dth_ocaml/README.md"
+kind = "peer-reference"
+languages = ["ocaml"]
+rung = "L1"
+status = "reference"
+public_interfaces = ["dth_solver"]
+root_validation = true
+validation = [
+  "opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml",
+  "opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml",
+]
+
+[[project]]
+id = "dth_cpp"
+path = "src/dth_cpp"
+instruction_readme = "src/dth_cpp/README.md"
+kind = "peer-reference"
+languages = ["c++"]
+rung = "L1"
+status = "in-progress"
+public_interfaces = []
+root_validation = false
+validation = []
+validation_deferred_reason = "The native implementation and build order are still under active development."
+
+[[project]]
+id = "crates"
+path = "src/crates"
+instruction_readme = "src/crates/README.md"
+kind = "shared-accelerators"
+languages = ["rust", "python-ffi"]
+rung = "L0-L1"
+status = "opt-in"
+public_interfaces = ["abstract_solver_rs", "dth_complete_rs"]
+root_validation = true
+validation = [
+  "cargo fmt --all -- --check",
+  "cargo test --workspace",
+  "Push-Location src/crates/abstract_solver; uv run --project ../../.. maturin develop --release; Pop-Location",
+  "Push-Location src/crates/dth_complete; uv run --project ../../.. maturin develop --release; Pop-Location",
+  "$env:STL_REQUIRE_RUST_PARITY='1'; uv run python -m pytest src/abstract/tests/test_rust_parity.py src/dth/tests/test_complete_rust_parity.py -q",
+]
+
+[[project]]
+id = "arena"
+path = "src/arena"
+instruction_readme = "src/arena/README.md"
+kind = "neutral-surface"
+languages = ["python", "typescript"]
+rung = "L2"
+status = "play-surface"
+public_interfaces = ["arena", "arena.web"]
+root_validation = true
+validation = [
+  "uv run python -m pytest src/arena/tests -q",
+  "npm --prefix src/arena/webclient test",
+  "npm --prefix src/arena/webclient run typecheck",
+  "npm --prefix src/arena/webclient run build",
+]
