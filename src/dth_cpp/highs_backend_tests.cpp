@@ -111,11 +111,24 @@ void test_equalizer()
 void test_covering_and_packing()
 {
     dth::HighsBackend backend;
+
+    const std::array<double, 1> shifted_singleton = {2.5};
+    dth::CoveringRaw output{};
+    require(
+        backend.solve_covering(shifted_singleton, 1, output)
+            == dth::NumericStatus::Optimal,
+        "HiGHS rejected the 1x1 shifted covering game");
+    require(
+        std::abs(output.x.mass[0] - 0.4) <= 1e-10
+            && std::abs(output.y.mass[0] - 0.4) <= 1e-10
+            && std::abs(output.sum_x - 0.4) <= 1e-10
+            && std::abs(output.sum_y - 0.4) <= 1e-10,
+        "HiGHS returned the wrong 1x1 covering result");
+
     const std::array<double, 4> shifted_matching_pennies = {
         3.0, 1.0,
         1.0, 3.0,
     };
-    dth::CoveringRaw output{};
     require(
         backend.solve_covering(shifted_matching_pennies, 2, output)
             == dth::NumericStatus::Optimal,

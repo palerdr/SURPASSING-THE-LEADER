@@ -12,6 +12,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -1709,6 +1710,75 @@ void test_pure_saddle_reduction_gate()
     }
 }
 
+dth::TransitionValues frozen_real_transition_values()
+{
+    dth::TransitionValues real{};
+    real.success = {
+        -0.08374241640910982,
+        -0.07824378973646026,
+        -0.07276852007830821,
+        -0.06729992882635064,
+        -0.06184921664221913,
+        -0.05640541936411085,
+        -0.05098028343761779,
+        -0.045559470336475213,
+        -0.04015874260475749,
+        -0.034759552320429335,
+        -0.029378314849305195,
+        -0.024001318107639155,
+        -0.018641909947997463,
+        -0.013281830188160992,
+        -0.007934307021762906,
+        -0.002593390575041668,
+        0.002728933415204883,
+        0.008051765093601936,
+        0.01335782930865187,
+        0.0186701704220803,
+        0.02396193587599028,
+        0.02925442261468289,
+        0.034531088801633136,
+        0.039808979516920195,
+        0.045072871838972337,
+        0.05033988974679343,
+        0.05559135558415802,
+        0.0608458097708978,
+        0.0660862869134648,
+        0.07134829255576977,
+        0.07660831658518162,
+        0.0818270846783182,
+        0.08703388199092033,
+        0.092241335839917,
+        0.09743926400715172,
+        0.10263756771046761,
+        0.10782451871974238,
+        0.11301351083332078,
+        0.11818912670266057,
+        0.12337335903026528,
+        0.12854119286066434,
+        0.1337083379009194,
+        0.13886283026145219,
+        0.14402075657608537,
+        0.1491758185527881,
+        0.15432293315910023,
+        0.15945550432607586,
+        0.16459207243968957,
+        0.16971383928356784,
+        0.1748448271592195,
+        0.17995740012712844,
+        0.18507380095016018,
+        0.1901764349117717,
+        0.19528156600736862,
+        0.20037508980607405,
+        0.2054700775030551,
+        0.2105520070887648,
+        0.2156368702477291,
+        0.22070896748955432,
+        0.22580849479758416,
+    };
+    real.failed = 0.15500017346065081;
+    return real;
+}
+
 void test_square_support_equalizer_gate()
 {
     using namespace dth;
@@ -1921,70 +1991,7 @@ void test_square_support_equalizer_gate()
     // Frozen canonical class 0 from complete_full_v1. The reference artifact
     // accepted its nonsingular all-60 equalizer with every mass positive.
     {
-        TransitionValues real{};
-        real.success = {
-            -0.08374241640910982,
-            -0.07824378973646026,
-            -0.07276852007830821,
-            -0.06729992882635064,
-            -0.06184921664221913,
-            -0.05640541936411085,
-            -0.05098028343761779,
-            -0.045559470336475213,
-            -0.04015874260475749,
-            -0.034759552320429335,
-            -0.029378314849305195,
-            -0.024001318107639155,
-            -0.018641909947997463,
-            -0.013281830188160992,
-            -0.007934307021762906,
-            -0.002593390575041668,
-            0.002728933415204883,
-            0.008051765093601936,
-            0.01335782930865187,
-            0.0186701704220803,
-            0.02396193587599028,
-            0.02925442261468289,
-            0.034531088801633136,
-            0.039808979516920195,
-            0.045072871838972337,
-            0.05033988974679343,
-            0.05559135558415802,
-            0.0608458097708978,
-            0.0660862869134648,
-            0.07134829255576977,
-            0.07660831658518162,
-            0.0818270846783182,
-            0.08703388199092033,
-            0.092241335839917,
-            0.09743926400715172,
-            0.10263756771046761,
-            0.10782451871974238,
-            0.11301351083332078,
-            0.11818912670266057,
-            0.12337335903026528,
-            0.12854119286066434,
-            0.1337083379009194,
-            0.13886283026145219,
-            0.14402075657608537,
-            0.1491758185527881,
-            0.15432293315910023,
-            0.15945550432607586,
-            0.16459207243968957,
-            0.16971383928356784,
-            0.1748448271592195,
-            0.17995740012712844,
-            0.18507380095016018,
-            0.1901764349117717,
-            0.19528156600736862,
-            0.20037508980607405,
-            0.2054700775030551,
-            0.2105520070887648,
-            0.2156368702477291,
-            0.22070896748955432,
-            0.22580849479758416,
-        };
-        real.failed = 0.15500017346065081;
+        const TransitionValues real = frozen_real_transition_values();
 
         const auto certified = try_support(
             real,
@@ -2003,6 +2010,195 @@ void test_square_support_equalizer_gate()
                 certified->certificate.midpoint - 0.08985007280951046)
                 <= kSaddleTolerance,
             "the frozen real tuple disagrees with its stored artifact value");
+    }
+}
+
+void test_linear_program_gate()
+{
+    using namespace dth;
+
+    constexpr double numeric_tolerance = 1e-8;
+    HighsBackend backend;
+    MatrixScratch scratch{};
+
+    const auto solve_and_check = [&](
+                                     const TransitionValues& transitions,
+                                     const double expected_value) {
+        const auto certified = try_linear_program(
+            transitions,
+            backend,
+            scratch);
+        require(
+            certified.has_value(),
+            "the LP rung returned no certified candidate");
+        require(
+            certified->certificate.gap <= kSaddleTolerance,
+            "the LP rung returned an uncertified saddle");
+        require(
+            std::abs(certified->certificate.midpoint - expected_value)
+                <= kSaddleTolerance,
+            "the LP rung returned the wrong game value");
+
+        double drop_total = 0.0;
+        double check_total = 0.0;
+        for (std::size_t action = 0; action < kActions; ++action) {
+            drop_total += certified->drop.mass[action];
+            check_total += certified->check.mass[action];
+        }
+        require(
+            std::abs(drop_total - 1.0) <= numeric_tolerance
+                && std::abs(check_total - 1.0) <= numeric_tolerance,
+            "the LP rung returned unnormalized policies");
+        return *certified;
+    };
+
+    // A constant game is the 60-action analogue of a 1x1 LP. Every policy is
+    // optimal, so this also exercises a maximally degenerate model.
+    {
+        TransitionValues constant{};
+        constant.success.fill(0.25);
+        constant.failed = 0.25;
+        solve_and_check(constant, 0.25);
+    }
+
+    // Equal actions pay +1 and unequal actions pay -1. The unique equilibrium
+    // is uniform on all 60 actions, with value 2/60-1.
+    {
+        TransitionValues matching{};
+        matching.success.fill(-1.0);
+        matching.success[0] = 1.0;
+        matching.failed = -1.0;
+
+        const Certified certified = solve_and_check(
+            matching,
+            2.0 / static_cast<double>(kActions) - 1.0);
+        const double expected_mass = 1.0 / static_cast<double>(kActions);
+        for (std::size_t action = 0; action < kActions; ++action) {
+            require(
+                std::abs(certified.drop.mass[action] - expected_mass)
+                        <= numeric_tolerance
+                    && std::abs(certified.check.mass[action] - expected_mass)
+                        <= numeric_tolerance,
+                "the matching game LP policies are not uniform");
+        }
+    }
+
+    // This all-action game has geometric policies in opposite directions.
+    // It pins the packing orientation independently of the symmetric case.
+    {
+        TransitionValues asymmetric{};
+        asymmetric.success.fill(0.0);
+        asymmetric.success[0] = 0.5;
+        asymmetric.failed = 0.025;
+
+        double geometric_sum = 0.0;
+        double power = 1.0;
+        for (std::size_t action = 0; action < kActions; ++action) {
+            geometric_sum += power;
+            power *= 0.95;
+        }
+        const Certified certified = solve_and_check(
+            asymmetric,
+            0.5 / geometric_sum);
+        require(
+            certified.drop.mass.front() < certified.drop.mass.back()
+                && certified.check.mass.front()
+                    > certified.check.mass.back(),
+            "the asymmetric LP policies have the wrong orientation");
+    }
+
+    // Repeated lower triangles create many optimal Dropper mixtures. The LP
+    // still has to return one point that certifies against the complete game.
+    {
+        TransitionValues repeated_lower{};
+        repeated_lower.success.fill(-0.25);
+        repeated_lower.failed = 0.75;
+        solve_and_check(repeated_lower, -0.25);
+    }
+
+    // Frozen canonical class 0 from complete_full_v1 supplies an external
+    // oracle value for a nontrivial real transition tuple.
+    {
+        const TransitionValues real = frozen_real_transition_values();
+        solve_and_check(real, 0.08985007280951046);
+    }
+
+    // Bad game coefficients fail before a model is submitted. An invalid
+    // direct backend call pins the non-optimal status and last_error channel,
+    // after which a valid rung solve proves that no stale state survives.
+    {
+        TransitionValues nonfinite{};
+        nonfinite.success.fill(0.0);
+        nonfinite.success[17] =
+            std::numeric_limits<double>::quiet_NaN();
+        nonfinite.failed = 0.0;
+        require_logic_error(
+            [&] {
+                (void)try_linear_program(nonfinite, backend, scratch);
+            },
+            "the LP rung accepted a nonfinite transition value");
+
+        TransitionValues outside_payoff_box{};
+        outside_payoff_box.success.fill(0.0);
+        outside_payoff_box.success[23] = 1.000001;
+        outside_payoff_box.failed = 0.0;
+        require_logic_error(
+            [&] {
+                (void)try_linear_program(
+                    outside_payoff_box,
+                    backend,
+                    scratch);
+            },
+            "the LP rung accepted a payoff outside [-1,1]");
+
+        CoveringRaw raw{};
+        const std::array<double, 1> invalid_shifted{-1.0};
+        require(
+            backend.solve_covering(invalid_shifted, 1, raw)
+                    == NumericStatus::InvalidInput
+                && !backend.last_error().empty(),
+            "the covering backend did not report invalid input");
+
+        TransitionValues valid_after_failure{};
+        valid_after_failure.success.fill(-0.125);
+        valid_after_failure.failed = -0.125;
+        solve_and_check(valid_after_failure, -0.125);
+    }
+
+    // Each outer worker owns its own backend and scratch. Identical inputs
+    // must stay identical at serial, two-worker, and production-width runs.
+    {
+        constexpr std::array<std::size_t, 3> worker_counts{1, 2, 12};
+        const TransitionValues real = frozen_real_transition_values();
+        constexpr double expected_value = 0.08985007280951046;
+
+        for (const std::size_t worker_count : worker_counts) {
+            std::vector<std::future<double>> futures;
+            futures.reserve(worker_count);
+            for (std::size_t worker = 0; worker < worker_count; ++worker) {
+                futures.push_back(std::async(
+                    std::launch::async,
+                    [real] {
+                        HighsBackend worker_backend;
+                        MatrixScratch worker_scratch{};
+                        const auto certified = try_linear_program(
+                            real,
+                            worker_backend,
+                            worker_scratch);
+                        if (!certified) {
+                            throw std::runtime_error(
+                                "worker LP returned no certificate");
+                        }
+                        return certified->certificate.midpoint;
+                    }));
+            }
+            for (auto& future : futures) {
+                require(
+                    std::abs(future.get() - expected_value)
+                        <= kSaddleTolerance,
+                    "the LP value changed with outer worker count");
+            }
+        }
     }
 }
 
@@ -2038,6 +2234,7 @@ int main(const int argc, char* argv[])
         test_policy_certification_gate();
         test_pure_saddle_reduction_gate();
         test_square_support_equalizer_gate();
+        test_linear_program_gate();
 
         std::cout << "All DTH tests passed\n";
         return 0;

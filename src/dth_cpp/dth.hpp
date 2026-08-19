@@ -173,4 +173,6 @@ double matrix_cell(const TransitionValues& t, std::size_t drop, std::size_t chec
     std::span<const std::size_t> check_indices,
     HighsBackend& backend,
     MatrixScratch& scratch);
+//SECTION 13: LP FALLBACK
+[[nodiscard]] std::optional<Certified> try_linear_program(const TransitionValues& t, HighsBackend& backend, MatrixScratch& scratch);
 } //namespace dth

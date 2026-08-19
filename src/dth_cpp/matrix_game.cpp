@@ -6,8 +6,51 @@
 #include <limits>
 #include <ranges>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 
 namespace dth {
+
+namespace {
+
+[[nodiscard]] constexpr std::string_view numeric_status_name(
+    const NumericStatus status) noexcept
+{
+    switch (status) {
+    case NumericStatus::Optimal:
+        return "Optimal";
+    case NumericStatus::Infeasible:
+        return "Infeasible";
+    case NumericStatus::Unbounded:
+        return "Unbounded";
+    case NumericStatus::InfeasibleOrUnbounded:
+        return "InfeasibleOrUnbounded";
+    case NumericStatus::IterationLimit:
+        return "IterationLimit";
+    case NumericStatus::InvalidInput:
+        return "InvalidInput";
+    case NumericStatus::Failure:
+        return "Failure";
+    }
+    return "Unknown";
+}
+
+[[noreturn]] void throw_backend_failure(
+    const std::string_view operation,
+    const NumericStatus status,
+    const HighsBackend& backend)
+{
+    std::string message{operation};
+    message += " failed: status=";
+    message += numeric_status_name(status);
+    if (!backend.last_error().empty()) {
+        message += ", backend error=";
+        message += backend.last_error();
+    }
+    throw std::runtime_error(message);
+}
+
+} // namespace
 
 double matrix_cell(
     const TransitionValues& t,
@@ -183,7 +226,7 @@ std::optional<Certified> try_support(
             return std::nullopt;
         }
         if (status != NumericStatus::Optimal) {
-            throw std::logic_error("invalid equalizer model or impossible backend status");
+            throw_backend_failure("support equalizer", status, backend);
         }
 
         for (std::size_t i = 0; i < k; ++i) {
@@ -202,4 +245,126 @@ std::optional<Certified> try_support(
 
         return certify(t, raw_drop, raw_check, 1e-10);
     }
+
+//SECTION 13
+std::optional<Certified> try_linear_program(
+    const TransitionValues& t,
+    HighsBackend& backend,
+    MatrixScratch& scratch)
+{
+    constexpr double feasibility_tolerance = 1e-9;
+    constexpr double objective_tolerance = 1e-10;
+    constexpr double duality_tolerance = 1e-8;
+
+    for (std::size_t d = 0; d < kActions; ++d) {
+        for (std::size_t c = 0; c < kActions; ++c) {
+            const std::size_t index = d * kActions + c;
+            const double shifted = matrix_cell(t, d, c) + 2.0;
+            if (!std::isfinite(shifted) || shifted < 1.0 || shifted > 3.0) {
+                throw std::logic_error("shifted value must lie inside [1,3]");
+            }
+            scratch.matrix[index] = shifted;
+        }
+    }
+
+    CoveringRaw raw{};
+    const NumericStatus status = backend.solve_covering(
+        std::span<const double>{scratch.matrix},
+        kActions,
+        raw);
+
+    if (status != NumericStatus::Optimal) {
+        throw_backend_failure(
+            "matrix-game covering-packing LP",
+            status,
+            backend);
+    }
+
+    double sum_x = 0.0;
+    double sum_y = 0.0;
+
+    for (std::size_t action = 0; action < kActions; ++action) {
+        const double x = raw.x.mass[action];
+        const double y = raw.y.mass[action];
+
+        if (!std::isfinite(x) || !std::isfinite(y)) {
+            throw std::runtime_error("HiGHS returned non-finite mass");
+        }
+
+        sum_x += x;
+        sum_y += y;
+    }
+
+    if (!std::isfinite(sum_x) || !std::isfinite(sum_y)) {
+        throw std::runtime_error("HiGHS policy sums must be finite");
+    }
+    if (sum_x <= 0.0 || sum_y <= 0.0) {
+        throw std::runtime_error("HiGHS policy sums must be positive");
+    }
+
+    for (std::size_t c = 0; c < kActions; ++c) {
+        double activity = 0.0;
+        for (std::size_t d = 0; d < kActions; ++d) {
+            activity += scratch.matrix[d * kActions + c] * raw.x.mass[d];
+        }
+        if (!std::isfinite(activity)
+            || activity < 1.0 - feasibility_tolerance) {
+            throw std::runtime_error(
+                "HiGHS covering solution violates A^T x >= 1");
+        }
+    }
+
+    for (std::size_t d = 0; d < kActions; ++d) {
+        double activity = 0.0;
+        for (std::size_t c = 0; c < kActions; ++c) {
+            activity += scratch.matrix[d * kActions + c] * raw.y.mass[c];
+        }
+        if (!std::isfinite(activity)
+            || activity > 1.0 + feasibility_tolerance) {
+            throw std::runtime_error(
+                "HiGHS packing solution violates A y <= 1");
+        }
+    }
+
+    if (!std::isfinite(raw.sum_x) || !std::isfinite(raw.sum_y)) {
+        throw std::runtime_error("HiGHS objectives must be finite");
+    }
+    if (std::abs(sum_x - raw.sum_x)
+        > objective_tolerance * std::max(1.0, sum_x)) {
+        throw std::runtime_error(
+            "HiGHS covering objective disagrees with its returned columns");
+    }
+    if (std::abs(sum_y - raw.sum_y)
+        > objective_tolerance * std::max(1.0, sum_y)) {
+        throw std::runtime_error(
+            "HiGHS packing objective disagrees with its returned columns");
+    }
+
+    const double duality_scale = std::max({1.0, sum_x, sum_y});
+    if (std::abs(sum_x - sum_y) > duality_tolerance * duality_scale) {
+        throw std::runtime_error(
+            "HiGHS covering and packing objectives disagree");
+    }
+
+    const double shifted_from_x = 1.0 / sum_x;
+    const double shifted_from_y = 1.0 / sum_y;
+    if (!std::isfinite(shifted_from_x) || !std::isfinite(shifted_from_y)) {
+        throw std::runtime_error("shifted matrix-game value must be finite");
+    }
+    const double diagnostic_value =
+        (shifted_from_x + shifted_from_y) / 2.0 - 2.0;
+
+    const auto candidate = certify(t, raw.x, raw.y, 1e-10);
+    if (!candidate) {
+        throw std::runtime_error(
+            "optimal HiGHS policies failed the full matrix certificate");
+    }
+    if (std::abs(candidate->certificate.midpoint - diagnostic_value)
+        > kSaddleTolerance) {
+        throw std::runtime_error(
+            "certified value disagrees with shifted LP objectives");
+    }
+
+    return candidate;
+}
 } // namespace dth
