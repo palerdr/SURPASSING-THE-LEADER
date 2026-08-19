@@ -145,23 +145,5 @@ std::optional<dth::Certified> dth::try_pure_saddle(const TransitionValues& t) {
 
 }
 
-//SECTION 11
-bool dth::solve_linear(std::span<double> a, std::span<double> b, std::size_t n, std::span<double> x) {
-    inline constexpr std::size_t kLinearDimension = kActions + 1;
-    
-    for (std::size_t col : std::views::iota(std::size_t{0}, n-1)){
-        std::size_t pivot_row = col;
-        double best = std::abs(A[col * kLinearDimension + col]);
-        for (std::size_t row : std::views::iota(col+1, n-1)) {
-            double magnitude = std::abs(A[row * kLinearDimension + col]);
-            if (magnitude > best) {
-                best = magnitude;
-                pivot_row = row;
-            }
-        }
-        if (best < kPivotTolerance) {
-            return false;
-        }
-        
-    }
-}
+//SECTION 12
+std::optional<dth::Certified> try_support(const dth::TransitionValues& t) {}

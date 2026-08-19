@@ -35,7 +35,6 @@ inline constexpr std::size_t kMaxProfilePotential = 600;
 inline constexpr std::size_t kMaxClassPotential = 1'200;
 
 inline constexpr double kSaddleTolerance = 1e-6;
-inline constexpr double kPivotTolerance = 1e-12;
 inline constexpr double kPolicyMassFloor = 1e-9;
 inline constexpr std::uint8_t kUnsolvedKind = 255;
 
@@ -160,6 +159,6 @@ double matrix_cell(const TransitionValues& t, int drop, int check);
 [[nodiscard]] PureSaddleScan scan_pure_saddle(const TransitionValues& t);
 [[nodiscard]] std::optional<Certified>  try_pure_saddle(const TransitionValues& t);
 
-//SECTION 11: DETERMINISTIC DENSE LINEAR-SYSTEM SOLVER
-bool solve_linear(std::span<double> A, std::span<double> b, std::size_t n, std::span<double> x);
+//SECTION 12: SQUARE-SUPPORT EQUALIZER
+std::optional<Certified> try_support(const TransitionValues& t );
 } //namespace dth

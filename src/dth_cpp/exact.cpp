@@ -333,14 +333,3 @@ dth::TransitionValues dth::assemble_transition_values(const ProfileTable& table,
     }
     return result;
 }
-
-bool dth::solve_linear(std::span<double> a, std::span<double> b, std::size_t n, std::span<double> x) {
-    inline constexpr std::size_t kLinearDimension = kActions + 1;
-    for (std::size_t col : std::views::iota(std::size_t{0}, n-1)){
-        std::size_t pivot_row = col;
-        double best = std::abs(A[col * (kActions + 1) + col]);
-        for (std::size_t row : std::views::iota(col+1, n-1)) {
-            double magnitude = std::abs(A[row * (kActions + 1)])
-        }
-    }
-}

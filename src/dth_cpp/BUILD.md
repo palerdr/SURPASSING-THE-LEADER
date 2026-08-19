@@ -25,6 +25,14 @@ whose saddle gap against the full literal 60 by 60 matrix is at most `1e-6`.
 Any missing child, malformed probability, failed numerical solve, or wider gap
 terminates the build.
 
+HiGHS is the sole production numerical backend. It owns model lifecycle,
+simplex implementation, feasibility tolerances, status reporting, and raw
+solution extraction. DTH code still owns every mathematical rung: the implicit
+matrix, O(60) pure reduction, support selection, equalizer and fallback model
+formulations, policy embedding, ladder order, and independent full-matrix
+certificate. A HiGHS objective value is never accepted as a game value without
+that certificate.
+
 Each section has four parts:
 
 1. **Prerequisites** names everything it is allowed to use.
@@ -53,7 +61,7 @@ in descending potential, solve its implicit matrix game, and store its
 certified value. Never allocate a state object or retain a matrix for each of
 the 289,374,121 classes.
 
-## 0. Establish the native build graph
+## 0. Establish the native build graph and pinned HiGHS dependency
 
 ### Prerequisites
 
@@ -83,16 +91,39 @@ Populate the empty files initially with the smallest compilable graph:
 
 Then extend `CMakeLists.txt` with:
 
-- static library `dth_solver` from `exact.cpp` and `matrix_game.cpp`;
+- static library `dth_solver` from `exact.cpp`, `highs_backend.cpp`, and
+  `matrix_game.cpp`;
 - executable `dth-solve-tablebase` from `solve_tablebase.cpp`;
 - executable `dth-tests` from `tests.cpp`;
-- `dth_project_options` linked to all three targets;
-- `dth_solver` linked into both executables;
+- executable `dth-highs-backend-tests` from `highs_backend_tests.cpp`;
+- `dth_project_options` linked to the library and all three executables;
+- `dth_solver` linked into all three executables;
 - `find_package(Threads REQUIRED)` and `Threads::Threads` linked to the solver;
-- `add_test(NAME dth-tests COMMAND dth-tests)`.
+- both native test executables registered with CTest.
 
-There are no third-party C++ libraries. The future tablebase uses the POSIX
-file and memory-mapping APIs supplied by macOS.
+Pin HiGHS exactly to release `1.15.1`, commit
+`04024d701f79feb8e2f18bc3df0dffc04ef05088`. First try an exact,
+toolchain-compatible CMake package:
+
+```cmake
+find_package(HIGHS 1.15.1 EXACT CONFIG QUIET)
+```
+
+If that package is unavailable and `DTH_FETCH_HIGHS=ON`, use CMake
+`FetchContent` with the pinned commit. Never track `master`, `latest`, or an
+unpinned release tag. Disable the HiGHS executable, examples, tests, HiPO,
+zlib, shared extras, and implicit threading for the embedded build. Require
+the target `highs::highs` and link it privately into `dth_solver`.
+
+An installed HiGHS library must use the same C++ compiler and runtime as this
+project. In particular, do not link a prebuilt MSVC library into a MinGW build.
+`HIGHS_DIR` may point to an exact compatible installation; the default
+FetchContent path avoids that ABI choice.
+
+`highs_backend.hpp` is a DTH-owned boundary and must not include `Highs.h`.
+Only `highs_backend.cpp` includes the third-party header. No HiGHS type may
+appear in `dth.hpp`, `matrix_game.cpp` APIs, checkpoint schemas, or storage
+objects.
 
 ### Algorithm
 
@@ -117,9 +148,10 @@ ctest --test-dir src/dth_cpp/build/debug --output-on-failure
 ### Gate
 
 Both presets configure. The debug build links with AddressSanitizer and
-UndefinedBehaviorSanitizer. `dth-tests` exits zero. The placeholder solver exits
-nonzero, proving that an incomplete implementation cannot be mistaken for a
-tablebase build.
+UndefinedBehaviorSanitizer. Both test executables link the exact HiGHS release
+and exit zero. The backend test reports version `1.15.1`. The placeholder
+solver exits nonzero, proving that an incomplete implementation cannot be
+mistaken for a tablebase build.
 
 ## 1. Define constants, identifiers, and inert data types
 
@@ -145,7 +177,6 @@ not be configurable at runtime:
 | `kMaxProfilePotential` | 600 | largest one-profile potential |
 | `kMaxClassPotential` | 1,200 | largest class potential |
 | `kSaddleTolerance` | `1e-6` | immutable acceptance gate |
-| `kPivotTolerance` | `1e-12` | equalizer singularity floor |
 | `kPolicyMassFloor` | `1e-9` | recorded-support threshold |
 | `kUnsolvedKind` | 255 | routing byte before solution |
 
@@ -846,8 +877,9 @@ F&F&F&S_1
 $$
 
 The 3,600 cells therefore contain only 61 distinct continuation values. Keep
-this matrix implicit except when copying coefficients into the rare LP
-fallback's fixed scratch.
+this matrix implicit during transition assembly, certification, and the pure
+rung. A support rung copies only its selected `k` by `k` submatrix; the general
+LP rung copies the full shifted matrix into reusable fixed scratch.
 
 ### Algorithm
 
@@ -940,8 +972,8 @@ L\le\operatorname{val}(M)\le U.
 $$
 
 Only $U-L\le10^{-6}$ accepts a result, and the stored value is
-$\widehat V=(L+U)/2$. This same test governs every route; a linear-system value
-or LP objective is diagnostic, never independent proof of correctness.
+$\widehat V=(L+U)/2$. This same test governs every route; an equalizer value or
+LP objective is diagnostic, never independent proof of correctness.
 
 Candidate-specific code decides the largest negative mass it will tolerate.
 The common normalizer receives that limit, rejects anything below it, clips
@@ -1097,158 +1129,211 @@ matrix and require bit-exact equality between:
 Also test pure acceptance, mixed rejection, exact ties, and all-failure/all-
 success edge layouts.
 
-## 11. Build the deterministic dense linear-system primitive
+## 11. Build the scoped HiGHS numerical backend
 
 ### Prerequisites
 
-Only finite scalar arithmetic and fixed tolerances from earlier sections. This
-primitive does not yet know about policies or stage matrices.
+The pinned dependency from Section 0 and finite scalar arithmetic from earlier
+sections. This backend does not know about `TransitionValues`, action indices,
+warm neighbors, solver routes, or certificates.
 
 ### Object
 
-The equalizer requires systems of size at most 61. Implement Gaussian
-elimination with partial pivoting over row-major dense scratch arrays. Do not
-allocate inside the solve: the caller supplies storage for matrix `A`, right
-hand side `b`, and solution `x` with maximum dimension 61.
+Create `highs_backend.hpp` and `highs_backend.cpp`. The header exposes only
+DTH-owned types:
 
-The numerical contract is pinned:
+```text
+NumericStatus:
+    Optimal
+    Infeasible
+    Unbounded
+    InfeasibleOrUnbounded
+    IterationLimit
+    InvalidInput
+    Failure
 
-- at column `k`, choose the row with largest absolute pivot in `k..n-1`;
-- exact ties keep the lowest row;
-- reject pivot magnitude below `1e-12`;
-- swap complete rows and RHS entries;
-- explicitly set eliminated cells to zero;
-- update each remaining cell as one multiply followed by one subtraction;
-- back-substitute columns in ascending order;
-- reject any nonfinite intermediate or final value.
+EqualizerRaw:
+    drop_mass[60]
+    check_mass[60]
+    drop_value
+    check_value
+    iterations
 
-Partial pivoting is necessary because the DTH matrix is highly degenerate.
-The pivot floor converts an unstable support guess into a clean rejection; the
-LP fallback later handles the state.
+CoveringRaw:
+    x: Policy
+    y: Policy
+    sum_x
+    sum_y
+    iterations
+
+HighsBackend:
+    solve_equalizer(row_major_support_matrix, dimension, output)
+    solve_covering(row_major_shifted_matrix, dimension, output)
+    version()
+    last_error()
+```
+
+`EqualizerRaw` indices are positions within the supplied support, not literal
+actions. `CoveringRaw.x` and `.y` are unnormalized optimization variables, not
+certified policies. The rung that calls the backend remains responsible for
+interpreting either result.
+
+Hide `Highs` behind a noncopyable, movable pImpl. Construct one persistent
+backend per future DTH worker. Configure and check every option exactly once:
+
+```text
+output_flag = false
+log_to_console = false
+solver = "simplex"
+simplex_strategy = 1        // serial dual simplex
+parallel = "off"
+threads = 1
+random_seed = 0
+presolve = "off"
+primal_feasibility_tolerance = 1e-10
+dual_feasibility_tolerance = 1e-10
+small_matrix_value = 1e-12
+simplex_iteration_limit = 10000
+```
+
+Every `clearModel`, `passModel`, and `run` status must be checked. Translate
+model statuses into `NumericStatus`; do not leak a HiGHS enum. An optimal
+result additionally requires a valid finite primal solution, feasible primal
+status, the expected number of columns, a finite objective, and a nonnegative
+iteration count.
+
+`passModel` returning a warning means HiGHS changed or rejected part of the
+model, commonly by dropping a coefficient at the small-matrix threshold. It
+is not an optimal result. The support rung may treat that as a rejected
+heuristic and continue to the general LP; the final LP rung must fail closed.
+
+Remove the former hand-written `solve_linear` declaration, implementation, and
+dedicated gate. HiGHS now owns that numerical plumbing; keeping two production
+paths would make it unclear which contract each rung actually exercises.
 
 ### Algorithm
 
 ```text
-function solve_linear(A, b, n, x):
-    for column in 0..n-1:
-        pivot_row := column
-        best := abs(A[column,column])
-        for row in column+1..n-1:
-            magnitude := abs(A[row,column])
-            if magnitude > best:
-                best := magnitude
-                pivot_row := row
-
-        if best < 1e-12:
-            return failure
-        swap complete rows column and pivot_row
-        swap b[column] and b[pivot_row]
-
-        for row in column+1..n-1:
-            factor := A[row,column] / A[column,column]
-            require factor is finite
-            if factor != 0:
-                A[row,column] := 0
-                for cell in column+1..n-1:
-                    A[row,cell] := A[row,cell] - factor*A[column,cell]
-                b[row] := b[row] - factor*b[column]
-
-    fill x with zero
-    for row in n-1 down to 0:
-        accumulated := b[row]
-        for column in row+1..n-1:
-            accumulated := accumulated - A[row,column]*x[column]
-        x[row] := accumulated / A[row,row]
-        require x[row] is finite
-    return success
+function solve_model(model, output_columns):
+    clear the prior HiGHS model without resetting options
+    require passModel(model) == OK
+    run
+    translate model status
+    if status is not Optimal:
+        return translated status
+    require run status == OK
+    require primal solution is valid and feasible
+    require every requested column and objective is finite
+    copy raw columns in model order
+    return Optimal
 ```
+
+Never call `resetGlobalScheduler` while any worker exists. HiGHS uses a static
+scheduler; all concurrent contexts therefore use the same pinned one-thread
+setting. DTH supplies parallelism across independent class solves later.
 
 ### Gate
 
-Test known 1x1, 2x2, and 61x61 systems; a row-swap case; a singular matrix; a
-pivot just below the rejection floor; and residuals `A_original*x-b_original`
-on deterministic well-conditioned random systems. Run these under sanitizers
-to verify all maximum-dimension scratch accesses.
+The isolated backend test must verify the exact version, invalid and nonfinite
+input rejection, a feasible 2x2 equalizer, an infeasible equalizer, and a
+shifted matching-pennies covering/packing pair with known raw solutions. Repeat
+the cases through the same backend instance to prove model clearing preserves
+options and does not reuse a stale solution.
 
 ## 12. Implement square-support equalizer solving
 
 ### Prerequisites
 
-The linear primitive from Section 11, implicit matrix and policies from
-Sections 8 and 9, and full certifier from Section 9.
+The HiGHS backend from Section 11, implicit matrix and policies from Sections
+8 and 9, and full certifier from Section 9.
 
 ### Object
+
+Add one rung-local storage type before implementing the function:
+
+```text
+MatrixScratch:
+    matrix[60*60]: float64
+```
+
+`MatrixScratch.matrix` is a reusable row-major buffer. This section views its
+first `k*k` entries as a compact support matrix; Section 13 reuses all 3,600
+entries for the shifted full matrix. It contains no solver state and performs
+no allocation. Section 18 later embeds it in permanent per-worker scratch.
 
 For candidate Dropper support `D` and Checker support `C`, let
 `k = min(size(D), size(C))` and retain the first `k` ascending indices from
 each. The square submatrix is `M[D,C]`.
 
-The Checker mixture `q_C` and equalized value `u_c` solve:
+The Checker mixture `q_C` and equalized value `u_c` satisfy:
 
 ```text
 [ M[D,C]   -1 ] [ q_C ] = [ 0 ]
 [   1^T     0 ] [ u_c ]   [ 1 ].
 ```
 
-The Dropper mixture `p_D` and value `u_d` solve:
+The Dropper mixture `p_D` and value `u_d` satisfy:
 
 ```text
 [ M[D,C]^T -1 ] [ p_D ] = [ 0 ]
 [    1^T    0 ] [ u_d ]   [ 1 ].
 ```
 
-Solving both systems is required: one candidate mixture does not certify what
-the other player can guarantee. `u_c` and `u_d` are diagnostic only; final
-value comes from the full certificate.
+Submit each system to HiGHS as a zero-objective equality-feasibility LP. The
+probability variables have bounds `[0,+infinity]`; the equalized-value variable
+is free. Identical row lower and upper bounds encode equality. Solving both
+systems is required: one candidate mixture does not certify what the other
+player can guarantee. `u_c` and `u_d` are diagnostic only; final value comes
+from the full certificate.
 
 The square-support object is a heuristic. Degenerate zero-sum games can have
-supports of different sizes. Trimming to `k`, rejecting negative masses, and
-certifying against the full matrix make an incorrect guess fail closed.
+supports of different sizes. Trimming to `k` and certifying against the full
+matrix make an incorrect guess fail closed.
+
+This intentionally changes one routing detail from the old Gaussian
+primitive: a singular but feasible equality model can now succeed because
+HiGHS may choose one feasible point. That is safe because nonnegative bounds,
+normalization, and the full certificate still apply. It can change degenerate
+policies, route counts, and warm-support records, so the artifact configuration
+id must include `highs-equalizer-v1` and exact backend version/options.
 
 ### Algorithm
 
 ```text
-function try_support(t, drop_indices, check_indices, scratch):
+function try_support(t, drop_indices, check_indices, backend, scratch):
     k := min(size(drop_indices), size(check_indices))
     if k == 0:
         return no solution
     D := first k ascending drop indices
     C := first k ascending check indices
-    n := k+1
-
-    zero scratch.A and scratch.b over n
+    zero scratch.matrix over k*k
     for i in 0..k-1:
         for j in 0..k-1:
-            A[i,j] := matrix_cell(t, D[i], C[j])
-        A[i,k] := -1
-    for j in 0..k-1: A[k,j] := 1
-    b[k] := 1
-    if solve_linear(A,b,n,check_solution) fails:
-        return no solution
+            scratch.matrix[i*k+j] := matrix_cell(t,D[i],C[j])
 
-    rebuild A and b from scratch, transposing the k by k block
-    if solve_linear(A,b,n,drop_solution) fails:
+    status := backend.solve_equalizer(scratch.matrix[0:k*k],k,raw)
+    if status is Infeasible, InfeasibleOrUnbounded,
+       IterationLimit, or Failure:
         return no solution
+    if status is anything other than Optimal:
+        fail "invalid equalizer model or impossible backend status"
 
     for i in 0..k-1:
-        if check_solution[i] < -1e-12 OR drop_solution[i] < -1e-12:
-            return no solution
+        require raw masses are finite
 
     raw_drop := zero Policy
     raw_check := zero Policy
     for i in 0..k-1:
-        raw_drop[D[i]] := max(0, drop_solution[i])
-        raw_check[C[i]] := max(0, check_solution[i])
+        raw_drop[D[i]] := raw.drop_mass[i]
+        raw_check[C[i]] := raw.check_mass[i]
 
-    try:
-        return certify(t, raw_drop, raw_check, negative_limit=1e-12)
-    catch certificate failure:
-        return no solution
+    return certify(t,raw_drop,raw_check,negative_limit=1e-10)
 ```
 
 The full-support attempt passes `D=C=[0,1,...,59]`, producing two 61x61
-systems. This is the dominant solver path: the completed reference artifact
-accepted roughly 99.8% of all classes through support equalization.
+equality-feasibility models. This is the dominant solver path: the completed
+reference artifact accepted roughly 99.8% of all classes through support
+equalization.
 
 Do not silently replace the two systems with the tempting upper-triangular
 Toeplitz recurrence obtained after subtracting the failure constant. That
@@ -1263,21 +1348,34 @@ Test:
 
 - a full-support matching-pennies embedding;
 - an asymmetric full-support game;
-- singular constant supports returning no solution;
-- a candidate with mass below `-1e-12` returning no solution;
+- singular infeasible supports returning no solution;
+- singular feasible supports producing a candidate that must still certify;
+- a candidate with mass below `-1e-10` returning no solution;
 - a wrong support that either fails or nevertheless passes the full certificate;
 - full support on deterministic real transition values sampled from the
   existing artifact, compared with the stored value within `1e-6`.
 
 No support attempt may return an uncertified value.
 
-## 13. Implement the dense dual-simplex fallback
+HiGHS model setup is much heavier than dense elimination. The reference route
+counts imply hundreds of millions of full-support attempts and therefore two
+HiGHS runs for nearly every non-pure class. Before a canonical build, benchmark
+at least one million real full-support tuples using persistent worker-local
+backends. Report models/second, backend iterations, and projected canonical
+wall time at the intended outer worker count. Do not start the canonical sweep
+if the projection exceeds the project's production budget; either retain
+HiGHS-only semantics and optimize model reuse, or explicitly revise this guide
+to a separately tested hybrid backend. Never silently claim the original
+hours-scale performance after changing the dominant numerical engine.
+
+## 13. Implement the HiGHS matrix-game LP fallback
 
 ### Prerequisites
 
-The implicit full matrix and certifier from Sections 8 and 9. This section does
-not depend on the equalizer, but it comes later because it is a rare fallback,
-not the main numerical path.
+The implicit full matrix and certifier from Sections 8 and 9, plus the scoped
+HiGHS backend from Section 11. This section does not depend on successful
+equalization; it comes later because it is the general fallback, not the
+dominant fast path.
 
 ### Object
 
@@ -1309,162 +1407,88 @@ policy. The shifted game value is `1/sum(x) = 1/sum(y)`; the original value is
 that number minus two. As everywhere else, store only the independently
 certified midpoint.
 
-To start dual simplex without Phase I, rewrite the covering constraints with
-slacks:
+The rung builds `A` in fixed row-major Dropper-then-Checker order and hands it
+to `HighsBackend::solve_covering`. The backend deliberately solves two
+explicit models and returns both primal column vectors:
 
-```text
--A^T x + s = -1,  x >= 0, s >= 0.
-```
+1. the covering minimization above, producing `x`;
+2. the packing maximization above, producing `y`.
 
-Choose all 60 slacks as the initial basis. The initial basic values are `-1`,
-so the basis is primal-infeasible. For minimization, the 60 nonbasic `x`
-variables have reduced cost `+1`, so the basis is dual-feasible. This is the
-native starting condition for dual simplex.
+Do not recover `y` from HiGHS row-dual signs. Two explicit models make policy
+orientation reviewable and keep the backend result independent of library
+dual-sign conventions. HiGHS owns Phase I, bases, pivots, anti-cycling,
+scaling, and termination statuses. DTH owns coefficient orientation and every
+post-solve check.
 
-Implement a dense dictionary for 60 basic and 60 nonbasic variables:
-
-```text
-basic[row]: variable id
-nonbasic[column]: variable id
-b[row]: current basic value
-a[row,column]: dictionary coefficient in x_B = b - a*x_N
-r[column]: reduced cost in z = z0 + r*x_N
-z0: objective constant
-```
-
-Variable ids `0..59` are `x`; ids `60..119` are slacks `s`. Initialize:
-
-```text
-basic[i] = 60+i
-nonbasic[j] = j
-b[i] = -1
-a[i,j] = -A[j,i]
-r[j] = 1
-z0 = 0.
-```
-
-Use Bland-compatible deterministic choices to prevent cycling in degenerate
-games:
-
-- leaving row: among rows with `b < -1e-10`, choose the row whose basic
-  variable id is smallest;
-- entering column: require `a[leaving,column] < -1e-12`; minimize
-  `r[column]/(-a[leaving,column])`, breaking exact ties by the smallest
-  nonbasic variable id;
-- reject if no entering column exists or if 10,000 pivots are exceeded.
+For this shifted game, infeasible, unbounded, ambiguous, limited, warning, or
+invalid-solution statuses indicate a broken numerical contract and are fatal.
+Unlike support equalization, there is no later rung to absorb a rejection.
 
 ### Algorithm
 
-For a pivot at leaving row `l`, entering column `e`, save the old pivot row,
-old entering column, and old reduced cost before overwriting anything:
-
 ```text
-function dual_simplex(A):
-    initialize dictionary exactly as above
+function try_linear_program(t, backend, scratch):
+    for drop in 0..59:
+        for check in 0..59:
+            scratch.matrix[drop*60+check] :=
+                matrix_cell(t,drop,check) + 2
+            require 1 <= scratch.matrix[drop*60+check] <= 3
 
-    for iteration in 0..9999:
-        l := eligible row with smallest basic variable id and b[l] < -1e-10
-        if no such row:
-            return extract_solution(dictionary)
+    status := backend.solve_covering(scratch.matrix,60,raw)
+    if status is not Optimal:
+        fail with backend status and last_error
 
-        e := no column
-        best_ratio := +infinity
-        for column in 0..59:
-            if a[l,column] < -1e-12:
-                ratio := r[column] / (-a[l,column])
-                if ratio < best_ratio OR
-                   (ratio == best_ratio AND nonbasic[column] is smaller):
-                    e := column
-                    best_ratio := ratio
-        if e does not exist:
-            fail "covering LP is infeasible"
+    sum_x := sum raw.x in ascending action order
+    sum_y := sum raw.y in ascending action order
+    require sums and every raw mass are finite
+    require sum_x > 0 AND sum_y > 0
 
-        pivot := old_a[l,e]
-        old_b_l := b[l]
-        old_r_e := r[e]
-        old_row[:] := a[l,:]
-        old_entering_column[:] := a[:,e]
+    for check in 0..59:
+        activity := 0
+        for drop in 0..59:
+            activity := activity + scratch.matrix[drop*60+check]*raw.x[drop]
+        require activity >= 1-1e-9
 
-        z0 := z0 + old_r_e*old_b_l/pivot
+    for drop in 0..59:
+        activity := 0
+        for check in 0..59:
+            activity := activity + scratch.matrix[drop*60+check]*raw.y[check]
+        require activity <= 1+1e-9
 
-        b[l] := old_b_l/pivot
-        for column != e:
-            a[l,column] := old_row[column]/pivot
-        a[l,e] := 1/pivot
+    require abs(sum_x-raw.sum_x) <= 1e-10*max(1,sum_x)
+    require abs(sum_y-raw.sum_y) <= 1e-10*max(1,sum_y)
+    require abs(sum_x-sum_y) <= 1e-8*max(1,sum_x,sum_y)
 
-        for row != l:
-            coefficient := old_entering_column[row]
-            b[row] := b[row] - coefficient*old_b_l/pivot
-            for column != e:
-                a[row,column] :=
-                    a[row,column] - coefficient*old_row[column]/pivot
-            a[row,e] := -coefficient/pivot
+    shifted_from_x := 1/sum_x
+    shifted_from_y := 1/sum_y
+    require both shifted values are finite
+    diagnostic_value :=
+        (shifted_from_x + shifted_from_y)/2 - 2
 
-        for column != e:
-            r[column] := r[column] - old_r_e*old_row[column]/pivot
-        r[e] := -old_r_e/pivot
-
-        swap(basic[l], nonbasic[e])
-
-        require every dictionary number is finite
-        require every reduced cost >= -1e-10
-
-    fail "dual simplex iteration limit"
+    candidate := certify(t,raw.x,raw.y,negative_limit=1e-10)
+    if candidate does not exist:
+        fail "optimal HiGHS policies failed the full matrix certificate"
+    require abs(candidate.midpoint-diagnostic_value) <= 1e-6
+    return candidate
 ```
 
-At optimum, all nonbasic variables are zero and each basic variable equals its
-row's `b`. Recover the covering solution:
-
-```text
-x := 60 zeros
-for row in 0..59:
-    if basic[row] < 60:
-        x[basic[row]] := clamp_small_negative_to_zero(b[row], 1e-10)
-```
-
-Recover the dual packing solution directly from slack reduced costs. For slack
-`s_i`, its reduced cost is `y_i`:
-
-```text
-y := 60 zeros
-for column in 0..59:
-    variable := nonbasic[column]
-    if 60 <= variable < 120:
-        y[variable-60] := clamp_small_negative_to_zero(r[column], 1e-10)
-// A basic slack has reduced cost zero, so its y entry remains zero.
-```
-
-Before policy normalization, verify the LP itself:
-
-```text
-for check in 0..59:
-    require sum_drop A[drop,check]*x[drop] >= 1-1e-9
-for drop in 0..59:
-    require sum_check A[drop,check]*y[check] <= 1+1e-9
-require abs(sum(x)-sum(y)) <= 1e-8 * max(1,sum(x),sum(y))
-```
-
-Then pass `x` and `y` as raw policies to `certify` with a `1e-10` negative
-limit. The shift is never present in the certificate; certification uses the
-original `TransitionValues` and `matrix_cell`.
-
-If an existing dual-simplex implementation is substituted for this dense
-dictionary, it must expose the same primal `x`, dual `y`, statuses, and
-feasibility checks. An objective value without both policies is insufficient.
-Each worker later owns a separate solver context; global mutable tableau state
-is forbidden.
+The shift is never present in the certificate. `certify` normalizes the raw
+covering and packing columns into policies and evaluates the original
+`TransitionValues` through `matrix_cell`.
 
 ### Gate
 
-Test the dual simplex independently on:
+Test the complete HiGHS LP rung on:
 
 - 1x1 analogues before fixing the dimension at 60;
 - constant, diagonal, asymmetric, and matching-pennies matrices;
 - highly degenerate matrices with repeated lower triangles;
 - deterministic random `TransitionValues`, comparing the certified result to
-  the established Python/HiGHS oracle within `1e-6`;
-- pivot ties, zero reduced costs, primal-infeasible initial slacks, iteration
-  exhaustion, and injected nonfinite coefficients.
+  the established Python artifact/oracle within `1e-6`;
+- injected nonfinite coefficients and each non-optimal backend status;
+- repeated solves through one backend, proving no stale model, basis, or
+  solution survives `clearModel`;
+- identical inputs under outer worker counts 1, 2, and the production width.
 
 Every successful result must pass both shifted-LP feasibility checks and the
 unshifted full-matrix saddle certificate.
@@ -1473,17 +1497,17 @@ unshifted full-matrix saddle certificate.
 
 ### Prerequisites
 
-Pure reduction, full-support equalizer, dual simplex, and common certificate
-from Sections 10 through 13.
+Pure reduction, full-support equalizer, HiGHS LP fallback, and common
+certificate from Sections 10 through 13.
 
 ### Object
 
-Create one function that accepts only `TransitionValues` and thread-local
-scratch. Its initial ladder is:
+Create one function that accepts `TransitionValues`, a persistent worker-local
+backend, and thread-local scratch. Its initial ladder is:
 
 1. O(60) pure saddle;
 2. full-support equalizer with all actions `0..59`;
-3. dual-simplex fallback.
+3. HiGHS covering/packing fallback.
 
 The function returns `SolveResult`, including both cleaned policies and its
 route. A numerical rejection at one rung is not an error; it advances to the
@@ -1493,17 +1517,17 @@ once the sweep calls it.
 ### Algorithm
 
 ```text
-function solve_stage_initial(t, scratch):
+function solve_stage_initial(t, backend, scratch):
     if pure := try_pure_saddle(t):
         pure.route := Pure
         return pure
 
     full := [0,1,...,59]
-    if support := try_support(t, full, full, scratch):
+    if support := try_support(t,full,full,backend,scratch):
         support.route := FullSupport
         return support
 
-    if lp := dual_simplex_matrix_game(t, scratch):
+    if lp := try_linear_program(t,backend,scratch):
         lp.route := LinearProgram
         return lp
 
@@ -1519,8 +1543,11 @@ build.
 Build a corpus that forces each route. Require route kind, policy validity,
 gap at most `1e-6`, and midpoint in range. Compare all results with an
 independent oracle. Run at least one million stage solves in Release while
-tracking allocations; after setup, the pure and equalizer paths must allocate
-zero heap objects per solve.
+tracking DTH-owned allocations and route throughput. After setup, the pure path
+must allocate zero heap objects per solve. The DTH scratch/model assembly on
+the equalizer and LP paths must not allocate; HiGHS may allocate internally,
+so report those allocations and elapsed time instead of asserting they do not
+exist.
 
 ## 15. Build a complete sequential backward sweep
 
@@ -1547,17 +1574,19 @@ priority queue, recursion, hash table, or transposition table is involved.
 ### Algorithm
 
 ```text
-function solve_one_class(table, stores, checker, dropper, scratch):
+function solve_one_class(
+    table, stores, checker, dropper, backend, scratch):
     class_id := encode_class(table, checker, dropper)
     transitions := assemble_transition_values(
         table, stores.values, checker, dropper)
-    result := solve_stage_initial(transitions, scratch)
+    result := solve_stage_initial(transitions, backend, scratch)
     stores.values[class_id] := result.certificate.midpoint
     stores.solver_kind[class_id] := byte(solver_kind_for(result.route))
     increment route counter for result.route
     return result
 
-function solve_layer_sequential(table, stores, P, counters):
+function solve_layer_sequential(
+    table, stores, P, counters, backend, scratch):
     for a from max(0,P-max_profile_potential)
              to min(max_profile_potential,P):
         checker_bucket := table.buckets[a]
@@ -1567,15 +1596,19 @@ function solve_layer_sequential(table, stores, P, counters):
 
         for dropper in dropper_bucket ascending:
             for checker in checker_bucket ascending:
-                solve_one_class(table, stores, checker, dropper, scratch)
+                solve_one_class(
+                    table, stores, checker, dropper, backend, scratch)
 
 function sweep_sequential(table, stores, checkpoint, stop_after_layers):
+    backend := one persistent HighsBackend
+    scratch := one persistent MatrixScratch
     P := checkpoint.completed_potential - 1
     layers_done := 0
     while P >= 0:
         expected := precomputed layer_size[P]
         before := sum(route counters)
-        solve_layer_sequential(table, stores, P, counters)
+        solve_layer_sequential(
+            table, stores, P, counters, backend, scratch)
         require sum(route counters)-before == expected
 
         stores.values.flush()
@@ -1697,7 +1730,8 @@ function warm_neighbor_ids(table, checker, dropper):
         append encode_class(table, checker, shifted)
     return ids
 
-function solve_stage_optimized(t, warm_records, neighbor_ids, scratch):
+function solve_stage_optimized(
+    t, warm_records, neighbor_ids, backend, scratch):
     if pure := try_pure_saddle(t):
         return pure with Pure route
 
@@ -1706,14 +1740,14 @@ function solve_stage_optimized(t, warm_records, neighbor_ids, scratch):
         if found:
             D := nonnegative actions from record.drop
             C := nonnegative actions from record.check
-            if warm := try_support(t,D,C,scratch):
+            if warm := try_support(t,D,C,backend,scratch):
                 return warm with WarmSupport route
 
     full := [0..59]
-    if support := try_support(t,full,full,scratch):
+    if support := try_support(t,full,full,backend,scratch):
         return support with FullSupport route
 
-    if lp := dual_simplex_matrix_game(t,scratch):
+    if lp := try_linear_program(t,backend,scratch):
         return lp with LinearProgram route
 
     fail closed
@@ -1827,17 +1861,20 @@ thread containing all mutable per-class numerical state:
 TransitionValues
 prefix minima and maxima
 two Policies and temporary Policies
-61x61 dense matrix storage
-61-entry RHS and solution vectors
-dual-simplex dictionary arrays, ids, and saved pivot row/column
+MatrixScratch for row-major support/shifted matrix storage
+fixed DTH-owned coefficient and bound assembly buffers
+one persistent HighsBackend
 thread-local RouteCounters
 thread-local vector<SupportRecord>
 thread-local first error string
 ```
 
 Reserve the support vector before processing a layer. Reuse every numerical
-array. There must be no allocation in transition assembly, pure scanning,
-full-support equalization, or dual-simplex pivots.
+array. There must be no DTH-owned allocation in transition assembly, pure
+scanning, support-matrix gathering, or LP-matrix gathering. HiGHS owns its
+internal memory and may allocate during `passModel` or `run`; the Release
+benchmark from Section 12 measures that cost. Never construct a `HighsBackend`
+per class.
 
 A `WorkItem` identifies one checker bucket and a slice of one dropper bucket:
 
@@ -1881,8 +1918,9 @@ function process_work_item(item, previous_supports, scratch):
 For every synthetic and canonical layer-size calculation, require that work
 items cover exactly the expected class count with no duplicate `(checker,
 dropper)` pair. Under sanitizers, process representative maximum-size work
-items with one scratch instance and verify no allocation occurs inside the
-class loops after vector reservation.
+items with one scratch instance and verify no DTH-owned allocation occurs
+inside the class loops after vector reservation. Separately record HiGHS-owned
+allocation and solve time; do not fold it into the zero-allocation claim.
 
 ## 19. Implement the fixed thread pool and parallel layer barrier
 
@@ -1915,6 +1953,13 @@ Each worker owns a fixed `WorkerScratch`. At dispatch, all workers observe the
 new generation, fetch work-item indices dynamically, and decrement
 `workers_remaining` exactly once. The main thread does not advance or flush
 until every worker has finished.
+
+Each scratch's `HighsBackend` remains owned and used by that worker only.
+Every backend is fixed to `threads=1` and `parallel=off`; the DTH pool is the
+only source of parallelism. All concurrent HiGHS instances must use that same
+thread setting because HiGHS coordinates them through a static scheduler.
+Never reset the global HiGHS scheduler until the pool has stopped and every
+backend has been destroyed.
 
 All mapped writes are race-free because Section 18 proved work-item ownership
 is disjoint. All mapped reads target higher completed layers. Previous support
@@ -2097,7 +2142,9 @@ config id
 profile and class counts
 maximum potential
 saddle tolerance
-route order: pure/warm-support/full-support/dual-simplex-v1
+route order: pure/warm-support/full-support/highs-covering-v1
+HiGHS semantic version and source commit
+pinned HiGHS options and feasibility tolerances
 cumulative route counters
 recertified sample count and worst midpoint difference
 root class id and root midpoint
@@ -2259,6 +2306,9 @@ xcrun clang-format -i \
   src/dth_cpp/storage/mapped_array.tpp \
   src/dth_cpp/storage/mapped_file_posix.cpp \
   src/dth_cpp/storage/mapped_file_win32.cpp \
+  src/dth_cpp/highs_backend.hpp \
+  src/dth_cpp/highs_backend.cpp \
+  src/dth_cpp/highs_backend_tests.cpp \
   src/dth_cpp/matrix_game.cpp \
   src/dth_cpp/solve_tablebase.cpp \
   src/dth_cpp/tests.cpp
@@ -2337,9 +2387,10 @@ The implementation is complete only when:
 
 The expected canonical hot data is about 2.43 GiB: roughly 2.16 GiB of values
 and 276 MiB of route bytes, plus small transition, support, checkpoint, and
-manifest files. A correct optimized implementation should execute on this Mac
-in hours. If an estimate returns to days, profile before changing mathematics;
-the usual causes are scanning all classes once per potential, materializing
-3,600 cells for every state, invoking dual simplex before the equalizer, heap
-allocation inside class loops, or serializing work that is independent within
-a layer.
+manifest files. Claim an hours-scale build only if Section 12's one-million-
+tuple HiGHS benchmark supports it at the intended worker count. If an estimate
+returns to days, profile before changing mathematics; the usual causes are
+scanning all classes once per potential, materializing 3,600 cells
+unnecessarily, invoking the general HiGHS LP before the equalizer,
+reconstructing a HiGHS context per class, or serializing work that is
+independent within a layer.

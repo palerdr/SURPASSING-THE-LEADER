@@ -9,6 +9,12 @@ The implementation files are intentionally empty at scaffold creation. Build
 them strictly in the chronological order specified by [`BUILD.md`](BUILD.md).
 That document owns this project's construction sequence and numerical design.
 
+HiGHS `1.15.1` is the pinned numerical backend. CMake first accepts an exact,
+toolchain-compatible installed package and otherwise fetches the pinned source
+commit when `DTH_FETCH_HIGHS=ON` (the default). HiGHS supplies model execution
+and simplex plumbing; DTH code still formulates every rung and independently
+certifies every returned policy against the full game matrix.
+
 ## Frozen scope
 
 - Actions are literal seconds `1..60`; action zero is illegal.
@@ -37,7 +43,10 @@ That document owns this project's construction sequence and numerical design.
   `storage/mapped_file_posix.cpp` and `storage/mapped_file_win32.cpp` backends
   own the operating system calls used to map and flush files.
 - `matrix_game.cpp` owns the implicit stage matrix, certificate, O(60) pure
-  reduction, equalizer systems, and dual-simplex fallback.
+  reduction, support selection, equalizer/LP formulations, and solver ladder.
+- `highs_backend.cpp` owns HiGHS model execution, fixed numerical options,
+  status translation, and raw solution extraction. It owns no game rules or
+  certification logic.
 - `solve_tablebase.cpp` owns the command-line executable.
 - `tests.cpp` owns the dependency-ordered native test executable.
 - `BUILD.md` is the complete implementation specification.
