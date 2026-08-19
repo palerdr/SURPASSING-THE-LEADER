@@ -1,4 +1,5 @@
 #include "dth.hpp"
+#include "highs_backend.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -6,9 +7,15 @@
 #include <ranges>
 #include <stdexcept>
 
-double dth::matrix_cell(const TransitionValues& t, int drop, int check) {
+namespace dth {
+
+double matrix_cell(
+    const TransitionValues& t,
+    const std::size_t drop,
+    const std::size_t check)
+{
     if (check >= drop) {
-        std::size_t lag = static_cast<std::size_t>(check - drop);
+        std::size_t lag = (check - drop);
         return t.success[lag];
     } else {
         return t.failed;
@@ -16,7 +23,7 @@ double dth::matrix_cell(const TransitionValues& t, int drop, int check) {
 }
 
 //SECTION 9
-std::optional<dth::Policy> dth::normalize_policy(Policy raw, double negative_limit)
+std::optional<Policy> normalize_policy(Policy raw, double negative_limit)
 noexcept{
   double total{0.0};
   for (std::size_t action : std::views::iota(std::size_t{0}, kActions)) {
@@ -38,7 +45,7 @@ for (double& mass : raw.mass) {
 return raw;
 }
 
-std::optional<dth::Certified> dth::certify(
+std::optional<Certified> certify(
     const TransitionValues& t,
     Policy raw_drop,
     Policy raw_check,
@@ -83,7 +90,7 @@ std::optional<dth::Certified> dth::certify(
 }
 
 //SECTION 10
-dth::PureSaddleScan dth::scan_pure_saddle(const TransitionValues& t) {
+PureSaddleScan scan_pure_saddle(const TransitionValues& t) {
     std::array<double, kActions> prefix_min{};
     std::array<double, kActions> prefix_max{};
     double running_min = std::numeric_limits<double>::infinity();
@@ -130,7 +137,7 @@ dth::PureSaddleScan dth::scan_pure_saddle(const TransitionValues& t) {
     };
 }
 
-std::optional<dth::Certified> dth::try_pure_saddle(const TransitionValues& t) {
+std::optional<Certified> try_pure_saddle(const TransitionValues& t) {
     const auto scan = scan_pure_saddle(t);
 
     if (scan.minimax - scan.maximin > kSaddleTolerance) {
@@ -146,4 +153,53 @@ std::optional<dth::Certified> dth::try_pure_saddle(const TransitionValues& t) {
 }
 
 //SECTION 12
-std::optional<dth::Certified> try_support(const dth::TransitionValues& t) {}
+std::optional<Certified> try_support(
+    const TransitionValues& t,
+    std::span<const std::size_t> drop_indices,
+    std::span<const std::size_t> check_indices,
+    HighsBackend& backend,
+    MatrixScratch& scratch
+    ) {
+        const std::size_t k = std::min(drop_indices.size(), check_indices.size());
+
+        if(k == 0) {
+            return std::nullopt;
+        }
+
+        for (std::size_t i = 0; i < k; ++i) {
+            for (std::size_t j = 0; j < k; ++j) {
+                scratch.matrix[i * k + j] = matrix_cell(t, drop_indices[i], check_indices[j]);
+            }
+        }
+        EqualizerRaw result{};
+        const auto matrix = std::span<const double>{
+            scratch.matrix.data(),
+            k*k,
+        };
+        auto status = backend.solve_equalizer(matrix, k, result);
+
+        if (status == NumericStatus::Infeasible || status == NumericStatus::InfeasibleOrUnbounded
+        || status == NumericStatus::IterationLimit || status == NumericStatus:: Failure) {
+            return std::nullopt;
+        }
+        if (status != NumericStatus::Optimal) {
+            throw std::logic_error("invalid equalizer model or impossible backend status");
+        }
+
+        for (std::size_t i = 0; i < k; ++i) {
+            if (!std::isfinite(result.check_mass[i]) || !std::isfinite(result.drop_mass[i])) {
+                throw std::logic_error("raw policy masses must be finite");
+            }
+        }
+
+        Policy raw_drop = Policy{};
+        Policy raw_check = Policy{};
+
+        for (std::size_t i = 0; i < k; ++i) {
+            raw_drop.mass[drop_indices[i]] = result.drop_mass[i];
+            raw_check.mass[check_indices[i]] = result.check_mass[i];
+        }
+
+        return certify(t, raw_drop, raw_check, 1e-10);
+    }
+} // namespace dth

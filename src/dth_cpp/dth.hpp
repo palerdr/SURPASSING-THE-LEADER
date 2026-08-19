@@ -10,8 +10,11 @@
 #include <tuple>
 #include <utility>
 #include <optional>
+#include <span>
 
 namespace dth {
+
+class HighsBackend;
 
 template <typename T>
 class MappedArray;
@@ -89,6 +92,10 @@ struct Certified {
   Certificate certificate{};
 };
 
+struct MatrixScratch {
+    std::array<double, kActions * kActions> matrix;
+};
+
 enum class SolverKind : std::uint8_t {
     Pure = 0,
     Support = 1,
@@ -149,7 +156,7 @@ int layer_size(const ProfileTable& table, Potential potential);
 
 //SECTTION 8: ASSEMBLE THE 61 CONTINUATION VALUES FOR A CLASS
 TransitionValues assemble_transition_values(const ProfileTable& table, const MappedArray<double>& values, ProfileId checker, ProfileId dropper);
-double matrix_cell(const TransitionValues& t, int drop, int check);
+double matrix_cell(const TransitionValues& t, std::size_t drop, std::size_t check);
 
 //SECTION 9: NORMALIZE POLICIES AND CERIFY AGAINST THE FULL MATRIX
 [[nodiscard]] std::optional<Policy> normalize_policy(Policy raw, double negative_limit) noexcept;
@@ -160,5 +167,10 @@ double matrix_cell(const TransitionValues& t, int drop, int check);
 [[nodiscard]] std::optional<Certified>  try_pure_saddle(const TransitionValues& t);
 
 //SECTION 12: SQUARE-SUPPORT EQUALIZER
-std::optional<Certified> try_support(const TransitionValues& t );
+[[nodiscard]] std::optional<Certified> try_support(
+    const TransitionValues& t,
+    std::span<const std::size_t> drop_indices,
+    std::span<const std::size_t> check_indices,
+    HighsBackend& backend,
+    MatrixScratch& scratch);
 } //namespace dth

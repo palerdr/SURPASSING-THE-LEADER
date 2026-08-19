@@ -1,4 +1,5 @@
 #include "dth.hpp"
+#include "highs_backend.hpp"
 #include "storage/durable_store.hpp"
 
 #include <algorithm>
@@ -1708,6 +1709,303 @@ void test_pure_saddle_reduction_gate()
     }
 }
 
+void test_square_support_equalizer_gate()
+{
+    using namespace dth;
+
+    constexpr double numeric_tolerance = 1e-8;
+    HighsBackend backend;
+    MatrixScratch scratch{};
+
+    std::array<std::size_t, kActions> full_support{};
+    for (std::size_t action = 0; action < kActions; ++action) {
+        full_support[action] = action;
+    }
+
+    // Empty candidate supports do not submit an invalid zero-dimensional model.
+    {
+        TransitionValues constant{};
+        constant.success.fill(0.0);
+        constant.failed = 0.0;
+        const std::array<std::size_t, 0> empty{};
+        require(
+            !try_support(
+                constant,
+                empty,
+                full_support,
+                backend,
+                scratch).has_value(),
+            "an empty candidate support produced a solution");
+    }
+
+    // Matching pennies occupies the first two actions. The longer Dropper
+    // guess proves that try_support trims both candidates to the same k and
+    // embeds the two returned masses at the selected literal actions.
+    {
+        TransitionValues pennies{};
+        pennies.success.fill(1.0);
+        pennies.success[1] = -1.0;
+        pennies.failed = -1.0;
+        const std::array<std::size_t, 3> drop_indices{0, 1, 59};
+        const std::array<std::size_t, 2> check_indices{0, 1};
+
+        const auto certified = try_support(
+            pennies,
+            drop_indices,
+            check_indices,
+            backend,
+            scratch);
+        require(
+            certified.has_value(),
+            "the matching-pennies support was rejected");
+        require(
+            certified->certificate.gap <= kSaddleTolerance
+                && std::abs(certified->certificate.midpoint) <= numeric_tolerance,
+            "the matching-pennies support returned an invalid certificate");
+        require(
+            std::abs(certified->drop.mass[0] - 0.5) <= numeric_tolerance
+                && std::abs(certified->drop.mass[1] - 0.5)
+                    <= numeric_tolerance
+                && std::abs(certified->check.mass[0] - 0.5)
+                    <= numeric_tolerance
+                && std::abs(certified->check.mass[1] - 0.5)
+                    <= numeric_tolerance
+                && certified->drop.mass[59] == 0.0,
+            "the matching-pennies masses were embedded at the wrong actions");
+    }
+
+    // A genuinely asymmetric all-action game has geometric, oppositely
+    // skewed policies. This pins the transpose/orientation of both systems.
+    {
+        TransitionValues asymmetric{};
+        asymmetric.success.fill(0.0);
+        asymmetric.success[0] = 0.5;
+        asymmetric.failed = 0.025;
+
+        const auto certified = try_support(
+            asymmetric,
+            full_support,
+            full_support,
+            backend,
+            scratch);
+        require(
+            certified.has_value(),
+            "the asymmetric full-support game was rejected");
+
+        double geometric_sum = 0.0;
+        double power = 1.0;
+        for (std::size_t action = 0; action < kActions; ++action) {
+            geometric_sum += power;
+            power *= 0.95;
+        }
+        const double expected_value = 0.5 / geometric_sum;
+        require(
+            certified->certificate.gap <= kSaddleTolerance
+                && std::abs(
+                       certified->certificate.midpoint - expected_value)
+                    <= numeric_tolerance,
+            "the asymmetric full-support value is wrong");
+        require(
+            certified->drop.mass.front() < certified->drop.mass.back()
+                && certified->check.mass.front()
+                    > certified->check.mass.back(),
+            "the asymmetric policies have the wrong orientation");
+    }
+
+    // The selected matrix is [[0,0],[1,1]]. Its equalizer system is singular
+    // and inconsistent with total probability one.
+    {
+        TransitionValues singular_infeasible{};
+        singular_infeasible.success.fill(0.0);
+        singular_infeasible.success[1] = 1.0;
+        singular_infeasible.failed = 1.0;
+        const std::array<std::size_t, 2> drop_indices{0, 1};
+        const std::array<std::size_t, 2> check_indices{0, 2};
+        require(
+            !try_support(
+                singular_infeasible,
+                drop_indices,
+                check_indices,
+                backend,
+                scratch).has_value(),
+            "a singular infeasible support produced a solution");
+    }
+
+    // HiGHS may choose any point from a singular feasible equalizer. A
+    // constant full matrix makes every such normalized point certifiable.
+    {
+        TransitionValues singular_feasible{};
+        singular_feasible.success.fill(0.125);
+        singular_feasible.failed = 0.125;
+        const std::array<std::size_t, 3> indices{3, 17, 41};
+
+        const auto certified = try_support(
+            singular_feasible,
+            indices,
+            indices,
+            backend,
+            scratch);
+        require(
+            certified.has_value(),
+            "a singular feasible support was rejected");
+        require(
+            certified->certificate.gap <= kSaddleTolerance
+                && std::abs(certified->certificate.midpoint - 0.125)
+                    <= numeric_tolerance,
+            "the singular feasible candidate was not fully certified");
+    }
+
+    // A locally feasible singular support is still rejected when an action
+    // outside that support exploits it in the complete 60-action matrix.
+    {
+        TransitionValues locally_feasible{};
+        locally_feasible.success.fill(-1.0);
+        locally_feasible.success[0] = 0.0;
+        locally_feasible.success[1] = 0.0;
+        locally_feasible.failed = 0.0;
+        const std::array<std::size_t, 2> indices{0, 1};
+        require(
+            !try_support(
+                locally_feasible,
+                indices,
+                indices,
+                backend,
+                scratch).has_value(),
+            "a locally equalized but globally exploitable support was accepted");
+    }
+
+    // Without nonnegative bounds this support's unique equalizer masses would
+    // be (-1,2) and (2,-1). HiGHS must therefore report no feasible candidate.
+    // Pin the exact normalization boundary independently as well.
+    {
+        TransitionValues negative_equalizer{};
+        negative_equalizer.success.fill(0.0);
+        negative_equalizer.success[1] = 0.5;
+        negative_equalizer.failed = -1.0;
+        const std::array<std::size_t, 2> indices{0, 1};
+        require(
+            !try_support(
+                negative_equalizer,
+                indices,
+                indices,
+                backend,
+                scratch).has_value(),
+            "a support requiring negative probability was accepted");
+
+        Policy below_limit{};
+        below_limit.mass[0] = 1.0;
+        below_limit.mass[1] = -1.000001e-10;
+        require(
+            !normalize_policy(below_limit, 1e-10).has_value(),
+            "a mass below the Section 12 negative limit was accepted");
+    }
+
+    // A valid 1x1 equalizer is not enough: this deliberately wrong support is
+    // exploitable elsewhere and must fail the independent full certificate.
+    {
+        TransitionValues matching{};
+        matching.success.fill(-1.0);
+        matching.success[0] = 1.0;
+        matching.failed = -1.0;
+        const std::array<std::size_t, 1> wrong_support{0};
+        require(
+            !try_support(
+                matching,
+                wrong_support,
+                wrong_support,
+                backend,
+                scratch).has_value(),
+            "an uncertified wrong support was accepted");
+    }
+
+    // Frozen canonical class 0 from complete_full_v1. The reference artifact
+    // accepted its nonsingular all-60 equalizer with every mass positive.
+    {
+        TransitionValues real{};
+        real.success = {
+            -0.08374241640910982,
+            -0.07824378973646026,
+            -0.07276852007830821,
+            -0.06729992882635064,
+            -0.06184921664221913,
+            -0.05640541936411085,
+            -0.05098028343761779,
+            -0.045559470336475213,
+            -0.04015874260475749,
+            -0.034759552320429335,
+            -0.029378314849305195,
+            -0.024001318107639155,
+            -0.018641909947997463,
+            -0.013281830188160992,
+            -0.007934307021762906,
+            -0.002593390575041668,
+            0.002728933415204883,
+            0.008051765093601936,
+            0.01335782930865187,
+            0.0186701704220803,
+            0.02396193587599028,
+            0.02925442261468289,
+            0.034531088801633136,
+            0.039808979516920195,
+            0.045072871838972337,
+            0.05033988974679343,
+            0.05559135558415802,
+            0.0608458097708978,
+            0.0660862869134648,
+            0.07134829255576977,
+            0.07660831658518162,
+            0.0818270846783182,
+            0.08703388199092033,
+            0.092241335839917,
+            0.09743926400715172,
+            0.10263756771046761,
+            0.10782451871974238,
+            0.11301351083332078,
+            0.11818912670266057,
+            0.12337335903026528,
+            0.12854119286066434,
+            0.1337083379009194,
+            0.13886283026145219,
+            0.14402075657608537,
+            0.1491758185527881,
+            0.15432293315910023,
+            0.15945550432607586,
+            0.16459207243968957,
+            0.16971383928356784,
+            0.1748448271592195,
+            0.17995740012712844,
+            0.18507380095016018,
+            0.1901764349117717,
+            0.19528156600736862,
+            0.20037508980607405,
+            0.2054700775030551,
+            0.2105520070887648,
+            0.2156368702477291,
+            0.22070896748955432,
+            0.22580849479758416,
+        };
+        real.failed = 0.15500017346065081;
+
+        const auto certified = try_support(
+            real,
+            full_support,
+            full_support,
+            backend,
+            scratch);
+        require(
+            certified.has_value(),
+            "the frozen real full-support tuple was rejected");
+        require(
+            certified->certificate.gap <= kSaddleTolerance,
+            "the frozen real tuple returned an uncertified value");
+        require(
+            std::abs(
+                certified->certificate.midpoint - 0.08985007280951046)
+                <= kSaddleTolerance,
+            "the frozen real tuple disagrees with its stored artifact value");
+    }
+}
+
 } // namespace
 
 int main(const int argc, char* argv[])
@@ -1739,6 +2037,7 @@ int main(const int argc, char* argv[])
         test_transition_value_assembly_gate();
         test_policy_certification_gate();
         test_pure_saddle_reduction_gate();
+        test_square_support_equalizer_gate();
 
         std::cout << "All DTH tests passed\n";
         return 0;
