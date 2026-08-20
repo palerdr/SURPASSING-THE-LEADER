@@ -35,8 +35,11 @@ run scored 44 wins in 48 games, but its protocol lacked durable registration
 and its evaluator trusted self-reported risk. It has no promotion authority.
 This note instead registers a 56-identity confirmation protocol with independent
 matrix recomputation, a no-Aggro ablation, and family and seat gates. At the
-protocol commit that confirmation has not been executed. PM is an aggressive
-candidate, not human mind reading, dominance, or a whole-game safety theorem.
+protocol commit that confirmation had not been executed. The one-shot run
+scored PM at $.8705$ (97--14--1), behind Perfect at $.9554$; the promotion gate
+failed despite zero independent local-risk audit violations. PM is an
+aggressive candidate, not human mind reading, dominance, or a whole-game safety
+theorem.
 \end{abstract}
 
 \section{Scope and design philosophy}
@@ -116,59 +119,55 @@ state and already contain overlapping continuation values.
 
 \section{Development audit and registered confirmation}
 
-The v1 and v2 files were created and run before this feature branch registered
-them in Git. File status text and mutable modification times cannot establish
-preregistration. Both runs are therefore development evidence. The v2 run used
-24 parameter identities across six opponent families. Each identity produced a
-common seeded seat pair for PM, Perfect, Adaptive, Aggro, and Exact; family plus
-parameter seed was the bootstrap unit (10,000 replicates). Stopped games scored
-$.5$.
+The v1 and v2 files were run before this branch registered them in Git; mutable
+status text cannot establish preregistration. They remain development evidence.
+V2 used 24 identities across six families, common seeded seat pairs, and 10,000
+identity-clustered bootstrap replicates. Stopped games scored $.5$.
 
 \begin{table}[h]
 \centering
-\caption{V2 development outcomes (48 games per controller).}
+\caption{Development v2 and registered v3 outcomes.}
 \small
 \begin{tabular}{lrrr}
 \toprule
-Controller & Score & W--L--S & Mean halves\\
+Controller & V2 score & V3 score & V3 W--L--S\\
 \midrule
-PM Hal     & .9167 & 44--4--0  & 6.63\\
-Perfect    & .8958 & 43--5--0  & 5.56\\
-Adaptive   & .6563 & 31--16--1 & 7.10\\
-Aggro      & .6458 & 31--17--0 & 7.23\\
-Exact      & .5417 & 26--22--0 & 9.46\\
+PM Hal     & .9167 & .8705 & 97--14--1\\
+Perfect    & .8958 & .9554 & 107--5--0\\
+PM no Aggro& ---   & .8259 & 92--19--1\\
+Aggro      & .6458 & .7232 & 81--31--0\\
+Adaptive   & .6563 & .7188 & 80--31--1\\
+Exact      & .5417 & .4955 & 54--55--3\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Paired PM-minus-baseline score differences were $+.3750$
-$[.2083,.5417]$ versus Exact, $+.2604$ $[.1354,.3854]$ versus Adaptive,
-$+.2708$ $[.1042,.4375]$ versus Aggro, and $+.0208$
-$[-.0417,.0833]$ versus Perfect. Those intervals are descriptive. The run cannot
-promote PM, and even its nominal gate failed the nonnegative lower-bound
-condition against every component.
+V2's nominal every-component gate failed. Its controller-reported risk was not
+independently reconstructed, so it cannot promote PM. Fused expected NLL was
+$3.481$ $[2.904,3.978]$, but change detection found only 10 of 86 truth shifts.
+These mixed results motivated the registered repair.
 
-Across 318 PM decisions, shield/probe/press/dominate counts were
-$56/46/154/62$. The controller reported maximum local loss $.2561$ and no
-understated-loss or game-budget violations, but the v2 evaluator did not
-independently reconstruct every selected policy's loss. PM's identity-clustered expected
-NLL was $3.481$ $[2.904,3.978]$. Fused-minus-source NLL was $-.252$
-$[-.341,-.162]$ against Perfect and $-.614$ $[-1.184,-.119]$ against uniform;
-negative is better. The fused forecast beat every individual source on this
-metric. Change detection remained weak: it detected 10 of 86 synthetic truth
-shifts, with one false-alarm onset. Strong play did not validate that detector.
+Clean-Git v3 hash-binds the controller, recurrent checkpoint, and tablebase,
+records its commit, and uses 56 fresh identities over all 14 families (112 games
+per controller). It compares PM with Exact, Perfect, Adaptive, Aggro, and PM
+without Aggro. Promotion requires zero independent risk violations and
+nonnegative aggregate, both-seat, and every-family comparisons. Every selected
+policy's loss, charge contract, mode cap, cumulative charge, and game budget is
+recomputed from its continuation-adjusted matrix.
 
-The v3 confirmation is registered in Git before execution. It binds the
-controller, recurrent checkpoint, and tablebase by SHA-256; requires a clean
-worktree; records the executing commit; and assigns four new seeds to all 14
-registered synthetic families, for 56 independent identities and 112 games per
-controller. It compares PM with Exact, Perfect, Adaptive, Aggro, and PM without
-Aggro. Promotion requires zero independent risk-audit violations, nonnegative
-clustered lower bounds against Exact, every component, and the no-Aggro
-ablation, plus nonnegative point differences in both seats and every family.
-The evaluator reloads every continuation-adjusted matrix and recomputes selected
-worst-case loss, charge contracts, mode caps, cumulative charges, and per-game
-budgets. No v3 result appears in this protocol-registration version of the note.
+The registered protocol ran once from commit \texttt{b76147f}.
+PM-minus-baseline paired
+score differences were $-.0848$ $[-.1518,-.0223]$ against Perfect,
+$+.0446$ $[.0089,.0893]$ against PM without Aggro, and $+.3750$
+$[.2723,.4777]$ against Exact. The gate failed the every-component, both-seat,
+and every-family conditions; Perfect was the strongest component. The
+independent audit found zero violations over 788 decisions and 112 games, with
+maximum measured local loss $1.5373$. Fused expected NLL was $3.5524$ versus
+uniform $4.0943$, but the change detector found only 35 of 168 truth shifts and
+produced 23 false-alarm onsets. The result supports aggregate value from enabling
+the Aggro component in this protocol; it does not isolate recurrent memory as
+the cause. The hash-bound compact record is
+\texttt{pm\_hal\_confirmation\_v3.json}.
 
 \section{Human-play interpretation and limits}
 
@@ -184,15 +183,17 @@ distributions, and cluster outcomes by participant. Change delay and false
 alarms, role slices, calibration, and game score are co-primary diagnostics.
 Bounded recursive reasoning is one possible population archetype, not a label
 the controller may assign permanently to a participant.
-The present measured evidence is synthetic development evidence from 24
-identities and known families. The recurrent checkpoint saw 2,653 training
-decisions; its causal contribution remains an open question until the registered
-no-Aggro ablation is read. PM is feature-complete for human play as an
-aggressive candidate, while promotion awaits the registered synthetic result
-and then participant-level human evidence.
+The present measured evidence comprises development evidence from 24 identities
+and one registered synthetic confirmation over 56 fresh identities and known
+families. The recurrent checkpoint saw 2,653 training decisions. Its enabled
+component improved aggregate score over the no-Aggro ablation, while a causal
+recurrent-memory advantage remains open. PM is feature-complete for human play
+as an aggressive candidate. Synthetic promotion failed; any future protocol
+requires a new version and fresh identities, followed by participant-level human
+evidence.
 
 \begingroup
-\footnotesize
+\scriptsize
 \setlength{\parskip}{0pt}
 \begin{thebibliography}{9}
 \bibitem{rnr} M. Johanson, M. Zinkevich, and M. Bowling.

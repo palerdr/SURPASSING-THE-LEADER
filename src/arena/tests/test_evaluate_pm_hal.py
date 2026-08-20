@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -68,6 +69,27 @@ def test_tracked_evaluation_config_is_hash_bound_and_has_56_identities() -> None
     assert config.expected_pm_config_sha256 is not None
     assert config.expected_aggro_checkpoint_sha256 is not None
     assert config.expected_dth_table_digest is not None
+
+
+def test_v3_confirmation_freeze_binds_tracked_protocol_bytes() -> None:
+    root = Path(__file__).resolve().parents[3]
+    freeze = json.loads(
+        (root / "src/arena/config/pm_hal_confirmation_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert freeze["schema_version"] == "arena-pm-hal-confirmation-freeze-v1"
+    assert freeze["immutable"] is True
+    assert freeze["evidence"]["promotion_gate"]["passed"] is False
+    assert freeze["protocol_commit"] == "b76147fc3718492353b24131ce756c558c4c43c8"
+    for binding in ("evaluation_config", "controller_config"):
+        evidence = freeze["bindings"][binding]
+        payload = (root / evidence["path"]).read_bytes()
+        assert len(payload) == evidence["bytes"]
+        assert hashlib.sha256(payload).hexdigest() == evidence["sha256"]
+    assert freeze["bindings"]["evaluation_report"]["generated_artifact"] is True
+    assert freeze["immutability"]["v3_must_not_be_rerun_or_rebound"] is True
 
 
 def test_smoke_evaluation_reports_prediction_risk_and_paired_metrics(

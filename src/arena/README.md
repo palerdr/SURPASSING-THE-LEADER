@@ -379,14 +379,32 @@ stream across identities, and used a permissive change-alarm metric. V3 closes
 those proof gaps with independent stage-matrix recomputation, identity-seeded
 randomness, alarm-onset accounting, a no-Aggro ablation, and seat/family gates.
 
+The Git-registered v3 protocol ran once from commit
+`b76147fc3718492353b24131ce756c558c4c43c8`. The immutable compact evidence
+record is `config/pm_hal_confirmation_v3.json`; the full generated report stays
+gitignored and is bound there by SHA-256. PM scored 97 wins, 14 losses, and one
+stopped game in 112 games (`.8705`), behind Perfect's 107-5 (`.9554`) but ahead
+of PM without Aggro `.8259`, Aggro `.7232`, Adaptive `.7188`, and Exact
+`.4955`. Paired PM-minus-baseline differences were
+`-.0848 [-.1518,-.0223]` against Perfect, `+.0446 [.0089,.0893]` against no-Aggro,
+and `+.3750 [.2723,.4777]` against Exact. The promotion gate failed because
+PM was inferior to Perfect in aggregate and in both seats, and at least one
+family slice was negative. V3 therefore freezes a failed promotion result,
+not a release claim.
+
 The fused forecast also improved opponent-identity-clustered expected log loss
 in that development run against every individual source. Its difference from the Perfect source was
 `-.2520 [-.3409, -.1622]` nats and from uniform was
 `-.6137 [-1.1842, -.1187]`; negative means the fused forecast was better.
 These are synthetic seed-holdout measurements. They establish neither human
 psychological validity, the Aggro component's causal contribution, promotion,
-nor a whole-game safety theorem. The v3 confirmation remains pending until its
-registered protocol commit exists and the one-shot report is produced.
+nor a whole-game safety theorem. In registered v3, the independent audit found
+zero violations across 788 decisions and 112 games; maximum measured local
+worst-case loss was `1.5373`. The enabled Aggro component improved aggregate
+score over the no-Aggro ablation, while that comparison does not isolate a
+causal recurrent-memory advantage. Fused expected NLL was `3.5524` versus
+uniform `4.0943`; the change detector found only 35 of 168 truth shifts and
+produced 23 false-alarm onsets. These mixed diagnostics remain synthetic.
 
 The audit manifest is a one-way door: predeclare checkpoint and ablations,
 record checkpoint/manifest hashes, run the memory, reset, adapter, and

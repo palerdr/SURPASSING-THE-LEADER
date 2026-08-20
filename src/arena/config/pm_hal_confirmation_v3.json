@@ -1,0 +1,129 @@
+{
+  "schema_version": "arena-pm-hal-confirmation-freeze-v1",
+  "confirmation_id": "pm-hal-v3-git-registered-synthetic",
+  "immutable": true,
+  "frozen_on": "2026-08-20",
+  "scope": "git-registered-synthetic-pure-dth-opponent-league",
+  "protocol_commit": "b76147fc3718492353b24131ce756c558c4c43c8",
+  "bindings": {
+    "evaluation_config": {
+      "path": "src/arena/config/pm_hal_evaluation_v3.json",
+      "sha256": "7d44e2480fa65197a36554ae3c6f5a3a21eaface1c3f72a76b2bc438a2fe0c95",
+      "bytes": 2604
+    },
+    "controller_config": {
+      "path": "src/arena/config/pm_hal_controller_v3.json",
+      "sha256": "67400560d7677c242eb5069e3ec71acf63472bee7388bdbc0b8a2402953b20f0",
+      "bytes": 2211
+    },
+    "aggro_checkpoint": {
+      "path": "outputs/pm-hal/aggro-component-v1/checkpoint.pt",
+      "sha256": "401df584ab52d5881fd96f7018546e4101d8617097acc32e0f077e76a707d153",
+      "bytes": 3838055,
+      "generated_artifact": true
+    },
+    "dth_tablebase": {
+      "manifest_path": "src/dth/artifacts/complete_full_v1/tablebase.json",
+      "manifest_sha256": "a63ed6666605a2d033d51b507cba5b1fc935a74d8669928a9f1ea8e6e436bb4e",
+      "manifest_bytes": 1385,
+      "schema_version": "dth.complete-tablebase.v2",
+      "table_digest": "40561447539bde3f1db83f61303b618ca062bc529c6c23a7fe27cffa917ac392",
+      "profile_count": 17011,
+      "class_count": 289374121,
+      "max_support": 12,
+      "saddle_gap_tolerance": 0.000001,
+      "solver_schema_hash": "cd7a015f515c46d6d15dbcd7231fc3ccb33647da548f0da0306089b01655189f",
+      "generated_artifact": true
+    },
+    "evaluation_report": {
+      "path": "outputs/pm-hal/v3/evaluation-report.json",
+      "sha256": "441c9dc7594b7ada715b260c9a8ed03279b7a4e6c2c3b78b75dd28b7a853b672",
+      "bytes": 1289978,
+      "schema_version": "arena-pm-hal-evaluation-v2",
+      "generated_artifact": true
+    }
+  },
+  "protocol": {
+    "benchmark_id": "pm-hal-broad-synthetic-confirmation-v3",
+    "opponent_identity_units": 56,
+    "families": 14,
+    "games_per_controller": 112,
+    "bootstrap_samples": 20000,
+    "experimental_unit": "opponent_family_and_parameter_seed",
+    "stopped_game_score": 0.5
+  },
+  "evidence": {
+    "promotion_gate": {
+      "passed": false,
+      "checks": {
+        "enough_opponent_identities": true,
+        "no_risk_violations": true,
+        "clustered_lower_bound_vs_exact": true,
+        "clustered_lower_bound_vs_every_component": false,
+        "clustered_lower_bound_vs_no_aggro": true,
+        "point_noninferiority_every_seat": false,
+        "point_noninferiority_every_family": false
+      }
+    },
+    "outcomes": {
+      "pm": {"record": "97-14-1", "all_game_score": 0.8705357142857143},
+      "perfect": {"record": "107-5-0", "all_game_score": 0.9553571428571429},
+      "pm_no_aggro": {"record": "92-19-1", "all_game_score": 0.8258928571428571},
+      "aggro": {"record": "81-31-0", "all_game_score": 0.7232142857142857},
+      "adaptive": {"record": "80-31-1", "all_game_score": 0.71875},
+      "exact": {"record": "54-55-3", "all_game_score": 0.4955357142857143}
+    },
+    "paired_pm_score_differences": {
+      "perfect": {"mean": -0.08482142857142858, "cluster_bootstrap_95": [-0.15178571428571427, -0.022321428571428572]},
+      "pm_no_aggro": {"mean": 0.044642857142857144, "cluster_bootstrap_95": [0.008928571428571428, 0.08928571428571429]},
+      "aggro": {"mean": 0.14732142857142858, "cluster_bootstrap_95": [0.05357142857142857, 0.24107142857142858]},
+      "adaptive": {"mean": 0.15178571428571427, "cluster_bootstrap_95": [0.05357142857142857, 0.25]},
+      "exact": {"mean": 0.375, "cluster_bootstrap_95": [0.27232142857142855, 0.47767857142857145]}
+    },
+    "slice_failures": {
+      "minimum_pm_minus_baseline_seat_difference": -0.0982142857142857,
+      "minimum_pm_minus_baseline_family_difference": -0.375,
+      "strongest_component": "perfect"
+    },
+    "independent_risk_audit": {
+      "decisions": 788,
+      "games": 112,
+      "total_violations": 0,
+      "maximum_actual_local_worst_case_loss": 1.537338565838423,
+      "mean_actual_local_worst_case_loss": 0.11876426073312876,
+      "total_conservative_budget_charge": 146.32927040219963
+    },
+    "forecast": {
+      "decisions": 788,
+      "expected_nll": 3.5523796529314624,
+      "uniform_expected_nll": 4.0943445622221,
+      "expected_brier": 0.9088269006101118,
+      "uniform_expected_brier": 0.9833333333333333
+    },
+    "change_detection": {
+      "truth_shifts": 168,
+      "detected_shifts": 35,
+      "undetected_shifts": 133,
+      "false_alarm_onsets": 23
+    }
+  },
+  "claim_boundary": {
+    "supported": [
+      "PM Hal safely executed its registered local-risk policy with zero independent audit violations in this synthetic league.",
+      "PM Hal outscored Exact, Adaptive, Aggro, and its no-Aggro ablation in aggregate paired comparisons.",
+      "The enabled Aggro component improved aggregate score relative to the otherwise identical no-Aggro ablation in this protocol."
+    ],
+    "not_supported": [
+      "Promotion: Perfect Hal significantly outscored PM Hal and the component, seat, and family gates failed.",
+      "A whole-game safety theorem from the sum of continuation-adjusted local losses.",
+      "A calibrated probability interpretation for heuristic improvement support.",
+      "A causal recurrent-memory advantage or long-horizon adaptation claim.",
+      "Human psychological validity or generalization to human opponents."
+    ]
+  },
+  "immutability": {
+    "generated_artifacts_remain_gitignored": true,
+    "v3_must_not_be_rerun_or_rebound": true,
+    "future_changes_require_a_new_protocol_version_and_fresh_identity_seeds": true
+  }
+}
