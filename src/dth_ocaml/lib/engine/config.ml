@@ -46,11 +46,7 @@ let default_config =
     turn =
       { duration_normal = 60; duration_leap = 61; failed_check_penalty = 60 };
     cylinder = { max = 300; death_procedure_overhead = 120 };
-    survival =
-      {
-        baseline = 0.95;
-        ttd_decay_per_minute = 0.75;
-      };
+    survival = { baseline = 0.95; ttd_decay_per_minute = 0.75 };
   }
 
 let default () = default_config

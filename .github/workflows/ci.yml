@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -14,9 +16,10 @@ concurrency:
 jobs:
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - run: uv sync --dev
@@ -25,6 +28,7 @@ jobs:
 
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - run: cargo fmt --all -- --check
@@ -38,11 +42,12 @@ jobs:
 
   rust-python-parity:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       STL_REQUIRE_RUST_PARITY: "1"
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - run: uv sync --dev
@@ -62,6 +67,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: src/arena/webclient
@@ -77,15 +83,44 @@ jobs:
       - run: npm test --if-present
       - run: npm run build
 
+  cpp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - debug
+          - release
+    defaults:
+      run:
+        working-directory: src/dth_cpp
+    steps:
+      - uses: actions/checkout@v6
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }} --parallel 2
+      - run: ctest --preset ${{ matrix.preset }}
+
   ocaml:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: src/dth_ocaml
     steps:
       - uses: actions/checkout@v6
       - name: Install GLPK
-        run: sudo apt-get update && sudo apt-get install --yes libglpk-dev
+        run: |
+          sudo apt-get \
+            -o Acquire::Retries=5 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            update
+          sudo apt-get \
+            -o Acquire::Retries=5 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install --yes libglpk-dev
       - uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: "5.3"
