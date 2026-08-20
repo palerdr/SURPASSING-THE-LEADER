@@ -2,10 +2,10 @@
 
     Two solvers live here on purpose. The direct one -- {!val:payoff_matrix}
     over {!val:expand_joint_action} -- states the game as plainly as it can be
-    written and is the readable reference. The packed one, {!val:solve_dth},
-    is the same mathematics over the TTD-dead quotient and is what a full run
-    would use. Both negate a live child's value, because every live edge swaps
-    the seats. *)
+    written and is the readable reference. The packed one, {!val:solve_dth}, is
+    the same mathematics over the TTD-dead quotient and is what a full run would
+    use. Both negate a live child's value, because every live edge swaps the
+    seats. *)
 
 (** Canonical role-relative order, matching [src/dth/solver.py]:
     [(checker_load, checker_ttd, dropper_load, dropper_ttd)]. *)

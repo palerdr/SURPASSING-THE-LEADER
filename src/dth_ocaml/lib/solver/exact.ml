@@ -1,6 +1,6 @@
 (* Canonical role-relative order, matching the Python authority in
-   src/dth/solver.py and the class encoding further down this file:
-   Checker load, Checker TTD, Dropper load, Dropper TTD. *)
+   src/dth/solver.py and the class encoding further down this file: Checker
+   load, Checker TTD, Dropper load, Dropper TTD. *)
 type state = int * int * int * int
 
 type outcome =
@@ -105,9 +105,9 @@ let rec value (x : state) : float =
 and joint_payoff (x : state) (a : joint_action) : float =
   (* Every payoff here is stated from the Dropper of [x]. A live child has
      swapped roles, so [value x_prime] is stated from the opponent's seat and
-     must be negated on the way back -- the same sign the packed path applies
-     in [class_continuation_value]. Terminal 1.0 is already this Dropper's win
-     and is not negated. *)
+     must be negated on the way back -- the same sign the packed path applies in
+     [class_continuation_value]. Terminal 1.0 is already this Dropper's win and
+     is not negated. *)
   Array.fold_left
     (fun (expectation : float) (branch : branch) ->
       match branch with
@@ -287,17 +287,16 @@ let solve_dth () =
     let phase_classes = ref 0 in
     for pic = 0 to 17010 do
       for pid = 0 to 17010 do
-        if potential pic + potential pid = phase then
+        if potential pic + potential pid = phase then (
           let k = (17011 * pic) + pid in
           class_solve_matrix k;
           incr solved_classes;
           incr phase_classes;
           if !solved_classes mod 10000 = 0 then
             Printf.eprintf "solved %d classes (phase %d)\n%!" !solved_classes
-              phase
+              phase)
       done
-    done
-    ;
+    done;
     if !phase_classes > 0 then
       Printf.eprintf "completed phase %d: %d classes (total %d)\n%!" phase
         !phase_classes !solved_classes
