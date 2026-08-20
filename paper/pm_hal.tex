@@ -1,0 +1,221 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[margin=0.60in,columnsep=0.22in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,enumitem,microtype}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,allcolors=blue!55!black]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\emergencystretch}{2em}
+\setlist{nosep,leftmargin=*}
+\newcommand{\D}{\Delta_{60}}
+\newcommand{\BR}{\operatorname{BR}}
+
+\title{\vspace{-1.2em}\textbf{Perfect Mode Hal: Aggressive, Change-Aware\\
+Opponent Exploitation in Exact DTH}}
+\author{James Cenawood}
+\date{August 20, 2026}
+
+\begin{document}
+\maketitle
+\vspace{-1.3em}
+
+\begin{abstract}
+Perfect Mode (PM) Hal is a causal meta-policy for repeated, pure Drop the
+Handkerchief (DTH). One certified tablebase remains the sole authority for each
+continuation-adjusted $60\times60$ matrix. Around it, PM combines Adaptive
+Hal's Bayesian counts, Perfect Hal's pattern experts, online change-point and
+outcome models, and a compatible Aggro Hal recurrent network. Fixed Share
+learns role-specific source and controller weights. Four modes move from an
+exact shield to hard forecast responses, while every selected policy receives
+a fresh local worst-case-loss measurement. An earlier 24-identity development
+run scored 44 wins in 48 games, but its protocol lacked durable registration
+and its evaluator trusted self-reported risk. It has no promotion authority.
+This note instead registers a 56-identity confirmation protocol with independent
+matrix recomputation, a no-Aggro ablation, and family and seat gates. At the
+protocol commit that confirmation has not been executed. PM is an aggressive
+candidate, not human mind reading, dominance, or a whole-game safety theorem.
+\end{abstract}
+
+\section{Scope and design philosophy}
+
+At public state $x$, the exact DTH agent supplies matrix $M(x)$, equilibrium
+policies $(x^\star,y^\star)$, and a saddle-gap certificate at most $10^{-6}$.
+All actions are literal seconds $1,\ldots,60$. PM never estimates continuation
+values and never sees an unrevealed simultaneous action.
+
+The intended character is ``overbearing after evidence, composed after
+surprise.'' Perfect contributes hard exploitation; Adaptive contributes
+uncertainty and a constrained response frontier; Aggro contributes recurrent
+features and a learned residual policy. The story evidence ledger motivates
+competing personae, opponent mental models, and abrupt memory discontinuities.
+PM translates that fiction into testable engineering---model competition,
+role separation, recency, and change recovery---rather than treating a person
+as one fixed psychological type. The final narrative ideal, to improve and
+adapt without looking back, becomes persistent memory with rapid de-weighting
+and recovery after changed play.
+
+\section{Causal opponent model}
+
+For each opponent role separately, PM maintains six mandatory forecast
+sources: uniform recovery, the opponent's exact equilibrium policy, a decayed
+Dirichlet model, Perfect's online expert mixture, categorical Bayesian online
+change-point detection (BOCPD), and an outcome-conditioned model. A seventh
+source is Aggro's GRU forecast when a strict compatible checkpoint is present.
+After action $a_t$ is revealed, source $k$ receives prequential log score and
+Fixed Share updates
+\begin{align*}
+ \widetilde w_{k,t+1}&\propto w_{k,t}
+       \exp\!\left(\eta\log q_{k,t}(a_t)\right),\\
+ w_{k,t+1}&=(1-\alpha)\widetilde w_{k,t+1}
+ +\frac{\alpha}{K-1}\left(1-\widetilde w_{k,t+1}\right),
+\end{align*}
+with $\alpha=.04$. Thus every source retains recovery mass when an opponent
+switches. BOCPD carries a truncated Dirichlet--multinomial run-length posterior
+with hazard $.08$. The fused forecast is
+$\widehat q_t=\sum_k w_{k,t}q_{k,t}$.
+
+Aggression confidence is the declared heuristic
+\[
+ c_t=c_{\max}\frac{n_{\rm eff}}{4+n_{\rm eff}}
+ (1-P_t(\text{change}))(1-\mathrm{JS}_t)s_t,
+\]
+where $\mathrm{JS}_t$ is normalized source disagreement and
+$s_t=\exp[-\max(0,\overline{\mathrm{NLL}}_t-\log60)]$. Only the evidence
+fraction has a data-biased-response interpretation; the product is a project
+controller, not a published theorem.
+
+\section{Aggression with measured risk}
+
+For Dropper, the certified $\epsilon$ candidate solves
+\[
+ \max_{x\in\D}x^{\mathsf T}M\widehat q_t
+ \quad\text{s.t.}\quad
+ (M^{\mathsf T}x)_j\ge L-\epsilon\quad\forall j,
+\]
+where $L=\min_j(M^{\mathsf T}x^\star)_j$ is freshly recomputed. Checker uses
+the symmetric upper constraint. The bank also contains exact equilibrium,
+hard responses to fused and Perfect forecasts, and Aggro's direct policy. For
+a direct Dropper policy $x$, actual local loss is
+$\max(0,L-\min_j(M^{\mathsf T}x)_j)$; every direct and frontier candidate is
+independently checked against the current matrix.
+
+One common bank of heuristic ensemble perturbations must give positive expected
+improvement and at least $.55$ positive-draw support. These draws are not a
+calibrated posterior, so the support fraction is not an improvement probability.
+Cold start or a change shock enters \emph{shield}, where only the exact face is
+admissible. The registered v3 caps are \emph{probe} $.05$, \emph{press} $.50$,
+and \emph{dominate} $2.0$, inside a $12.0$ per-game charge budget. Controller
+weights receive full-information counterfactual payoff feedback after reveal.
+This is deliberately aggressive: the budget is an explicit risk appetite, not
+a guarantee that losses add across a DTH game. Ganzfried--Sandholm's cumulative
+ledger concerns repetitions of one stage game; DTH's matrices change with the
+state and already contain overlapping continuation values.
+
+\section{Development audit and registered confirmation}
+
+The v1 and v2 files were created and run before this feature branch registered
+them in Git. File status text and mutable modification times cannot establish
+preregistration. Both runs are therefore development evidence. The v2 run used
+24 parameter identities across six opponent families. Each identity produced a
+common seeded seat pair for PM, Perfect, Adaptive, Aggro, and Exact; family plus
+parameter seed was the bootstrap unit (10,000 replicates). Stopped games scored
+$.5$.
+
+\begin{table}[h]
+\centering
+\caption{V2 development outcomes (48 games per controller).}
+\small
+\begin{tabular}{lrrr}
+\toprule
+Controller & Score & W--L--S & Mean halves\\
+\midrule
+PM Hal     & .9167 & 44--4--0  & 6.63\\
+Perfect    & .8958 & 43--5--0  & 5.56\\
+Adaptive   & .6563 & 31--16--1 & 7.10\\
+Aggro      & .6458 & 31--17--0 & 7.23\\
+Exact      & .5417 & 26--22--0 & 9.46\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Paired PM-minus-baseline score differences were $+.3750$
+$[.2083,.5417]$ versus Exact, $+.2604$ $[.1354,.3854]$ versus Adaptive,
+$+.2708$ $[.1042,.4375]$ versus Aggro, and $+.0208$
+$[-.0417,.0833]$ versus Perfect. Those intervals are descriptive. The run cannot
+promote PM, and even its nominal gate failed the nonnegative lower-bound
+condition against every component.
+
+Across 318 PM decisions, shield/probe/press/dominate counts were
+$56/46/154/62$. The controller reported maximum local loss $.2561$ and no
+understated-loss or game-budget violations, but the v2 evaluator did not
+independently reconstruct every selected policy's loss. PM's identity-clustered expected
+NLL was $3.481$ $[2.904,3.978]$. Fused-minus-source NLL was $-.252$
+$[-.341,-.162]$ against Perfect and $-.614$ $[-1.184,-.119]$ against uniform;
+negative is better. The fused forecast beat every individual source on this
+metric. Change detection remained weak: it detected 10 of 86 synthetic truth
+shifts, with one false-alarm onset. Strong play did not validate that detector.
+
+The v3 confirmation is registered in Git before execution. It binds the
+controller, recurrent checkpoint, and tablebase by SHA-256; requires a clean
+worktree; records the executing commit; and assigns four new seeds to all 14
+registered synthetic families, for 56 independent identities and 112 games per
+controller. It compares PM with Exact, Perfect, Adaptive, Aggro, and PM without
+Aggro. Promotion requires zero independent risk-audit violations, nonnegative
+clustered lower bounds against Exact, every component, and the no-Aggro
+ablation, plus nonnegative point differences in both seats and every family.
+The evaluator reloads every continuation-adjusted matrix and recomputes selected
+worst-case loss, charge contracts, mode caps, cumulative charges, and per-game
+budgets. No v3 result appears in this protocol-registration version of the note.
+
+\section{Human-play interpretation and limits}
+
+The psychology is operational: reinforcement, belief learning, response to
+one's own revealed action, recency, periodicity, and change are competing
+causal hypotheses. A human can counter-adapt, deceive, or change strategy; PM
+must preserve recovery mass and retreat on surprise. It should never label a
+participant's personality or claim privileged access to intent.
+
+A human study must keep opponent identity across games, log the sequence
+forecast before each reveal, score realized NLL/Brier without simulator-truth
+distributions, and cluster outcomes by participant. Change delay and false
+alarms, role slices, calibration, and game score are co-primary diagnostics.
+Bounded recursive reasoning is one possible population archetype, not a label
+the controller may assign permanently to a participant.
+The present measured evidence is synthetic development evidence from 24
+identities and known families. The recurrent checkpoint saw 2,653 training
+decisions; its causal contribution remains an open question until the registered
+no-Aggro ablation is read. PM is feature-complete for human play as an
+aggressive candidate, while promotion awaits the registered synthetic result
+and then participant-level human evidence.
+
+\begingroup
+\footnotesize
+\setlength{\parskip}{0pt}
+\begin{thebibliography}{9}
+\bibitem{rnr} M. Johanson, M. Zinkevich, and M. Bowling.
+\href{https://papers.nips.cc/paper_files/paper/2007/file/6e7b33fdea3adc80ebd648fffb665bb8-Paper.pdf}{Computing Robust Counter-Strategies}. NeurIPS, 2007.
+\bibitem{dbr} M. Johanson and M. Bowling.
+\href{https://proceedings.mlr.press/v5/johanson09a.html}{Data Biased Robust Counter Strategies}. AISTATS, 2009.
+\bibitem{share} M. Herbster and M. Warmuth.
+\href{https://doi.org/10.1023/A:1007424614876}{Tracking the Best Expert}. Machine Learning, 1998.
+\bibitem{bocpd} R. Adams and D. MacKay.
+\href{https://arxiv.org/abs/0710.3742}{Bayesian Online Changepoint Detection}, 2007.
+\bibitem{ewa} C. Camerer and T. Ho.
+\href{https://doi.org/10.1111/1468-0262.00054}{Experience-Weighted Attraction Learning}. Econometrica, 1999.
+\bibitem{mentalize} A. Hampton, P. Bossaerts, and J. O'Doherty.
+\href{https://doi.org/10.1073/pnas.0711099105}{Mentalizing-related computations in strategic interaction}. PNAS, 2008.
+\bibitem{delta} M. Nassar et al.
+\href{https://doi.org/10.1523/JNEUROSCI.0822-10.2010}{A Bayesian delta-rule model of changing environments}. J. Neuroscience, 2010.
+\bibitem{ch} C. Camerer, T.-H. Ho, and J.-K. Chong.
+\href{https://doi.org/10.1162/0033553041502225}{A Cognitive Hierarchy Model of Games}. QJE, 2004.
+\bibitem{scores} T. Gneiting and A. Raftery.
+\href{https://doi.org/10.1198/016214506000001437}{Strictly Proper Scoring Rules}. JASA, 2007.
+\bibitem{safe} S. Ganzfried and T. Sandholm.
+\href{https://doi.org/10.1145/2716322}{Safe Opponent Exploitation}. ACM TEAC, 2015.
+\end{thebibliography}
+\endgroup
+
+\end{document}

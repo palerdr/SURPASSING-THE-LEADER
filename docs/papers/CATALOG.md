@@ -44,3 +44,52 @@ material.
 Many-Player Silent Duel with Arbitrary Consolation Prize*, arXiv:1712.00274. It
 is an n-player non-constant-sum tournament and is **not** a model for this
 game's stage matrix; it is retained for the timing-game framing only.
+
+## PM Hal opponent-modeling literature
+
+The PM Hal design note in `paper/pm_hal.tex` cites the following primary
+sources. They motivate separate mechanisms and evaluation questions; none is
+treated as direct evidence about people playing this repository's DTH game.
+
+- Johanson, Zinkevich & Bowling, *Computing Robust Counter-Strategies*
+  ([NeurIPS paper](https://papers.nips.cc/paper_files/paper/2007/file/6e7b33fdea3adc80ebd648fffb665bb8-Paper.pdf),
+  PDF pp. 5--6) — restricted Nash response and the exploitation/worst-case
+  frontier.
+- Johanson & Bowling, *Data Biased Robust Counter Strategies*
+  ([PMLR](https://proceedings.mlr.press/v5/johanson09a.html), proceedings
+  pp. 270--272; PDF pp. 6--8) — evidence-scaled confidence. PM Hal's additional
+  change and agreement factors are project heuristics, not results from this
+  paper.
+- Ganzfried & Sandholm, *Safe Opponent Exploitation*
+  ([author PDF](https://www.cs.cmu.edu/~sandholm/www/safeExploitation.teac15.pdf),
+  article pp. 8:1--8:3 and 8:12--8:16) — expected-profit safety across
+  repetitions of one game. Its cumulative theorem is not claimed for changing
+  continuation-adjusted DTH stages.
+- Herbster & Warmuth, *Tracking the Best Expert*
+  ([DOI](https://doi.org/10.1023/A:1007424614876), pp. 151--160) — the Fixed
+  Share update used by PM Hal's role-separated source and controller mixtures.
+- Adams & MacKay, *Bayesian Online Changepoint Detection*
+  ([arXiv](https://arxiv.org/abs/0710.3742), PDF pp. 2--3) — run-length
+  inference adapted to a truncated categorical Dirichlet-multinomial model.
+- Camerer & Ho, *Experience-Weighted Attraction Learning in Normal Form Games*
+  ([open record](https://authors.library.caltech.edu/records/kgnbx-e2z22),
+  journal pp. 827--835) — reinforcement and belief learning as competing or
+  hybrid behavioral mechanisms.
+- Hampton, Bossaerts & O'Doherty, *Neural correlates of mentalizing-related
+  computations during strategic interactions*
+  ([PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC2373314/), journal
+  pp. 6741--6744) — evidence that a model of how one's revealed actions
+  influence an opponent can improve prediction in a repeated inspection game.
+- Nassar et al., *An Approximately Bayesian Delta-Rule Model Explains the
+  Dynamics of Belief Updating in a Changing Environment*
+  ([DOI](https://doi.org/10.1523/JNEUROSCI.0822-10.2010), journal
+  pp. 12366--12370) — surprise-dependent human learning rates and gradual
+  post-change recovery.
+- Camerer, Ho & Chong, *A Cognitive Hierarchy Model of Games*
+  ([DOI](https://doi.org/10.1162/0033553041502225), journal pp. 861--866) —
+  bounded recursive reasoning as a possible human archetype, not a permanent
+  player label.
+- Gneiting & Raftery, *Strictly Proper Scoring Rules, Prediction, and
+  Estimation* ([DOI](https://doi.org/10.1198/016214506000001437), journal
+  pp. 359--363) — why the PM benchmark leads with prequential log and Brier
+  scores rather than accuracy alone.

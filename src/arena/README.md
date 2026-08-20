@@ -71,7 +71,7 @@ retired `stl-mcts` surface is not advertised. Browser snapshots carry
 server-owned character, role, and winner-seat fields, so the client never
 infers identity from presentation labels.
 
-## Exact, Adaptive, Exploit, and Aggro Hal
+## Exact, Adaptive, Exploit, Aggro, Perfect, and PM Hal
 
 All policy providers return a distribution over literal seconds;
 `PolicyDrivenAgent` remains the only component that masks and samples a legal
@@ -131,6 +131,60 @@ opponents leave authority with the network. The blend is cleared at session
 boundaries and never sees an unrevealed simultaneous action. It is an explicit
 hand-written adapter, not evidence that the GRU learned to adapt, and should be
 selected only by validation rather than assumed to be stronger.
+
+**Perfect Hal** is the checkpoint-free, maximally aggressive pure-DTH path.
+It maintains separate Dropper and Checker opponent models and scores a fixed
+ensemble of global, multi-timescale recency, repeat, first-order, response-to-
+own-action, action-delta, public-state-regime, and periodic experts by causal
+prequential log loss. Every revealed action updates the ensemble only after
+the simultaneous decision has resolved. The current ensemble forecast is fed
+through the exact continuation-adjusted DTH matrix, and the default zero
+temperature puts all policy mass on the exact best-response set. Perfect Hal
+never blends equilibrium back in, enforces no epsilon budget, and requires no
+learned checkpoint.
+
+The name describes the policy's character, not a mathematical guarantee. It
+is an unrestricted empirical exploiter, not a second DTH solver, a maximin
+certificate, or a claim of unbeatable play. Its opponent memory persists
+across one repeated-opponent session and is cleared only by `reset_session`.
+Like Aggro Hal, it fails closed outside literal actions `1..60` and is exposed
+only by explicit pure-DTH Arena surfaces.
+
+**Perfect Mode (PM) Hal** is the synthesis layer for repeated pure-DTH play.
+It keeps Adaptive Hal's role-separated Dirichlet evidence and independently
+checked epsilon frontier, Perfect Hal's interpretable pattern forecast, a
+categorical Bayesian online change-point model, an outcome-conditioned expert,
+and—when a compatible checkpoint is supplied—Aggro Hal's GRU forecast and
+direct residual policy. The sources earn role-separated authority by true
+Fixed Share updates under reveal-time prequential log loss. Uniform and the
+opponent's exact equilibrium policy remain explicit recovery sources.
+
+PM Hal turns evidence into four modes. `shield` admits only the exact face at a
+cold start or after a change shock; `probe` spends at most `.05` local epsilon;
+`press` admits up to `.50`; and sustained high-confidence agreement can enter
+`dominate` at up to `2.0` local epsilon within a `12.0` per-game budget. These
+values are deliberately overbearing and are registered in
+`pm_hal_controller_v3.json`. Every chosen direct or frontier policy has its
+actual local worst-case loss recomputed from the fresh exact matrix. Frontier
+candidates are charged their declared epsilon; direct candidates are charged
+their measured loss. The provider records both and refuses any policy that
+would exceed the active mode or game budget.
+
+The confidence product—effective evidence, low change probability, forecast
+agreement, and prequential skill—is a PM-specific controller heuristic. Fixed
+Share has a switching-expert interpretation, the evidence fraction is inspired
+by data-biased robust response, and the local epsilon checks are exact for the
+current matrix. Their product is not a new whole-game safety theorem. The name
+describes Hal's intended character: fast pressure against stable habits,
+immediate retreat after a surprise, and renewed pressure when the new regime is
+supported. It does not claim mind reading, human psychological validity, or
+unbeatable play.
+
+The optional Aggro checkpoint is explicit. Omitting it leaves a complete,
+checkpoint-free PM controller and reports `aggro_enabled: false`; PM never
+pretends an absent or incompatible recurrent model contributed evidence. A
+compatible network is used as one forecast and one independently risk-measured
+direct-policy candidate, never as continuation-value authority.
 
 Aggro training and evaluation use `PureDTHGame`, which reuses the shared
 canonical resolution, revival, load, and clock mechanics while permanently
@@ -282,7 +336,57 @@ uv run python -m arena.policies.evaluate_aggro_hal_memory --checkpoint outputs/a
 
 # Pure-DTH agent match. Canonical STL play intentionally does not offer Aggro.
 uv run python -m arena match --candidate aggro-hal --opponent dth --pure-dth --games 50 --aggro-hal-checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/vs-exact.json
+
+# Checkpoint-free hard-best-response match. Canonical STL play omits Perfect Hal.
+uv run python -m arena match --candidate perfect-hal --opponent dth --pure-dth --games 50 --output outputs/perfect-hal-v1/vs-exact.json
+
+# Build the current schema-v2 exact artifact at the Arena default path.
+uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 report_path=outputs/pm-hal/dth-complete-v2-report.json backend=rust lp_workers=4 progress_every=50
+
+# Frozen bounded training run for PM's compatible recurrent component candidate.
+uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/pm_hal_aggro_component_v1.yaml --output-dir outputs/pm-hal/aggro-component-v1
+
+# Full PM Hal match with the compatible recurrent component.
+uv run python -m arena match --candidate pm-hal --opponent dth --pure-dth --games 50 --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/vs-exact.json
+
+# Human play on the permanent 1..60 pure-DTH surface.
+uv run python -m arena play --hal-agent pm-hal --pure-dth --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt
+
+# Git-registered v3 confirmation: 56 identities, every family, common sessions,
+# no-Aggro ablation, and independent matrix-based risk audit.
+uv run python -m arena.policies.evaluate_pm_hal --config src/arena/config/pm_hal_evaluation_v3.json --pm-config src/arena/config/pm_hal_controller_v3.json --artifact-dir src/dth/artifacts/complete_full_v1 --aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/evaluation-report.json
 ```
+
+The artifact directory is generated and gitignored despite its historical
+`complete_full_v1` profile name; PM requires manifest schema
+`dth.complete-tablebase.v2` and fails with a rebuild command when an older
+artifact is opened. The recurrent checkpoint is also generated. The v3
+protocol binds the controller bytes, checkpoint, and table digest by SHA-256,
+requires a clean Git worktree, and records the executing commit before opening
+any registered identity.
+
+The v1 and v2 configurations and reports are retained as development history.
+They were not durably registered in Git before execution, so their status text
+does not establish preregistration and their promotion gates carry no release
+authority. The v2 development run produced 44 wins and 4 losses for PM Hal in 48
+games (`.9167` all-game score), compared with Perfect `.8958`, Adaptive
+`.6563`, Aggro `.6458`, and Exact `.5417`. The opponent-identity-clustered
+paired difference was `+.3750 [.2083, .5417]` against Exact and
+`+.0208 [-.0417, .0833]` against Perfect. These descriptive results motivated
+the repaired v3 confirmation; they do not promote the controller. The v2
+evaluator also trusted controller-supplied risk diagnostics, reused one random
+stream across identities, and used a permissive change-alarm metric. V3 closes
+those proof gaps with independent stage-matrix recomputation, identity-seeded
+randomness, alarm-onset accounting, a no-Aggro ablation, and seat/family gates.
+
+The fused forecast also improved opponent-identity-clustered expected log loss
+in that development run against every individual source. Its difference from the Perfect source was
+`-.2520 [-.3409, -.1622]` nats and from uniform was
+`-.6137 [-1.1842, -.1187]`; negative means the fused forecast was better.
+These are synthetic seed-holdout measurements. They establish neither human
+psychological validity, the Aggro component's causal contribution, promotion,
+nor a whole-game safety theorem. The v3 confirmation remains pending until its
+registered protocol commit exists and the one-shot report is produced.
 
 The audit manifest is a one-way door: predeclare checkpoint and ablations,
 record checkpoint/manifest hashes, run the memory, reset, adapter, and

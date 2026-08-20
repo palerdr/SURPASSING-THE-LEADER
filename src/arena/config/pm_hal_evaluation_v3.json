@@ -1,0 +1,49 @@
+{
+  "schema_version": "arena-pm-hal-evaluation-config-v2",
+  "status": "git-registered-before-execution",
+  "benchmark_id": "pm-hal-broad-synthetic-confirmation-v3",
+  "families": [
+    {"family": "fixed", "seeds": [71001, 71002, 71003, 71004]},
+    {"family": "deterministic", "seeds": [72001, 72002, 72003, 72004]},
+    {"family": "early", "seeds": [73001, 73002, 73003, 73004]},
+    {"family": "late", "seeds": [74001, 74002, 74003, 74004]},
+    {"family": "narrow", "seeds": [75001, 75002, 75003, 75004]},
+    {"family": "multimodal", "seeds": [76001, 76002, 76003, 76004]},
+    {"family": "state_threshold", "seeds": [77001, 77002, 77003, 77004]},
+    {"family": "periodic", "seeds": [78001, 78002, 78003, 78004]},
+    {"family": "win_stay_lose_shift", "seeds": [79001, 79002, 79003, 79004]},
+    {"family": "copy_recent", "seeds": [80001, 80002, 80003, 80004]},
+    {"family": "counter_recent", "seeds": [81001, 81002, 81003, 81004]},
+    {"family": "switch", "seeds": [82001, 82002, 82003, 82004]},
+    {"family": "retreat_after_detected_exploitation", "seeds": [83001, 83002, 83003, 83004]},
+    {"family": "bait_then_reverse", "seeds": [84001, 84002, 84003, 84004]}
+  ],
+  "sessions_per_opponent": 1,
+  "seat_pairs_per_session": 1,
+  "start_clocks": [720],
+  "max_half_rounds": 24,
+  "evaluation_seed": 1268000,
+  "bootstrap_seed": 1275919,
+  "bootstrap_samples": 20000,
+  "promotion_gate": {
+    "minimum_opponent_identities": 56,
+    "maximum_risk_violations": 0,
+    "minimum_clustered_lower_bound_vs_exact": 0.0,
+    "minimum_clustered_lower_bound_vs_strongest_component": 0.0,
+    "minimum_clustered_lower_bound_vs_no_aggro": 0.0,
+    "minimum_point_difference_every_seat": 0.0,
+    "minimum_point_difference_every_family": 0.0
+  },
+  "bindings": {
+    "pm_config_sha256": "67400560d7677c242eb5069e3ec71acf63472bee7388bdbc0b8a2402953b20f0",
+    "aggro_checkpoint_sha256": "401df584ab52d5881fd96f7018546e4101d8617097acc32e0f077e76a707d153",
+    "dth_table_digest": "40561447539bde3f1db83f61303b618ca062bc529c6c23a7fe27cffa917ac392"
+  },
+  "notes": [
+    "V1 and v2 are development evidence because their registration was not durable in Git.",
+    "V3 uses 56 new parameter identities spanning every registered synthetic family.",
+    "The controller, checkpoint, and tablebase are hash-bound before execution.",
+    "The gate requires aggregate clustered superiority, both-seat and every-family point noninferiority, a clean independent risk audit, and noninferiority to the no-Aggro ablation.",
+    "This remains synthetic evidence and cannot establish human psychological validity."
+  ]
+}

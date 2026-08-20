@@ -146,6 +146,65 @@ def _make_aggro_hal_provider(args: argparse.Namespace):
     )
 
 
+def _make_perfect_hal_provider(args: argparse.Namespace):
+    from arena.policies.perfect_hal import (
+        PerfectHalConfig,
+        make_live_provider,
+    )
+
+    return make_live_provider(
+        artifact_dir=_dth_artifact_dir(args),
+        config=PerfectHalConfig(
+            prior_strength=args.perfect_hal_prior_strength,
+            expert_learning_rate=args.perfect_hal_expert_learning_rate,
+            expert_weight_retention=args.perfect_hal_expert_weight_retention,
+            response_temperature=args.perfect_hal_response_temperature,
+        ),
+    )
+
+
+def _make_pm_hal_provider(args: argparse.Namespace):
+    from dataclasses import replace
+
+    from arena.policies.pm_hal import load_pm_hal_config, make_live_provider
+
+    base = load_pm_hal_config(args.pm_hal_config)
+    game_budget = (
+        base.game_epsilon_budget
+        if args.pm_hal_game_epsilon_budget is None
+        else args.pm_hal_game_epsilon_budget
+    )
+    press_cap = (
+        min(base.press_epsilon_cap, game_budget)
+        if args.pm_hal_press_epsilon_cap is None
+        else args.pm_hal_press_epsilon_cap
+    )
+    dominate_cap = (
+        min(base.dominate_epsilon_cap, game_budget)
+        if args.pm_hal_dominate_epsilon_cap is None
+        else args.pm_hal_dominate_epsilon_cap
+    )
+
+    return make_live_provider(
+        artifact_dir=_dth_artifact_dir(args),
+        config=replace(
+            base,
+            game_epsilon_budget=game_budget,
+            probe_epsilon_cap=min(base.probe_epsilon_cap, press_cap),
+            press_epsilon_cap=press_cap,
+            dominate_epsilon_cap=dominate_cap,
+            posterior_samples=(
+                base.posterior_samples
+                if args.pm_hal_posterior_samples is None
+                else args.pm_hal_posterior_samples
+            ),
+        ),
+        aggro_checkpoint=args.pm_hal_aggro_checkpoint,
+        device=args.pm_hal_device,
+        seed=args.seed,
+    )
+
+
 def _make_provider(kind: str, args: argparse.Namespace):
     if kind == "abstract":
         tablebase_path, ruleset_id = _abstract_artifact(args)
@@ -198,6 +257,10 @@ def _make_provider(kind: str, args: argparse.Namespace):
         return _make_exploit_hal_provider(args)
     if kind == "aggro-hal":
         return _make_aggro_hal_provider(args)
+    if kind == "perfect-hal":
+        return _make_perfect_hal_provider(args)
+    if kind == "pm-hal":
+        return _make_pm_hal_provider(args)
     if kind == "stl-mcts":
         raise ValueError(
             "stl-mcts is retired: the STL play/solver stack it depended on no "
@@ -215,7 +278,9 @@ def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
 def _print_state(game: Game, *, human_display_name: str = CANONICAL_HUMAN_NAME) -> None:
     print(f"\nClock {game.format_game_clock()} | round {game.round_num + 1}")
     for player in (game.player1, game.player2):
-        name = human_display_name if player.name == CANONICAL_HUMAN_NAME else player.name
+        name = (
+            human_display_name if player.name == CANONICAL_HUMAN_NAME else player.name
+        )
         print(
             f"  {name}: cylinder={player.cylinder:.0f}s TTD={player.ttd:.0f}s deaths={player.deaths}"
         )
@@ -283,7 +348,12 @@ def _play_one_game(
     )
     hal = Player(name=CANONICAL_HAL_NAME, physicality=PHYSICALITY_HAL)
     human = Player(name=CANONICAL_HUMAN_NAME, physicality=PHYSICALITY_BAKU)
-    game = Game(
+    game_type = Game
+    if args.pure_dth:
+        from arena.dth_adapter import PureDTHGame
+
+        game_type = PureDTHGame
+    game = game_type(
         player1=hal,
         player2=human,
         referee=Referee(),
@@ -415,6 +485,12 @@ def _play_one_game(
 
 def command_play(args: argparse.Namespace) -> int:
     args.human_name = validate_human_display_name(args.human_name)
+    pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
+    if args.hal_agent in pure_dth_only and not args.pure_dth:
+        raise ValueError(
+            f"{args.hal_agent} is a pure-DTH policy; pass --pure-dth so action "
+            "61 is impossible"
+        )
     if args.games <= 0:
         raise ValueError("--games must be positive")
     if args.tui and args.games != 1:
@@ -435,6 +511,7 @@ def command_play(args: argparse.Namespace) -> int:
         "start_clock": args.start_clock,
         "start_clock_sequence": args.start_clock_sequence,
         "requested_games": args.games,
+        "pure_dth": bool(args.pure_dth),
         "games": [],
     }
     games = transcript["games"]
@@ -556,14 +633,86 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="blend concentrated public action evidence into Aggro Hal's forecast",
     )
+    parser.add_argument(
+        "--perfect-hal-prior-strength",
+        type=float,
+        default=0.02,
+        help="public pseudo-observation mass before Perfect Hal sees an action",
+    )
+    parser.add_argument(
+        "--perfect-hal-expert-learning-rate",
+        type=float,
+        default=1.25,
+        help="Perfect Hal prequential expert-score learning rate",
+    )
+    parser.add_argument(
+        "--perfect-hal-expert-weight-retention",
+        type=float,
+        default=0.92,
+        help="Perfect Hal expert-score retention across public reveals",
+    )
+    parser.add_argument(
+        "--perfect-hal-response-temperature",
+        type=float,
+        default=0.0,
+        help="Perfect Hal best-response temperature; zero is a hard response",
+    )
+    parser.add_argument(
+        "--pm-hal-config",
+        default="src/arena/config/pm_hal_controller_v3.json",
+        help="frozen PM Hal controller configuration",
+    )
+    parser.add_argument(
+        "--pm-hal-aggro-checkpoint",
+        default=None,
+        help=(
+            "optional compatible Aggro checkpoint; PM Hal remains checkpoint-free "
+            "when omitted"
+        ),
+    )
+    parser.add_argument(
+        "--pm-hal-device",
+        choices=("cpu", "cuda"),
+        default="cpu",
+        help="explicit device for the optional PM Hal recurrent expert",
+    )
+    parser.add_argument(
+        "--pm-hal-game-epsilon-budget",
+        type=float,
+        default=None,
+        help="maximum cumulative PM Hal local worst-case-loss charge per game",
+    )
+    parser.add_argument(
+        "--pm-hal-press-epsilon-cap",
+        type=float,
+        default=None,
+        help="maximum local loss admitted in PM Hal press mode",
+    )
+    parser.add_argument(
+        "--pm-hal-dominate-epsilon-cap",
+        type=float,
+        default=None,
+        help="maximum local loss admitted in PM Hal dominate mode",
+    )
+    parser.add_argument(
+        "--pm-hal-posterior-samples",
+        type=int,
+        default=None,
+        help="forecast-ensemble posterior draws per PM Hal frontier candidate",
+    )
 
 
 def command_match(args: argparse.Namespace) -> int:
     from arena.match import run_paired_series, write_report
 
-    if "aggro-hal" in {args.candidate, args.opponent} and not args.pure_dth:
+    pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
+    if (
+        pure_dth_only.intersection({args.candidate, args.opponent})
+        and not args.pure_dth
+    ):
         raise ValueError(
-            "aggro-hal is a pure-DTH policy; pass --pure-dth so action 61 is impossible"
+            "aggro-hal, perfect-hal, and pm-hal are pure-DTH policies; pass "
+            "--pure-dth so action 61 is impossible"
         )
     report = run_paired_series(
         args.candidate,
@@ -593,11 +742,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m arena")
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser(
-        "play", help="play canonical STL against a pluggable Hal policy"
+        "play", help="play STL or explicit pure DTH against a pluggable Hal policy"
     )
     play.add_argument(
         "--hal-agent",
-        choices=("abstract", "dth", "adaptive-dth", "exploit-hal"),
+        choices=(
+            "abstract",
+            "dth",
+            "adaptive-dth",
+            "exploit-hal",
+            "perfect-hal",
+            "pm-hal",
+        ),
         default="dth",
     )
     _add_agent_arguments(play)
@@ -631,6 +787,14 @@ def build_parser() -> argparse.ArgumentParser:
         "fresh randomness each match, set for a reproducible replay",
     )
     play.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
+    play.add_argument(
+        "--pure-dth",
+        action="store_true",
+        help=(
+            "use permanent literal actions 1..60; required for Aggro, Perfect, "
+            "and PM Hal"
+        ),
+    )
     play.add_argument(
         "--start-clock-sequence",
         type=int,
@@ -698,6 +862,8 @@ def build_parser() -> argparse.ArgumentParser:
             "adaptive-dth",
             "exploit-hal",
             "aggro-hal",
+            "perfect-hal",
+            "pm-hal",
         ),
         required=True,
     )
@@ -709,6 +875,8 @@ def build_parser() -> argparse.ArgumentParser:
             "adaptive-dth",
             "exploit-hal",
             "aggro-hal",
+            "perfect-hal",
+            "pm-hal",
         ),
         required=True,
     )
@@ -725,7 +893,10 @@ def build_parser() -> argparse.ArgumentParser:
     match.add_argument(
         "--pure-dth",
         action="store_true",
-        help="run the pure 1..60 DTH action contract (required for aggro-hal)",
+        help=(
+            "run the pure 1..60 DTH action contract "
+            "(required for aggro-hal, perfect-hal, and pm-hal)"
+        ),
     )
     match.add_argument(
         "--output",

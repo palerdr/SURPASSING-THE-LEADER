@@ -1,0 +1,50 @@
+{
+  "schema_version": "arena-pm-hal-evaluation-config-v1",
+  "status": "predeclared-before-results",
+  "benchmark_id": "pm-hal-synthetic-seed-holdout-v2",
+  "families": [
+    {
+      "family": "deterministic",
+      "seeds": [61001, 61002, 61003, 61004]
+    },
+    {
+      "family": "periodic",
+      "seeds": [62001, 62002, 62003, 62004]
+    },
+    {
+      "family": "win_stay_lose_shift",
+      "seeds": [63001, 63002, 63003, 63004]
+    },
+    {
+      "family": "switch",
+      "seeds": [64001, 64002, 64003, 64004]
+    },
+    {
+      "family": "retreat_after_detected_exploitation",
+      "seeds": [65001, 65002, 65003, 65004]
+    },
+    {
+      "family": "bait_then_reverse",
+      "seeds": [66001, 66002, 66003, 66004]
+    }
+  ],
+  "sessions_per_opponent": 1,
+  "seat_pairs_per_session": 1,
+  "start_clocks": [720],
+  "max_half_rounds": 24,
+  "evaluation_seed": 1068000,
+  "bootstrap_seed": 1075919,
+  "bootstrap_samples": 10000,
+  "promotion_gate": {
+    "minimum_opponent_identities": 24,
+    "maximum_risk_violations": 0,
+    "minimum_clustered_lower_bound_vs_exact": 0.0,
+    "minimum_clustered_lower_bound_vs_strongest_component": 0.0
+  },
+  "notes": [
+    "The v1 identities became development evidence after their first result was inspected.",
+    "The v2 parameter seeds and protocol were frozen after aggression tuning and before v2 results were inspected.",
+    "This is a synthetic public-history seed holdout, not human validation.",
+    "A stopped game is scored as 0.5 only in paired all-game comparisons."
+  ]
+}

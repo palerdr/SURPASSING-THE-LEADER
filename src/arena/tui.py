@@ -429,7 +429,7 @@ def _background_run(width: int, colour: bool) -> str:
 # Scaling three figures per frame costs a tenth of a second or so, which would
 # be paid again on every redraw. Layout is fixed for a session and there are at
 # most ten distinct sprites, so the scaled results are memoised.
-_SCALE_MEMO: dict[tuple[int, int, int, int], Sprite] = {}
+_SCALE_MEMO: dict[tuple[int, int, int, int, int], tuple[Sprite, Sprite]] = {}
 
 
 def _scaled(sprite: Sprite, columns: int, rows: int, cell: tuple[int, int]) -> Sprite:
@@ -448,17 +448,21 @@ def _scaled(sprite: Sprite, columns: int, rows: int, cell: tuple[int, int]) -> S
     layout size.
     """
     cell_width, cell_height = cell
-    key = (id(sprite), columns, rows, cell_height)
-    cached = _SCALE_MEMO.get(key)
-    if cached is None:
+    key = (id(sprite), columns, rows, cell_width, cell_height)
+    entry = _SCALE_MEMO.get(key)
+    if entry is None or entry[0] is not sprite:
         width, height = columns * cell_width, rows * cell_height
         # A pure shrink, not a blend: box-averaging at this reduction ratio
         # melts the ink into grey, while nearest sampling keeps each pixel an
         # authentic colour from the artwork.
         inner = sprite.shrunk(max(1, width - 2), max(1, height - 2))
         cached = inner.padded(1).rimmed()
-        _SCALE_MEMO[key] = cached
-    return cached
+        # Retain the source alongside the result. An integer object ID can be
+        # recycled after its object dies; the strong reference makes the ID a
+        # stable identity for as long as the memo entry exists.
+        _SCALE_MEMO[key] = (sprite, cached)
+        return cached
+    return entry[1]
 
 
 def _figure_columns(sprite: Sprite | None, cell_rows: int) -> int:

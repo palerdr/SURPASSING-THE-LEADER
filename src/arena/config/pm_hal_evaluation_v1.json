@@ -1,0 +1,49 @@
+{
+  "schema_version": "arena-pm-hal-evaluation-config-v1",
+  "status": "predeclared-before-results",
+  "benchmark_id": "pm-hal-synthetic-benchmark-v1",
+  "families": [
+    {
+      "family": "deterministic",
+      "seeds": [51001, 51002, 51003, 51004]
+    },
+    {
+      "family": "periodic",
+      "seeds": [52001, 52002, 52003, 52004]
+    },
+    {
+      "family": "win_stay_lose_shift",
+      "seeds": [53001, 53002, 53003, 53004]
+    },
+    {
+      "family": "switch",
+      "seeds": [54001, 54002, 54003, 54004]
+    },
+    {
+      "family": "retreat_after_detected_exploitation",
+      "seeds": [55001, 55002, 55003, 55004]
+    },
+    {
+      "family": "bait_then_reverse",
+      "seeds": [56001, 56002, 56003, 56004]
+    }
+  ],
+  "sessions_per_opponent": 1,
+  "seat_pairs_per_session": 1,
+  "start_clocks": [720],
+  "max_half_rounds": 24,
+  "evaluation_seed": 968000,
+  "bootstrap_seed": 975919,
+  "bootstrap_samples": 10000,
+  "promotion_gate": {
+    "minimum_opponent_identities": 24,
+    "maximum_risk_violations": 0,
+    "minimum_clustered_lower_bound_vs_exact": 0.0,
+    "minimum_clustered_lower_bound_vs_strongest_component": 0.0
+  },
+  "notes": [
+    "Opponent identities and protocol were frozen before PM Hal v1 results were inspected.",
+    "This is synthetic public-history evidence, not human validation.",
+    "A stopped game is scored as 0.5 only in paired all-game comparisons."
+  ]
+}

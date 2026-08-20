@@ -27,7 +27,9 @@ from arena.tui import (
     POSE_SCALE,
     Layout,
     SceneArt,
+    _SCALE_MEMO,
     _figure_columns,
+    _scaled,
     _sprite_block,
     format_result,
     render_frame,
@@ -690,6 +692,17 @@ def test_yakou_stands_a_step_back_from_the_players() -> None:
     lit_rows = [index for index, line in enumerate(scene) if line[2:-2].strip()]
     assert marker_rows, "the marker figure must be visible"
     assert max(marker_rows) < max(lit_rows), "Yakou's feet must sit above the floor line"
+
+
+def test_scaled_sprite_cache_retains_identity_and_cell_width() -> None:
+    sprite = _tall_block((250, 250, 250, 255))
+    _SCALE_MEMO.clear()
+    narrow = _scaled(sprite, 3, 4, (1, 2))
+    wide = _scaled(sprite, 3, 4, (2, 2))
+
+    assert narrow.width == 3
+    assert wide.width == 6
+    assert all(entry[0] is sprite for entry in _SCALE_MEMO.values())
 
 
 def test_figures_share_a_common_floor_line() -> None:
