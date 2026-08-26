@@ -523,15 +523,23 @@ $\max_{d,c}|M_{d,c}-\widehat M_{d,c}|\le\epsilon$, then
 $|\val(M)-\val(\widehat M)|\le\epsilon$.
 \end{proposition}
 
+\begin{lemma}[Mirror symmetry]\label{lem:persym}
+The stage matrix is persymmetric, $M_{d,c}=M_{61-c,\,61-d}$, because the map
+$(d,c)\mapsto(61-c,\,61-d)$ preserves both the condition $c\ge d$ and the
+lag $c-d+1$ in \eqref{eq:toeplitz}. Hence for every $\sigma\in\Delta_{60}$
+and its reversal $\bar\sigma_i=\sigma_{61-i}$,
+$(\sigma^{\mathsf T}M)_c=(M\bar\sigma)_{61-c}$ for $c=1,\dots,60$.
+\end{lemma}
+
 \begin{proposition}[One recurrence, both strategies]\label{prop:equalizer}
 Let $d_0=S_1-F$ and $\Delta_m=S_{m+1}-S_m$. If $d_0\ne0$, define
 \[
 r_1=1,\qquad
 r_k=-\frac{1}{d_0}\sum_{m=1}^{k-1}\Delta_m\,r_{k-m}\quad(k=2,\dots,60).
 \]
-Then $\sigma_d\propto(r_1,\dots,r_{60})$ makes $\sigma_d^{\mathsf T}M$
-constant, $\sigma_c\propto(r_{60},\dots,r_1)$ makes $M\sigma_c$ constant,
-and $(M\sigma_c)_i=(\sigma_d^{\mathsf T}M)_{61-i}$ for every $i$.
+Then $\sigma_c\propto(r_{60},\dots,r_1)$ makes $M\sigma_c$ constant, and
+its reversal $\sigma_d\propto(r_1,\dots,r_{60})$ makes
+$\sigma_d^{\mathsf T}M$ the same constant.
 \end{proposition}
 
 \begin{proof}
@@ -541,26 +549,24 @@ with $F$ in column $d$. Thus, for $d=1,\dots,59$,
 (M\sigma_c)_d-(M\sigma_c)_{d+1}
 =d_0\,\sigma_{c,d}+\sum_{m\ge1}\Delta_m\,\sigma_{c,d+m}.
 \]
-This is zero when the Dropper is indifferent between seconds $d$ and $d+1$.
-Zero gives $\sigma_{c,d}$ from the later entries. Start at
-$\sigma_{c,60}=1$ and step down $59$ times: this is the recurrence with
-$r_k=\sigma_{c,61-k}$. The same subtraction on columns $c$ and $c+1$ gives
-$d_0\,\sigma_{d,c+1}+\sum_{m\ge1}\Delta_m\,\sigma_{d,c+1-m}$, the same
-coefficients read forwards from $\sigma_{d,1}=1$, so $\sigma_{d,k}=r_k$.
-Substitute $k\mapsto61-k$ in the two sums to get
-$(M\sigma_c)_i=(\sigma_d^{\mathsf T}M)_{61-i}$.
+Setting every difference to zero gives $\sigma_{c,d}$ from the later
+entries. Start at $\sigma_{c,60}=1$ and step down $59$ times: this is the
+recurrence with $r_k=\sigma_{c,61-k}$. By Lemma~\ref{lem:persym},
+$(\sigma_d^{\mathsf T}M)_c=(M\sigma_c)_{61-c}$ is the same constant.
 \end{proof}
 
-Negative entries of $r$ are clipped, and the pair is normalized, before the
-certificate is measured. The clip cannot invalidate the bounds, because they
-hold for any mixed pair. Each class then goes through the same ladder:
+Negative entries of $r$ are clipped and the pair is normalized before the
+certificate is measured. The clip cannot invalidate the bounds, which hold for
+any mixed pair, and Lemma~\ref{lem:persym} holds for any reversed pair, so one
+product $M\sigma_c$ still yields both $U$ and $L$. Each class then goes
+through the same ladder:
 
 \begin{enumerate}[leftmargin=*]
 \item \textbf{Pure saddle.} Lemma~\ref{lem:toeplitz}. If the maximin and the
   minimax meet within $\tol$, a pure action pair is enough.
 \item \textbf{Equalizer.} Proposition~\ref{prop:equalizer}: $1{,}770$
   multiply-adds for $r$ and $1{,}770$ for $M\sigma_c$. Its maximum and
-  minimum are $U$ and $L$.
+  minimum are $U$ and $L$ (Lemma~\ref{lem:persym}).
 \item \textbf{Linear programming.} The standard zero-sum program
   $\max\{v:M^{\mathsf T}\sigma_d\ge v\mathbf1,\ \mathbf1^{\mathsf T}\sigma_d=1,
   \ \sigma_d\ge0\}$, with $\sigma_c$ from its duals, then the same
@@ -615,7 +621,7 @@ $\widehat V(x)=(L_x+U_x)/2$, this is the recurrence for $\varepsilon$.
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-  width=0.95\textwidth, height=3.9cm,
+  width=0.95\textwidth, height=3.5cm,
   xlabel={second}, ylabel={probability},
   xmin=0, xmax=61, ymin=0.005, ymax=0.35,
   ymode=log,
@@ -641,7 +647,7 @@ Proposition~\ref{prop:policy} shows how later gaps accumulate.}
 
 \section{The computation}\label{sec:computation}
 
-The implementation is one Python file of $480$ lines. It builds the
+The implementation is one Python file of $481$ lines. It builds the
 $17{,}011$ quotient profiles with their successful-check children, failure
 child, and revival probability. It stores $V$ as a $17{,}011\times17{,}012$
 float64 array. The extra column holds $-1$, so a terminal win reads as $+1$
@@ -664,9 +670,9 @@ Apple M5 Pro laptop. The laptop has five performance cores and ten efficiency
 cores; the kernel used fifteen threads with a static schedule. That is about
 $5.9$ million classes per second, and a single thread does $0.49$ million
 per second. The earlier artifact came from the same rules on a twelve-core
-desktop: $5{,}432$ seconds for $98.1\%$ of the table. It used a warm-started
-support search, two bordered $61\times61$ linear systems per class, and
-sessions with checkpoints.
+desktop in about $1.5$ hours. It used a warm-started support search, two
+bordered $61\times61$ linear systems per class, and sessions with
+checkpoints.
 
 Three changes explain the ratio. Proposition~\ref{prop:equalizer} replaces
 about $1.6\times10^{5}$ floating-point operations per class with about
@@ -738,9 +744,9 @@ $\overline V_{\widehat\pi}(0,0,0,0)-\underline V_{\widehat\pi}(0,0,0,0)
 \textbf{Reproducibility.} From \texttt{src/dth\_compact}, \texttt{uv run
 main.py} builds the table, re-solves the $1{,}200$ audit classes, and prints
 the six reference values in about one minute. \texttt{uv run pytest} runs
-the seventeen structural and numerical checks.
+the eighteen structural and numerical checks.
 
-\vspace{-1.2em}
+\vspace{-1.6em}
 \begin{thebibliography}{9}
 \footnotesize
 \setlength{\itemsep}{0pt}

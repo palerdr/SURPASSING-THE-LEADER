@@ -86,11 +86,12 @@ uv run --project src/dth_compact src/dth_compact/main.py
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 ```
 
-With the exact value table available, the figures and the PDF can be rebuilt:
+With the compact solver's table built (`src/dth_compact/artifacts/V.npy`), the
+figures and the PDF can be rebuilt:
 
 ```powershell
-uv run python paper/generate_figure_data.py
-uv run --with matplotlib --with seaborn --with pandas python paper/make_figures.py
+uv run --project src/dth_compact python paper/generate_figure_data.py
+uv run --with matplotlib --with seaborn python paper/make_figures.py
 Push-Location paper
 tectonic dth_exact_solution.tex --synctex --keep-logs
 Pop-Location

@@ -1,4 +1,4 @@
-"""Step 1 acceptance checks for the profile tables (reference.md §5.1-5.2, §6)."""
+"""The profile tables, class indexing, and layer census (architecture.md 4.1-4.2, 6)."""
 import numpy as np
 import pytest
 
@@ -115,7 +115,6 @@ def test_layer_census(T):
 
 
 def test_encode(T):
-    S = m.State
-    assert m.encode_state(S(dropper_st=0, dropper_ttd=0, checker_st=0, checker_ttd=0), T) == 0
-    assert m.encode_state(S(dropper_st=240, dropper_ttd=0, checker_st=240, checker_ttd=0), T) == 16951 * N + 16951
-    assert m.encode_state(S(dropper_st=200, dropper_ttd=0, checker_st=10, checker_ttd=60), T) == m.profile(10, 60, T) * N + m.profile(200, 0, T)
+    assert m.encode_state(0, 0, 0, 0, T) == 0
+    assert m.encode_state(240, 0, 240, 0, T) == 16951 * N + 16951
+    assert m.encode_state(10, 60, 200, 0, T) == m.profile(10, 60, T) * N + m.profile(200, 0, T)

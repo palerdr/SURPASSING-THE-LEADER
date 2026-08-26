@@ -6,7 +6,7 @@ describes: one file, [`main.py`](main.py), that builds the complete pure-DTH
 quotient tablebase — one certified value for each of the 289,374,121 state
 classes — in a single backward pass over the 1,201 potential layers, in about
 49 s on a fifteen-core laptop. [`architecture.md`](architecture.md) is the
-language-neutral recipe it implements, and `tests/` holds the seventeen
+language-neutral recipe it implements, and `tests/` holds the eighteen
 structural and numerical checks the paper cites.
 
 - Rules: pure DTH with literal seconds 1..60, inclusive ST, and the frozen
