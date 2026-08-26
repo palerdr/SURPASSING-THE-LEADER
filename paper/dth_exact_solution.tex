@@ -46,12 +46,15 @@
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{corollary}[theorem]{Corollary}
 \newtheorem{definition}[theorem]{Definition}
+\theoremstyle{definition}
+\newtheorem{example}[theorem]{Example}
 
 \newcommand{\val}{\operatorname{val}}
 \newcommand{\gap}{\operatorname{gap}}
 \newcommand{\tol}{\tau_0}
+\newcommand{\EV}{\operatorname{EV}}
 
-\title{An Exact Approach to Solving the Drop the Handkerchief Game}
+\title{An Exact Solution of the Drop the Handkerchief Game}
 \author{James Cenawood\thanks{Code and reproduction instructions:
 \url{https://github.com/palerdr/SURPASSING-THE-LEADER}}}
 \date{August 25, 2026}
@@ -71,9 +74,11 @@ classes. A potential function puts the classes into $1{,}201$ layers, and one
 backward sweep solves them.
 
 Each value has a mixed-strategy gap of at most $10^{-6}$ against its full
-$60\times60$ stage matrix. The matrix is triangular Toeplitz, so one 59-step
-recurrence gives both equilibrium strategies. One source file builds the
-whole table in $49$ seconds on a fifteen-core laptop. At the root state
+$60\times60$ stage matrix. A round pays out on the gap between the two chosen
+seconds and on nothing else. The marginal value of a one-second delay is
+therefore the same short expression at every second. One 59-step recurrence
+solves it and gives both equilibrium strategies. One source file builds
+the whole table in $49$ seconds on a fifteen-core laptop. At the root state
 $V=0.08985\pm0.00061$, so the first Dropper wins with probability
 $0.54493\pm0.00031$ under optimal play.
 \end{abstract}
@@ -85,6 +90,19 @@ In each round, both players choose a second in $\{1,\dots,60\}$. A successful
 check adds the inclusive delay to the Checker's squandered time (ST), and
 then the roles swap. A failed check injects that ST plus sixty seconds. The
 Checker revives with the probability in Figure~\ref{fig:revival}, or loses.
+
+Two numbers describe a player. The ST is the time in the cylinder that a
+failed check would inject, before the fixed sixty-second penalty. The TTD is
+the total damage from the doses that the player already took. The cylinder
+holds 300 seconds, so a large ST or a large TTD makes the next failed check
+fatal. The ST of the player who checks grows round by round, until a failed
+check empties the cylinder into them.
+
+The tension of one round is short to state. The Checker wants to check on the
+same second as the drop, because that check succeeds and costs only one
+second of ST. A check one second early instead fails and brings the needle.
+The Checker therefore trades a small lag against the risk of failure, and the
+Dropper hides the drop second.
 
 The game is finite but large, and each round can need a mixed strategy. The
 solution has four steps:
@@ -111,8 +129,9 @@ V(x)=\max_{\sigma_d\in\Delta_{60}}\min_{\sigma_c\in\Delta_{60}}
 \sigma_d^{\mathsf T}M(x)\sigma_c.
 \]
 Each entry of the matrix is a terminal payoff or the value of a later state.
-When the transitions form a DAG, the later values substitute backward. Since
-$V=P(\mathrm{win})-P(\mathrm{loss})$, $P(\mathrm{win})=(1+V)/2$.
+When the transitions form a DAG, the later values substitute backward. The
+value $V(x)$ is therefore the payoff that optimal play from both sides gives.
+Since $V=P(\mathrm{win})-P(\mathrm{loss})$, $P(\mathrm{win})=(1+V)/2$.
 
 \section{The game}\label{sec:game}
 
@@ -234,6 +253,12 @@ Every failed cell has the same transition distribution. The entries are the
 expected continuation values, negated for the role swap.
 \end{proof}
 
+The two symbols carry the whole round. $S_\ell$ is what the Dropper gets when
+the check succeeds at lag $\ell$, and $F$ is what the Dropper gets when the
+check fails. A pair of seconds only selects one of these $61$ numbers. The
+implementation reads $61$ values out of $V$ and never builds the $3{,}600$
+cells.
+
 \begin{lemma}[Constant-time saddle test]\label{lem:toeplitz}
 Row $d$ of \eqref{eq:toeplitz} contains the prefix $S_1,\dots,S_{61-d}$, and
 also $F$ when $d>1$. Column $c$ contains the prefix $S_1,\dots,S_c$, and also
@@ -246,7 +271,7 @@ Then
 \]
 Among rows $d>1$, the row minimum is largest at $d=60$. Among columns
 $c<60$, the column maximum is smallest at $c=1$. The test is exact, because
-min and max select one of their arguments and add no rounding.
+min and max select one of their arguments and do not round.
 \end{lemma}
 
 Figure~\ref{fig:toeplitz} shows the layout. Each row contains a prefix of the
@@ -370,7 +395,8 @@ a player has left the game.}
 \section{The potential and the sweep schedule}\label{sec:potential}
 
 The potential is not payoff, value, or strategic advantage. It is only a
-progress score that orders the states.
+progress score that orders the states. Backward induction needs each child
+before its parents, and the potential supplies that order without a search.
 
 \begin{definition}[Potential]\label{def:potential}
 For a profile let $\rho(s,t)=t$ if $(s,t)$ is revival-eligible and
@@ -397,8 +423,8 @@ are:
 \end{theorem}
 
 \begin{corollary}[Layered backward induction]\label{cor:layers}
-No transition stays inside a $\Phi$-layer. Thus a descending sweep solves
-every child before its parents. With the one-player bucket
+No transition stays inside a $\Phi$-layer. Thus a sweep down the layers
+solves every child before its parents. With the one-player bucket
 $B_a=\{(s,t):s+\rho(s,t)=a\}$, layer $P$ is exactly
 \[
 \Phi^{-1}(P)=
@@ -523,6 +549,14 @@ $\max_{d,c}|M_{d,c}-\widehat M_{d,c}|\le\epsilon$, then
 $|\val(M)-\val(\widehat M)|\le\epsilon$.
 \end{proposition}
 
+Proposition~\ref{prop:midpoint} is the arbiter for the whole build. $L$ is the
+payoff that the Dropper's mixture guarantees, and $U$ is the payoff that the
+Checker's mixture allows. Weak duality puts the true value between them for
+every mixed pair. The bounds therefore do not depend on the method that made
+the pair. A faulty candidate does not give a wrong value: it gives a wide gap,
+and the class moves to the next rung. The rungs below only propose a pair;
+this definition decides.
+
 \begin{lemma}[Mirror symmetry]\label{lem:persym}
 The stage matrix is persymmetric, $M_{d,c}=M_{61-c,\,61-d}$, because the map
 $(d,c)\mapsto(61-c,\,61-d)$ preserves both the condition $c\ge d$ and the
@@ -531,11 +565,67 @@ and its reversal $\bar\sigma_i=\sigma_{61-i}$,
 $(\sigma^{\mathsf T}M)_c=(M\bar\sigma)_{61-c}$ for $c=1,\dots,60$.
 \end{lemma}
 
+The mirror is a statement about the clock, not about the players. A round
+pays out on the gap between the two seconds, and the two roles read that gap
+from opposite ends. One product $M\sigma_c$ therefore gives $U$ and $L$
+together, for any $\sigma_c$ paired with its reversal.
+
+\subsection{The marginal value of a one-second delay}\label{sec:marginal}
+
+A pure saddle point needs one cell that is best for both players at once, and
+Lemma~\ref{lem:toeplitz} finds that cell in constant time. When no such cell
+exists, both players must mix. The reason is an expected-value argument, and
+it does not need the matrix.
+
+Let the Checker play the mixture $\sigma_c$, and write $q_j=\sigma_{c,j}$.
+Definitions~\ref{def:actions} and~\ref{def:failure} give the Dropper's
+expected value at drop second $d$ at once. A check before the drop fails and
+pays $F$. A check at second $c\ge d$ succeeds at lag $c-d+1$ and pays
+$S_{c-d+1}$. Therefore
+\begin{equation}\label{eq:ev}
+\EV(d)\;=\;F\sum_{c<d}q_c\;+\;\sum_{c\ge d}q_c\,S_{c-d+1}
+\;=\;(M\sigma_c)_d .
+\end{equation}
+
+The Dropper reads $\EV$ and moves all mass to its largest entry. The
+Checker's mixture therefore holds the Dropper to a mixture only when every
+drop second that the Dropper uses has the same expected value. This rung
+takes the full-support case, in which all $60$ drop seconds are equal. That
+gives $59$ equations, one for each step from $d$ to $d+1$, and the sum of the
+mixture gives the sixtieth.
+
+\begin{proposition}[The margin of a delay]\label{prop:marginal}
+Let $\delta_0=S_1-F$ and $\Delta_j=S_{j+1}-S_j$. Then, for $d=1,\dots,59$,
+\begin{equation}\label{eq:marginal}
+\EV(d)-\EV(d+1)\;=\;
+\underbrace{\delta_0\,q_d}_{\text{the boundary term}}
+\;+\;\underbrace{\sum_{j=1}^{60-d}\Delta_j\,q_{d+j}}_{\text{the lag shift}} .
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Compare \eqref{eq:ev} at $d$ and at $d+1$. The mass $q_d$ crosses the
+boundary. A check at second $d$ was the tightest success and paid $S_1$.
+After the delay the same check comes before the drop and pays $F$. That swing
+is $\delta_0$ for each unit of mass.
+
+Every later check keeps its second and loses one second of lag. Its payoff
+therefore moves from $S_{j+1}$ to $S_j$, a swing of $\Delta_j$ for each unit
+of mass at $q_{d+j}$. Nothing else changes, because a check before second $d$
+pays $F$ in both cases.
+\end{proof}
+
+Equation \eqref{eq:marginal} is the Toeplitz shape of \eqref{eq:toeplitz} in
+expected-value language. A round pays out on the gap $c-d$ and on nothing
+else. One second of delay therefore moves every lag by the same amount. The
+coefficients $\delta_0,\Delta_1,\dots,\Delta_{59}$ are the same short stencil
+at every $d$, and only the window into $q$ moves.
+
 \begin{proposition}[One recurrence, both strategies]\label{prop:equalizer}
-Let $d_0=S_1-F$ and $\Delta_m=S_{m+1}-S_m$. If $d_0\ne0$, define
+Let $\delta_0\ne0$ and define
 \[
 r_1=1,\qquad
-r_k=-\frac{1}{d_0}\sum_{m=1}^{k-1}\Delta_m\,r_{k-m}\quad(k=2,\dots,60).
+r_k=-\frac{1}{\delta_0}\sum_{m=1}^{k-1}\Delta_m\,r_{k-m}\quad(k=2,\dots,60).
 \]
 Then $\sigma_c\propto(r_{60},\dots,r_1)$ makes $M\sigma_c$ constant, and
 its reversal $\sigma_d\propto(r_1,\dots,r_{60})$ makes
@@ -543,35 +633,81 @@ $\sigma_d^{\mathsf T}M$ the same constant.
 \end{proposition}
 
 \begin{proof}
-Row $d+1$ of \eqref{eq:toeplitz} is row $d$ moved one column to the right,
-with $F$ in column $d$. Thus, for $d=1,\dots,59$,
-\[
-(M\sigma_c)_d-(M\sigma_c)_{d+1}
-=d_0\,\sigma_{c,d}+\sum_{m\ge1}\Delta_m\,\sigma_{c,d+m}.
-\]
-Setting every difference to zero gives $\sigma_{c,d}$ from the later
-entries. Start at $\sigma_{c,60}=1$ and step down $59$ times: this is the
-recurrence with $r_k=\sigma_{c,61-k}$. By Lemma~\ref{lem:persym},
-$(\sigma_d^{\mathsf T}M)_c=(M\sigma_c)_{61-c}$ is the same constant.
+Set every margin \eqref{eq:marginal} to zero. The equation at $d$ then reads
+\begin{equation}\label{eq:backsub}
+q_d=-\frac{1}{\delta_0}\sum_{j=1}^{60-d}\Delta_j\,q_{d+j}.
+\end{equation}
+This equation reads no entry before index $d$, because a delay only re-prices
+the checks at or after the drop. The system is therefore triangular. Start at
+$q_{60}=1$ and take $59$ steps down: each equation gives exactly one new
+entry. The $59$ equations are homogeneous in $60$ unknowns, so they fix only
+the ratios, and the sum of the mixture fixes the scale.
+
+Substitute $r_k=q_{61-k}$ to get the recurrence as stated. By
+Lemma~\ref{lem:persym}, $(\sigma_d^{\mathsf T}M)_c=(M\sigma_c)_{61-c}$ is the
+same constant.
 \end{proof}
 
-Negative entries of $r$ are clipped and the pair is normalized before the
-certificate is measured. The clip cannot invalidate the bounds, which hold for
-any mixed pair, and Lemma~\ref{lem:persym} holds for any reversed pair, so one
-product $M\sigma_c$ still yields both $U$ and $L$. Each class then goes
-through the same ladder:
+\begin{example}[Three seconds]\label{ex:toy}
+Take $S=(5,2,9)$ and $F=4$, so $\delta_0=1$, $\Delta_1=-3$, and
+$\Delta_2=7$. The margin at $d=2$ is $q_2-3q_3$ and the margin at $d=1$ is
+$q_1-3q_2+7q_3$. Back-substitution \eqref{eq:backsub} from $q_3=1$ gives
+$q_2=3$ and then $q_1=2$, so $\sigma_c=(\tfrac13,\tfrac12,\tfrac16)$. Read
+the three expected values back from \eqref{eq:ev}:
+\[
+\EV(1)=\frac{10+6+9}{6},\qquad
+\EV(2)=\frac{8+15+2}{6},\qquad
+\EV(3)=\frac{8+12+5}{6},
+\]
+and all three are $\tfrac{25}{6}$. No drop second beats another, so
+$U=\tfrac{25}{6}$. The reversal $\sigma_d\propto(1,3,2)$ gives the same
+constant, so $L=U$ and the gap is zero.
+\end{example}
+
+The kernel clips the negative entries of $r$ to zero and normalizes the pair
+before it measures the certificate. The clip cannot invalidate the bounds,
+because Proposition~\ref{prop:midpoint} holds for any mixed pair.
+Lemma~\ref{lem:persym} also holds for any reversed pair, so one product
+$M\sigma_c$ still gives both $U$ and $L$. Each class then goes through the
+same ladder:
 
 \begin{enumerate}[leftmargin=*]
 \item \textbf{Pure saddle.} Lemma~\ref{lem:toeplitz}. If the maximin and the
   minimax meet within $\tol$, a pure action pair is enough.
-\item \textbf{Equalizer.} Proposition~\ref{prop:equalizer}: $1{,}770$
-  multiply-adds for $r$ and $1{,}770$ for $M\sigma_c$. Its maximum and
-  minimum are $U$ and $L$ (Lemma~\ref{lem:persym}).
+\item \textbf{Equalizer.} Propositions~\ref{prop:marginal}
+  and~\ref{prop:equalizer}: $1{,}770$ multiply-adds for $r$ and $1{,}770$ for
+  $M\sigma_c$. Its maximum and minimum are $U$ and $L$
+  (Lemma~\ref{lem:persym}).
 \item \textbf{Linear programming.} The standard zero-sum program
   $\max\{v:M^{\mathsf T}\sigma_d\ge v\mathbf1,\ \mathbf1^{\mathsf T}\sigma_d=1,
   \ \sigma_d\ge0\}$, with $\sigma_c$ from its duals, then the same
   full-matrix check.
 \end{enumerate}
+
+Rung 2 divides by $\delta_0$, so it has one singular direction. Rung 1 fences
+that direction off before rung 2 runs.
+
+\begin{proposition}[The singular direction is safe]\label{prop:singular}
+The gap of rung 1 is at most $|\delta_0|$. Rung 1 therefore certifies every
+class with $|\delta_0|\le\tol$, and rung 2 never divides by a quantity below
+the tolerance.
+\end{proposition}
+
+\begin{proof}
+Write $m=\min_\ell S_\ell$ and $\overline m=\max_\ell S_\ell$, so
+$m\le S_1\le\overline m$. Take $\delta_0\ge0$ first, which puts $F=S_1-\delta_0$
+below $S_1$. Lemma~\ref{lem:toeplitz} then gives the maximin
+$\max(m,F)\ge S_1-\delta_0$ and the minimax $\min(\overline m,S_1)=S_1$.
+
+Take $\delta_0<0$ next, which puts $F$ above $S_1$. The maximin is
+$\max(m,S_1)=S_1$ and the minimax is
+$\min(\overline m,F)\le S_1+|\delta_0|$. In both cases the two values differ
+by at most $|\delta_0|$, and rung 1 runs first.
+\end{proof}
+
+Example~\ref{ex:toy} shows that the bound is tight. Rung 1 there brackets the
+value in $[4,5]$, a gap of exactly $\delta_0=1$, while the true value is
+$\tfrac{25}{6}$.
 
 \begin{proposition}[A priori accumulated bound]\label{prop:accumulated}
 Let every stored value have a certificate at tolerance $\tol$. Let
@@ -594,8 +730,8 @@ state's own $\tol/2$. Theorem~\ref{thm:potential} bounds $\delta$.
 \begin{proposition}[Full-policy bound]\label{prop:policy}
 Let $\widehat\pi$ play the accepted pair at every class. Let
 $\underline V_{\widehat\pi}(x)$ and $\overline V_{\widehat\pi}(x)$ be its
-security values against every complete opposing policy, with deviations
-after later role swaps included. Then
+security values against every complete policy of the opponent, with
+deviations after later role swaps included. Then
 \[
 \overline V_{\widehat\pi}(x)-\underline V_{\widehat\pi}(x)
 \le\varepsilon(x)\le(1201-\Phi(x))\tol,
@@ -639,7 +775,9 @@ $\widehat V(x)=(L_x+U_x)/2$, this is the recurrence for $\varepsilon$.
 \end{tikzpicture}
 \caption{The first-round strategies of the selected full-game policy, both
 with full support. The Dropper puts $27.3\%$ on second $1$, and a ramp from
-$0.6\%$ to $2.2\%$ on the other seconds. The Checker is the exact mirror
+$0.6\%$ to $2.2\%$ on the other seconds. Each mixture makes the other player
+indifferent between all sixty seconds, which is what
+Proposition~\ref{prop:marginal} asks of it. The Checker is the exact mirror
 $\sigma_{c,j}=\sigma_{d,61-j}$ of Proposition~\ref{prop:equalizer}.
 Proposition~\ref{prop:policy} shows how later gaps accumulate.}
 \label{fig:root}
@@ -649,19 +787,19 @@ Proposition~\ref{prop:policy} shows how later gaps accumulate.}
 
 The implementation is one Python file of $481$ lines. It builds the
 $17{,}011$ quotient profiles with their successful-check children, failure
-child, and revival probability. It stores $V$ as a $17{,}011\times17{,}012$
-float64 array. The extra column holds $-1$, so a terminal win reads as $+1$
-after the role-swap negation, with no branch. It lists each layer by
-Corollary~\ref{cor:layers}, in an order where consecutive classes read the
-same row of $V$. One compiled kernel per layer runs in parallel over the
-classes.
+child, and revival probability. It stores $V$ as a
+$17{,}011\times17{,}012$ float64 array. The extra column holds $-1$, so a
+terminal win reads as $+1$ after the role-swap negation, with no branch. It
+lists each layer by Corollary~\ref{cor:layers}, in an order where consecutive
+classes read the same row of $V$. One compiled kernel per layer runs in
+parallel over the classes.
 
 For each class, the kernel gathers the $61$ continuation values. It runs
 Lemma~\ref{lem:toeplitz}, then Proposition~\ref{prop:equalizer}, in
 sixty-entry scratch that stays in first-level cache. It tracks the minimum
-and the maximum of $M\sigma_c$ as they are produced. It writes the certified
-midpoint and its rung. Classes that fail both rungs are collected and solved
-by linear programming afterwards.
+and the maximum of $M\sigma_c$ as it produces them. It writes the certified
+midpoint and its rung. The build collects the classes that fail both rungs
+and solves them by linear programming afterwards.
 
 \subsection{Results}
 
@@ -694,10 +832,14 @@ linear programming & $0$ & $0$\\
 
 \noindent
 The earlier artifact sent $190{,}995$ classes to linear programming and
-$334{,}588$ to the pure rung. The difference is borderline classes with a
-gap at the tolerance; both routes are certified.
+$334{,}588$ to the pure rung. It rejected the equalizer whenever an entry of
+$r$ came out negative. The kernel here clips that entry, normalizes the pair,
+and measures the gap anyway. Those classes are borderline ones with a gap at
+the tolerance, and the clipped pair still certifies them. Both routes carry a
+certificate, so the two builds agree on the values and differ only in the
+route.
 
-Six stored values were compared with the earlier artifact. Five agree to
+We compared six stored values with the earlier artifact. Five agree to
 within $2\times10^{-11}$; the state $(250,300,40,0)$ agrees to
 $1.2\times10^{-9}$. After the sweep, an independent scalar ladder re-solved
 $1{,}200$ evenly strided classes from their stored children. The largest
@@ -734,6 +876,12 @@ $\overline V_{\widehat\pi}(0,0,0,0)-\underline V_{\widehat\pi}(0,0,0,0)
   arithmetic. The structural theorems are exact. The table build asserts
   survival, absorption, the counts, and the potential increase by
   enumeration.
+\item \textbf{Shared code.} Definition~\ref{def:certificate} measures the gap
+  against the matrix that the kernel itself assembles. A fault that corrupted
+  the candidate and the check in the same way would pass. Two audits address
+  that risk: the six reference values come from an earlier and independent
+  implementation, and a separate scalar ladder re-solved the $1{,}200$
+  strided classes.
 \item \textbf{Domain.} States with a revival-eligible profile with TTD in
   $1..59$ are outside the table; the implementation rejects them.
 \item \textbf{Policies.} The table stores values and routes;
