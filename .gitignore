@@ -37,6 +37,7 @@ models/
 checkpoints/
 src/stl/checkpoints/
 src/dth/artifacts/
+src/dth_compact/artifacts/
 src/dth/checkpoints/
 
 # Imported OCaml/Dune build products

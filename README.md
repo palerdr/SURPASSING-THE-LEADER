@@ -6,6 +6,7 @@ This repository contains deliberately separate game-solving projects:
 | --- | --- | --- |
 | `src/stl/` | Canonical leap-aware referee compatibility layer and formulation shell; no complete STL solver yet | L2 public game; only Baku as Dropper may use second 61 |
 | `src/dth/` | Completed pure Drop the Handkerchief solve and optional research tooling | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
+| `src/dth_compact/` | The paper's solver: one numba file that builds the complete 289,374,121-class table in about 49 s | Pure DTH; literal seconds 1..60 |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
 | `src/dth_ocaml/` | Hand-written exact OCaml reference | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
@@ -30,6 +31,7 @@ Use Python 3.12+ and `uv`:
 uv sync --dev
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
+uv run --project src/dth_compact pytest src/dth_compact/tests -q
 cargo test --workspace
 npm --prefix src/arena/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
@@ -50,6 +52,10 @@ uv run python -m dth complete
 uv run python -m dth dataset --help
 uv run python -m dth train --help
 
+# The paper's compact solver: its own uv project (numba is not a root dependency)
+uv run --project src/dth_compact src/dth_compact/main.py
+uv run --project src/dth_compact pytest src/dth_compact/tests -q
+
 # Exact abstract example (optional: `arena play` builds this automatically when absent)
 uv run python -m abstract --help
 uv run python -m abstract exact
@@ -67,14 +73,20 @@ across incompatible schema versions.
 
 ## Exact DTH paper
 
-The completed paper is available as both the rendered
+The paper is available as both the rendered
 [`paper/dth_exact_solution.pdf`](paper/dth_exact_solution.pdf) and its
 [`paper/dth_exact_solution.tex`](paper/dth_exact_solution.tex) source. It gives
 a certified exact solution of the complete finite DTH game, including the root
-value and equilibrium strategies.
+value and equilibrium strategies, and describes the one-file solver in
+[`src/dth_compact/`](src/dth_compact/). Reproduce its result from the
+repository root in about a minute:
 
-With the exact value table available, the paper and its figures can be
-reproduced from the repository root:
+```powershell
+uv run --project src/dth_compact src/dth_compact/main.py
+uv run --project src/dth_compact pytest src/dth_compact/tests -q
+```
+
+With the exact value table available, the figures and the PDF can be rebuilt:
 
 ```powershell
 uv run python paper/generate_figure_data.py

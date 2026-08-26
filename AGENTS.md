@@ -12,10 +12,10 @@
 - `paper/` owns the project's mathematical paper. Re-render and visually
   inspect its PDF after changing the TeX.
 - `docs/papers/` owns primary evidence and cited literature.
-- `src/stl/`, `src/dth/`, `src/abstract/`, and `src/dth_ocaml/` are peer
-  projects. They must not import one another. `src/arena/` is a neutral play
-  surface: it may consume their public interfaces, but they must not import it
-  or one another.
+- `src/stl/`, `src/dth/`, `src/dth_compact/`, `src/abstract/`, and
+  `src/dth_ocaml/` are peer projects. They must not import one another.
+  `src/arena/` is a neutral play surface: it may consume their public
+  interfaces, but they must not import it or one another.
 - `src/crates/` is a shared Rust workspace; Python remains behavioral authority
   until an explicit parity contract says otherwise.
 - `src/arena/webclient/` is the TypeScript browser client and `src/arena/web/`
@@ -52,6 +52,9 @@ Code loads them all as instruction files. Adding a subtree means adding its
   DTH**, not STL: actions are literal seconds 1..60 and it has no leap window.
   It exists as a hand-written reference for the exact solver and is held to
   the same frozen rules and the same 1e-6 saddle-gap gate as its Python peer.
+- The `dth_compact` project is the paper's one-file solver of **pure DTH**. It
+  shares `src/dth/`'s rules, revival surface, and reference anchors, is held
+  to the same 1e-6 saddle-gap gate, and is not the arena's policy provider.
 - `docs/FORMULATION_LADDER.md` fixes which games are claimed at all. Work that
   does not sit on a rung is not a supported claim.
 
@@ -64,6 +67,7 @@ validation to make a change pass.
 ```powershell
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
+uv run --project src/dth_compact pytest src/dth_compact/tests -q
 cargo test --workspace
 npm --prefix src/arena/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml

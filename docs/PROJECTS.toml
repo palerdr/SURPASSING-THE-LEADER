@@ -25,6 +25,18 @@ root_validation = true
 validation = ["uv run python -m pytest src/dth/tests -q"]
 
 [[project]]
+id = "dth_compact"
+path = "src/dth_compact"
+instruction_readme = "src/dth_compact/README.md"
+kind = "peer"
+languages = ["python"]
+rung = "L1"
+status = "solved"
+public_interfaces = ["main.py"]
+root_validation = true
+validation = ["uv run --project src/dth_compact pytest src/dth_compact/tests -q"]
+
+[[project]]
 id = "abstract"
 path = "src/abstract"
 instruction_readme = "src/abstract/README.md"

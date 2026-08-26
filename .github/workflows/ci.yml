@@ -23,6 +23,19 @@ jobs:
       - run: uv run python -m pytest --collect-only -q
       - run: uv run python -m pytest -q
 
+  dth-compact:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/dth_compact
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run pytest -q
+
   rust:
     runs-on: ubuntu-latest
     steps:

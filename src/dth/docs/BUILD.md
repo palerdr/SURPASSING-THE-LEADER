@@ -1,5 +1,9 @@
 # Building the complete DTH tablebase from scratch in Python
 
+> `src/dth_compact/main.py` builds the same table in about 49 s with numba and
+> is the solver the paper describes; this recipe remains the dependency-minimal
+> (NumPy + SciPy) version.
+
 This is a self-contained recipe for computing the exact solution of pure Drop
 the Handkerchief: one certified game value for every one of its 289,374,121
 state classes. It assumes nothing but Python and

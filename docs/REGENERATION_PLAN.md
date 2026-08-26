@@ -28,6 +28,9 @@ own ignored artifact/output roots.
 uv run python -m dth complete
 uv run python -m dth complete-audit
 
+# The paper's compact solver (its own uv project; writes src/dth_compact/artifacts/).
+uv run --project src/dth_compact src/dth_compact/main.py
+
 # Certified abstract tablebase.
 uv run python -m abstract exact
 
