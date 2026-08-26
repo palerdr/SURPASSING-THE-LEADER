@@ -632,7 +632,7 @@ fn sweep_layer_rs<'py>(
     validate_padded_supports(&inputs.guess_cols, inputs.max_support, "guess_cols")?;
 
     let mut validated_segments = HashSet::<(usize, usize)>::new();
-    for item in inputs.work_items.chunks_exact(4) {
+    for item in inputs.work_items.as_chunks::<4>().0 {
         let checker_offset = usize::try_from(item[0])
             .map_err(|_| PyValueError::new_err("work-item offset exceeds platform limits"))?;
         let checker_len = usize::try_from(item[1])
