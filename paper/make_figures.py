@@ -3,8 +3,7 @@
 The numerical figures fail closed when their generated inputs are missing or
 malformed. Run from anywhere with, for example:
 
-    uv run --with matplotlib --with seaborn --with pandas \
-        python paper/make_figures.py
+    uv run --with matplotlib --with seaborn python paper/make_figures.py
 
 The earlier monolithic Gemini plotting draft is deprecated. It silently
 substituted mock strategies and values when solver outputs were absent, so its
@@ -17,9 +16,9 @@ Chart contracts
 1. Revival: expose the two decay mechanisms and the survivability cliff.
 2. Toeplitz: connect matrix structure to the O(60) saddle scan.
 
-The quotient, potential-DAG, and root-strategy figures are deliberately
-rendered in TeX; their simpler geometry is clearer in the paper than the
-Seaborn alternatives.
+The quotient, potential-DAG, and root-strategy figures are drawn in TeX
+(TikZ and pgfplots) inside the paper; their simpler geometry is clearer
+there than in Seaborn, so this script owns only the two figures above.
 
 All figures use a white paper surface, explicit palette roots, and line style
 or geometry in addition to color. Outputs are vector PDF/SVG plus PNG previews.
@@ -38,7 +37,6 @@ from matplotlib import patches
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.patches import ConnectionPatch
 import numpy as np
-import pandas as pd
 import seaborn as sns
 
 
@@ -86,24 +84,6 @@ def configure_style() -> None:
             "ps.fonttype": 42,
         },
     )
-
-
-def load_table(name: str, expected_columns: tuple[str, ...]) -> pd.DataFrame:
-    """Load one generated table and reject missing, incomplete, or nonfinite data."""
-
-    path = DATA_DIR / name
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"missing {path}; run paper/generate_figure_data.py first"
-        )
-    frame = pd.read_csv(path, sep=r"\s+")
-    if tuple(frame.columns) != expected_columns:
-        raise ValueError(
-            f"{path} has columns {tuple(frame.columns)}, expected {expected_columns}"
-        )
-    if frame.empty or not np.isfinite(frame.to_numpy(dtype=float)).all():
-        raise ValueError(f"{path} is empty or contains nonfinite values")
-    return frame
 
 
 def save_figure(fig: plt.Figure, stem: str, *, tight: bool = True) -> None:
@@ -363,271 +343,6 @@ def make_toeplitz_structure() -> None:
             arrowprops={"arrowstyle": "-|>", "color": ORANGE, "lw": 1.2},
         )
     save_figure(fig, "fig2_toeplitz_structure")
-
-
-def make_quotient_geometry() -> None:
-    """Show the dead region, representative fiber collapses, and squared count."""
-
-    fig = plt.figure(figsize=(TEXT_WIDTH, 3.65))
-    grid = fig.add_gridspec(
-        2,
-        3,
-        width_ratios=(1.05, 0.9, 1.15),
-        height_ratios=(1, 0.34),
-        left=0.055,
-        right=0.985,
-        bottom=0.08,
-        top=0.92,
-        wspace=0.32,
-        hspace=0.30,
-    )
-
-    raw = fig.add_subplot(grid[0, 0])
-    raw.set_xlim(0, 300)
-    raw.set_ylim(0, 300)
-    raw.fill(
-        [0, 300, 300, 0],
-        [0, 0, 300, 300],
-        color=LIGHT_GRAY,
-        ec="#A5A5A5",
-        lw=0.7,
-    )
-    raw.fill([0, 240, 0], [0, 0, 240], color="#C9E9DF", ec=TEAL, lw=0.8)
-    raw.plot([0, 240], [240, 0], color=TEAL, lw=1.2)
-    raw.text(70, 62, "alive\n16,711", color="#136A50", ha="center", fontsize=8.2)
-    raw.annotate(
-        "death-eligible\n55,889",
-        xy=(205, 215),
-        xytext=(120, 262),
-        arrowprops={"arrowstyle": "->", "color": MID_GRAY, "lw": 0.8},
-        color=MID_GRAY,
-        ha="center",
-        fontsize=8.0,
-    )
-    raw.set(
-        title="Raw one-player profiles",
-        xlabel="ST $s$",
-        ylabel="TTD $t$",
-        xticks=(0, 120, 240, 300),
-        yticks=(0, 120, 240, 300),
-    )
-    raw.set_aspect("equal")
-    raw.grid(False)
-
-    fibers = fig.add_subplot(grid[0, 1])
-    fibers.set_xlim(-0.05, 1.05)
-    fibers.set_ylim(-0.08, 1.05)
-    fibers.axis("off")
-    fibers.set_title("Collapse each dead TTD fiber", pad=5)
-    sample_x = (0.17, 0.50, 0.83)
-    sample_st = (60, 150, 230)
-    for x, st_value in zip(sample_x, sample_st, strict=True):
-        threshold = (240 - st_value) / 300
-        alive_y = np.linspace(0.08, max(0.09, threshold), 3)
-        dead_y = np.linspace(max(threshold + 0.08, 0.27), 0.92, 5)
-        fibers.scatter(
-            np.full_like(alive_y, x),
-            alive_y,
-            s=14,
-            facecolors="#C9E9DF",
-            edgecolors=TEAL,
-            linewidths=0.6,
-            zorder=3,
-        )
-        fibers.scatter(
-            np.full_like(dead_y, x),
-            dead_y,
-            s=13,
-            facecolors=LIGHT_GRAY,
-            edgecolors=MID_GRAY,
-            linewidths=0.5,
-            zorder=3,
-        )
-        sentinel_y = 0.02
-        for source_y in dead_y[1::2]:
-            fibers.annotate(
-                "",
-                xy=(x, sentinel_y + 0.025),
-                xytext=(x, source_y - 0.025),
-                arrowprops={"arrowstyle": "->", "color": PURPLE, "lw": 0.55},
-            )
-        fibers.scatter(
-            [x],
-            [sentinel_y],
-            s=32,
-            facecolors=PURPLE,
-            edgecolors="white",
-            linewidths=0.6,
-            zorder=4,
-        )
-        fibers.text(x, -0.055, f"$s={st_value}$", ha="center", fontsize=7.2)
-    counts = fig.add_subplot(grid[0, 2])
-    counts.axis("off")
-    counts.set_xlim(0, 1)
-    counts.set_ylim(0, 1)
-    counts.set_title("One-player quotient", pad=5)
-    rounded_box(
-        counts,
-        (0.05, 0.65),
-        0.90,
-        0.20,
-        "$72{,}600$ profiles\n$16{,}711$ alive + $55{,}889$ dead",
-        facecolor=PALE_GRAY,
-        edgecolor="#A0A0A0",
-    )
-    counts.annotate(
-        "",
-        xy=(0.5, 0.48),
-        xytext=(0.5, 0.65),
-        arrowprops={"arrowstyle": "-|>", "color": ORANGE, "lw": 1.3},
-    )
-    counts.text(0.56, 0.565, "quotient", color=ORANGE, fontsize=7.3, va="center")
-    rounded_box(
-        counts,
-        (0.05, 0.27),
-        0.90,
-        0.20,
-        "$17{,}011$ classes\n$16{,}711$ alive + $300$ sentinels",
-        facecolor="#F1EEFB",
-        edgecolor=PURPLE,
-    )
-
-    combined = fig.add_subplot(grid[1, :])
-    combined.axis("off")
-    combined.set_xlim(0, 1)
-    combined.set_ylim(0, 1)
-    rounded_box(
-        combined,
-        (0.02, 0.08),
-        0.29,
-        0.70,
-        "$72{,}600^2$ states\n$\\approx 5.27$ billion",
-        facecolor=PALE_GRAY,
-        edgecolor="#A0A0A0",
-    )
-    rounded_box(
-        combined,
-        (0.69, 0.08),
-        0.29,
-        0.70,
-        "$17{,}011^2$ classes\n$289{,}374{,}121$",
-        facecolor="#F1EEFB",
-        edgecolor=PURPLE,
-    )
-    combined.annotate(
-        "",
-        xy=(0.68, 0.43),
-        xytext=(0.32, 0.43),
-        arrowprops={"arrowstyle": "-|>", "color": ORANGE, "lw": 1.5},
-    )
-    combined.text(
-        0.50,
-        0.55,
-        "apply independently to both players",
-        ha="center",
-        color=ORANGE,
-        fontsize=7.5,
-    )
-    combined.text(
-        0.50,
-        0.20,
-        "reduction factor $18.2$",
-        ha="center",
-        color=PURPLE,
-        fontsize=8.4,
-        weight="bold",
-    )
-
-    bridge = ConnectionPatch(
-        xyA=(300, 150),
-        coordsA=raw.transData,
-        xyB=(-0.02, 0.53),
-        coordsB=fibers.transData,
-        arrowstyle="-|>",
-        color=ORANGE,
-        lw=1.1,
-        connectionstyle="arc3,rad=-0.04",
-    )
-    fig.add_artist(bridge)
-    save_figure(fig, "fig3_quotient_geometry")
-
-
-def make_root_strategies() -> None:
-    """Plot the exact root policies with an honest log probability scale."""
-
-    frame = load_table(
-        "root_strategies.dat", ("action", "drop", "check")
-    ).sort_values("action")
-    if not np.array_equal(frame["action"].to_numpy(), np.arange(1, 61)):
-        raise ValueError("root_strategies.dat must contain actions 1 through 60")
-    for column in ("drop", "check"):
-        if (frame[column] <= 0).any():
-            raise ValueError(f"{column} strategy is not full support")
-        if not np.isclose(frame[column].sum(), 1.0, atol=1e-8):
-            raise ValueError(f"{column} strategy does not sum to one")
-
-    long = frame.rename(
-        columns={"drop": r"Dropper $\sigma_d$", "check": r"Checker $\sigma_c$"}
-    ).melt(
-        id_vars="action",
-        var_name="Player",
-        value_name="Probability",
-    )
-    fig, ax = plt.subplots(figsize=(TEXT_WIDTH, 3.15))
-    sns.lineplot(
-        data=long,
-        x="action",
-        y="Probability",
-        hue="Player",
-        style="Player",
-        palette={r"Dropper $\sigma_d$": BLUE, r"Checker $\sigma_c$": ORANGE},
-        dashes={r"Dropper $\sigma_d$": "", r"Checker $\sigma_c$": (4, 2)},
-        linewidth=1.65,
-        ax=ax,
-    )
-    ax.scatter(
-        frame.loc[::5, "action"],
-        frame.loc[::5, "drop"],
-        s=11,
-        facecolor="white",
-        edgecolor=BLUE,
-        linewidth=0.7,
-        zorder=3,
-    )
-    ax.scatter(
-        frame.loc[::5, "action"],
-        frame.loc[::5, "check"],
-        s=10,
-        marker="s",
-        facecolor="white",
-        edgecolor=ORANGE,
-        linewidth=0.7,
-        zorder=3,
-    )
-    ax.set_yscale("log")
-    ax.set(
-        title="Certified equilibrium strategies at $(0,0,0,0)$",
-        xlabel="Second",
-        ylabel="Probability (log scale)",
-        xlim=(0.5, 60.5),
-    )
-    ax.set_xticks((1, 10, 20, 30, 40, 50, 60))
-    root_mass = float(frame.loc[frame["action"] == 1, "drop"].iloc[0])
-    minimum_probability = float(frame[["drop", "check"]].to_numpy().min())
-    maximum_probability = float(frame[["drop", "check"]].to_numpy().max())
-    ax.set_ylim(minimum_probability * 0.82, maximum_probability * 1.22)
-    ax.annotate(
-        f"Dropper places {root_mass:.1%} on second 1",
-        xy=(1, root_mass),
-        xytext=(8, root_mass * 0.63),
-        arrowprops={"arrowstyle": "->", "color": BLUE, "lw": 0.8},
-        color=BLUE,
-        fontsize=8,
-    )
-    ax.legend(loc="upper right", ncols=2, title=None)
-    sns.despine(ax=ax)
-    fig.tight_layout(pad=0.6)
-    save_figure(fig, "fig4_root_strategies")
 
 
 def main() -> None:

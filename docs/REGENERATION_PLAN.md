@@ -34,9 +34,9 @@ uv run --project src/dth_compact src/dth_compact/main.py
 # Certified abstract tablebase.
 uv run python -m abstract exact
 
-# Paper figures, after the DTH artifact passes its production reader.
-uv run python paper/generate_figure_data.py
-uv run --with matplotlib --with seaborn --with pandas python paper/make_figures.py
+# Paper figures, from the compact solver's finished table.
+uv run --project src/dth_compact python paper/generate_figure_data.py
+uv run --with matplotlib --with seaborn python paper/make_figures.py
 ```
 
 The OCaml project retains its independent direct and packed exact-solver paths;

@@ -1,4 +1,4 @@
-"""Step 5: the layer sweep on the dead band, recheck, anchors."""
+"""The layer sweep on the dead band, recheck, and the anchors (architecture.md 4.8-4.10, 6)."""
 import numpy as np
 import pytest
 

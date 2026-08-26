@@ -69,8 +69,7 @@ def test_kernel_matches_oracle_on_one_layer(T):
     lp_disagreements = 0
     for i in range(pcs.size):
         pc, pd = int(pcs[i]), int(pds[i])
-        V_read = V.copy() if False else V              # children untouched by this layer's writes
-        s, f = m.class_values(pc, pd, V_read, T)
+        s, f = m.class_values(pc, pd, V, T)                # children live in other layers: untouched by these writes
         if need_lp[i]:
             r1 = m.try_rung1(s, f)
             r2 = m.try_rung2(s, f)

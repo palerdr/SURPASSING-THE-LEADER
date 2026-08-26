@@ -1,4 +1,4 @@
-"""The scalar ladder and the fused numba ladder against each other and against LP-certified values."""
+"""The scalar ladder and the fused numba ladder against each other and against LP-certified values (architecture.md 4.4-4.7)."""
 import numpy as np
 import pytest
 
@@ -76,6 +76,24 @@ def test_scalar_bounds_bracket_lp_value():
         r2 = m.try_rung2(S[i], F[i])
         if r2 is not None:
             assert r2.maximin <= v + 2e-6 and r2.minimax >= v - 2e-6
+
+
+def test_rungs_return_certifying_strategies():
+    rng = np.random.default_rng(8)
+    S, F = structured_batch(rng, 40)
+    S[0] = 0.5; F[0] = 0.5
+    for i in range(40):
+        M = m.full_matrix(S[i], F[i])
+        for res in (m.try_rung1(S[i], F[i]), m.try_rung2(S[i], F[i]), m.try_rung3(S[i], F[i])):
+            if res is None:
+                continue
+            assert res.drop.shape == (60,) and res.check.shape == (60,)
+            assert res.drop.min() >= 0 and res.check.min() >= 0
+            assert res.drop.sum() == pytest.approx(1) and res.check.sum() == pytest.approx(1)
+            assert (res.drop @ M).min() == pytest.approx(res.maximin, abs=1e-12)   # L from the Dropper's mix
+            assert (M @ res.check).max() == pytest.approx(res.minimax, abs=1e-12)  # U from the Checker's mix
+            if res.kind == m.SUPPORT:
+                assert np.array_equal(res.drop, res.check[::-1])                   # the mirror pair
 
 
 def test_ladder_matches_solve_class():

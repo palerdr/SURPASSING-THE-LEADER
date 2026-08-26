@@ -32,7 +32,7 @@ UNSOLVED = 255                # K sentinel; V uses NaN
 RECHECK_SAMPLES = 1200        # classes re-derived independently in finalize
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"   # V.npy and K.npy land here (gitignored)
 
-ANCHORS = [  # ((s_c, t_c, s_d, t_d), certified value), architecture.md section 7
+ANCHORS = [  # ((s_c, t_c, s_d, t_d), certified value), architecture.md section 6
     ((0, 0, 0, 0), 0.08985007280951046),
     ((240, 0, 240, 0), 0.3372132166291093),
     ((10, 60, 200, 0), -0.7944428916469297),
@@ -40,14 +40,6 @@ ANCHORS = [  # ((s_c, t_c, s_d, t_d), certified value), architecture.md section 
     ((250, 300, 40, 0), 0.9981152817381969),
     ((100, 140, 100, 140), 0.1877386378276193),
 ]
-
-
-@dataclass
-class State:
-    dropper_st: int
-    dropper_ttd: int
-    checker_st: int
-    checker_ttd: int
 
 
 @dataclass
@@ -68,6 +60,8 @@ class SolveResult:
     maximin: float      # lower bound on the value: the Checker's best reply to the Dropper's mix
     minimax: float      # upper bound on the value: the Dropper's best reply to the Checker's mix
     kind: int           # PURE / SUPPORT / LP
+    drop: np.ndarray | None = None    # the certifying Dropper mix (rows), when the rung produced one
+    check: np.ndarray | None = None   # the certifying Checker mix (columns)
     saddle_gap: float = field(init=False)
     certified: bool = field(init=False)
     value: float | None = field(init=False)   # the certificate midpoint; None when uncertified
@@ -93,7 +87,7 @@ def revival_probability(s: int, t: int) -> float:
 
 
 def build_table() -> ProfileTable:
-    """Profiles in the normative order, every transition table, and the phi buckets (architecture.md 5.1)."""
+    """Profiles in the normative order, every transition table, and the phi buckets (architecture.md 4.1)."""
     alive_id = np.full((MAX_ST + 1, MAX_TTD + 1), -1, dtype=np.int32)
     st = np.empty(N, dtype=np.int32)
     ttd = np.empty(N, dtype=np.int32)
@@ -160,9 +154,9 @@ def profile(s: int, t: int, table: ProfileTable) -> int:
     return pid
 
 
-def encode_state(state: State, table: ProfileTable) -> int:
-    """Flat class index pc * N + pd."""
-    return profile(state.checker_st, state.checker_ttd, table) * N + profile(state.dropper_st, state.dropper_ttd, table)
+def encode_state(sc: int, tc: int, sd: int, td: int, table: ProfileTable) -> int:
+    """Flat class index pc * N + pd of the state (s_c, t_c, s_d, t_d): Checker first, as everywhere else."""
+    return profile(sc, tc, table) * N + profile(sd, td, table)
 
 
 def decode_class(c: int) -> tuple[int, int]:
@@ -182,7 +176,7 @@ def kinds_array() -> np.ndarray:
 
 
 def class_values(pc: int, pd: int, V: np.ndarray, table: ProfileTable) -> tuple[np.ndarray, float]:
-    """The 60 successful-check values and the failed-check value of one class (architecture.md 5.3)."""
+    """The 60 successful-check values and the failed-check value of one class (architecture.md 4.3)."""
     s = np.empty(LAGS, dtype=np.float64)
     for lag in range(1, LAGS + 1):
         child = int(table.success_children[pc, lag - 1])
@@ -231,9 +225,16 @@ def full_matrix(s: np.ndarray, f: float) -> np.ndarray:
 
 def try_rung1(s: np.ndarray, f: float) -> SolveResult:
     """Pure saddle point. Constant: ~120 comparisons (min and max of the 60 success values); row d of M is
-    (d-1) copies of f then s[0:n-d+1], so the row/column scans collapse to min/max of s."""
+    (d-1) copies of f then s[0:n-d+1], so the row/column scans collapse to min/max of s. The maximin row is
+    row 1 (minimum s) or row 60 (min(f, s[0])); the minimax column is column 60 (maximum s) or column 1
+    (max(f, s[0])). Those pure actions are the certifying pair."""
+    n = len(s)
     s0, lo, hi = s[0], s.min(), s.max()
-    return SolveResult(maximin=max(lo, min(f, s0)), minimax=min(hi, max(f, s0)), kind=PURE)
+    drop = np.zeros(n)
+    check = np.zeros(n)
+    drop[0 if lo >= min(f, s0) else n - 1] = 1.0
+    check[n - 1 if hi <= max(f, s0) else 0] = 1.0
+    return SolveResult(maximin=max(lo, min(f, s0)), minimax=min(hi, max(f, s0)), kind=PURE, drop=drop, check=check)
 
 
 def try_rung2(s: np.ndarray, f: float) -> SolveResult | None:
@@ -241,10 +242,10 @@ def try_rung2(s: np.ndarray, f: float) -> SolveResult | None:
     1,770 each) plus 60 divisions.
 
     Consecutive rows of M differ by d0 = s[0] - f on the diagonal and dS = diff(s) above it, so
-    (M q)[i] == (M q)[i+1] for all i becomes r[k] = -sum_{m<k} dS[m] r[k-1-m] / d0 with r[0] = 1.
-    The same recurrence read forwards equalizes the columns, so p = r / sum(r) (Dropper) and
-    q = reverse(r) / sum(r) (Checker), and (M q)[i] == (p M)[n-1-i]: max/min of M q are the
-    two-sided certificate bounds.
+    (M q)[i] == (M q)[i+1] for all i becomes r[k] = -sum_{m<k} dS[m] r[k-1-m] / d0 with r[0] = 1, and
+    q = clip(reverse(r), 0) / sum (Checker). M is persymmetric, M[d, c] == M[n-1-c, n-1-d], so for the
+    mirror p = reverse(q) (Dropper) (p M)[c] == (M q)[n-1-c] whatever q is: the max and min of M q are the
+    two-sided certificate bounds, clipped or not.
     """
     n = len(s)
     d0 = s[0] - f
@@ -263,7 +264,7 @@ def try_rung2(s: np.ndarray, f: float) -> SolveResult | None:
         return None
     q /= q.sum()
     Mq = _M_dot(s, f, q)
-    return SolveResult(maximin=Mq.min(), minimax=Mq.max(), kind=SUPPORT)
+    return SolveResult(maximin=Mq.min(), minimax=Mq.max(), kind=SUPPORT, drop=q[::-1].copy(), check=q)
 
 
 def try_rung3(s: np.ndarray, f: float) -> SolveResult:
@@ -291,7 +292,7 @@ def try_rung3(s: np.ndarray, f: float) -> SolveResult:
         if q.sum() <= 0:
             continue
         q /= q.sum()
-        out = SolveResult(maximin=(p @ M).min(), minimax=(M @ q).max(), kind=LP)
+        out = SolveResult(maximin=(p @ M).min(), minimax=(M @ q).max(), kind=LP, drop=p, check=q)
         if out.certified:
             return out
         if best is None or out.saddle_gap < best.saddle_gap:
@@ -300,7 +301,7 @@ def try_rung3(s: np.ndarray, f: float) -> SolveResult:
 
 
 def solve_class(s: np.ndarray, f: float) -> SolveResult:
-    """The ladder for one class (architecture.md 5.7)."""
+    """The ladder for one class (architecture.md 4.7)."""
     res = try_rung1(s, f)
     if res.certified:
         return res
@@ -417,14 +418,14 @@ def solve_layer(P: int, V: np.ndarray, K: np.ndarray, table: ProfileTable, scrat
 
 # ---- sweep -------------------------------------------------------------------------------------
 def recheck(c: int, V: np.ndarray, table: ProfileTable) -> SolveResult:
-    """Re-derive one class from its stored children with the scalar ladder (architecture.md 5.10)."""
+    """Re-derive one class from its stored children with the scalar ladder (architecture.md 4.10)."""
     pc, pd = decode_class(c)
     s, f = class_values(pc, pd, V, table)
     return solve_class(s, f)
 
 
 def finalize(V: np.ndarray, K: np.ndarray, table: ProfileTable, log=print) -> None:
-    """Every class solved and in range, every rung recorded, and 1,200 strided classes re-derived (5.9)."""
+    """Every class solved and in range, every rung recorded, and 1,200 strided classes re-derived (4.9)."""
     core = V[:, :N]
     assert not np.isnan(core).any(), "unsolved classes remain"
     assert (np.abs(core) <= 1 + 1e-9).all(), "a value left [-1, 1]"
@@ -439,10 +440,10 @@ def finalize(V: np.ndarray, K: np.ndarray, table: ProfileTable, log=print) -> No
 
 
 def verify_anchors(V: np.ndarray, table: ProfileTable) -> list[tuple[tuple, float, float, bool]]:
-    """(state, expected, got, ok) for the six reference values of architecture.md section 7."""
+    """(state, expected, got, ok) for the six reference values of architecture.md section 6."""
     out = []
     for (sc, tc, sd, td), expected in ANCHORS:
-        c = encode_state(State(dropper_st=sd, dropper_ttd=td, checker_st=sc, checker_ttd=tc), table)
+        c = encode_state(sc, tc, sd, td, table)
         pc, pd = decode_class(c)
         got = float(V[pc, pd])
         out.append(((sc, tc, sd, td), expected, got, abs(got - expected) <= MAX_SADDLE_GAP))
@@ -450,7 +451,7 @@ def verify_anchors(V: np.ndarray, table: ProfileTable) -> list[tuple[tuple, floa
 
 
 def build(table: ProfileTable, stop_at: int = 0, log=print) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The whole sweep (architecture.md 5.8): layers MAX_LAYER down to stop_at, N^2 = 289,374,121 classes
+    """The whole sweep (architecture.md 4.8): layers MAX_LAYER down to stop_at, N^2 = 289,374,121 classes
     times the constant per-class ladder. Returns V, K, counts by rung."""
     V, K = values_array(), kinds_array()
     scratch = np.empty((nb.get_num_threads(), 3, LAGS), dtype=np.float64)
