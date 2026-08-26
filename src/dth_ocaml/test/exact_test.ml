@@ -50,7 +50,8 @@ let test_engine_solver_revival_parity () =
   let config = C.default () in
   for st = 0 to 299 do
     for ttd = 0 to 300 do
-      check_approx "engine/solver revival parity" (E.revival_probability st ttd)
+      check_approx "engine/solver revival parity"
+        (E.revival_probability st ttd)
         (R.compute_revival_prob config ~st_in_vial:st ~ttd_accrued:ttd)
     done
   done
@@ -206,10 +207,9 @@ let test_certificate () =
 (* Cross-implementation parity. These are complete-game Dropper-relative values
    read from the Python authority's certified artifact (complete_full_v1, every
    class certified to a 1e-6 saddle gap). The states are deep enough in the
-   endgame that the direct recursion closes quickly, and they are the check
-   that this project agrees with the peer solver rather than merely with
-   itself -- in particular that a live child's value is negated across the
-   seat swap. *)
+   endgame that the direct recursion closes quickly, and they are the check that
+   this project agrees with the peer solver rather than merely with itself -- in
+   particular that a live child's value is negated across the seat swap. *)
 let test_python_authority_parity () =
   let expect name state expected =
     check name (approx ~tolerance:1e-9 expected (E.value state))

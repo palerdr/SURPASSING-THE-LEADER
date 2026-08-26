@@ -37,8 +37,7 @@ let compute_revival_prob (config : Config.t) ~(st_in_vial : int)
         /. float_of_int config.turn.failed_check_penalty
       in
       let ttd_factor = survival.ttd_decay_per_minute ** death_minutes in
-      clamp_probability
-        (survival.baseline *. st_factor *. ttd_factor)
+      clamp_probability (survival.baseline *. st_factor *. ttd_factor)
 
 let attempt_revival (config : Config.t) ~(st_in_vial : int) ~(ttd_accrued : int)
     (rng : rng) : bool =
