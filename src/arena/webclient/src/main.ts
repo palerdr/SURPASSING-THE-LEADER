@@ -32,7 +32,7 @@ import { renderOutcome } from "./screens/outcome";
 import { renderRules, renderTitle } from "./screens/rules";
 import { renderVictory } from "./screens/victory";
 import { secondOnClock } from "./second";
-import type { Snapshot, Transcript } from "./types";
+import type { PlayerView, Snapshot, Transcript } from "./types";
 
 /** How long the screen stays black after a commit before the result is shown. */
 const HOLD_MS = 1500;
@@ -65,6 +65,8 @@ let onClockSince = started;
 let tickedSecond = 0;
 /** The second the count names now. Commit and Enter play this number. */
 let shownSecond = 1;
+/** The players as they stood at the commit, so the result can show in red what grew. */
+let playersAtCommit: PlayerView[] | null = null;
 let stopWarmup = () => {};
 
 function keepServerReady(seconds?: number): void {
@@ -94,6 +96,7 @@ async function commit(call: () => Promise<Snapshot>, timedOut = false): Promise<
   const elapsed = turnSeconds() ?? 0;
   if (deciding) {
     committedAt = performance.now();
+    playersAtCommit = snapshot?.players ?? null;
     drawHud(null, transcript);
     screen!.innerHTML = "";
   }
@@ -113,6 +116,7 @@ async function commit(call: () => Promise<Snapshot>, timedOut = false): Promise<
     if (error instanceof ApiError && error.status === 409) {
       try {
         snapshot = await readSession();
+        playersAtCommit = null;
         render();
         showError("That move was out of date, so the board was reloaded.");
         return;
@@ -170,6 +174,22 @@ async function nextGame(current: Snapshot): Promise<Snapshot> {
   return begin(fresh.sequence);
 }
 
+/** Elapsed turn time: the audio clock when the turn is scheduled, the frame clock otherwise. */
+function turnElapsedMs(): number {
+  const heard = turnSeconds();
+  return heard !== null ? heard * 1000 : performance.now() - onClockSince;
+}
+
+/**
+ * The second the clock names at this instant. The commit reads this rather
+ * than the last drawn count, so a stalled frame loop (a hidden tab) cannot
+ * commit a stale second.
+ */
+function secondNow(current: Snapshot): number {
+  const beats = Math.min(current.turn_duration, Math.floor(turnElapsedMs() / 1000));
+  return secondOnClock(beats, current.legal_seconds);
+}
+
 /** End the establishing shot and open the action screen. */
 function cutToAction(): void {
   if (beatOver) return;
@@ -225,7 +245,9 @@ function render(): void {
   stage.classList.toggle("revealing", current.phase === "awaiting_ack" && holdOver);
   stage.style.setProperty("--reveal-ms", `${REVEAL_MS}ms`);
   screen.inert = busy;
-  drawHud(held ? null : current, transcript);
+  // The result screen alone shows the half-round's growth in red; every other
+  // screen draws the bars in one colour.
+  drawHud(held ? null : current, transcript, current.phase === "awaiting_ack" ? playersAtCommit : null);
   if (held) {
     screen.innerHTML = "";
     return;
@@ -244,9 +266,9 @@ function render(): void {
       break;
     case "awaiting_action":
       if (beatOver) {
-        // The commit reads the count at the moment of the gesture.
+        // The commit reads the clock at the moment of the gesture.
         renderLive(screen, current, shownSecond, () =>
-          void commit(() => act(current.sequence, shownSecond)),
+          void commit(() => act(current.sequence, secondNow(current))),
         );
       } else {
         renderBeat(screen, current);
@@ -286,9 +308,7 @@ function loop(): void {
     }
     if (snapshot.phase === "awaiting_action" && beatOver && !busy) {
       const plate = screen?.querySelector<HTMLElement>("[data-dialplate]");
-      // The audio clock when the turn is scheduled, the frame clock otherwise.
-      const heard = turnSeconds();
-      const elapsed = heard !== null ? heard * 1000 : performance.now() - onClockSince;
+      const elapsed = turnElapsedMs();
       if (plate) setHands(plate, snapshot, elapsed);
       // The count beneath the plate rises on the instant each beat is heard:
       // after beat k it names second k + 1, the one now passing, and holds
@@ -345,7 +365,7 @@ document.addEventListener("keydown", (event) => {
       return;
     }
     const current = snapshot;
-    void commit(() => act(current.sequence, shownSecond));
+    void commit(() => act(current.sequence, secondNow(current)));
     return;
   }
   if (snapshot.phase === "awaiting_ack" && event.key === "Enter") {

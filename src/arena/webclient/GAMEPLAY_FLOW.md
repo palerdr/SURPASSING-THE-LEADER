@@ -14,7 +14,9 @@ moment of play is a full-screen cut on that stage.
 
 The status of the two players is four bars in the top-left corner: each
 player's ST (the vial) and TTD (total time dead), with the player's name,
-current role, and death count above them. The top-right corner carries the
+current role, and death count above them. On the result screen, the part of
+a bar that the half-round just added is drawn in red; it returns to white
+when you continue. The top-right corner carries the
 game clock, the round and half, the game number, and the series tally, set
 large so the state of the game reads at a glance.
 
@@ -172,5 +174,6 @@ Each line is something the author asked for. Keep them all.
   before sound can start. A failed load can retry on your next gesture.
 - The dial plate is ported line for line from the site's `ClockFace.astro`
   (`src/render/dialplate.ts`).
-- Wording on the decision screen matches the terminal interface, so a player
-  moving between the two surfaces reads the same game.
+- Wording on the decision screen follows the terminal interface, so a player
+  moving between the two surfaces reads the same game. Each line opens with
+  a capital letter, since every line stands alone.

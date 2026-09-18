@@ -1,6 +1,7 @@
-// Player-facing wording, kept identical to the terminal interface so a player
-// moving between the two surfaces reads the same game. Pure functions only;
-// every number here arrives from the server-owned referee.
+// Player-facing wording, kept close to the terminal interface so a player
+// moving between the two surfaces reads the same game. Each line opens with
+// a capital, since every line stands alone on the result screen. Pure
+// functions only; every number here arrives from the server-owned referee.
 
 import type { OutcomeResult, OutcomeView, Tally } from "../types";
 
@@ -29,9 +30,9 @@ export function legalRange(legal: readonly number[]): string {
   return contiguous ? `${first}–${last}` : legal.join(", ");
 }
 
-/** The squandered time, just the number: `squandered time 10s into <checker>'s ST`. */
+/** The squandered time, just the number: `Squandered time 10s into <checker>'s ST`. */
 export function squanderedTimeLine(outcome: Pick<OutcomeView, "st_gained" | "checker">): string {
-  return `squandered time ${outcome.st_gained.toFixed(0)}s into ${outcome.checker}'s ST`;
+  return `Squandered time ${outcome.st_gained.toFixed(0)}s into ${outcome.checker}'s ST`;
 }
 
 /**
@@ -41,7 +42,7 @@ export function squanderedTimeLine(outcome: Pick<OutcomeView, "st_gained" | "che
  */
 export function deathLines(outcome: Pick<OutcomeView, "death_duration">): string[] {
   if (outcome.death_duration <= 0) return [];
-  return [`injected dose ${outcome.death_duration.toFixed(0)}s`];
+  return [`Injected dose ${outcome.death_duration.toFixed(0)}s`];
 }
 
 /** "3–1" style series score from the human's point of view. */

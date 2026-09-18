@@ -18,13 +18,13 @@ test("result wording follows the terminal interface, with commas", () => {
 test("the squandered time is shown as a number, not a calculation", () => {
   assert.equal(
     squanderedTimeLine({ st_gained: 10, checker: "Alice" }),
-    "squandered time 10s into Alice's ST",
+    "Squandered time 10s into Alice's ST",
   );
 });
 
 test("the death block reports the dose alone, not the chance or the roll", () => {
-  assert.deepEqual(deathLines({ death_duration: 100 }), ["injected dose 100s"]);
-  assert.deepEqual(deathLines({ death_duration: 300 }), ["injected dose 300s"]);
+  assert.deepEqual(deathLines({ death_duration: 100 }), ["Injected dose 100s"]);
+  assert.deepEqual(deathLines({ death_duration: 300 }), ["Injected dose 300s"]);
   assert.deepEqual(deathLines({ death_duration: 0 }), []);
 });
 
