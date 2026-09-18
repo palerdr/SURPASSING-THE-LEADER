@@ -15,7 +15,8 @@ moment of play is a full-screen cut on that stage.
 The status of the two players is four bars in the top-left corner: each
 player's ST (the vial) and TTD (total time dead), with the player's name,
 current role, and death count above them. The top-right corner carries the
-game clock, the round and half, the game number, and the series tally.
+game clock, the round and half, the game number, and the series tally, set
+large so the state of the game reads at a glance.
 
 ## The cuts, in order
 

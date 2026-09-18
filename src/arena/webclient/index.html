@@ -51,17 +51,20 @@
       .bar > i { display: block; height: 100%; background: var(--ink); }
       .bar.hot > i { background: var(--bad); }
       .value { width: 66px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
+      /* The state of the game, set large enough to read from across the room:
+         the clock, the round and half, the game number, and the series. */
       #corner {
         position: absolute; top: 16px; right: 18px; text-align: right; z-index: 2;
         color: var(--dim); font-variant-numeric: tabular-nums;
+        font-size: 22px; line-height: 1.35;
       }
       #corner strong { color: var(--ink); font-weight: 600; }
-      #corner .clock { font-size: 20px; color: var(--ink); }
+      #corner .clock { font-size: 34px; line-height: 1.2; color: var(--ink); }
       #corner .leap { color: var(--warn); }
       #screen {
         position: absolute; inset: 0; z-index: 1;
         display: flex; align-items: center; justify-content: center;
-        padding: 96px 18px 24px;
+        padding: 128px 18px 24px;
       }
       #screen.floor { pointer-events: none; }
       #screen .card { width: min(880px, 100%); }
@@ -204,8 +207,8 @@
         .title-slide h1 { font-size: clamp(1.7rem, 9vw, 3rem); }
         #hud { width: 48vw; }
         #hud .player h2 { font-size: 12px; }
-        #corner { font-size: 13px; }
-        #corner .clock { font-size: 16px; }
+        #corner { font-size: 15px; }
+        #corner .clock { font-size: 22px; }
         .stat { gap: 4px; }
         .stat span:first-child { width: 28px; }
         .value { width: 52px; font-size: 12px; }
