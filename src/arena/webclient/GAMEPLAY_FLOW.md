@@ -72,7 +72,11 @@ large so the state of the game reads at a glance.
    it. You can press Enter to continue without waiting for the fade.
 
 6. **Repeat** from the scene for the next half-round, with the roles swapped
-   when both survived.
+   when both survived. Continue draws that scene at once from the result's
+   own snapshot and acknowledges behind it, so a slow server never holds the
+   result screen. The clock still needs the server's legal seconds: a gesture
+   made before they arrive shows "One moment" and opens the clock on arrival.
+   A result that ends the game waits for the server's verdict.
 
 7. **Game over.** The winner's still, centred, with the verdict and the
    series tally. "Next game" starts the next game of the series against the

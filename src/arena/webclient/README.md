@@ -93,7 +93,9 @@ full-screen stage rather than a scrolling page:
   for its dashes and numbers in place of arithmetic: the result, both
   seconds, the squandered time, and the injected dose. It omits the revival
   chance and the round, half, and clock, which the corner already carries.
-  Enter continues, and the next half-round opens on the scene again.
+  Enter continues, and the next half-round opens on the scene again. The
+  scene is drawn ahead of the acknowledgement; the clock opens only once
+  the server's snapshot arrives, and an early gesture is honoured then.
 - Four bars in the top-left corner carry both players' ST and TTD throughout;
   the top-right carries the clock, round, half, game number, and series tally.
 - The end-of-game screen draws the winner's still, the series tally, and

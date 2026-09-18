@@ -36,16 +36,30 @@ class RedisSessionStore:
         if not url.startswith("https://") or not token:
             raise ValueError("session storage requires an HTTPS URL and token")
         self.url, self.token = url, token
+        self._client: httpx.AsyncClient | None = None
 
     async def command(self, command: list):
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
+        # One client per worker keeps the TLS connection to the store open, so
+        # each command costs a round trip and not a fresh handshake.
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=15)
+        try:
+            response = await self._client.post(
                 self.url,
                 json=command,
                 headers={"Authorization": f"Bearer {self.token}"},
             )
-            response.raise_for_status()
-            body = response.json()
+        except (httpx.TransportError, RuntimeError):
+            # A suspended worker can wake with a dead connection or a closed
+            # event loop; open a fresh client once and retry.
+            self._client = httpx.AsyncClient(timeout=15)
+            response = await self._client.post(
+                self.url,
+                json=command,
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+        response.raise_for_status()
+        body = response.json()
         if "error" in body:
             raise RuntimeError("session storage command failed")
         return body["result"]

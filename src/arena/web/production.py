@@ -14,7 +14,10 @@ from dth.agent import CompleteDTHAgent
 
 
 def create_production_app(artifact: Path):
-    agent = CompleteDTHAgent(artifact)
+    # `prepare_vercel` hashes both arrays before it copies them into the
+    # bundle, and the bundle is immutable once deployed. Rehashing 2.3 GB on
+    # every cold start cost about ten seconds before the first answer.
+    agent = CompleteDTHAgent(artifact, verify_hashes=False)
 
     class Policy:
         def policy(self, decision):

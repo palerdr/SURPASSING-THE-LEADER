@@ -52,6 +52,10 @@ certified DTH artifact. Vercel serves the browser and prepared art from its CDN.
 Build the artifact on your workstation. A Vercel build exceeded 45 minutes;
 packaging the existing artifact avoids that solve. The preparation command
 checks its source digest, array hashes, and opening policy before copying it.
+The deployed function opens that copy with `verify_hashes=False`: the bundle
+is immutable, and rehashing 2.3 GB at each cold start delayed the first
+answer by about ten seconds. The manifest, schema, source digest, and array
+contracts are still checked at every start.
 Vercel CLI installs Linux dependencies for the deployment, including when you
 run the build on macOS. We checked that Vercel's Linux rule-profile digest
 matches the local artifact.

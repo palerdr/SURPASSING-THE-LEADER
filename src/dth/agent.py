@@ -53,8 +53,16 @@ class CompleteDTHAgent:
     substitutes a partial or learned answer.
     """
 
-    def __init__(self, artifact_dir: str | Path) -> None:
-        self.tablebase = CompleteTablebase(artifact_dir=artifact_dir)
+    def __init__(self, artifact_dir: str | Path, *, verify_hashes: bool = True) -> None:
+        """Open the artifact. Hashing the arrays is the default and stays the
+        default; `verify_hashes=False` is for a serving copy whose arrays were
+        hashed when it was packaged, where rehashing gigabytes at every process
+        start only delays the first answer. The manifest, schema, source digest,
+        and array contracts are checked either way.
+        """
+        self.tablebase = CompleteTablebase(
+            artifact_dir=artifact_dir, verify_hashes=verify_hashes
+        )
 
     def decide(self, state: NTState) -> MoveDecision:
         started = time.monotonic()

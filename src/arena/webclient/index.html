@@ -105,6 +105,12 @@
         letter-spacing: 0.18em; color: var(--ink); font-size: 17px;
       }
       .caption small { display: block; color: var(--dim); letter-spacing: 0.08em; margin-top: 6px; font-size: 14px; }
+      /* A gesture made before the server answered: the clock opens on arrival. */
+      .caption.waiting button { opacity: 0.45; cursor: progress; }
+      .caption.waiting::after {
+        content: "One moment"; display: block; margin-top: 10px;
+        color: var(--dim); letter-spacing: 0.08em; font-size: 14px;
+      }
       .caption button {
         margin-top: 20px; color: var(--ink); background: transparent;
         border: 1px solid var(--rule);

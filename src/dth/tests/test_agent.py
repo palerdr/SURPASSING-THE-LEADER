@@ -13,8 +13,9 @@ from dth.complete_tablebase import COMPLETE_TABLEBASE_SCHEMA
 
 
 class _Complete:
-    def __init__(self, artifact_dir) -> None:
+    def __init__(self, artifact_dir, verify_hashes=True) -> None:
         self.artifact_dir = artifact_dir
+        self.verify_hashes = verify_hashes
 
     def certificate(self, state):
         assert state == (0, 0, 0, 0)
@@ -28,6 +29,15 @@ class _Complete:
     def lookup(self, state):
         del state
         return {"value": 0.0}
+
+
+def test_complete_agent_hashes_by_default_and_only_skips_on_request(monkeypatch) -> None:
+    monkeypatch.setattr(agent_module, "CompleteTablebase", _Complete)
+    assert CompleteDTHAgent("complete").tablebase.verify_hashes is True
+    assert (
+        CompleteDTHAgent("complete", verify_hashes=False).tablebase.verify_hashes
+        is False
+    )
 
 
 def test_complete_agent_returns_exact_certificate(monkeypatch) -> None:

@@ -67,6 +67,10 @@ let tickedSecond = 0;
 let shownSecond = 1;
 /** The players as they stood at the commit, so the result can show in red what grew. */
 let playersAtCommit: PlayerView[] | null = null;
+/** An acknowledgement is in flight behind the next scene, which is already drawn. */
+let ackPending = false;
+/** The player asked to open the clock before that acknowledgement returned. */
+let cutRequested = false;
 let stopWarmup = () => {};
 
 function keepServerReady(seconds?: number): void {
@@ -168,6 +172,57 @@ function renderOpening(): void {
   }
 }
 
+/**
+ * Continue from a result without waiting for the server. The result snapshot
+ * already carries the next half-round's roles, bars, and clock, so the scene
+ * is drawn from it at once and the acknowledgement runs behind it. The clock
+ * cannot open until the server's snapshot arrives with the legal seconds; a
+ * gesture made before then is remembered and honoured on arrival. A result
+ * that ends the game still waits, since the verdict comes from the server.
+ */
+async function acknowledgeAhead(current: Snapshot): Promise<void> {
+  if (busy) return;
+  const outcome = current.last_outcome;
+  if (!outcome || outcome.game_over || outcome.session_ending) {
+    await commit(() => acknowledge(current.sequence));
+    return;
+  }
+  busy = true;
+  ackPending = true;
+  cutRequested = false;
+  stopWarmup();
+  if (holdTimer !== null) {
+    window.clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  holdOver = true;
+  snapshot = { ...current, phase: "awaiting_action", legal_seconds: [] };
+  render();
+  let failure: unknown = null;
+  try {
+    snapshot = await acknowledge(current.sequence);
+  } catch (error) {
+    failure = error;
+    try {
+      // The acknowledgement may have landed; the server's state decides.
+      snapshot = await readSession();
+      if (error instanceof ApiError && error.status === 409) {
+        failure = "That move was out of date, so the board was reloaded.";
+      }
+    } catch {
+      snapshot = current;
+    }
+  } finally {
+    busy = false;
+    ackPending = false;
+  }
+  const open = cutRequested && failure === null && snapshot.phase === "awaiting_action";
+  cutRequested = false;
+  render();
+  if (open) cutToAction();
+  if (failure !== null) showError(failure instanceof Error ? failure.message : String(failure));
+}
+
 /** The next game of the series: the rules were read once, so play resumes at once. */
 async function nextGame(current: Snapshot): Promise<Snapshot> {
   const fresh = await newSession(current.sequence);
@@ -193,6 +248,12 @@ function secondNow(current: Snapshot): number {
 /** End the establishing shot and open the action screen. */
 function cutToAction(): void {
   if (beatOver) return;
+  if (ackPending) {
+    // The legal seconds are not here yet; open the clock when they arrive.
+    cutRequested = true;
+    screen?.querySelector(".caption")?.classList.add("waiting");
+    return;
+  }
   beatOver = true;
   onClockSince = performance.now();
   tickedSecond = 0;
@@ -244,7 +305,8 @@ function render(): void {
   stage.classList.toggle("result-stage", current.phase === "awaiting_ack");
   stage.classList.toggle("revealing", current.phase === "awaiting_ack" && holdOver);
   stage.style.setProperty("--reveal-ms", `${REVEAL_MS}ms`);
-  screen.inert = busy;
+  // The scene drawn ahead of an acknowledgement stays live, so its gesture registers.
+  screen.inert = busy && !ackPending;
   // The result screen alone shows the half-round's growth in red; every other
   // screen draws the bars in one colour.
   drawHud(held ? null : current, transcript, current.phase === "awaiting_ack" ? playersAtCommit : null);
@@ -276,9 +338,7 @@ function render(): void {
       break;
     case "awaiting_ack":
       if (current.last_outcome) {
-        renderOutcome(screen, current.last_outcome, () =>
-          void commit(() => acknowledge(current.sequence)),
-        );
+        renderOutcome(screen, current.last_outcome, () => void acknowledgeAhead(current));
       }
       break;
     case "game_over":
@@ -350,6 +410,11 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (!snapshot) return;
+  if (ackPending && event.key === "Enter") {
+    event.preventDefault();
+    cutToAction();
+    return;
+  }
   if (busy) return;
   if (snapshot.phase === "rules" && event.key === "Enter") {
     event.preventDefault();
@@ -370,8 +435,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (snapshot.phase === "awaiting_ack" && event.key === "Enter") {
     event.preventDefault();
-    const current = snapshot;
-    void commit(() => acknowledge(current.sequence));
+    void acknowledgeAhead(snapshot);
     return;
   }
   if (event.key === "Enter" && snapshot.phase === "game_over") {
@@ -384,7 +448,7 @@ document.addEventListener("pointerdown", () => {
 });
 // Capture before a button submits, so one click cannot advance two screens.
 document.addEventListener("click", (event) => {
-  if (!opening && !busy && snapshot?.phase === "awaiting_action" && !beatOver) {
+  if (!opening && (!busy || ackPending) && snapshot?.phase === "awaiting_action" && !beatOver) {
     event.preventDefault();
     cutToAction();
   }
