@@ -85,6 +85,9 @@ __all__ = [
 
 COMPLETE_TABLEBASE_SCHEMA = "dth.complete-tablebase.v2"
 COMPLETE_BUILD_SCHEMA = "dth.complete-tablebase-build.v2"
+FAST_TABLEBASE_SCHEMA = "dth.complete-tablebase.v3"
+FAST_BUILD_SCHEMA = "dth.complete-tablebase-build.v3"
+FAST_LADDER_ID = "pure/recurrence/lp-v1"
 WARM_START_POLICY = "prev-layer-neighbor-v1"
 SOLVER_KIND_PURE = 0
 SOLVER_KIND_SUPPORT = 1
@@ -204,7 +207,9 @@ def _rust_source_bundle_digest() -> str:
     return digest.hexdigest()
 
 
-def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
+def _source_digest_inputs(
+    *, include_rust: bool, include_fast: bool = False
+) -> list[Path]:
     """Return every implementation input that can affect persisted values."""
 
     source_root = Path(__file__).resolve().parent
@@ -214,8 +219,11 @@ def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
         source_root / "solver.py",
         source_root / "support_solver.py",
         source_root / "complete_tablebase.py",
+        source_root / "fast_kernel.py",
         repository_root / "uv.lock",
     ]
+    if include_fast:
+        inputs.append(source_root / "fast_kernel.c")
     if include_rust:
         source_workspace = source_root.parent
         inputs.extend(
@@ -229,13 +237,19 @@ def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
     return inputs
 
 
-def _implementation_digest(*, include_rust: bool) -> str:
+def _implementation_digest(*, include_rust: bool, include_fast: bool = False) -> str:
     return _digest_files(
-        _source_digest_inputs(include_rust=include_rust),
+        _source_digest_inputs(include_rust=include_rust, include_fast=include_fast),
         config={
-            "artifact_schema": COMPLETE_TABLEBASE_SCHEMA,
-            "build_schema": COMPLETE_BUILD_SCHEMA,
-            "execution_backend": "rust" if include_rust else "python",
+            "artifact_schema": FAST_TABLEBASE_SCHEMA
+            if include_fast
+            else COMPLETE_TABLEBASE_SCHEMA,
+            "build_schema": FAST_BUILD_SCHEMA
+            if include_fast
+            else COMPLETE_BUILD_SCHEMA,
+            "execution_backend": "c"
+            if include_fast
+            else ("rust" if include_rust else "python"),
         },
     )
 
@@ -247,22 +261,27 @@ def _build_config_payload(
     warm_start: bool,
     max_support: int,
     include_rust: bool,
+    include_fast: bool = False,
 ) -> dict[str, object]:
     """Construct the source-bound resume contract used by builders and readers."""
 
     return {
-        "schema": COMPLETE_BUILD_SCHEMA,
+        "schema": FAST_BUILD_SCHEMA if include_fast else COMPLETE_BUILD_SCHEMA,
         "class_encoding": PACKED_CLASS_ENCODING,
         "canonical_table": canonical_table,
         "table_digest": table_digest,
         "solver_schema_hash": solver_schema_hash(),
         "saddle_gap_tolerance": SADDLE_GAP_TOLERANCE,
-        "ladder": LADDER_ID,
+        "ladder": FAST_LADDER_ID if include_fast else LADDER_ID,
         "warm_start": warm_start,
         "warm_start_policy": WARM_START_POLICY if warm_start else None,
         "max_support": max_support,
         "policy_mass_eps": _POLICY_MASS_EPS,
-        "implementation_digest": _implementation_digest(include_rust=include_rust),
+        "implementation_digest": (
+            _implementation_digest(include_rust=include_rust, include_fast=True)
+            if include_fast
+            else _implementation_digest(include_rust=include_rust)
+        ),
     }
 
 
@@ -295,7 +314,9 @@ def _atomic_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _open_npy(path: Path, *, mode: str, dtype: str, shape: tuple[int, ...]) -> np.memmap:
+def _open_npy(
+    path: Path, *, mode: str, dtype: str, shape: tuple[int, ...]
+) -> np.memmap:
     if mode == "w+":
         return np.lib.format.open_memmap(
             path, mode=mode, dtype=np.dtype(dtype), shape=shape
@@ -710,6 +731,11 @@ def class_certificate(
 
     success, failed = class_transition_values(table, class_id, value)
     matrix = reconstruct_transition_class_matrix(success, failed)
+    from dth.fast_kernel import recurrence_policy
+
+    candidate = recurrence_policy(success, failed)
+    if candidate is not None:
+        return candidate
     solved, drop, check, _ = solve_certified_matrix_fast(matrix)
     gap = float(np.max(matrix @ check) - np.min(matrix.T @ drop))
     if gap > SADDLE_GAP_TOLERANCE:
@@ -756,6 +782,8 @@ class CompleteTablebaseBuilder:
 
     output_dir: Path
     backend: str = "auto"
+    kernel_workers: int = 12
+    checkpoint_every: int = 1
     warm_start: bool = True
     max_support: int = 12
     lp_workers: int = 1
@@ -766,8 +794,18 @@ class CompleteTablebaseBuilder:
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
-        if self.backend not in {"auto", "python", "rust"}:
-            raise ValueError("backend must be 'auto', 'python', or 'rust'")
+        if self.backend not in {"auto", "python", "rust", "c"}:
+            raise ValueError("backend must be auto, python, rust, or c")
+        if self.backend == "c" and self.warm_start:
+            raise ValueError("the c recurrence ladder requires warm_start=false")
+        if self.checkpoint_every < 1 or (
+            self.checkpoint_every != 1 and self.backend != "c"
+        ):
+            raise ValueError(
+                "grouped checkpoints require the c backend and a positive interval"
+            )
+        if self.kernel_workers < 1:
+            raise ValueError("kernel_workers must be positive")
         if not 1 <= self.max_support <= 60:
             raise ValueError("max_support must be in 1..60")
         if self.lp_workers < 1 or self.work_item_profiles < 1:
@@ -784,18 +822,26 @@ class CompleteTablebaseBuilder:
         self._max_class_potential = 2 * (len(self._buckets) - 1)
         self._progress_path = self.output_dir / "build-progress.json"
         self._rust_kernel = self._load_rust_kernel()
-        self._active_backend = "rust" if self._rust_kernel is not None else "python"
+        self._active_backend = (
+            "c"
+            if self.backend == "c"
+            else ("rust" if self._rust_kernel is not None else "python")
+        )
+        self._build_schema = (
+            FAST_BUILD_SCHEMA if self.backend == "c" else COMPLETE_BUILD_SCHEMA
+        )
         self._build_config = _build_config_payload(
             canonical_table=self._canonical,
             table_digest=_table_digest(self._table),
             warm_start=bool(self.warm_start),
             max_support=int(self.max_support),
             include_rust=self._active_backend == "rust",
+            include_fast=self._active_backend == "c",
         )
         self._config_digest = _digest_json(self._build_config)
         if self._progress_path.exists():
             self._progress = json.loads(self._progress_path.read_text(encoding="utf-8"))
-            if self._progress.get("schema_version") != COMPLETE_BUILD_SCHEMA:
+            if self._progress.get("schema_version") != self._build_schema:
                 raise ValueError("unsupported complete-tablebase checkpoint schema")
             if self._progress.get("config_digest") != self._config_digest:
                 raise ValueError(
@@ -806,7 +852,7 @@ class CompleteTablebaseBuilder:
 
     # ------------------------------------------------------------- plumbing
     def _load_rust_kernel(self) -> Any | None:
-        if self.backend == "python":
+        if self.backend in {"python", "c"}:
             return None
         try:
             module = importlib.import_module("dth_complete_rs")
@@ -848,7 +894,9 @@ class CompleteTablebaseBuilder:
         if not _is_sha256(expected):
             raise RuntimeError("completed DTH checkpoint has no valid manifest digest")
         if not manifest_path.is_file() or _sha256_file(manifest_path) != expected:
-            raise RuntimeError("completed DTH checkpoint manifest is missing or corrupt")
+            raise RuntimeError(
+                "completed DTH checkpoint manifest is missing or corrupt"
+            )
         try:
             CompleteTablebase(self.output_dir, verify_hashes=True)
         except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
@@ -862,7 +910,9 @@ class CompleteTablebaseBuilder:
 
     def _open_arrays(self, mode: str) -> dict[str, np.memmap]:
         return {
-            name: _open_npy(self.output_dir / f"{name}.npy", mode=mode, dtype=dtype, shape=shape)
+            name: _open_npy(
+                self.output_dir / f"{name}.npy", mode=mode, dtype=dtype, shape=shape
+            )
             for name, (dtype, shape) in self._array_specs().items()
         }
 
@@ -878,7 +928,7 @@ class CompleteTablebaseBuilder:
         for array in arrays.values():
             array.flush()
         self._progress = {
-            "schema_version": COMPLETE_BUILD_SCHEMA,
+            "schema_version": self._build_schema,
             "config_digest": self._config_digest,
             "phase": "sweep",
             "completed_potential": self._max_class_potential + 1,
@@ -906,7 +956,9 @@ class CompleteTablebaseBuilder:
         expected_digest = self._progress.get("warm_supports_sha256")
         if completed == self._max_class_potential + 1:
             if expected_digest is not None:
-                raise RuntimeError("initial DTH checkpoint has an unexpected support digest")
+                raise RuntimeError(
+                    "initial DTH checkpoint has an unexpected support digest"
+                )
             return {}
         if not path.is_file():
             raise RuntimeError("warm-support checkpoint is missing")
@@ -980,7 +1032,12 @@ class CompleteTablebaseBuilder:
         path = self.output_dir / _SUPPORTS_FILE
         _atomic_npz(
             path,
-            {"potential": np.int64(potential), "classes": classes, "rows": rows, "cols": cols},
+            {
+                "potential": np.int64(potential),
+                "classes": classes,
+                "rows": rows,
+                "cols": cols,
+            },
         )
         return _sha256_file(path)
 
@@ -1008,6 +1065,13 @@ class CompleteTablebaseBuilder:
         prev_supports = self._load_prev_supports()
         layers_done = 0
         pool = None
+        self._fast_pool = None
+        if self.backend == "c":
+            from concurrent.futures import ThreadPoolExecutor
+            from dth.fast_kernel import load_kernel
+
+            self._fast_kernel = load_kernel()
+            self._fast_pool = ThreadPoolExecutor(max_workers=self.kernel_workers)
         try:
             if self.lp_workers > 1:
                 from concurrent.futures import ProcessPoolExecutor
@@ -1023,8 +1087,17 @@ class CompleteTablebaseBuilder:
                 # Timed apart from the solve because a layer that is slow to
                 # commit and one that is slow to solve want different fixes.
                 solved_at = time.perf_counter()
-                for array in arrays.values():
-                    array.flush()
+                commit = (
+                    potential == 0
+                    or (layers_done + 1) % self.checkpoint_every == 0
+                    or (
+                        stop_after_layers is not None
+                        and layers_done + 1 >= stop_after_layers
+                    )
+                )
+                if commit:
+                    for array in arrays.values():
+                        array.flush()
                 support_digest = self._store_supports(potential, next_supports)
                 for key, delta in counters.items():
                     self._progress[key] = int(self._progress.get(key, 0)) + delta
@@ -1032,7 +1105,8 @@ class CompleteTablebaseBuilder:
                 self._progress["warm_supports_sha256"] = support_digest
                 if self._active_backend not in self._progress["execution_backends"]:
                     self._progress["execution_backends"].append(self._active_backend)
-                self._save_progress()
+                if commit:
+                    self._save_progress()
                 finished_at = time.perf_counter()
                 self._metrics[f"layer_{potential}_seconds"] = finished_at - started
                 self._metrics[f"layer_{potential}_solve_seconds"] = solved_at - started
@@ -1051,6 +1125,8 @@ class CompleteTablebaseBuilder:
                 if stop_after_layers is not None and layers_done >= stop_after_layers:
                     return False
         finally:
+            if self._fast_pool is not None:
+                self._fast_pool.shutdown()
             if pool is not None:
                 pool.shutdown()
         self._finalize(arrays)
@@ -1129,6 +1205,8 @@ class CompleteTablebaseBuilder:
         prev_supports: dict[int, tuple[tuple[int, ...], tuple[int, ...]]],
         pool,
     ) -> tuple[dict[str, int], dict[int, tuple[tuple[int, ...], tuple[int, ...]]]]:
+        if self.backend == "c":
+            return self._solve_layer_fast(potential, arrays, pool)
         if self._rust_kernel is not None:
             return self._solve_layer_rust(potential, arrays, prev_supports, pool)
         return self._solve_layer_python(potential, arrays, prev_supports, pool)
@@ -1144,6 +1222,84 @@ class CompleteTablebaseBuilder:
             if len(checker_bucket) and len(dropper_bucket):
                 rectangles.append((checker_bucket, dropper_bucket))
         return rectangles
+
+    def _solve_layer_fast(self, potential, arrays, pool):
+        table = self._table
+        count = self._profile_count
+        rectangles = self._layer_rectangles(potential)
+        checkers = (
+            np.concatenate([np.tile(c, len(d)) for c, d in rectangles]).astype(np.int32)
+            if rectangles
+            else np.empty(0, np.int32)
+        )
+        droppers = (
+            np.concatenate([np.repeat(d, len(c)) for c, d in rectangles]).astype(
+                np.int32
+            )
+            if rectangles
+            else np.empty(0, np.int32)
+        )
+        classes = checkers.astype(np.int64) * count + droppers
+        # A failed attempt must not inherit route bytes from an interrupted layer.
+        arrays["solver_kind"][classes] = 255
+        success = np.ascontiguousarray(table.success_child_by_profile, dtype=np.int32)
+        failure = np.ascontiguousarray(table.failure_child_by_profile, dtype=np.int32)
+        revival = np.ascontiguousarray(table.revival_by_profile, dtype=np.float64)
+        chunk = max(
+            16,
+            min(
+                self.work_item_profiles,
+                (len(classes) + self.kernel_workers - 1) // self.kernel_workers,
+            ),
+        )
+
+        def run(start):
+            pc, pd = checkers[start : start + chunk], droppers[start : start + chunk]
+            result = self._fast_kernel.solve_chunk(
+                len(pc),
+                pc,
+                pd,
+                arrays["value"],
+                arrays["solver_kind"],
+                count,
+                success,
+                failure,
+                revival,
+            )
+            if result < 0:
+                raise RuntimeError(
+                    f"layer {potential}: invalid child or floating-point environment"
+                )
+            return result
+
+        list(self._fast_pool.map(run, range(0, len(classes), chunk)))
+        kinds = arrays["solver_kind"][classes]
+        pure, support = (
+            int(np.count_nonzero(kinds == 0)),
+            int(np.count_nonzero(kinds == 1)),
+        )
+        counters = dict(
+            pure_states=pure,
+            support_states=support,
+            warm_hits=0,
+            full_support_hits=support,
+            lp_states=0,
+            lp_single_dual=0,
+            lp_highs=0,
+            lp_ipm=0,
+            lp_tightened=0,
+            warm_attempts=0,
+        )
+        residues = [
+            (int(cid), *class_transition_values(table, int(cid), arrays["value"]))
+            for cid in classes[kinds == 255]
+        ]
+        self._solve_residues(
+            residues, pool, counters, {}, arrays["value"], arrays["solver_kind"]
+        )
+        if pure + support + counters["lp_states"] != len(classes):
+            raise RuntimeError("recurrence layer route count mismatch")
+        return counters, {}
 
     def _solve_layer_python(
         self,
@@ -1202,9 +1358,7 @@ class CompleteTablebaseBuilder:
                         f"layer {potential} read an unsolved child value"
                     )
                 gap, maximin, minimax = toeplitz_saddle(flat_success, flat_failure)
-                classes = (
-                    checkers[None, :] * count + droppers[:, None]
-                ).reshape(-1)
+                classes = (checkers[None, :] * count + droppers[:, None]).reshape(-1)
                 pure = gap <= SADDLE_GAP_TOLERANCE
                 pure_indices = np.flatnonzero(pure)
                 value[classes[pure_indices]] = (
@@ -1224,8 +1378,10 @@ class CompleteTablebaseBuilder:
                                 continue
                             counters["warm_attempts"] += 1
                             solution = attempt_support_solution(
-                                flat_success[flat], float(flat_failure[flat]),
-                                guess[0], guess[1],
+                                flat_success[flat],
+                                float(flat_failure[flat]),
+                                guess[0],
+                                guess[1],
                             )
                             if solution is not None:
                                 counters["warm_hits"] += 1
@@ -1235,8 +1391,10 @@ class CompleteTablebaseBuilder:
                         # full-support structured solve; endgame regions are
                         # dominated by near-full supports (measured 2026-07-30).
                         solution = attempt_support_solution(
-                            flat_success[flat], float(flat_failure[flat]),
-                            _FULL_SUPPORT, _FULL_SUPPORT,
+                            flat_success[flat],
+                            float(flat_failure[flat]),
+                            _FULL_SUPPORT,
+                            _FULL_SUPPORT,
                         )
                         if solution is not None:
                             counters["full_support_hits"] += 1
@@ -1246,12 +1404,20 @@ class CompleteTablebaseBuilder:
                         kind[class_id] = SOLVER_KIND_SUPPORT
                         counters["support_states"] += 1
                         next_supports[class_id] = (
-                            support_of_policy(drop_policy, max_support=self.max_support),
-                            support_of_policy(check_policy, max_support=self.max_support),
+                            support_of_policy(
+                                drop_policy, max_support=self.max_support
+                            ),
+                            support_of_policy(
+                                check_policy, max_support=self.max_support
+                            ),
                         )
                     else:
                         residues.append(
-                            (class_id, flat_success[flat].copy(), float(flat_failure[flat]))
+                            (
+                                class_id,
+                                flat_success[flat].copy(),
+                                float(flat_failure[flat]),
+                            )
                         )
 
         self._solve_residues(residues, pool, counters, next_supports, value, kind)
@@ -1277,7 +1443,10 @@ class CompleteTablebaseBuilder:
             solved = pool.map(_residue_worker, payloads, chunksize=64)
         else:
             solved = (
-                (class_id, *_solve_residue(success, failed, max_support=self.max_support))
+                (
+                    class_id,
+                    *_solve_residue(success, failed, max_support=self.max_support),
+                )
                 for class_id, success, failed in residues
             )
         backend_keys = {
@@ -1343,7 +1512,9 @@ class CompleteTablebaseBuilder:
         ) = self._rust_kernel.sweep_layer_rs(
             np.asarray(work, dtype=np.uint64),
             profile_pool,
-            np.ascontiguousarray(table.success_child_by_profile, dtype=np.int32).reshape(-1),
+            np.ascontiguousarray(
+                table.success_child_by_profile, dtype=np.int32
+            ).reshape(-1),
             np.ascontiguousarray(table.failure_child_by_profile, dtype=np.int32),
             np.ascontiguousarray(table.revival_by_profile, dtype=np.float64),
             self._profile_count,
@@ -1386,7 +1557,12 @@ class CompleteTablebaseBuilder:
             for index in range(len(np.asarray(residue_classes)))
         ]
         self._solve_residues(
-            residues, pool, counters, next_supports, arrays["value"], arrays["solver_kind"]
+            residues,
+            pool,
+            counters,
+            next_supports,
+            arrays["value"],
+            arrays["solver_kind"],
         )
         return counters, next_supports
 
@@ -1403,12 +1579,17 @@ class CompleteTablebaseBuilder:
             if np.any(np.abs(values) > 1.0 + 1e-9):
                 raise RuntimeError("complete-tablebase value lies outside [-1, 1]")
             if np.any(kinds > SOLVER_KIND_LP):
-                raise RuntimeError("complete-tablebase solver_kind contains an unknown route")
+                raise RuntimeError(
+                    "complete-tablebase solver_kind contains an unknown route"
+                )
 
         recertified, worst_gap = self._sampled_recertification(value, kind)
 
+        include_fast = self.backend == "c"
         include_rust = "rust" in self._progress["execution_backends"]
-        digest_inputs = _source_digest_inputs(include_rust=include_rust)
+        digest_inputs = _source_digest_inputs(
+            include_rust=include_rust, include_fast=include_fast
+        )
         code_config_digest = _digest_files(
             digest_inputs, config={"build_config_digest": self._config_digest}
         )
@@ -1422,7 +1603,9 @@ class CompleteTablebaseBuilder:
                 "sha256": _sha256_file(path),
             }
         manifest = {
-            "schema_version": COMPLETE_TABLEBASE_SCHEMA,
+            "schema_version": FAST_TABLEBASE_SCHEMA
+            if include_fast
+            else COMPLETE_TABLEBASE_SCHEMA,
             "metadata": {
                 "class_encoding": PACKED_CLASS_ENCODING,
                 "canonical_table": self._canonical,
@@ -1437,7 +1620,7 @@ class CompleteTablebaseBuilder:
                 "warm_start_policy": WARM_START_POLICY if self.warm_start else None,
                 "max_support": int(self.max_support),
                 "policy_mass_eps": _POLICY_MASS_EPS,
-                "ladder": LADDER_ID,
+                "ladder": FAST_LADDER_ID if include_fast else LADDER_ID,
                 "solver_kinds": {"pure": 0, "support": 1, "lp": 2},
                 "pure_states": int(self._progress["pure_states"]),
                 "support_states": int(self._progress["support_states"]),
@@ -1461,7 +1644,9 @@ class CompleteTablebaseBuilder:
         supports_path.unlink(missing_ok=True)
         self._progress["warm_supports_sha256"] = None
         self._progress["phase"] = "complete"
-        self._progress["manifest_sha256"] = _sha256_file(self.output_dir / "tablebase.json")
+        self._progress["manifest_sha256"] = _sha256_file(
+            self.output_dir / "tablebase.json"
+        )
         self._save_progress()
         self._verify_completed_artifact()
 
@@ -1526,7 +1711,9 @@ class CompleteTablebase:
         self.artifact_dir = Path(self.artifact_dir)
         manifest_path = self.artifact_dir / "tablebase.json"
         if not manifest_path.exists():
-            raise FileNotFoundError(f"no complete tablebase manifest at {manifest_path}")
+            raise FileNotFoundError(
+                f"no complete tablebase manifest at {manifest_path}"
+            )
         self._manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not isinstance(self._manifest, dict) or set(self._manifest) != {
             "schema_version",
@@ -1534,7 +1721,10 @@ class CompleteTablebase:
             "arrays",
         }:
             raise ValueError("malformed complete-tablebase manifest key set")
-        if self._manifest.get("schema_version") != COMPLETE_TABLEBASE_SCHEMA:
+        if self._manifest.get("schema_version") not in {
+            COMPLETE_TABLEBASE_SCHEMA,
+            FAST_TABLEBASE_SCHEMA,
+        }:
             raise ValueError(
                 f"unsupported complete-tablebase schema "
                 f"{self._manifest.get('schema_version')!r}"
@@ -1570,7 +1760,8 @@ class CompleteTablebase:
             raise ValueError("complete-tablebase rules hash does not match current DTH")
         if metadata.get("saddle_gap_tolerance") != SADDLE_GAP_TOLERANCE:
             raise ValueError("complete-tablebase saddle-gap tolerance is incompatible")
-        if metadata.get("ladder") != LADDER_ID:
+        include_fast = self._manifest["schema_version"] == FAST_TABLEBASE_SCHEMA
+        if metadata.get("ladder") != (FAST_LADDER_ID if include_fast else LADDER_ID):
             raise ValueError("complete-tablebase solve ladder is incompatible")
         if metadata.get("solver_kinds") != {"pure": 0, "support": 1, "lp": 2}:
             raise ValueError("complete-tablebase solver-kind encoding is incompatible")
@@ -1584,11 +1775,17 @@ class CompleteTablebase:
         if metadata.get("warm_start_policy") != expected_warm_policy:
             raise ValueError("complete-tablebase warm-start policy is incompatible")
         max_support = metadata.get("max_support")
-        if isinstance(max_support, bool) or not isinstance(max_support, int) or not 1 <= max_support <= 60:
+        if (
+            isinstance(max_support, bool)
+            or not isinstance(max_support, int)
+            or not 1 <= max_support <= 60
+        ):
             raise ValueError("complete-tablebase max_support is invalid")
 
         backends = metadata.get("execution_backends")
-        if backends not in (["python"], ["rust"]):
+        if (include_fast and (backends != ["c"] or warm_start)) or (
+            not include_fast and backends not in (["python"], ["rust"])
+        ):
             raise ValueError("complete-tablebase execution provenance is invalid")
         include_rust = "rust" in backends
         table_digest = metadata.get("table_digest")
@@ -1600,9 +1797,7 @@ class CompleteTablebase:
             "code_config_digest",
         ):
             if not _is_sha256(metadata.get(field_name)):
-                raise ValueError(
-                    f"complete-tablebase {field_name} digest is malformed"
-                )
+                raise ValueError(f"complete-tablebase {field_name} digest is malformed")
         maximum_potential = metadata.get("max_class_potential")
         if (
             isinstance(maximum_potential, bool)
@@ -1617,7 +1812,9 @@ class CompleteTablebase:
                 raise ValueError("canonical manifest has the wrong potential schedule")
             current_table_digest = _table_digest(build_profile_table())
             if table_digest != current_table_digest:
-                raise ValueError("canonical profile table does not match current DTH rules")
+                raise ValueError(
+                    "canonical profile table does not match current DTH rules"
+                )
 
         expected_build_config = _build_config_payload(
             canonical_table=self._canonical,
@@ -1625,6 +1822,7 @@ class CompleteTablebase:
             warm_start=warm_start,
             max_support=max_support,
             include_rust=include_rust,
+            include_fast=include_fast,
         )
         build_config_digest = metadata.get("build_config_digest")
         if build_config_digest != _digest_json(expected_build_config):
@@ -1632,14 +1830,15 @@ class CompleteTablebase:
                 "complete-tablebase build configuration or implementation source is stale"
             )
         expected_code_digest = _digest_files(
-            _source_digest_inputs(include_rust=include_rust),
+            _source_digest_inputs(include_rust=include_rust, include_fast=include_fast),
             config={"build_config_digest": build_config_digest},
         )
         if metadata.get("code_config_digest") != expected_code_digest:
             raise ValueError("complete-tablebase code/configuration digest is stale")
 
         route_counts = tuple(
-            metadata.get(name) for name in ("pure_states", "support_states", "lp_states")
+            metadata.get(name)
+            for name in ("pure_states", "support_states", "lp_states")
         )
         if any(
             isinstance(count, bool) or not isinstance(count, int) or count < 0
@@ -1674,7 +1873,9 @@ class CompleteTablebase:
             != metadata["lp_states"]
             or detail_counts["warm_hits"] > detail_counts["warm_attempts"]
         ):
-            raise ValueError("complete-tablebase detailed routing counts are inconsistent")
+            raise ValueError(
+                "complete-tablebase detailed routing counts are inconsistent"
+            )
         recertified_samples = metadata.get("recertified_samples")
         if (
             isinstance(recertified_samples, bool)
@@ -1692,7 +1893,11 @@ class CompleteTablebase:
             raise ValueError("complete-tablebase recertification metadata is invalid")
 
         expected_arrays = {
-            "value": {"file": "value.npy", "shape": [self._class_count], "dtype": "float64"},
+            "value": {
+                "file": "value.npy",
+                "shape": [self._class_count],
+                "dtype": "float64",
+            },
             "solver_kind": {
                 "file": "solver_kind.npy",
                 "shape": [self._class_count],
@@ -1709,13 +1914,19 @@ class CompleteTablebase:
                 or set(spec) != {*expected, "sha256"}
                 or any(spec.get(field) != value for field, value in expected.items())
             ):
-                raise ValueError(f"complete-tablebase array contract is invalid for {name}")
+                raise ValueError(
+                    f"complete-tablebase array contract is invalid for {name}"
+                )
             digest = spec.get("sha256")
             if not _is_sha256(digest):
-                raise ValueError(f"complete-tablebase array digest is invalid for {name}")
+                raise ValueError(
+                    f"complete-tablebase array digest is invalid for {name}"
+                )
             path = self.artifact_dir / spec["file"]
             if self.verify_hashes and _sha256_file(path) != digest:
-                raise ValueError(f"complete-tablebase array {name} fails its manifest digest")
+                raise ValueError(
+                    f"complete-tablebase array {name} fails its manifest digest"
+                )
             self._arrays[name] = _open_npy(
                 path, mode="r", dtype=spec["dtype"], shape=tuple(spec["shape"])
             )
@@ -1855,6 +2066,8 @@ def run_complete(config) -> dict[str, Any]:
     builder = CompleteTablebaseBuilder(
         output_dir=Path(config.output_dir),
         backend=str(config.backend),
+        kernel_workers=int(config.get("kernel_workers", 12)),
+        checkpoint_every=int(config.get("checkpoint_every", 1)),
         warm_start=bool(config.warm_start),
         max_support=int(config.max_support),
         lp_workers=int(config.lp_workers),
@@ -1881,7 +2094,9 @@ def main() -> None:
     import hydra
     from omegaconf import DictConfig
 
-    @hydra.main(version_base="1.3", config_path="config", config_name="complete_full_v1")
+    @hydra.main(
+        version_base="1.3", config_path="config", config_name="complete_full_v1"
+    )
     def _entry(config: DictConfig) -> None:
         report = run_complete(config)
         print(

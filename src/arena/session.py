@@ -104,6 +104,10 @@ class PlaySession:
     start_clock: int = 0
     max_half_rounds: int | None = None
     sequence_start: int = 0
+    # Presentation fact for clients: the game was built on the permanent
+    # 1..60 turn, so no leap window will open. The engine still decides
+    # legality; this flag only lets a screen say so.
+    pure_dth: bool = False
 
     phase: Phase = field(default=Phase.RULES, init=False)
     sequence: int = field(default=0, init=False)
@@ -127,6 +131,8 @@ class PlaySession:
             raise TypeError("sequence_start must be an integer")
         if self.sequence_start < 0:
             raise ValueError("sequence_start must be nonnegative")
+        if not isinstance(self.pure_dth, bool):
+            raise TypeError("pure_dth must be a boolean")
         self.sequence = self.sequence_start
 
     def display_name(self, player: Player) -> str:

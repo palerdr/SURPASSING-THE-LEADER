@@ -44,12 +44,6 @@ std::filesystem::path checkpoint_path(
     return output_dir / "checkpoint.bin";
 }
 
-std::filesystem::path temporary_checkpoint_path(
-    const std::filesystem::path& output_dir)
-{
-    return output_dir / "checkpoint.tmp";
-}
-
 void validate_checkpoint_record(const dth::CheckpointRecord& record)
 {
     if (record.profile_count == 0) {
@@ -228,11 +222,12 @@ dth::CheckpointRecord parse_checkpoint(
 
 void write_checkpoint_atomically(
     const std::filesystem::path& output_dir,
-    const std::vector<std::uint8_t>& bytes)
+    const std::vector<std::uint8_t>& bytes,
+    const std::string& filename = "checkpoint.bin")
 {
     const std::filesystem::path temporary =
-        temporary_checkpoint_path(output_dir);
-    const std::filesystem::path final = checkpoint_path(output_dir);
+        output_dir / (filename + ".tmp");
+    const std::filesystem::path final = output_dir / filename;
     HANDLE file = CreateFileW(
         temporary.c_str(),
         GENERIC_WRITE,
@@ -327,11 +322,12 @@ void fsync_retry(
 
 void write_checkpoint_atomically(
     const std::filesystem::path& output_dir,
-    const std::vector<std::uint8_t>& bytes)
+    const std::vector<std::uint8_t>& bytes,
+    const std::string& filename = "checkpoint.bin")
 {
     const std::filesystem::path temporary =
-        temporary_checkpoint_path(output_dir);
-    const std::filesystem::path final = checkpoint_path(output_dir);
+        output_dir / (filename + ".tmp");
+    const std::filesystem::path final = output_dir / filename;
     const int file = ::open(
         temporary.c_str(),
         O_CREAT | O_TRUNC | O_WRONLY,
@@ -472,7 +468,7 @@ void dth::atomically_write_checkpoint(
 dth::DurableStores dth::open_resume(
     const std::filesystem::path& output_dir,
     const std::uint64_t expected_profile_count,
-    const ClassId expected_class_count)
+    const ClassId expected_class_count, const bool read_only)
 {
     if (expected_profile_count == 0) {
         throw std::invalid_argument("expected profile count cannot be zero");
@@ -490,15 +486,20 @@ dth::DurableStores dth::open_resume(
 
     MappedArray<double> values = MappedArray<double>::open_existing(
         output_dir / "values.bin",
-        mapped_count);
+        mapped_count, read_only);
     MappedArray<std::uint8_t> solver_kind =
         MappedArray<std::uint8_t>::open_existing(
             output_dir / "solver_kind.bin",
-            mapped_count);
+            mapped_count, read_only);
 
     return DurableStores{
         std::move(values),
         std::move(solver_kind),
         checkpoint,
     };
+}
+
+void dth::atomic_write_text(const std::filesystem::path& directory,
+    const std::string& filename, const std::string& contents) {
+    write_checkpoint_atomically(directory, std::vector<std::uint8_t>(contents.begin(), contents.end()), filename);
 }

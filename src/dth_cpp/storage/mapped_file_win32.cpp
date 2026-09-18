@@ -122,13 +122,13 @@ void validate_mapping_size(const std::size_t byte_count) {
 
     MappedFile MappedFile::open_existing(
         const std::filesystem::path& path,
-        const std::size_t expected_byte_count
+        const std::size_t expected_byte_count, const bool read_only
     ) {
         validate_mapping_size(expected_byte_count);
 
         HANDLE file = CreateFileW(
             path.c_str(),
-            GENERIC_READ | GENERIC_WRITE,
+            read_only ? GENERIC_READ : (GENERIC_READ | GENERIC_WRITE),
             0,
             nullptr,
             OPEN_EXISTING,
@@ -156,7 +156,7 @@ void validate_mapping_size(const std::size_t byte_count) {
         HANDLE mapping = CreateFileMappingW(
             file,
             nullptr,
-            PAGE_READWRITE,
+            read_only ? PAGE_READONLY : PAGE_READWRITE,
             0,
             0,
             nullptr
@@ -170,7 +170,7 @@ void validate_mapping_size(const std::size_t byte_count) {
 
         void* data = MapViewOfFile(
             mapping,
-            FILE_MAP_ALL_ACCESS,
+            read_only ? FILE_MAP_READ : FILE_MAP_ALL_ACCESS,
             0,
             0,
             0

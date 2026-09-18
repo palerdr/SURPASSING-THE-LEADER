@@ -20,6 +20,8 @@ export interface PlayerView {
 }
 
 export interface OutcomeView {
+  round: number;
+  half: number;
   dropper: string;
   checker: string;
   drop_time: number;
@@ -37,6 +39,8 @@ export interface OutcomeView {
 export interface Snapshot {
   sequence: number;
   phase: Phase;
+  game_index: number;
+  pure_dth: boolean;
   human_name: string;
   clock_display: string;
   clock_seconds: number;
@@ -60,13 +64,74 @@ export interface Snapshot {
 
 export interface Rules {
   human_name: string;
+  hal_label: string;
+  pure_dth: boolean;
   lines: string[];
 }
 
-export const RESULT_TEXT: Record<string, string> = {
-  check_success: "Check successful",
-  check_fail_survived: "Check failed — revived",
-  check_fail_died: "Check failed — died",
-  overflow_survived: "Cylinder overflow — revived",
-  overflow_died: "Cylinder overflow — died",
-};
+/** One resolved half-round as the public transcript records it. */
+export interface HistoryEntry {
+  public_state_before: {
+    clock_seconds: number;
+    clock_display: string;
+    round: number;
+    half: number;
+    turn_duration: number;
+  };
+  dropper: string;
+  checker: string;
+  drop_second: number;
+  check_second: number;
+  result: OutcomeResult;
+  squandered_seconds: number;
+  death_duration_seconds: number;
+  survived: boolean | null;
+  survival_probability: number | null;
+}
+
+export interface FinishedGame {
+  game_index: number;
+  seed: number | null;
+  start_clock: number;
+  winner: string | null;
+  stopped: boolean;
+  half_rounds: number;
+  public_history: HistoryEntry[];
+}
+
+export interface Tally {
+  human_wins: number;
+  hal_wins: number;
+  no_winner: number;
+  stopped: number;
+}
+
+/** GET /api/transcript: the CLI's play-session transcript plus the live game. */
+export interface Transcript {
+  schema_version: string;
+  hal_agent: string;
+  public_hal_label: string | null;
+  human_name: string;
+  base_seed: number | null;
+  start_clock: number;
+  pure_dth: boolean;
+  games: FinishedGame[];
+  tally: Tally;
+  current_game: {
+    game_index: number;
+    seed: number | null;
+    start_clock: number;
+    phase: Phase;
+    half_rounds: number;
+    public_history: HistoryEntry[];
+  };
+  hal_summary?: string;
+}
+
+/** Fields a new game may override; everything else is fixed by the server. */
+export interface NewGameOptions {
+  human_name?: string;
+  seed?: number;
+  start_clock?: number;
+  max_half_rounds?: number;
+}

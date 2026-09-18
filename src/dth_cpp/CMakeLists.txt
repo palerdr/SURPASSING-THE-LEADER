@@ -82,6 +82,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
             -Wconversion
             -Wshadow
             -ffp-contract=off
+            -fno-fast-math
     )
 endif()
 
@@ -98,6 +99,9 @@ find_package(Threads REQUIRED)
 add_library(
     dth_solver
     STATIC
+        storage/digest.cpp
+        sweep.cpp
+        recurrence.cpp
         storage/durable_store.cpp
         exact.cpp
         highs_backend.cpp
@@ -170,3 +174,28 @@ add_test(
     NAME dth-highs-backend-tests
     COMMAND dth-highs-backend-tests
 )
+
+# Bind resume and final artifacts to the implementation and toolchain.
+file(GLOB_RECURSE DTH_SOURCE_INPUTS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.tpp")
+list(FILTER DTH_SOURCE_INPUTS EXCLUDE REGEX "/(build|outputs)/")
+list(SORT DTH_SOURCE_INPUTS)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DTH_SOURCE_INPUTS})
+set(DTH_SOURCE_BUNDLE "${CMAKE_CXX_COMPILER_ID};${CMAKE_CXX_COMPILER_VERSION};${CMAKE_SYSTEM_PROCESSOR};${CMAKE_CXX_FLAGS};${CMAKE_CXX_FLAGS_RELEASE};${CMAKE_BUILD_TYPE}")
+foreach(source IN LISTS DTH_SOURCE_INPUTS)
+    file(SHA256 "${source}" digest)
+    file(RELATIVE_PATH label "${CMAKE_CURRENT_SOURCE_DIR}" "${source}")
+    string(APPEND DTH_SOURCE_BUNDLE "${label}:${digest};")
+endforeach()
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt" DTH_CMAKE_DIGEST)
+string(SHA256 DTH_SOURCE_DIGEST "${DTH_SOURCE_BUNDLE}${DTH_CMAKE_DIGEST}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/source_digest.hpp"
+    CONTENT [=[#pragma once
+#define DTH_SOURCE_DIGEST "@DTH_SOURCE_DIGEST@"
+]=] @ONLY)
+target_include_directories(dth_solver PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+
+add_executable(dth-sweep-tests sweep_tests.cpp)
+target_link_libraries(dth-sweep-tests PRIVATE dth_solver dth_project_options)
+add_test(NAME dth-sweep-tests COMMAND dth-sweep-tests)

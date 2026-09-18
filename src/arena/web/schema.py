@@ -18,7 +18,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from arena.session import Phase, PlaySession, validate_human_display_name
-from stl.engine.game import CYLINDER_MAX, TOTAL_TTD_MAX, HalfRoundResult
+from stl.engine.game import (
+    CYLINDER_MAX,
+    TOTAL_TTD_MAX,
+    TURN_DURATION_LEAP,
+    HalfRoundResult,
+)
 
 # Phases in which the reveal is public and may be serialized.
 _REVEALED = (Phase.AWAITING_ACK, Phase.GAME_OVER)
@@ -37,8 +42,14 @@ class PlayerView(BaseModel):
 
 
 class OutcomeView(BaseModel):
-    """A reveal with distinct engine-game-over and session-ending signals."""
+    """A reveal with distinct engine-game-over and session-ending signals.
 
+    ``round`` and ``half`` are the resolved half-round's own, not the next
+    half's: the engine has already advanced by the time the reveal is shown.
+    """
+
+    round: int
+    half: int
     dropper: str
     checker: str
     drop_time: int
@@ -56,6 +67,8 @@ class OutcomeView(BaseModel):
 class Snapshot(BaseModel):
     sequence: int
     phase: Phase
+    game_index: int
+    pure_dth: bool
     human_name: str
     clock_display: str
     clock_seconds: float
@@ -104,6 +117,8 @@ def _outcome_view(session: PlaySession) -> OutcomeView | None:
     if record is None or session.phase not in _REVEALED:
         return None
     return OutcomeView(
+        round=int(record.round_num + 1),
+        half=int(record.half),
         dropper=session.display_canonical_name(record.dropper),
         checker=session.display_canonical_name(record.checker),
         drop_time=int(record.drop_time),
@@ -133,13 +148,17 @@ def snapshot_from_session(session: PlaySession) -> Snapshot:
     return Snapshot(
         sequence=session.sequence,
         phase=session.phase,
+        game_index=session.game_index,
+        pure_dth=session.pure_dth,
         human_name=session.human_display_name,
         clock_display=game.format_game_clock(),
         clock_seconds=float(game.game_clock),
         round=int(game.round_num + 1),
         half=int(game.current_half),
         turn_duration=int(turn_duration),
-        leap_window=game.is_leap_second_turn(),
+        # The leap turn is in effect only when the engine lengthened the
+        # turn; a pure-DTH game keeps 60 seconds however the clock reads.
+        leap_window=turn_duration == TURN_DURATION_LEAP,
         dropper_name=session.display_name(dropper),
         checker_name=session.display_name(checker),
         human_role=session.human_role(),

@@ -89,7 +89,7 @@ MappedArray<T> MappedArray<T>::create(
 template <typename T>
 MappedArray<T> MappedArray<T>::open_existing(
     const std::filesystem::path& path,
-    const std::size_t expected_count
+    const std::size_t expected_count, const bool read_only
 ) {
     const std::size_t byte_count =
         checked_byte_count(expected_count);
@@ -97,7 +97,7 @@ MappedArray<T> MappedArray<T>::open_existing(
     MappedFile file =
         MappedFile::open_existing(
             path,
-            byte_count
+            byte_count, read_only
         );
 
     return MappedArray{

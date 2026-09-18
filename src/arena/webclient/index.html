@@ -3,96 +3,235 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Surpassing The Leader</title>
+    <title>Drop the Handkerchief</title>
     <style>
+      /* Benne, by Reset Type, under the SIL Open Font License; see public/fonts. */
+      @font-face {
+        font-family: "Benne";
+        src: url("/fonts/benne.woff2") format("woff2");
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
       :root {
         --ink: #f2f2f2;
         --dim: #8a8a8a;
         --rule: #2b2b2b;
+        --field: #0c0c0c;
         --warn: #d8b24a;
         --bad: #c4544a;
         --good: #7fa87f;
         color-scheme: dark;
       }
       * { box-sizing: border-box; }
+      html, body { height: 100%; }
       body {
         margin: 0;
         background: #000;
         color: var(--ink);
-        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        display: flex;
-        justify-content: center;
+        font: 17px/1.55 Benne, Georgia, "Times New Roman", serif;
+        overflow: hidden;
       }
-      #app {
-        width: min(880px, 100vw);
-        padding: 20px 18px 32px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+      /* One stage, the whole viewport. The canvas is the floor; every screen
+         is a layer over it. */
+      #stage { position: fixed; inset: 0; background: #000; }
+      #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #hud {
+        position: absolute; top: 16px; left: 18px; width: min(300px, 46vw);
+        display: flex; flex-direction: column; gap: 10px; z-index: 2;
       }
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        border-bottom: 1px solid var(--rule);
-        padding-bottom: 8px;
+      #hud .player h2 {
+        font-size: 14px; margin: 0 0 4px; font-weight: 600; letter-spacing: 0.08em;
+        overflow-wrap: anywhere;
       }
-      h1 { font-size: 15px; letter-spacing: 0.22em; margin: 0; font-weight: 600; }
-      #clock { font-variant-numeric: tabular-nums; color: var(--dim); }
-      #meta, #roles { display: flex; gap: 14px; color: var(--dim); }
-      #roles strong { color: var(--ink); font-weight: 600; }
-      .leap { color: var(--warn); }
-      canvas {
-        width: 100%;
-        aspect-ratio: 16 / 7;
-        display: block;
-        background: #000;
-        border: 1px solid var(--rule);
-        image-rendering: pixelated;
-      }
-      #stats { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-      .player { border: 1px solid var(--rule); padding: 10px 12px; }
-      .player h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; letter-spacing: 0.08em; }
-      .player .you { color: var(--dim); font-weight: 400; }
-      .stat { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-      .stat span:first-child { width: 68px; color: var(--dim); }
-      .bar { flex: 1; height: 8px; background: #141414; border: 1px solid var(--rule); }
+      #hud .you { color: var(--dim); font-weight: 400; }
+      .stat { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+      .stat span:first-child { width: 38px; color: var(--dim); font-size: 13px; }
+      .bar { flex: 1; height: 7px; background: #141414; border: 1px solid var(--rule); }
       .bar > i { display: block; height: 100%; background: var(--ink); }
       .bar.hot > i { background: var(--bad); }
-      .value { width: 62px; text-align: right; font-variant-numeric: tabular-nums; }
-      #panel { border: 1px solid var(--rule); padding: 14px; min-height: 132px; }
-      #panel h2 { font-size: 13px; margin: 0 0 10px; letter-spacing: 0.1em; }
-      #panel p { margin: 0 0 8px; }
-      #panel .rules { color: var(--dim); white-space: pre-wrap; margin-bottom: 12px; }
-      #panel .arith { color: var(--dim); }
-      #panel .win { color: var(--good); }
-      #panel .lose { color: var(--bad); }
-      form { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-      input[type="number"] {
-        width: 96px; background: #0c0c0c; color: var(--ink);
-        border: 1px solid var(--rule); padding: 7px 9px; font: inherit;
+      .value { width: 66px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
+      #corner {
+        position: absolute; top: 16px; right: 18px; text-align: right; z-index: 2;
+        color: var(--dim); font-variant-numeric: tabular-nums;
       }
+      #corner strong { color: var(--ink); font-weight: 600; }
+      #corner .clock { font-size: 20px; color: var(--ink); }
+      #corner .leap { color: var(--warn); }
+      #screen {
+        position: absolute; inset: 0; z-index: 1;
+        display: flex; align-items: center; justify-content: center;
+        padding: 96px 18px 24px;
+      }
+      #screen.floor { pointer-events: none; }
+      #screen .card { width: min(880px, 100%); }
+      #screen h2 { font-size: 15px; margin: 0 0 12px; letter-spacing: 0.14em; font-weight: 400; }
+      #screen p { margin: 0 0 8px; }
+      #screen.opening { padding: 24px 18px; }
+      .title-slide { width: 100%; text-align: center; }
+      .title-slide h1 {
+        margin: 0 0 48px; font-weight: 400; line-height: 1.1;
+        font-size: clamp(2.3rem, 7vw, 6.5rem); letter-spacing: 0.12em;
+      }
+      .title-slide form { justify-content: center; }
+      .opening button {
+        background: transparent; color: var(--ink); border: 1px solid var(--rule);
+        min-width: 120px;
+      }
+      .opening button:hover { border-color: var(--ink); }
+      .opening button:focus-visible { outline: 2px solid var(--ink); outline-offset: 5px; }
+      .opening .error:empty { display: none; }
+      .rules-slide {
+        width: 100%; height: 100%;
+        display: flex; flex-direction: column; gap: 12px; align-items: center;
+      }
+      .rules-slide img {
+        flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain;
+        background: #000;
+      }
+      .rules-slide form { flex: 0 0 auto; justify-content: center; margin: 0; }
+      #screen .assumptions {
+        margin: 0; color: var(--dim); text-align: center;
+        font-size: 14px; line-height: 1.4; text-wrap: balance;
+      }
+      .caption {
+        position: absolute; left: 0; right: 0; bottom: 8vh; text-align: center;
+        letter-spacing: 0.18em; color: var(--ink); font-size: 17px;
+      }
+      .caption small { display: block; color: var(--dim); letter-spacing: 0.08em; margin-top: 6px; font-size: 14px; }
+      .caption button {
+        margin-top: 20px; color: var(--ink); background: transparent;
+        border: 1px solid var(--rule);
+      }
+      .action { display: flex; gap: 40px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+      .action .ask { flex: 1 1 320px; }
+      .action .ask [data-commit] { margin-top: 12px; }
+
+      .plate-and-count { display: grid; justify-items: center; gap: 0.6rem; flex: 0 0 auto; }
+      .count {
+        font-family: "Times New Roman", Times, "Liberation Serif", serif;
+        font-size: clamp(2rem, 5vh, 3.2rem); line-height: 1; color: var(--dim);
+        font-variant-numeric: lining-nums tabular-nums; letter-spacing: 0.04em;
+      }
+      /* ---- The dial plate, from palerdr.github.io ---- */
+      .dialplate {
+        --paper: #ffffff;
+        --paper-lift: #ffffff;
+        --ink: #0a0a0a;
+        --ink-dim: #383838;
+        --ink-faint: #6d6d6d;
+        --line: #e3e3e0;
+        --line-strong: #c9c9c4;
+        --leap: #c0142a;
+        position: relative;
+        width: min(62vh, 44vw, 32rem);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: var(--paper);
+        border: 1px solid var(--line-strong);
+      }
+      .dialplate .engraving,
+      .dialplate .hands {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        pointer-events: none; overflow: visible;
+      }
+      .dialplate .rim { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+      .dialplate .rim.thin { stroke: var(--line); stroke-width: 1; }
+      .dialplate .tick { stroke: var(--line-strong); stroke-width: 1.5; }
+      .dialplate .tick.major { stroke: var(--ink-faint); stroke-width: 3; }
+      .dialplate .leap-tick { stroke: var(--leap); stroke-width: 4; }
+      /* Hands are filled triangles, not strokes: a stroke cannot come to a point. */
+      .dialplate .hands polygon { stroke: none; }
+      .dialplate [data-hand] { transform-box: view-box; transform-origin: 500px 500px; }
+      .dialplate [data-hand="hour"] polygon { fill: var(--ink-dim); }
+      .dialplate [data-hand="minute"] polygon { fill: var(--ink-faint); }
+      .dialplate [data-hand="pointer"] polygon { fill: var(--leap); }
+      .dialplate [data-hand="pointer"][data-live] { transition: none; }
+      .dialplate .hub { fill: var(--paper-lift); stroke: var(--line-strong); stroke-width: 3; }
+      .dialplate .core {
+        position: absolute; left: 50%; top: 42%; translate: -50% -50%; width: 62%;
+        text-align: center;
+      }
+      /* The only words on the dial, set like a name engraved on one. */
+      .dialplate .who {
+        margin: 0; color: var(--ink);
+        font-size: clamp(0.8125rem, 1.8vw, 1.0625rem); letter-spacing: 0.22em;
+        font-variant-numeric: tabular-nums;
+      }
+      .win { color: var(--good); }
+      .lose { color: var(--bad); }
+      .big { font-size: 28px; letter-spacing: 0.12em; font-weight: 400; margin: 0 0 12px; }
+      .hint { color: var(--dim); }
+      .leap { color: var(--warn); }
+      .summary { color: var(--dim); overflow-wrap: anywhere; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 14px; }
+      form { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+      form label { color: var(--dim); }
+      input[type="number"], input[type="text"] {
+        width: 96px; background: var(--field); color: var(--ink);
+        border: 1px solid var(--rule); padding: 8px 10px; font: inherit; font-size: 18px;
+      }
+      input[type="text"] { width: min(240px, 100%); }
       button {
-        background: var(--ink); color: #000; border: 0; padding: 7px 16px;
-        font: inherit; font-weight: 600; cursor: pointer;
+        background: var(--ink); color: #000; border: 0; padding: 8px 20px;
+        font: inherit; letter-spacing: 0.06em; cursor: pointer;
       }
-      button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
       button:disabled { opacity: 0.45; cursor: default; }
       .error { color: var(--bad); margin-top: 8px; min-height: 1.4em; }
-      .hint { color: var(--dim); }
+      #screen .outcome { width: min(1120px, 100%); text-align: center; color: #fff; }
+      #screen .verdict {
+        font-size: clamp(2.3rem, 6.5vw, 5.8rem); line-height: 1.15;
+        letter-spacing: 0.13em; margin: 0 0 38px; text-wrap: balance;
+        font-weight: 400;
+      }
+      #screen .verdict .aftermath {
+        display: block; margin-top: 10px; font-size: clamp(1.1rem, 2.3vw, 1.65rem);
+        letter-spacing: 0.08em;
+      }
+      .outcome form { justify-content: center; margin-top: 32px; }
+      .victory { text-align: center; }
+      .victory form { justify-content: center; margin-bottom: 12px; }
+      .outcome button { color: #fff; background: transparent; border: 1px solid #fff; }
+      .outcome .error { color: #fff; }
+      .result-stage #hud, .result-stage #corner { color: #fff; }
+      .result-stage #hud .you, .result-stage .stat span:first-child,
+      .result-stage .value, .result-stage #corner .clock,
+      .result-stage #corner .leap, .result-stage #corner strong { color: #fff; }
+      .revealing #screen, .revealing #hud, .revealing #corner {
+        animation: result-reveal var(--reveal-ms) cubic-bezier(0.22, 0.05, 0.36, 1) both;
+      }
+      @keyframes result-reveal { from { opacity: 0; } to { opacity: 1; } }
+      @media (max-width: 640px) {
+        .title-slide h1 { font-size: clamp(1.7rem, 9vw, 3rem); }
+        #hud { width: 48vw; }
+        #hud .player h2 { font-size: 12px; }
+        #corner { font-size: 13px; }
+        #corner .clock { font-size: 16px; }
+        .stat { gap: 4px; }
+        .stat span:first-child { width: 28px; }
+        .value { width: 52px; font-size: 12px; }
+        .dialplate .core { width: 66%; }
+        #screen { padding: 160px 18px 18px; }
+        .action { gap: 18px; justify-content: center; }
+        .action .ask { flex-basis: 100%; }
+        .dialplate { width: min(48vw, 29vh); }
+        .plate-and-count { gap: 12px; }
+        .dialplate .who { font-size: 10px; letter-spacing: 0.06em; }
+        #screen .verdict { margin-bottom: 24px; }
+      }
     </style>
   </head>
   <body>
-    <div id="app">
-      <header>
-        <h1>SURPASSING THE LEADER</h1>
-        <div id="clock"></div>
-      </header>
-      <div id="meta"></div>
-      <div id="roles"></div>
+    <div id="stage">
       <canvas id="scene"></canvas>
-      <div id="stats"></div>
-      <div id="panel"></div>
+      <div id="hud"></div>
+      <div id="corner"></div>
+      <div id="screen" class="opening">
+        <div class="title-slide">
+          <h1>DROP THE<br />HANDKERCHIEF</h1>
+          <form><button type="submit">Start</button></form>
+          <div class="error" role="alert"></div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

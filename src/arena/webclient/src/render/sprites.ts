@@ -8,7 +8,7 @@
 // art the terminal front end has already validated, so we do not.
 
 export type Character = "baku" | "hal" | "yakou";
-export type Pose = "idle" | "dropping" | "seated" | "standing";
+export type Pose = "idle" | "dropping" | "seated" | "standing" | "win_screen";
 
 const cache = new Map<string, HTMLImageElement>();
 const failed = new Set<string>();
@@ -41,10 +41,11 @@ export function frame(character: Character, pose: Pose, index: number): HTMLImag
 export function preload(): void {
   const players: Character[] = ["baku", "hal"];
   for (const character of players) {
-    for (let i = 0; i < 4; i += 1) frame(character, "idle", i);
+    frame(character, "idle", 0);
     frame(character, "dropping", 0);
     frame(character, "seated", 0);
   }
-  for (let i = 0; i < 4; i += 1) frame("yakou", "idle", i);
+  frame("hal", "win_screen", 0);
+  frame("yakou", "idle", 0);
   frame("yakou", "standing", 0);
 }

@@ -5,9 +5,8 @@ Handkerchief. It must not import or link the Python, Rust, OCaml, STL, abstract,
 or arena projects. Those projects may be used only as external validation
 oracles while developing this implementation.
 
-The implementation files are intentionally empty at scaffold creation. Build
-them strictly in the chronological order specified by [`BUILD.md`](BUILD.md).
-That document owns this project's construction sequence and numerical design.
+The complete solver implements the recurrence amendment in [`BUILD.md`](BUILD.md).
+That document owns this project's construction gates and numerical design.
 
 HiGHS `1.15.1` is the pinned numerical backend. CMake first accepts an exact,
 toolchain-compatible installed package and otherwise fetches the pinned source
@@ -56,3 +55,46 @@ under this subtree's ignored `build/` and `outputs/` directories.
 
 After implementation, validate from the repository root with the commands in
 the final section of `BUILD.md`, then run `graphify update .`.
+
+## Build and run
+
+```sh
+cmake --preset release -S src/dth_cpp -B src/dth_cpp/build/recurrence-release
+cmake --build src/dth_cpp/build/recurrence-release -j 12
+ctest --test-dir src/dth_cpp/build/recurrence-release --output-on-failure
+src/dth_cpp/build/recurrence-release/dth-solve-tablebase --fresh --output src/dth_cpp/outputs/complete-recurrence-v1 --threads 12
+```
+
+Use `--resume` with the same output directory to continue a checkpoint.
+Use `--verify-only` to open completed arrays read-only and check their
+hashes and certificates. `--stop-after-layers N` commits before stopping.
+`--checkpoint-every N` defaults to 50; set 1 to commit each layer. SIGINT
+and SIGTERM request a checkpoint at the next layer barrier. A crash can
+require replay of the unfinished checkpoint group.
+
+Exit codes: 0 means complete or verified; 2 means invalid arguments;
+3 means solver failure; 4 means an I/O error; 5 means a requested checkpoint
+stop; 6 means an incompatible or corrupt artifact on open or verification.
+
+The native artifact contains `values.bin` and `solver_kind.bin`, plus a
+source-bound build config, durable checkpoint, and SHA-256 manifest. It
+uses the C++ schema. The arena continues to consume the Python provider's
+artifact. Each implementation owns its code and storage contract.
+
+## Full-build verification on this Mac
+
+On 2026-09-11, the full builds took the following times, including final
+scans, recertification, and manifest hashing. These are single local runs.
+The 12-worker run includes a checkpoint stop and resume.
+
+| Workers | Seconds |
+| --- | ---: |
+| 12 | 29.75 |
+| 14 | 28.97 |
+| 15 | 28.15 |
+
+All runs produced identical value and route hashes. We compared all
+289,374,121 values with the Python recurrence build and found no difference.
+The root is `0.08985007281413855`. The native read-only verifier checked
+4,792 classes and both file hashes. The generated benchmark report remains
+at `outputs/recurrence-benchmark.json`.

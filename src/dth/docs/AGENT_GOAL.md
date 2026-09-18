@@ -8,7 +8,8 @@ policy for every arena state.
 ## Canonical artifact
 
 - Directory: `src/dth/artifacts/complete_full_v1/`
-- Schema: `dth.complete-tablebase.v2`
+- Schemas: `dth.complete-tablebase.v2` for the original ladder and
+  `dth.complete-tablebase.v3` for the certified recurrence ladder
 - Quotient classes: 289,374,121
 - Values: one float64 per class
 - Routing audit: one uint8 solver-kind value per class
@@ -17,7 +18,7 @@ policy for every arena state.
   model in `docs/REVIVAL_MODEL.md`
 
 The artifact is generated and therefore gitignored. Its manifest binds array
-digests, class encoding, rule hash, sweep configuration, and Python/Rust
+digests, class encoding, rule hash, sweep configuration, and Python/Rust/C
 execution provenance. Missing, corrupt, wrong-schema, or off-domain lookups
 fail closed.
 
@@ -48,3 +49,5 @@ The complete sweep, packed codec, independent dead-band anchor, Bellman
 recertification, resume behavior, and Python/Rust byte parity are locked by the
 tests named `test_complete_*` and the contract in
 [`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md).
+
+Use the [fast build instructions](FAST_TABLEBASE.md) to rebuild the arena artifact.

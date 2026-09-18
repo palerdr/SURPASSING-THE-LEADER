@@ -1,0 +1,25 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+output_dir: src/dth/artifacts/complete_fast_v1
+report_path: src/dth/artifacts/complete_fast_v1_report.json
+backend: c
+kernel_workers: 12
+checkpoint_every: 50
+warm_start: false
+max_support: 12
+lp_workers: 1
+work_item_profiles: 4096
+progress_every: 1
+
+sweep:
+  stop_after_layers: null
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

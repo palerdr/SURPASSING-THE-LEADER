@@ -18,7 +18,7 @@ public:
         std::size_t byte_count);
     static MappedFile open_existing(
         const std::filesystem::path& path,
-        std::size_t expected_byte_count);
+        std::size_t expected_byte_count, bool read_only = false);
 
     ~MappedFile();
 
@@ -56,7 +56,7 @@ public:
         const T& initial_value);
     static MappedArray open_existing(
         const std::filesystem::path& path,
-        std::size_t expected_count);
+        std::size_t expected_count, bool read_only = false);
 
     MappedArray(const MappedArray&) = delete;
     MappedArray& operator=(const MappedArray&) = delete;
@@ -67,6 +67,8 @@ public:
     const T& operator[](std::size_t index) const;
     std::size_t size() const noexcept;
     void flush();
+    T* data() noexcept { return static_cast<T*>(file_.data()); }
+    const T* data() const noexcept { return static_cast<const T*>(file_.data()); }
 
 private:
     MappedArray(MappedFile file, std::size_t count) noexcept;
@@ -101,7 +103,10 @@ void atomically_write_checkpoint(
 [[nodiscard]] DurableStores open_resume(
     const std::filesystem::path& output_dir,
     std::uint64_t expected_profile_count,
-    ClassId expected_class_count);
+    ClassId expected_class_count, bool read_only = false);
+
+void atomic_write_text(const std::filesystem::path& directory,
+    const std::string& filename, const std::string& contents);
 
 } // namespace dth
 

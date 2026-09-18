@@ -60,16 +60,38 @@ refuses `--hal-agent abstract` for that reason. `web/schema.py` holds the only
 serializer that faces the browser, so the seat-scoping rule has exactly one
 place to be enforced and one place to be tested.
 
+The browser server is one repeated-opponent series, the same unit as
+`arena play --games N`: one Hal is retained across games, game `N` is seeded
+with the base seed plus `N`, and every finished game is appended to a public
+transcript in the CLI's `arena-public-play-session-v1` shape. `GET
+/api/transcript` serves that transcript plus the live game's resolved
+half-rounds, and `--transcript PATH` rewrites the same JSON after every
+finished game. `--public-hal-label`, `--conceal-hal-details`, `--pure-dth`,
+and every agent option of `arena play` are accepted with the same meaning.
+When `webclient/dist/` has been built, the Python server serves it at `/`, so
+one process is the whole game.
+
 Engine identities remain exactly `Hal` and `Baku`. `--human-name` and the web
 session's `human_name` are presentation labels only; they never replace Baku's
 rule-bearing identity. `Hal` is reserved as a display label. Browser session
 replacement is a sequenced mutation, is allowed only before play or after a
 terminal acknowledgement, and advances the sequence across the replacement.
-The browser server's live provider set is `dth`, `adaptive-dth`, and
-`exploit-hal`; terminal `arena play` additionally offers `abstract`. The
+The browser server's live provider set is `dth`, `adaptive-dth`,
+`exploit-hal`, and, behind `--pure-dth`, `perfect-hal` and `pm-hal`; terminal
+`arena play` additionally offers `abstract`. The
 retired `stl-mcts` surface is not advertised. Browser snapshots carry
 server-owned character, role, and winner-seat fields, so the client never
 infers identity from presentation labels.
+
+The Vercel entrypoint uses `web/hosted.py` and `web/production.py` to isolate
+players with secure cookies and Redis command logs. It replays accepted commands
+through the same local HTTP adapter and commits each mutation before returning
+a reveal. It shares the immutable tablebase, with separate policy samplers.
+See [deployment instructions](web/DEPLOYMENT.md).
+
+The browser requests a sequenced restart on page load. This abandons the active
+game and clears the visible series before returning the title page. Ordinary
+session reads still recover state for stale-request handling and worker replay.
 
 ## Exact, Adaptive, Exploit, Aggro, Perfect, and PM Hal
 
@@ -475,3 +497,10 @@ is required to equal the direct zero-hidden target intervention. It verifies
 the provider/reset path but is not a separately trained, capacity-matched
 history-free architecture; an architecture comparison would require that
 additional model.
+
+## Browser deployment
+
+See [web/DEPLOYMENT.md](web/DEPLOYMENT.md) for the certified recurrence build,
+local launch commands, and the per-player session changes needed for Vercel.
+The complete DTH reader accepts its source-bound v3 artifact. The browser
+keeps the existing commit-before-sampling and reveal contracts.

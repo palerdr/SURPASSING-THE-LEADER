@@ -40,3 +40,11 @@ become a default backend. Run `uv run python -m pytest src/dth/tests -q`.
 After a canonical complete build, `uv run python -m dth complete-audit`
 re-solves the full LP-routed tail and independently checks the lowest-mass
 full-support certificates from a deterministic class-stratified screen.
+
+## Fast complete build
+
+Use `uv run python -m dth complete --config-name complete_fast_v1` for the
+certified C recurrence backend. It emits schema v3 and retains the 1e-6
+full-matrix gate. The existing Python/Rust v2 ladder remains available.
+See [docs/FAST_TABLEBASE.md](docs/FAST_TABLEBASE.md) for its independent
+certificate, checkpoint interval, and measured full-build results.

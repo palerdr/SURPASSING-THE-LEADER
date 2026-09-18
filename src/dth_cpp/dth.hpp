@@ -175,4 +175,11 @@ double matrix_cell(const TransitionValues& t, std::size_t drop, std::size_t chec
     MatrixScratch& scratch);
 //SECTION 13: LP FALLBACK
 [[nodiscard]] std::optional<Certified> try_linear_program(const TransitionValues& t, HighsBackend& backend, MatrixScratch& scratch);
+// Recurrence candidates must pass the common full-matrix certificate.
+[[nodiscard]] std::optional<Certified> try_recurrence(const TransitionValues& t);
+[[nodiscard]] SolveResult solve_stage(const TransitionValues& t, HighsBackend& backend, MatrixScratch& scratch);
+std::int64_t solve_recurrence_chunk(std::int64_t n, const ProfileId* checkers,
+    const ProfileId* droppers, double* values, std::uint8_t* kinds,
+    std::int64_t profile_count, const ChildId* success, const ChildId* failure,
+    const double* revival);
 } //namespace dth

@@ -219,20 +219,29 @@ dth::Potential dth::class_potential(const ProfileTable& table, ClassId class_id)
 
 // SECTION 6
 void dth::build_buckets(ProfileTable& table) {
+    if (table.potential.size() != table.profile_count) throw std::logic_error("potential dimensions mismatch");
+    for (auto& bucket : table.buckets) bucket.clear();
     for (std::size_t profile : std::views::iota(std::size_t{0}, table.profile_count)) {
+        if (table.potential[profile] > kMaxProfilePotential) throw std::logic_error("profile potential outside 0..600");
         table.buckets[table.potential[profile]].push_back(static_cast<ProfileId>(profile));
     }
 }
 void dth::validate_profile_edges(const ProfileTable& table) {
+    if (!table.profile_count || table.profile_count > kCanonicalProfiles ||
+        table.potential.size() != table.profile_count || table.revival.size() != table.profile_count ||
+        table.success_child.size() != table.profile_count * kActions || table.failure_child.size() != table.profile_count)
+        throw std::logic_error("profile transition dimensions mismatch");
     int live_success{0};
     int live_failure{0};
     for (std::size_t profile : std::views::iota(std::size_t{0}, table.profile_count)) {
         const Potential parent_phi = table.potential[profile];
+        if (!(table.revival[profile] >= 0.0 && table.revival[profile] <= 1.0)) throw std::logic_error("invalid revival probability");
         const std::size_t row_begin = profile * kActions;
         const std::size_t row_end = row_begin + kActions;
 
         for (std::size_t i : std::views::iota(row_begin, row_end)) {
             const ChildId success_child = table.success_child[i];
+            if (success_child < -1 || success_child >= static_cast<ChildId>(table.profile_count)) throw std::logic_error("success child out of range");
             // validate child
             if (success_child >= 0) {
                 const auto child_index = static_cast<std::size_t>(success_child);
@@ -244,6 +253,7 @@ void dth::validate_profile_edges(const ProfileTable& table) {
             }
         }
         const ChildId fail_child = table.failure_child[profile];
+        if (fail_child < -1 || fail_child >= static_cast<ChildId>(table.profile_count)) throw std::logic_error("failure child out of range");
         if (fail_child >= 0) {
             const auto child_index = static_cast<std::size_t>(fail_child);
             if (table.potential[child_index] <= parent_phi) {
@@ -253,10 +263,10 @@ void dth::validate_profile_edges(const ProfileTable& table) {
             ++live_failure;
         }
     }
-    if (live_success != 1'018'830) {
+    if (table.profile_count == kCanonicalProfiles && live_success != 1'018'830) {
         throw std::logic_error("live successes differ from the canonical number");
     }
-    if (live_failure != 16'711) {
+    if (table.profile_count == kCanonicalProfiles && live_failure != 16'711) {
         throw std::logic_error("live failures differ from the canonical number");
     }
 }

@@ -1,3 +1,26 @@
+# Recurrence implementation amendment (2026-09-11)
+
+You requested the method from `palerdr/dth` at commit
+`1ef73c93ea99a00854ed3b6fea10fc3e30045f2a`. The implementation keeps
+Sections 0–13 and the full-matrix 1e-6 certificate. In Section 14, it tries
+pure, recurrence, full-support HiGHS equalizer, then the covering/packing LP.
+It keeps the Section 15 sequential gate before the Section 19 fixed pool.
+
+The recurrence replaces the warm-support optimization in Sections 16–17.
+It needs no support records. The sweep joins workers after each layer and commits values, route bytes,
+then the checkpoint after each group of 50 layers (configurable). A layer
+limit or signal forces a commit. Sections 18–20 use batches of 16 classes
+and fixed workers. `warm_support` remains zero; `full_support` counts the
+recurrence and equalizer routes. The new source-bound build config prevents
+resume from a different implementation. Threads do not change arithmetic.
+
+Sections 21–22 retain full scans, four recertifications per layer, anchors,
+and a read-only verification path. A deterministic manifest includes SHA-256
+file hashes. Its presence marks completion after checkpoint potential zero.
+Verification recomputes the manifest and requires exact bytes. The checkpoint
+remains the sweep authority. The historical sections below explain the
+construction gates; this amendment replaces their warm-support requirements.
+
 # Build the optimized C++ DTH solver
 
 This is the single mathematical and implementation guide for the complete

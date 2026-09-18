@@ -181,3 +181,12 @@ unchecked Rust path.
 Set `STL_REQUIRE_RUST_PARITY=1` in CI or a release-validation shell. With that
 gate enabled, a missing `dth_complete_rs` extension is a hard test-collection
 failure instead of an ordinary Python-development skip.
+
+## Separate recurrence contract
+
+The `c` backend uses the v3 schema and `pure/recurrence/lp-v1` ladder in
+[FAST_TABLEBASE.md](FAST_TABLEBASE.md). It does not change this v2 Python/Rust
+route-order contract. Its tests compare full small-game values with the
+Python authority and require byte-identical resume and worker-count results.
+The C++ peer owns its own implementation and artifact schema. Cross-peer
+comparison uses completed values as external evidence, with no peer imports.

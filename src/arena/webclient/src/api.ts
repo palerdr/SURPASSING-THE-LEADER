@@ -1,4 +1,4 @@
-import type { Rules, Snapshot } from "./types";
+import type { NewGameOptions, Rules, Snapshot, Transcript } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -17,8 +17,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
     try {
-      const body = (await response.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (body.detail) detail = JSON.stringify(body.detail);
     } catch {
       // A non-JSON error body is still an error; the status carries the meaning.
     }
@@ -32,10 +33,21 @@ const post = <T>(path: string, body: unknown): Promise<T> =>
 
 export const getRules = (): Promise<Rules> => request<Rules>("/api/rules");
 
+/** A public read wakes the policy server without loading or changing your game. */
+export const warmServer = (): Promise<Rules> =>
+  request<Rules>("/api/rules", { cache: "no-store", credentials: "omit" });
+
 export const readSession = (): Promise<Snapshot> => request<Snapshot>("/api/session");
 
-export const newSession = (sequence: number): Promise<Snapshot> =>
-  post<Snapshot>("/api/session", { sequence });
+/** A page load abandons the previous game and opens a fresh series. */
+export const restartSession = (sequence: number): Promise<Snapshot> =>
+  post<Snapshot>("/api/session/restart", { sequence });
+
+/** The series so far. Only resolved half-rounds appear, so nothing is hidden here. */
+export const getTranscript = (): Promise<Transcript> => request<Transcript>("/api/transcript");
+
+export const newSession = (sequence: number, options: NewGameOptions = {}): Promise<Snapshot> =>
+  post<Snapshot>("/api/session", { sequence, ...options });
 
 export const begin = (sequence: number): Promise<Snapshot> =>
   post<Snapshot>("/api/session/begin", { sequence });

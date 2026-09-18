@@ -93,6 +93,9 @@ std::optional<Certified> certify(
     Policy raw_drop,
     Policy raw_check,
     double negative_limit) {
+    if (!std::isfinite(t.failed) || std::any_of(t.success.begin(), t.success.end(), [](double x) { return !std::isfinite(x); })) {
+        return std::nullopt;
+    }
     const auto normalized_drop = normalize_policy(raw_drop, negative_limit);
     const auto normalized_check = normalize_policy(raw_check, negative_limit);
 
@@ -366,5 +369,38 @@ std::optional<Certified> try_linear_program(
     }
 
     return candidate;
+}
+} // namespace dth
+
+namespace dth {
+std::optional<Certified> try_recurrence(const TransitionValues& t) {
+    const double delta = t.success[0] - t.failed;
+    if (!std::isfinite(delta) || std::abs(delta) < 1e-12) return std::nullopt;
+    std::array<double, kActions> r{}, b{};
+    r[0] = 1.0;
+    for (std::size_t k = 1; k < kActions; ++k)
+        b[k] = (t.success[k-1] - t.success[k]) / delta;
+    for (std::size_t k = 1; k < kActions; ++k)
+        for (std::size_t j = 0; j < k; ++j) r[k] += b[k-j] * r[j];
+    Policy p{}, q{};
+    for (std::size_t k = 0; k < kActions; ++k) {
+        if (!std::isfinite(r[k])) return std::nullopt;
+        p.mass[k] = std::max(r[k], 0.0);
+        q.mass[kActions-1-k] = p.mass[k];
+    }
+    return certify(t, p, q, 0.0);
+}
+
+SolveResult solve_stage(const TransitionValues& t, HighsBackend& backend, MatrixScratch& scratch) {
+    auto result = [](const Certified& c, SolverRoute route) {
+        return SolveResult{c.certificate, c.drop, c.check, route};
+    };
+    if (auto c = try_pure_saddle(t)) return result(*c, SolverRoute::Pure);
+    if (auto c = try_recurrence(t)) return result(*c, SolverRoute::FullSupport);
+    std::array<std::size_t, kActions> full{};
+    for (std::size_t k = 0; k < kActions; ++k) full[k] = k;
+    if (auto c = try_support(t, full, full, backend, scratch)) return result(*c, SolverRoute::FullSupport);
+    if (auto c = try_linear_program(t, backend, scratch)) return result(*c, SolverRoute::LinearProgram);
+    throw std::runtime_error("no rung produced a full-matrix certificate");
 }
 } // namespace dth

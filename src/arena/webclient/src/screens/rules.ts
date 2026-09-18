@@ -1,20 +1,27 @@
-import type { Rules, Snapshot } from "../types";
-import { escapeHtml } from "../render/escape";
+/** Players open the rules before they begin the server-owned game. */
+export function renderTitle(screen: HTMLElement, onStart: () => void): void {
+  screen.innerHTML = `
+    <div class="title-slide">
+      <h1>DROP THE<br />HANDKERCHIEF</h1>
+      <form><button type="submit">Start</button></form>
+      <div class="error" role="alert"></div>
+    </div>`;
+  screen.querySelector("form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    onStart();
+  });
+}
 
-export function renderRules(
-  panel: HTMLElement,
-  rules: Rules | null,
-  snapshot: Snapshot,
-  onBegin: () => void,
-): void {
-  const body = rules ? rules.lines.join("\n") : "Loading the rules…";
-  panel.innerHTML = `
-    <h2>ORDINARY TURN</h2>
-    <div class="rules">${escapeHtml(body)}</div>
-    <p class="hint">You play as ${escapeHtml(snapshot.human_name)}. Hal moves at the same time you do.</p>
-    <form><button type="submit">Begin</button></form>
-    <div class="error"></div>`;
-  panel.querySelector("form")?.addEventListener("submit", (event) => {
+/** The chapter supplies the rules; the footer states the adaptation's additions. */
+export function renderRules(screen: HTMLElement, onBegin: () => void): void {
+  screen.innerHTML = `
+    <div class="rules-slide">
+      <img src="/art/panel/stl_rules" alt="Drop the Handkerchief: the chapter's rules" />
+      <form><button type="submit">Begin</button></form>
+      <p class="assumptions">Assumptions: same-second checks succeed and add 1s; modeled revival odds fall with dose and prior time dead, with no revival above 5 minutes total.</p>
+      <div class="error" role="alert"></div>
+    </div>`;
+  screen.querySelector("form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     onBegin();
   });

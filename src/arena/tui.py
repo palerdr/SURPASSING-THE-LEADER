@@ -348,7 +348,11 @@ class SceneArt:
     ) -> SceneArt:
         base = Path(root)
         poses: dict[tuple[str, str], tuple[Sprite, ...]] = {}
-        wanted = {"baku": _PLAYER_POSES, "hal": _PLAYER_POSES, "yakou": _YAKOU_POSES}
+        wanted = {
+            "baku": _PLAYER_POSES,
+            "hal": (*_PLAYER_POSES, "win_screen"),
+            "yakou": _YAKOU_POSES,
+        }
         for character, names in wanted.items():
             for pose in names:
                 source = base / character / f"{character}_{pose}.png"

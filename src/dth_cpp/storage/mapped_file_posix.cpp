@@ -96,11 +96,11 @@ MappedFile MappedFile::create(
 
 MappedFile MappedFile::open_existing(
     const std::filesystem::path& path,
-    const std::size_t expected_byte_count
+    const std::size_t expected_byte_count, const bool read_only
 ) {
     validate_mapping_size(expected_byte_count);
 
-    const int file_descriptor = ::open(path.c_str(), O_RDWR);
+    const int file_descriptor = ::open(path.c_str(), read_only ? O_RDONLY : O_RDWR);
     if (file_descriptor == -1) {
         throw_posix_error("could not open mapped file", path, errno);
     }
@@ -122,7 +122,7 @@ MappedFile MappedFile::open_existing(
     void* const data = ::mmap(
         nullptr,
         expected_byte_count,
-        PROT_READ | PROT_WRITE,
+        read_only ? PROT_READ : (PROT_READ | PROT_WRITE),
         MAP_SHARED,
         file_descriptor,
         0
