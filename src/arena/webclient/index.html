@@ -114,13 +114,15 @@
          the same distance from its neighbours, and a button or heading sits
          one double step away. */
       #screen { --step: 14px; }
-      /* The text block is as wide as its longest line, so the button centres
-         under the text rather than under the whole column. */
+      /* The column is as wide as the heading, so the button centres under
+         "YOU ARE THE CHECKER". The instruction lines run on past that width:
+         inline-size containment keeps them from widening the column. */
       .action .ask {
         flex: 1 1 320px; display: grid; gap: var(--step);
         grid-template-columns: minmax(0, max-content); justify-content: start;
       }
       .action .ask > * { margin: 0; }
+      .action .ask p { contain: inline-size; white-space: nowrap; }
       .action .ask [data-commit] { justify-self: center; margin-top: var(--step); }
       .action .ask .error { min-height: 0; }
       .action .ask .error:empty { display: none; }
