@@ -60,8 +60,9 @@ large so the state of the game reads at a glance.
    the server supplies the result. A slow server
    can extend the black hold until it supplies the result.
 
-5. **Decision screen.** The result of the exchange: the result line, both
-   seconds, the squandered time as a plain number when the check succeeded,
+5. **Decision screen.** The result of the exchange: the result line, the
+   drop and the check on two separate lines with their seconds, the
+   squandered time as a plain number when the check succeeded,
    and the dose when it failed. No calculation is shown, only the number.
    The revival chance is not shown. Whether the checker was revived is in
    the result line already, so it is not repeated. The round, half, and

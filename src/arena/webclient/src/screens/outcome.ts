@@ -20,8 +20,8 @@ export function renderOutcome(
   const [verdict, ...aftermath] = resultText(outcome.result).split(", ");
   const verdictHtml = escapeHtml(verdict).replace("FAILED", '<span class="lose">FAILED</span>');
   const lines: string[] = [
-    `<p><strong>${escapeHtml(outcome.dropper)}</strong> dropped at second <strong>${outcome.drop_time}</strong>` +
-      ` · <strong>${escapeHtml(outcome.checker)}</strong> checked at second <strong>${outcome.check_time}</strong></p>`,
+    `<p><strong>${escapeHtml(outcome.dropper)}</strong> dropped at second <strong>${outcome.drop_time}</strong></p>`,
+    `<p><strong>${escapeHtml(outcome.checker)}</strong> checked at second <strong>${outcome.check_time}</strong></p>`,
   ];
   if (outcome.st_gained > 0) {
     lines.push(`<p>${escapeHtml(squanderedTimeLine(outcome))}</p>`);
