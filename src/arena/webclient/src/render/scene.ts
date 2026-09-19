@@ -17,6 +17,8 @@ const BACKGROUND = "#000000";
  * field, as the panel frames it.
  */
 const SCENE_FILL = 0.11;
+/** The winner's still stands a little taller than the scene's miniatures. */
+const VICTORY_FILL = 0.135;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
@@ -196,7 +198,7 @@ export function drawVictory(
   const character: Character = humanWon(snapshot) ? "baku" : "hal";
   const image = (character === "hal" ? frame(character, "win_screen", 0) : null)
     ?? frame(character, "idle", 0);
-  const target = height * SCENE_FILL;
+  const target = height * VICTORY_FILL;
   const aspect = image && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 0.5;
   const figureWidth = target * aspect;
   const x = (width - figureWidth) / 2;
