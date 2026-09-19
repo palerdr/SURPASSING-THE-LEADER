@@ -5,7 +5,9 @@ import {
   deathLines,
   legalRange,
   resultText,
+  scoreText,
   squanderedTimeLine,
+  standingText,
   tallyText,
 } from "../src/render/text.ts";
 
@@ -37,4 +39,21 @@ test("legal seconds are summarised as a range only when contiguous", () => {
 test("the series tally reads from the human's side", () => {
   assert.equal(tallyText({ human_wins: 3, hal_wins: 1, no_winner: 0, stopped: 0 }), "3–1");
   assert.equal(tallyText({ human_wins: 0, hal_wins: 2, no_winner: 1, stopped: 1 }), "0–2 · 2 undecided");
+});
+
+test("the leaderboard tells the player where their latest game stands", () => {
+  assert.equal(scoreText(183), "183");
+  assert.equal(scoreText(182.55), "182.6");
+  assert.equal(
+    standingText({ your_rank: null, your_name: "Baku", your_score: null }),
+    "Your latest game must be a win to hold a place.",
+  );
+  assert.equal(
+    standingText({ your_rank: null, your_name: null, your_score: 183 }),
+    "You won with 183 seconds of life left. Enter a name to post it.",
+  );
+  assert.equal(
+    standingText({ your_rank: 4, your_name: "Baku", your_score: 183 }),
+    "You hold rank 4 with 183 seconds of life left.",
+  );
 });

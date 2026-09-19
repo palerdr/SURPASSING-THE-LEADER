@@ -46,6 +46,8 @@ def main():
         "arena/web/app.py",
         "arena/web/schema.py",
         "arena/web/hosted.py",
+        "arena/web/ledger.py",
+        "arena/web/names.py",
         "arena/web/production.py",
         "dth/__init__.py",
         "dth/agent.py",

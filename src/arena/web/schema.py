@@ -13,11 +13,18 @@ only once the half-round has resolved.
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from arena.session import Phase, PlaySession, validate_human_display_name
+from arena.session import (
+    CANONICAL_HAL_NAME,
+    Phase,
+    PlaySession,
+    validate_human_display_name,
+)
+from arena.web.names import is_offensive
 from stl.engine.game import (
     CYLINDER_MAX,
     TOTAL_TTD_MAX,
@@ -110,6 +117,71 @@ class NewSessionRequest(BaseModel):
     @classmethod
     def _valid_human_name(cls, value: str | None) -> str | None:
         return None if value is None else validate_human_display_name(value)
+
+
+LEADERBOARD_NAME_LENGTH = 16
+# Control, format (bidi and zero-width), surrogate, private-use, unassigned,
+# and line or paragraph separators.
+_HIDDEN_CATEGORIES = {"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"}
+# Blank glyphs that Unicode files as letters or symbols: the Hangul fillers
+# and the empty braille cell.
+_BLANK_GLYPHS = {"\u115f", "\u1160", "\u3164", "\uffa0", "\u2800"}
+
+
+class LeaderboardEntry(BaseModel):
+    """One standing: a player's latest game, which that player won."""
+
+    rank: int
+    name: str
+    score: float
+    half_rounds: int
+    is_you: bool
+
+
+class Leaderboard(BaseModel):
+    """The top standings plus the requesting player's own.
+
+    Player identifiers and seeds stay in the ledger. ``your_score`` is set when
+    the player's latest game was a win; ``your_rank`` also needs a posted name.
+    """
+
+    entries: list[LeaderboardEntry]
+    your_rank: int | None
+    your_name: str | None
+    your_score: float | None
+
+
+class PlayerNameRequest(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str) -> str:
+        # Every player reads this name, so it must show as the text it holds:
+        # no direction overrides, no invisible characters, no stacked marks.
+        name = validate_human_display_name(unicodedata.normalize("NFC", value))
+        if len(name) > LEADERBOARD_NAME_LENGTH:
+            raise ValueError(
+                f"a leaderboard name has at most {LEADERBOARD_NAME_LENGTH} characters"
+            )
+        categories = [unicodedata.category(character) for character in name]
+        if any(category in _HIDDEN_CATEGORIES for category in categories) or any(
+            character in _BLANK_GLYPHS for character in name
+        ):
+            raise ValueError("a leaderboard name must use visible characters")
+        # Fullwidth and styled letters fold to plain ones, so they cannot spell Hal.
+        if unicodedata.normalize("NFKC", name).casefold() == CANONICAL_HAL_NAME.casefold():
+            raise ValueError(f"{CANONICAL_HAL_NAME!r} is reserved for the opponent")
+        if not any(category[0] in "LN" for category in categories):
+            raise ValueError("a leaderboard name needs a letter or a digit")
+        marks = 0
+        for category in categories:
+            marks = marks + 1 if category[0] == "M" else 0
+            if marks > 2:
+                raise ValueError("a leaderboard name has too many combining marks")
+        if is_offensive(name):
+            raise ValueError("choose another leaderboard name")
+        return name
 
 
 def _outcome_view(session: PlaySession) -> OutcomeView | None:

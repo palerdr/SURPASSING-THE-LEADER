@@ -220,6 +220,19 @@
       .outcome .error:empty { display: none; }
       .victory { text-align: center; }
       .victory form { justify-content: center; margin-bottom: 12px; }
+      .board { text-align: center; }
+      .board form { justify-content: center; }
+      .standings {
+        list-style: none; padding: 0; margin: 12px auto; width: min(520px, 100%);
+        font-variant-numeric: tabular-nums;
+      }
+      .standings li {
+        display: grid; grid-template-columns: 2.5em 1fr auto 3.5em; gap: 12px;
+        padding: 4px 0; border-bottom: 1px solid var(--rule); text-align: left;
+      }
+      .standings .name { overflow-wrap: anywhere; unicode-bidi: isolate; }
+      .standings .score { text-align: right; }
+      .standings .you { color: var(--good); }
       .outcome button { color: #fff; background: transparent; border: 1px solid #fff; }
       .outcome .error { color: #fff; }
       .result-stage #hud, .result-stage #corner { color: #fff; }

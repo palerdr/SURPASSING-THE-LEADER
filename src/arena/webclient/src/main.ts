@@ -14,8 +14,10 @@ import {
   acknowledge,
   act,
   begin,
+  getLeaderboard,
   getTranscript,
   newSession,
+  postLeaderboardName,
   readSession,
   restartSession,
   warmServer,
@@ -27,12 +29,13 @@ import { drawScene, drawVictory } from "./render/scene";
 import { cancelTurn, scheduleTurn, turnSeconds, unlockTicking } from "./audio/tick";
 import { preload } from "./render/sprites";
 import { renderBeat } from "./screens/beat";
+import { renderLeaderboard } from "./screens/leaderboard";
 import { renderLive } from "./screens/live";
 import { renderOutcome } from "./screens/outcome";
 import { renderRules, renderTitle } from "./screens/rules";
 import { renderVictory } from "./screens/victory";
 import { secondOnClock } from "./second";
-import type { PlayerView, Snapshot, Transcript } from "./types";
+import type { Leaderboard, PlayerView, Snapshot, Transcript } from "./types";
 
 /** How long the screen stays black after a commit before the result is shown. */
 const HOLD_MS = 1500;
@@ -71,6 +74,13 @@ let playersAtCommit: PlayerView[] | null = null;
 let ackPending = false;
 /** The player asked to open the clock before that acknowledgement returned. */
 let cutRequested = false;
+/**
+ * The standings for the finished game. "off" means this server keeps none, so
+ * the win screen leads to the next game as before.
+ */
+let board: Leaderboard | "loading" | "off" = "off";
+/** The player has left the win screen for the standings. */
+let boardOpen = false;
 let stopWarmup = () => {};
 
 function keepServerReady(seconds?: number): void {
@@ -108,12 +118,20 @@ async function commit(call: () => Promise<Snapshot>, timedOut = false): Promise<
   screen!.inert = true;
   try {
     snapshot = await call();
+    if (snapshot.phase !== "game_over") closeBoard();
     // A transcript failure must not hide an accepted move or permit a replay.
     if (snapshot.phase === "game_over") {
       void getTranscript().then((history) => {
         transcript = history;
         if (snapshot?.phase === "game_over") render();
       }).catch(() => {});
+      board = "loading";
+      void getLeaderboard().then(
+        (standings) => { board = standings; },
+        () => { board = "off"; },
+      ).then(() => {
+        if (snapshot?.phase === "game_over") render();
+      });
     }
     render();
   } catch (error) {
@@ -121,6 +139,8 @@ async function commit(call: () => Promise<Snapshot>, timedOut = false): Promise<
       try {
         snapshot = await readSession();
         playersAtCommit = null;
+        // Another tab moved the series on; its next result opens on the win screen.
+        if (snapshot.phase !== "game_over") closeBoard();
         render();
         showError("That move was out of date, so the board was reloaded.");
         return;
@@ -221,6 +241,28 @@ async function acknowledgeAhead(current: Snapshot): Promise<void> {
   render();
   if (open) cutToAction();
   if (failure !== null) showError(failure instanceof Error ? failure.message : String(failure));
+}
+
+/** The standings belong to one finished game; the next game starts without them. */
+function closeBoard(): void {
+  board = "off";
+  boardOpen = false;
+}
+
+/** Post the winner's name. The reply is the board with the new standing on it. */
+async function postName(name: string): Promise<void> {
+  if (busy) return;
+  busy = true;
+  screen!.inert = true;
+  try {
+    board = await postLeaderboardName(name);
+    render();
+  } catch (error) {
+    showError(error instanceof Error ? error.message : String(error));
+  } finally {
+    busy = false;
+    screen!.inert = false;
+  }
 }
 
 /** The next game of the series: the rules were read once, so play resumes at once. */
@@ -341,9 +383,20 @@ function render(): void {
         renderOutcome(screen, current.last_outcome, () => void acknowledgeAhead(current));
       }
       break;
-    case "game_over":
-      renderVictory(screen, current, transcript, () => void commit(() => nextGame(current)));
+    case "game_over": {
+      const next = () => void commit(() => nextGame(current));
+      if (boardOpen && board !== "off") {
+        renderLeaderboard(screen, board === "loading" ? null : board, (name) => void postName(name), next);
+      } else if (board === "off") {
+        renderVictory(screen, current, transcript, next);
+      } else {
+        renderVictory(screen, current, transcript, () => {
+          boardOpen = true;
+          render();
+        }, "Continue");
+      }
       break;
+    }
   }
 }
 
@@ -358,7 +411,7 @@ function resize(): void {
 function loop(): void {
   if (snapshot && context && !opening) {
     const showScene = snapshot.phase === "awaiting_action" && !beatOver;
-    if (snapshot.phase === "game_over") {
+    if (snapshot.phase === "game_over" && !boardOpen) {
       drawVictory(context, canvas.width, canvas.height, snapshot);
     } else if (showScene) {
       drawScene(context, canvas.width, canvas.height, snapshot, performance.now() - started);
@@ -440,7 +493,12 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Enter" && snapshot.phase === "game_over") {
     event.preventDefault();
-    screen?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    // Enter posts a typed name. With the name field empty it moves on, so the
+    // keyboard can always leave the standings.
+    const field = screen?.querySelector<HTMLInputElement>("[data-name] input");
+    const form = field?.value.trim() ? "[data-name]" : "[data-next]";
+    (screen?.querySelector<HTMLButtonElement>(`${form} button[type="submit"]`)
+      ?? screen?.querySelector<HTMLButtonElement>('button[type="submit"]'))?.click();
   }
 });
 document.addEventListener("pointerdown", () => {

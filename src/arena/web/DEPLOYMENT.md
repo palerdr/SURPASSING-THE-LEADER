@@ -83,6 +83,13 @@ The server uses `KV_REST_API_URL` and `KV_REST_API_TOKEN`. It also accepts
 Vercel environment settings. The tablebase is part of the function bundle;
 Redis stores the per-player command log.
 
+The game ledger and leaderboard use the Supabase project
+`surpassing-the-leader` (`zsipmcrvxtgmoufcswgo`). Set `SUPABASE_URL` and
+`SUPABASE_SECRET_KEY` for Preview and Production; the server also accepts the
+legacy `SUPABASE_SERVICE_ROLE_KEY`. Copy the secret key from the Supabase
+dashboard and keep it in Vercel environment settings. Without these two
+settings the game plays as before, records nothing, and serves no leaderboard.
+
 Keep one deployed copy of the tablebase. After you verify a replacement on
 the production alias, remove the superseded deployments by their IDs. Preserve
 the deployment that serves `surpassing-the-leader.vercel.app`. Vercel counts
@@ -120,5 +127,45 @@ client overrides of the seed, opening clock, and round limit. Code-version
 changes invalidate old command logs so the server cannot replay a game with
 a different referee or sampler.
 
+## Game ledger and leaderboard
+
+`web/ledger.py` writes one Supabase row for each game. The server rewrites the
+row after each resolved half-round, once the session store has committed that
+half-round, so a closed tab leaves its moves behind and a losing concurrent
+request writes nothing. A restart marks the old series' open game `abandoned`.
+A ledger failure is logged and does not block the reveal; the closing
+acknowledgement repeats the final write. Rows hold the public history, both
+players' final loads, the code version, and the private seeds for offline
+replay. No seed or player identifier reaches a browser.
+
+A second cookie, `stl_player`, identifies the browser for one year. The session
+cookie changes with each code version; the player cookie keeps a standing
+across deployments. The ledger stores its SHA-256 digest only.
+
+The leaderboard ranks each player's latest closed game. A win scores
+`max(0, 300 - ttd_seconds - cylinder_seconds)` for the winner, the seconds of
+life left. A later loss, stopped game, or abandoned game removes the standing.
+Ties order by fewer half-rounds, then by earlier finish. The score uses game
+facts only, so it holds in the leap window, where DTH has no value for 61. The
+browser shows the board after the win screen. A winner posts a name of at most
+16 characters. The server normalizes it to NFC and refuses control, format, and
+other invisible characters, names with no letter or digit, and runs of more
+than two combining marks. `web/names.py` refuses slurs and a few hate terms,
+through spacing, repeated letters, digit substitutions, and Cyrillic or Greek
+lookalikes; ordinary profanity passes. `names.py` stays out of the version
+digest on purpose, because a word-list change must not end active games. A
+review left three known gaps in the filter. A short word beside a whole-word
+term spelled with gaps hides that term. One stem in the inside-a-word tier
+refuses ordinary derivatives such as "Retardant". A doubled letter lets
+"Rapping" and "Whittler" match a term. A name needs a recorded
+game, and a posted name holds for one minute before the next change. The
+leaderboard routes carry no rate limit; use the Vercel firewall if scripts
+abuse them. A misconfigured ledger setting is logged and disables the ledger;
+it never stops the game.
+Both tables enable row level security with no policy, and the four database
+functions grant execute to `service_role` alone.
+
 The local `python -m arena.web` surface retains its one-player process model.
+It keeps no ledger, answers 404 for the leaderboard, and the browser then skips
+that screen.
 Neither deployment mode changes the canonical referee or the leap rule.

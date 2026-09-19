@@ -62,6 +62,23 @@ export interface Snapshot {
   stopped: boolean;
 }
 
+/** One standing: a player's latest game, which that player won. */
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  score: number;
+  half_rounds: number;
+  is_you: boolean;
+}
+
+/** GET /api/leaderboard: the top standings plus the requesting player's own. */
+export interface Leaderboard {
+  entries: LeaderboardEntry[];
+  your_rank: number | null;
+  your_name: string | null;
+  your_score: number | null;
+}
+
 export interface Rules {
   human_name: string;
   hal_label: string;

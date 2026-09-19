@@ -3,7 +3,7 @@
 // a capital, since every line stands alone on the result screen. Pure
 // functions only; every number here arrives from the server-owned referee.
 
-import type { OutcomeResult, OutcomeView, Tally } from "../types";
+import type { Leaderboard, OutcomeResult, OutcomeView, Tally } from "../types";
 
 /**
  * The terminal's `_RESULT_TEXT` in src/arena/tui.py, with a comma where the
@@ -51,4 +51,20 @@ export function tallyText(tally: Tally): string {
   const extra = tally.no_winner + tally.stopped;
   if (extra > 0) parts.push(`${extra} undecided`);
   return parts.join(" · ");
+}
+
+/** A leaderboard score: whole seconds plainly, a fraction to one place. */
+export function scoreText(score: number): string {
+  return Number.isInteger(score) ? String(score) : score.toFixed(1);
+}
+
+/** What the leaderboard tells the requesting player about their own standing. */
+export function standingText(
+  board: Pick<Leaderboard, "your_rank" | "your_name" | "your_score">,
+): string {
+  if (board.your_score === null) return "Your latest game must be a win to hold a place.";
+  const life = `${scoreText(board.your_score)} seconds of life left`;
+  if (board.your_name === null) return `You won with ${life}. Enter a name to post it.`;
+  if (board.your_rank === null) return `You won with ${life}.`;
+  return `You hold rank ${board.your_rank} with ${life}.`;
 }

@@ -17,7 +17,13 @@ from typing import Literal, Union, get_args, get_origin
 import pytest
 from pydantic import BaseModel
 
-from arena.web.schema import OutcomeView, PlayerView, Snapshot
+from arena.web.schema import (
+    Leaderboard,
+    LeaderboardEntry,
+    OutcomeView,
+    PlayerView,
+    Snapshot,
+)
 from arena.session import Phase
 from stl.engine.game import HalfRoundResult
 
@@ -79,7 +85,13 @@ def _string_union(source: str, name: str) -> set[str]:
 
 @pytest.mark.parametrize(
     ("model", "interface"),
-    [(Snapshot, "Snapshot"), (PlayerView, "PlayerView"), (OutcomeView, "OutcomeView")],
+    [
+        (Snapshot, "Snapshot"),
+        (PlayerView, "PlayerView"),
+        (OutcomeView, "OutcomeView"),
+        (Leaderboard, "Leaderboard"),
+        (LeaderboardEntry, "LeaderboardEntry"),
+    ],
 )
 def test_typescript_mirrors_the_python_schema(model, interface: str) -> None:
     source = _TYPES.read_text(encoding="utf-8")

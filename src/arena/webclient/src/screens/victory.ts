@@ -6,13 +6,15 @@ import { tallyText } from "../render/text";
 /**
  * The end-of-game screen over the winner's still. Hal keeps its opponent
  * model into the next game, exactly as `arena play --games N` retains one
- * provider across a series, so the button reads "Next game".
+ * provider across a series, so the button reads "Next game". A server with a
+ * leaderboard puts that screen between this one and the next game.
  */
 export function renderVictory(
   screen: HTMLElement,
   snapshot: Snapshot,
   transcript: Transcript | null,
   onNext: () => void,
+  nextLabel = "Next game",
 ): void {
   let headline: string;
   if (snapshot.stopped) {
@@ -38,7 +40,7 @@ export function renderVictory(
       ${headline}
       ${series}
       <form>
-        <button type="submit">Next game</button>
+        <button type="submit">${escapeHtml(nextLabel)}</button>
       </form>
       <p class="hint">Hal remembers you between games</p>
       <div class="error"></div>

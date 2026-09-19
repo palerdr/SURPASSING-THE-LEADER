@@ -1,4 +1,4 @@
-import type { NewGameOptions, Rules, Snapshot, Transcript } from "./types";
+import type { Leaderboard, NewGameOptions, Rules, Snapshot, Transcript } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -45,6 +45,13 @@ export const restartSession = (sequence: number): Promise<Snapshot> =>
 
 /** The series so far. Only resolved half-rounds appear, so nothing is hidden here. */
 export const getTranscript = (): Promise<Transcript> => request<Transcript>("/api/transcript");
+
+/** The hosted server keeps a leaderboard; a local server answers 404. */
+export const getLeaderboard = (): Promise<Leaderboard> => request<Leaderboard>("/api/leaderboard");
+
+/** Post the name a winning score appears under. The reply is the updated board. */
+export const postLeaderboardName = (name: string): Promise<Leaderboard> =>
+  post<Leaderboard>("/api/leaderboard/name", { name });
 
 export const newSession = (sequence: number, options: NewGameOptions = {}): Promise<Snapshot> =>
   post<Snapshot>("/api/session", { sequence, ...options });

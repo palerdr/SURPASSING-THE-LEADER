@@ -4,16 +4,27 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import secrets
-from typing import Callable, Protocol
+from typing import Awaitable, Callable, Protocol
 
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+
+from arena.web.ledger import GameLedger, game_row
+from arena.web.schema import Leaderboard, PlayerNameRequest
 
 COOKIE = "stl_session"
 TTL_SECONDS = 7 * 24 * 60 * 60
+# The session cookie dies with each code version. The player cookie outlives
+# deployments, so a standing on the leaderboard follows the same browser.
+PLAYER_COOKIE = "stl_player"
+PLAYER_TTL_SECONDS = 365 * 24 * 60 * 60
+_TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
+_log = logging.getLogger(__name__)
 _READ_PATHS = {"/api/rules", "/api/session", "/api/transcript"}
 _WRITE_PATHS = {
     "/api/session",
@@ -101,12 +112,36 @@ def _public(payload):
     return payload
 
 
+def _cross_origin(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    return bool(origin) and origin.rstrip("/") != str(request.base_url).rstrip("/")
+
+
+def _player_id(request: Request) -> str | None:
+    token = request.cookies.get(PLAYER_COOKIE, "")
+    if _TOKEN.fullmatch(token) is None:
+        return None
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _ledger_write(write: Callable[[], Awaitable[None]]) -> None:
+    """A ledger failure must not hide a reveal the session store has committed.
+
+    The caller passes a function, so building the row fails here as well.
+    """
+    try:
+        await write()
+    except Exception:
+        _log.exception("game ledger write failed")
+
+
 def create_hosted_app(
     store: SessionStore,
     factory: Callable[[int, int, int], FastAPI],
     *,
     version: str,
     secure_cookie: bool = True,
+    ledger: GameLedger | None = None,
 ):
     """Replay accepted commands with private seeds; persist before revealing.
 
@@ -123,6 +158,71 @@ def create_hosted_app(
     async def health():
         return {"status": "ok", "policy": "certified-dth", "version": version}
 
+    async def board(player_id: str | None) -> JSONResponse:
+        # An unknown player reads the same public standings with no row marked.
+        try:
+            payload = await ledger.leaderboard(player_id or "")
+            body = Leaderboard.model_validate(payload).model_dump()
+        except (httpx.HTTPError, RuntimeError, ValueError):
+            return JSONResponse(
+                {"detail": "The leaderboard is unavailable."},
+                status_code=503,
+                headers={"Cache-Control": "no-store"},
+            )
+        return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/leaderboard")
+    async def read_leaderboard(request: Request):
+        if ledger is None:
+            return JSONResponse({"detail": "Unknown route"}, status_code=404)
+        return await board(_player_id(request))
+
+    @app.post("/api/leaderboard/name")
+    async def post_name(request: Request):
+        if ledger is None:
+            return JSONResponse({"detail": "Unknown route"}, status_code=404)
+        if _cross_origin(request):
+            return JSONResponse(
+                {"detail": "Cross-origin action refused"}, status_code=403
+            )
+        data = await request.body()
+        if len(data) > 4096:
+            return JSONResponse({"detail": "Request is too large"}, status_code=413)
+        try:
+            name = PlayerNameRequest.model_validate_json(data).name
+        except ValidationError as error:
+            # The player reads this line, so drop pydantic's "Value error, " label.
+            reason = error.errors()[0]["msg"].removeprefix("Value error, ")
+            return JSONResponse(
+                {"detail": reason[:1].upper() + reason[1:] + "."}, status_code=422
+            )
+        player_id = _player_id(request)
+        if player_id is None:
+            return JSONResponse(
+                {"detail": "Session expired. Reload the page."}, status_code=409
+            )
+        try:
+            posted = await ledger.set_player_name(player_id, name)
+        except (httpx.HTTPError, RuntimeError, ValueError):
+            return JSONResponse(
+                {"detail": "The leaderboard is unavailable."}, status_code=503
+            )
+        if posted == "no_game":
+            return JSONResponse(
+                {"detail": "Play a game before you post a name."}, status_code=409
+            )
+        if posted == "too_soon":
+            return JSONResponse(
+                {"detail": "Wait a minute before you change the name."},
+                status_code=429,
+            )
+        if posted != "ok":
+            # An answer this server does not know is no proof the name was set.
+            return JSONResponse(
+                {"detail": "The leaderboard is unavailable."}, status_code=503
+            )
+        return await board(player_id)
+
     @app.api_route("/api/{path:path}", methods=["GET", "POST"])
     async def route(request: Request, path: str):
         route_path = f"/api/{path}"
@@ -130,8 +230,7 @@ def create_hosted_app(
         if route_path not in (_WRITE_PATHS if mutation else _READ_PATHS):
             return JSONResponse({"detail": "Unknown route"}, status_code=404)
         if mutation:
-            origin = request.headers.get("origin")
-            if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+            if _cross_origin(request):
                 return JSONResponse(
                     {"detail": "Cross-origin action refused"}, status_code=403
                 )
@@ -151,7 +250,9 @@ def create_hosted_app(
                     {"detail": "Game settings are server-controlled"}, status_code=422
                 )
         token = request.cookies.get(COOKIE, "")
-        valid_token = re.fullmatch(r"[A-Za-z0-9_-]{43}", token) is not None
+        valid_token = _TOKEN.fullmatch(token) is not None
+        player_id = _player_id(request)
+        player_token = None
         key = (
             "stl:v1:" + hashlib.sha256(token.encode()).hexdigest()
             if valid_token
@@ -170,6 +271,7 @@ def create_hosted_app(
                     )
                 record = {
                     "version": version,
+                    "series_id": secrets.token_hex(16),
                     "game_seed": secrets.randbits(128),
                     "policy_seed": secrets.randbits(128),
                     "sequence_start": 0,
@@ -183,6 +285,12 @@ def create_hosted_app(
                     if not await store.compare_set(key, None, raw):
                         raise RuntimeError("session creation collision")
                     new_cookie = True
+            # The page makes one session read, so one load mints one player.
+            # Two tabs opened together can mint two; the browser keeps the last.
+            if player_id is None and not mutation and route_path == "/api/session":
+                player_token = secrets.token_urlsafe(32)
+            series_id = record["series_id"]
+            history = None
             inner = factory(
                 record["game_seed"],
                 record["policy_seed"],
@@ -198,17 +306,33 @@ def create_hosted_app(
                 response = await client.request(
                     request.method, route_path, json=command if mutation else None
                 )
-            if (
-                mutation
-                and response.status_code == 200
-                and route_path == "/api/session/restart"
-            ):
+                snapshot = response.json() if response.status_code == 200 else None
+                # A resolved half-round changes the ledger row. The closing
+                # acknowledgement repeats the last write in case it failed.
+                if (
+                    ledger is not None
+                    and player_id is not None
+                    and snapshot is not None
+                    and (
+                        route_path == "/api/session/action"
+                        or (
+                            route_path == "/api/session/ack"
+                            and snapshot["phase"] == "game_over"
+                        )
+                    )
+                ):
+                    transcript = await client.get("/api/transcript")
+                    if transcript.status_code == 200:
+                        history = transcript.json()
+            restarted = snapshot is not None and route_path == "/api/session/restart"
+            if restarted:
                 # The old series validated this restart. Open the new series as
                 # its own record: new seeds, so a reload cannot rehearse Hal's
                 # samples, and the next sequence number, so a request from
                 # before the restart stays stale.
                 record = {
                     "version": version,
+                    "series_id": secrets.token_hex(16),
                     "game_seed": secrets.randbits(128),
                     "policy_seed": secrets.randbits(128),
                     "sequence_start": int(response.json()["sequence"]),
@@ -234,6 +358,25 @@ def create_hosted_app(
                         status_code=409,
                         headers={"Cache-Control": "no-store"},
                     )
+            # The ledger follows the committed record, so a losing request
+            # writes nothing. A restart closes the old series' open game.
+            if ledger is not None and restarted:
+                await _ledger_write(lambda: ledger.abandon_series(series_id))
+            elif history is not None:
+
+                async def record_row():
+                    row = game_row(
+                        player_id=player_id,
+                        series_id=series_id,
+                        policy_seed=record["policy_seed"],
+                        version=version,
+                        snapshot=snapshot,
+                        transcript=history,
+                    )
+                    if row is not None:
+                        await ledger.record_game(row)
+
+                await _ledger_write(record_row)
             result = JSONResponse(
                 _public(response.json()),
                 status_code=response.status_code,
@@ -244,6 +387,16 @@ def create_hosted_app(
                     COOKIE,
                     token,
                     max_age=TTL_SECONDS,
+                    secure=secure_cookie,
+                    httponly=True,
+                    samesite="strict",
+                    path="/",
+                )
+            if player_token is not None:
+                result.set_cookie(
+                    PLAYER_COOKIE,
+                    player_token,
+                    max_age=PLAYER_TTL_SECONDS,
                     secure=secure_cookie,
                     httponly=True,
                     samesite="strict",

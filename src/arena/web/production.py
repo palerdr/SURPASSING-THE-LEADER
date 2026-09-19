@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from arena.agent import PolicyDrivenAgent
 from arena.dth_adapter import project_to_dth_state
 from arena.web.app import SessionConfig, SeriesConfig, create_app
 from arena.web.hosted import RedisSessionStore, create_hosted_app
+from arena.web.ledger import SupabaseLedger
 from dth.agent import CompleteDTHAgent
 
 
@@ -45,6 +47,7 @@ def create_production_app(artifact: Path):
         source / "arena/session.py",
         source / "arena/web/app.py",
         source / "arena/web/hosted.py",
+        source / "arena/web/ledger.py",
         source / "arena/web/production.py",
         source / "arena/web/schema.py",
         source / "stl/engine/game.py",
@@ -58,6 +61,22 @@ def create_production_app(artifact: Path):
     token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get(
         "UPSTASH_REDIS_REST_TOKEN", ""
     )
+    # The ledger is optional: without its two settings the game plays as
+    # before, records nothing, and serves no leaderboard.
+    ledger_url = os.environ.get("SUPABASE_URL", "")
+    ledger_key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get(
+        "SUPABASE_SERVICE_ROLE_KEY", ""
+    )
+    ledger = None
+    if ledger_url and ledger_key:
+        try:
+            ledger = SupabaseLedger(ledger_url, ledger_key)
+        except ValueError:
+            # A bad ledger setting costs the leaderboard and never the game.
+            logging.getLogger(__name__).exception("game ledger is misconfigured")
     return create_hosted_app(
-        RedisSessionStore(url, token), factory, version=digest.hexdigest()
+        RedisSessionStore(url, token),
+        factory,
+        version=digest.hexdigest(),
+        ledger=ledger,
     )
