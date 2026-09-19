@@ -43,9 +43,8 @@ export function renderLeaderboard(
   screen.innerHTML = `
     <div class="card board">
       <h2>LEADERBOARD</h2>
-      <p class="hint">Seconds of life left at the win; fewer half-rounds break a tie. Your latest game holds your place.</p>
       ${standings}
-      ${board === null ? "" : `<p class="${board.your_score === null ? "hint" : "win"}">${escapeHtml(standingText(board))}</p>`}
+      ${board === null ? "" : `<p${board.your_score === null ? ' class="hint"' : ""}>${escapeHtml(standingText(board))}</p>`}
       ${nameForm}
       <form data-next><button type="submit">Next game</button></form>
       <div class="error" role="alert"></div>

@@ -120,6 +120,7 @@ class NewSessionRequest(BaseModel):
 
 
 LEADERBOARD_NAME_LENGTH = 16
+LEADERBOARD_SIZE = 10
 # Control, format (bidi and zero-width), surrogate, private-use, unassigned,
 # and line or paragraph separators.
 _HIDDEN_CATEGORIES = {"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"}
@@ -149,6 +150,14 @@ class Leaderboard(BaseModel):
     your_rank: int | None
     your_name: str | None
     your_score: float | None
+
+
+def top_standings(payload: dict[str, object]) -> Leaderboard:
+    """The board a browser may see: the ledger's answer, cut to the top ten."""
+
+    board = Leaderboard.model_validate(payload)
+    board.entries = board.entries[:LEADERBOARD_SIZE]
+    return board
 
 
 class PlayerNameRequest(BaseModel):

@@ -125,6 +125,9 @@ async function commit(call: () => Promise<Snapshot>, timedOut = false): Promise<
         transcript = history;
         if (snapshot?.phase === "game_over") render();
       }).catch(() => {});
+      // The player may read the result and type a name for a minute or more;
+      // an idle server answers that post seconds late.
+      keepServerReady();
       board = "loading";
       void getLeaderboard().then(
         (standings) => { board = standings; },
@@ -517,6 +520,7 @@ window.addEventListener("pagehide", () => stopWarmup());
 window.addEventListener("pageshow", (event) => {
   if (!event.persisted) return;
   if (opening || snapshot?.phase === "rules" || snapshot?.phase === "awaiting_ack"
+      || snapshot?.phase === "game_over"
       || (snapshot?.phase === "awaiting_action" && !beatOver)) keepServerReady();
   else if (snapshot?.phase === "awaiting_action" && beatOver) {
     keepServerReady(Math.max(0, snapshot.turn_duration - (performance.now() - onClockSince) / 1000));

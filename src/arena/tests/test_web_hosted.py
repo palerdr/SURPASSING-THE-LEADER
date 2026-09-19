@@ -578,3 +578,24 @@ def test_a_name_post_succeeds_only_on_a_known_answer():
         client.get("/api/session")
         response = client.post("/api/leaderboard/name", json={"name": "Baku"})
         assert response.status_code == status, answer
+
+
+def test_the_board_shows_ten_entries_even_if_the_ledger_returns_more():
+    ledger = MemoryLedger()
+
+    async def twelve(player_id):
+        return {
+            "entries": [
+                {"rank": rank, "name": f"P{rank}", "score": 300 - rank,
+                 "half_rounds": 4, "is_you": False}
+                for rank in range(1, 13)
+            ],
+            "your_rank": 12,
+            "your_name": "P12",
+            "your_score": 288,
+        }
+
+    ledger.leaderboard = twelve
+    board = TestClient(hosted(MemoryStore(), ledger=ledger)).get("/api/leaderboard").json()
+    assert [entry["rank"] for entry in board["entries"]] == list(range(1, 11))
+    assert board["your_rank"] == 12

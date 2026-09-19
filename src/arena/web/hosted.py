@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from arena.web.ledger import GameLedger, game_row
-from arena.web.schema import Leaderboard, PlayerNameRequest
+from arena.web.schema import PlayerNameRequest, top_standings
 
 COOKIE = "stl_session"
 TTL_SECONDS = 7 * 24 * 60 * 60
@@ -162,7 +162,7 @@ def create_hosted_app(
         # An unknown player reads the same public standings with no row marked.
         try:
             payload = await ledger.leaderboard(player_id or "")
-            body = Leaderboard.model_validate(payload).model_dump()
+            body = top_standings(payload).model_dump()
         except (httpx.HTTPError, RuntimeError, ValueError):
             return JSONResponse(
                 {"detail": "The leaderboard is unavailable."},
