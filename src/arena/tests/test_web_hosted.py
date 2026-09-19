@@ -34,8 +34,11 @@ class Hal:
 def hosted(store, version="test"):
     return create_hosted_app(
         store,
-        lambda game_seed, policy_seed: create_app(
-            hal_factory=Hal, config=SessionConfig(seed=game_seed), webclient_dist=None
+        lambda game_seed, policy_seed, sequence_start=0: create_app(
+            hal_factory=Hal,
+            config=SessionConfig(seed=game_seed),
+            webclient_dist=None,
+            sequence_start=sequence_start,
         ),
         version=version,
         secure_cookie=False,
@@ -128,6 +131,16 @@ def test_restart_survives_worker_recovery_and_keeps_other_players_isolated():
     assert fresh["sequence"] > state["sequence"]
     assert fresh["last_outcome"] is None
     assert fresh["half_rounds"] == 0
+    # The restart opens a new record: no commands to replay, and the sequence
+    # continues, so a request from before the restart stays stale.
+    records = [json.loads(row) for row in store.rows.values()]
+    restarted = [row for row in records if row["events"] == []]
+    assert len(restarted) == 1
+    assert restarted[0]["sequence_start"] == fresh["sequence"]
+    stale = client.post(
+        "/api/session/action", json={"sequence": state["sequence"], "second": 60}
+    )
+    assert stale.status_code == 409
     assert other.get("/api/session").json() == other_state
     replacement = TestClient(hosted(store))
     replacement.cookies.update(client.cookies)

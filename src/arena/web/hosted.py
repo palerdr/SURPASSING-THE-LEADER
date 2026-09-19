@@ -103,12 +103,18 @@ def _public(payload):
 
 def create_hosted_app(
     store: SessionStore,
-    factory: Callable[[int, int], FastAPI],
+    factory: Callable[[int, int, int], FastAPI],
     *,
     version: str,
     secure_cookie: bool = True,
 ):
-    """Replay accepted commands with private seeds; persist before revealing."""
+    """Replay accepted commands with private seeds; persist before revealing.
+
+    A record is one series: its seeds, the sequence its first session starts
+    at, and the commands accepted since. A restart abandons the series, so it
+    replaces the record with a fresh one and an empty command list. Replay
+    cost then follows the current series and not the cookie's whole life.
+    """
     app = FastAPI(
         title="Surpassing The Leader", docs_url=None, redoc_url=None, openapi_url=None
     )
@@ -166,6 +172,7 @@ def create_hosted_app(
                     "version": version,
                     "game_seed": secrets.randbits(128),
                     "policy_seed": secrets.randbits(128),
+                    "sequence_start": 0,
                     "events": [],
                 }
                 # The client's initial reads run in parallel. Only this route issues a cookie.
@@ -176,7 +183,11 @@ def create_hosted_app(
                     if not await store.compare_set(key, None, raw):
                         raise RuntimeError("session creation collision")
                     new_cookie = True
-            inner = factory(record["game_seed"], record["policy_seed"])
+            inner = factory(
+                record["game_seed"],
+                record["policy_seed"],
+                record.get("sequence_start", 0),
+            )
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=inner), base_url="http://arena"
             ) as client:
@@ -187,8 +198,34 @@ def create_hosted_app(
                 response = await client.request(
                     request.method, route_path, json=command if mutation else None
                 )
-            if mutation and response.status_code == 200:
+            if (
+                mutation
+                and response.status_code == 200
+                and route_path == "/api/session/restart"
+            ):
+                # The old series validated this restart. Open the new series as
+                # its own record: new seeds, so a reload cannot rehearse Hal's
+                # samples, and the next sequence number, so a request from
+                # before the restart stays stale.
+                record = {
+                    "version": version,
+                    "game_seed": secrets.randbits(128),
+                    "policy_seed": secrets.randbits(128),
+                    "sequence_start": int(response.json()["sequence"]),
+                    "events": [],
+                }
+                fresh = factory(
+                    record["game_seed"], record["policy_seed"], record["sequence_start"]
+                )
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=fresh), base_url="http://arena"
+                ) as client:
+                    response = await client.get("/api/session")
+                if response.status_code != 200:
+                    raise RuntimeError("fresh series could not be opened")
+            elif mutation and response.status_code == 200:
                 record["events"].append({"path": route_path, "body": command})
+            if mutation and response.status_code == 200:
                 updated = json.dumps(record, separators=(",", ":"))
                 if not await store.compare_set(key, raw, updated):
                     # The losing request must not reveal its speculative Hal action.

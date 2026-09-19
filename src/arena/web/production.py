@@ -27,12 +27,13 @@ def create_production_app(artifact: Path):
                 second: float(mass) for second, mass in enumerate(row, 1) if mass > 0
             }
 
-    def factory(game_seed, policy_seed):
+    def factory(game_seed, policy_seed, sequence_start=0):
         return create_app(
             hal_factory=lambda: PolicyDrivenAgent(Policy(), seed=policy_seed),
             config=SessionConfig(seed=game_seed),
             series=SeriesConfig(conceal_hal_details=True),
             webclient_dist=None,
+            sequence_start=sequence_start,
         )
 
     digest = hashlib.sha256()

@@ -100,6 +100,9 @@ Each line is something the author asked for. Keep them all.
 - One screen: the scene, then a cut to full screen with the action window
   and the clock, then a decision screen for the result, then repeat.
 - The two players' status is four bars in the top-left corner.
+- On a phone, the action card is one centred column: the heading and the
+  instructions, then the clock and its count, then Commit beneath the clock.
+  Wide screens keep the text and Commit together on the left of the clock.
 - No grid of sixty squares to pick a second from, and no field to type in:
   one Commit, played on the second the count names.
 - The result screen is delayed behind a full black screen, for anticipation:

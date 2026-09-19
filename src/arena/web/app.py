@@ -199,8 +199,13 @@ def create_app(
     series: SeriesConfig | None = None,
     art_loader: Callable[[], object] | None = None,
     webclient_dist: Path | None = DEFAULT_WEBCLIENT_DIST,
+    sequence_start: int = 0,
 ) -> FastAPI:
     """Build the app. ``hal_factory`` is called once, never inside a request.
+
+    ``sequence_start`` numbers the first session. The hosted server opens a
+    fresh app after a restart and continues the player's sequence there, so a
+    request from before the restart stays stale.
 
     Provider construction can memory-map a multi-gigabyte artifact, and the
     ``abstract`` provider can even build a tablebase from scratch. Neither
@@ -223,7 +228,10 @@ def create_app(
     lock = threading.Lock()
     state: dict[str, object] = {
         "session": _new_session(
-            hal_agent, base_config, game_seed=_game_seed(base_config.seed, 0)
+            hal_agent,
+            base_config,
+            game_seed=_game_seed(base_config.seed, 0),
+            sequence_start=sequence_start,
         ),
         "game_index": 0,
         "recorded": False,

@@ -241,8 +241,21 @@
         .value { width: 52px; font-size: 12px; }
         .dialplate .core { width: 66%; }
         #screen { padding: 160px 18px 18px; }
-        .action { gap: 18px; justify-content: center; }
-        .action .ask { flex-basis: 100%; }
+        /* On a phone the card is one centred column: the heading and the
+           instructions, then the clock and its count, then Commit beneath the
+           clock. `display: contents` lifts the ask block's children into the
+           column so the button can sit after the plate; wide screens keep the
+           text and button together on the left. */
+        .action {
+          flex-direction: column; flex-wrap: nowrap; align-items: center;
+          justify-content: center; gap: var(--step); text-align: center;
+        }
+        .action .ask { display: contents; }
+        .action .ask h2 { order: 1; }
+        .action .ask p { order: 2; contain: none; white-space: normal; }
+        .action .plate-and-count { order: 3; margin-top: var(--step); }
+        .action .ask [data-commit] { order: 4; align-self: center; }
+        .action .ask .error { order: 5; }
         .dialplate { width: min(48vw, 29vh); }
         .plate-and-count { gap: 12px; }
         .dialplate .who { font-size: 10px; letter-spacing: 0.06em; }
