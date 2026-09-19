@@ -434,8 +434,8 @@ def test_a_later_abandoned_game_removes_the_standing_and_a_name_needs_a_game():
     state = client.post(
         "/api/session/action", json={"sequence": state["sequence"], "second": 60}
     ).json()
-    # The second game of the series has its own row; an open game risks nothing yet.
-    assert sorted(index for _, index in ledger.games) == [0, 1]
+    # The next game opened its own record and row; an open game risks nothing yet.
+    assert len(ledger.games) == 2 and len({series for series, _ in ledger.games}) == 2
     assert client.get("/api/leaderboard").json()["your_rank"] == 1
     client.post("/api/session/restart", json={"sequence": state["sequence"]})
     board = client.get("/api/leaderboard").json()
@@ -599,3 +599,27 @@ def test_the_board_shows_ten_entries_even_if_the_ledger_returns_more():
     board = TestClient(hosted(MemoryStore(), ledger=ledger)).get("/api/leaderboard").json()
     assert [entry["rank"] for entry in board["entries"]] == list(range(1, 11))
     assert board["your_rank"] == 12
+
+
+def test_the_next_game_opens_a_fresh_record_so_replay_follows_one_game():
+    store = MemoryStore()
+    client = TestClient(hosted(store))
+    final = win(client)
+    (before,) = [json.loads(row) for row in store.rows.values()]
+    # Hal can die at the first revival roll, so a won game can hold five commands.
+    assert len(before["events"]) >= 5
+    fresh = client.post("/api/session", json={"sequence": final["sequence"]}).json()
+    (after,) = [json.loads(row) for row in store.rows.values()]
+    assert after["events"] == [] and after["series_id"] != before["series_id"]
+    assert after["game_seed"] != before["game_seed"]
+    assert after["sequence_start"] == fresh["sequence"] == final["sequence"] + 1
+    assert fresh["phase"] == "rules" and fresh["half_rounds"] == 0
+    # A request from the finished game stays stale, and a new worker recovers the new one.
+    stale = client.post("/api/session", json={"sequence": final["sequence"]})
+    assert stale.status_code == 409
+    replacement = TestClient(hosted(store))
+    replacement.cookies.update(client.cookies)
+    state = begin(replacement)
+    assert replacement.post(
+        "/api/session/action", json={"sequence": state["sequence"], "second": 60}
+    ).status_code == 200

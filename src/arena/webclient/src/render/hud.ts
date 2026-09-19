@@ -73,7 +73,7 @@ export function drawHud(
       (snapshot.leap_window ? ' · <span class="leap">⚠ leap second</span>' : "") +
       "</div>",
     `<div>Game <strong>${snapshot.game_index + 1}</strong>` +
-      (transcript ? ` · Series <strong>${escapeHtml(tallyText(transcript.tally))}</strong>` : "") +
+      (transcript && transcript.games.length > 1 ? ` · Series <strong>${escapeHtml(tallyText(transcript.tally))}</strong>` : "") +
       "</div>",
   ];
   corner.innerHTML = lines.join("");

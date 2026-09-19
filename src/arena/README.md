@@ -88,8 +88,10 @@ players with secure cookies and Redis command logs. It replays accepted commands
 through the same local HTTP adapter and commits each mutation before returning
 a reveal. `web/ledger.py` then writes the game's public history to Supabase,
 and `GET /api/leaderboard` ranks each player's latest game by the winner's
-seconds of life left. A restart replaces the record with fresh seeds, an empty command
-list, and the next sequence number, so replay covers only the current series. It shares the immutable tablebase, with separate policy samplers.
+seconds of life left. A restart and a next game each replace the record with fresh seeds, an empty
+command list, and the next sequence number, so replay covers only the current
+game. The hosted exact Hal keeps no memory, so each hosted game stands alone;
+the local server still plays one repeated-opponent series. It shares the immutable tablebase, with separate policy samplers.
 See [deployment instructions](web/DEPLOYMENT.md).
 
 The browser requests a sequenced restart on page load. This abandons the active

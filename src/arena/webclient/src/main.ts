@@ -38,8 +38,9 @@ import { secondOnClock } from "./second";
 import type { Leaderboard, PlayerView, Snapshot, Transcript } from "./types";
 
 /** How long the screen stays black after a commit before the result is shown. */
-const HOLD_MS = 1500;
-const REVEAL_MS = 3600;
+const HOLD_MS = 800;
+/** The fade starts when the black lifts, so the two run back to back: 3 s in all. */
+const REVEAL_MS = 2200;
 
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
 const context = canvas.getContext("2d");

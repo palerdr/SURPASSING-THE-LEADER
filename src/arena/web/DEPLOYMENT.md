@@ -118,8 +118,10 @@ then uses an atomic compare-and-set before it returns a new reveal. A losing
 concurrent submission receives a conflict response with no speculative action.
 A new worker can recover play from the same cookie and Redis log.
 The browser requests `/api/session/restart` on page load, so opening or reloading
-starts a fresh series. Worker recovery still replays the accepted restart and
-subsequent commands; an ordinary session read does not restart the game.
+starts a fresh game. "Next game" opens a fresh record in the same way: each
+replayed command costs the next request about 2.6 ms, and a five-game series
+under one record reached 0.5 s for each click. Worker recovery replays the
+current game's commands; an ordinary session read does not restart the game.
 
 The server shares one immutable tablebase reader across players. Each player
 has a separate policy sampler. The hosted API hides random seeds and refuses

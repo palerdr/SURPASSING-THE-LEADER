@@ -4,10 +4,8 @@ import { humanWon } from "../render/identity";
 import { tallyText } from "../render/text";
 
 /**
- * The end-of-game screen over the winner's still. Hal keeps its opponent
- * model into the next game, exactly as `arena play --games N` retains one
- * provider across a series, so the button reads "Next game". A server with a
- * leaderboard puts that screen between this one and the next game.
+ * The end-of-game screen over the winner's still. A server with a leaderboard
+ * puts that screen between this one and the next game.
  */
 export function renderVictory(
   screen: HTMLElement,
@@ -27,7 +25,8 @@ export function renderVictory(
       `<p class="big ${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name.toUpperCase())} WINS</p>` +
       `<p class="${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name)} wins the match after ${snapshot.half_rounds} half-rounds.</p>`;
   }
-  const series = transcript
+  // A hosted game stands alone, so a series line appears only once one exists.
+  const series = transcript && transcript.games.length > 1
     ? `<p class="hint">Series so far: ${escapeHtml(tallyText(transcript.tally))} over ${transcript.games.length} game${transcript.games.length === 1 ? "" : "s"}.</p>`
     : "";
   const summary =
@@ -42,7 +41,6 @@ export function renderVictory(
       <form>
         <button type="submit">${escapeHtml(nextLabel)}</button>
       </form>
-      <p class="hint">Hal remembers you between games</p>
       <div class="error"></div>
       ${summary}
     </div>`;

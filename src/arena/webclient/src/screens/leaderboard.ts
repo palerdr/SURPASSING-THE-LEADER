@@ -44,7 +44,7 @@ export function renderLeaderboard(
     <div class="card board">
       <h2>LEADERBOARD</h2>
       ${standings}
-      ${board === null ? "" : `<p${board.your_score === null ? ' class="hint"' : ""}>${escapeHtml(standingText(board))}</p>`}
+      ${board === null ? "" : `<p>${escapeHtml(standingText(board))}</p>`}
       ${nameForm}
       <form data-next><button type="submit">Next game</button></form>
       <div class="error" role="alert"></div>

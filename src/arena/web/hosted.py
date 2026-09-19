@@ -145,10 +145,11 @@ def create_hosted_app(
 ):
     """Replay accepted commands with private seeds; persist before revealing.
 
-    A record is one series: its seeds, the sequence its first session starts
-    at, and the commands accepted since. A restart abandons the series, so it
-    replaces the record with a fresh one and an empty command list. Replay
-    cost then follows the current series and not the cookie's whole life.
+    A record is one game: its seeds, the sequence its session starts at, and
+    the commands accepted since. A restart and a next game each replace the
+    record with a fresh one and an empty command list, so replay cost follows
+    the current game. The hosted Hal is the exact policy and keeps no memory,
+    so a game owes nothing to the games before it.
     """
     app = FastAPI(
         title="Surpassing The Leader", docs_url=None, redoc_url=None, openapi_url=None
@@ -325,11 +326,12 @@ def create_hosted_app(
                     if transcript.status_code == 200:
                         history = transcript.json()
             restarted = snapshot is not None and route_path == "/api/session/restart"
-            if restarted:
-                # The old series validated this restart. Open the new series as
+            next_game = snapshot is not None and mutation and route_path == "/api/session"
+            if restarted or next_game:
+                # The old record validated this request. Open the new game as
                 # its own record: new seeds, so a reload cannot rehearse Hal's
                 # samples, and the next sequence number, so a request from
-                # before the restart stays stale.
+                # before the change stays stale.
                 record = {
                     "version": version,
                     "series_id": secrets.token_hex(16),
@@ -346,7 +348,7 @@ def create_hosted_app(
                 ) as client:
                     response = await client.get("/api/session")
                 if response.status_code != 200:
-                    raise RuntimeError("fresh series could not be opened")
+                    raise RuntimeError("fresh game could not be opened")
             elif mutation and response.status_code == 200:
                 record["events"].append({"path": route_path, "body": command})
             if mutation and response.status_code == 200:
