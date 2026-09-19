@@ -46,7 +46,7 @@ test("the leaderboard tells the player where their latest game stands", () => {
   assert.equal(scoreText(182.55), "182.6");
   assert.equal(
     standingText({ your_rank: null, your_name: "Baku", your_score: null }),
-    "Your latest game must be a win to hold a place.",
+    "You must win to hold a place.",
   );
   assert.equal(
     standingText({ your_rank: null, your_name: null, your_score: 183 }),

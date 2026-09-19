@@ -62,7 +62,7 @@ export function scoreText(score: number): string {
 export function standingText(
   board: Pick<Leaderboard, "your_rank" | "your_name" | "your_score">,
 ): string {
-  if (board.your_score === null) return "Your latest game must be a win to hold a place.";
+  if (board.your_score === null) return "You must win to hold a place.";
   const life = `${scoreText(board.your_score)} seconds of life left`;
   if (board.your_name === null) return `You won with ${life}. Enter a name to post it.`;
   if (board.your_rank === null) return `You won with ${life}.`;
