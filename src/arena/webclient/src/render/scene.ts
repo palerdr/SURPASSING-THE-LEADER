@@ -18,7 +18,7 @@ const BACKGROUND = "#000000";
  */
 const SCENE_FILL = 0.11;
 /** The winner's still stands a little taller than the scene's miniatures. */
-const VICTORY_FILL = 0.135;
+const VICTORY_FILL = 0.17;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
