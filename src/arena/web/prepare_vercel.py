@@ -4,13 +4,54 @@ from __future__ import annotations
 
 import json
 import argparse
+import py_compile
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from arena.sprites import encode_png
 from arena.tui import SceneArt
 from dth.agent import CompleteDTHAgent
+
+
+def add_bytecode(target: Path) -> int:
+    """Compile every Python file the built function maps and map the results.
+
+    Vercel ships no bytecode and forbids writing it, so each new process
+    compiled numpy, scipy, and FastAPI from source before its first answer.
+    `unchecked-hash` files load whatever modification time the bundle gives
+    the sources. Run this after `vercel build` and before `vercel deploy`.
+    """
+    runtime = (3, 13)
+    if sys.version_info[:2] != runtime:
+        raise SystemExit(f"bytecode must come from Python {runtime[0]}.{runtime[1]}")
+    written = 0
+    for config in (target / ".vercel/output/functions").glob("*.func/.vc-config.json"):
+        settings = json.loads(config.read_text())
+        mapped = settings["filePathMap"]
+        for name, source in list(mapped.items()):
+            if not name.endswith(".py") or name.startswith("_vendor/pip/"):
+                continue
+            tag = f"{Path(name).stem}.{sys.implementation.cache_tag}.pyc"
+            compiled = (target / source).parent / "__pycache__" / tag
+            try:
+                py_compile.compile(
+                    str(target / source),
+                    cfile=str(compiled),
+                    dfile=f"/var/task/{name}",
+                    doraise=True,
+                    invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+                )
+            except py_compile.PyCompileError:
+                # Vendored packages carry template and Python 2 files that never import.
+                continue
+            mapped[str(Path(name).parent / "__pycache__" / tag)] = str(
+                compiled.relative_to(target)
+            )
+            written += 1
+        config.write_text(json.dumps(settings, indent=2))
+    return written
 
 
 def main():
@@ -19,7 +60,16 @@ def main():
     parser.add_argument(
         "--artifact", type=Path, default=root / "src/dth/artifacts/complete_full_v1"
     )
+    parser.add_argument(
+        "--bytecode",
+        action="store_true",
+        help="after `vercel build`: add compiled bytecode to the built function",
+    )
     options = parser.parse_args()
+    if options.bytecode:
+        count = add_bytecode(root / "src/arena/web/build/vercel")
+        print(f"Added {count} bytecode files to the built function.")
+        return
     agent = CompleteDTHAgent(options.artifact)
     opening = agent.decide((0, 0, 0, 0))
     print(
@@ -109,7 +159,8 @@ def main():
         (target / ".vercel").mkdir()
         shutil.copy2(link, target / ".vercel/project.json")
     print(
-        f"Prepared {target}. Use vercel build, then vercel deploy --prebuilt --archive=tgz."
+        f"Prepared {target}. Use vercel build, then this command with --bytecode, "
+        "then vercel deploy --prebuilt --archive=tgz."
     )
 
 

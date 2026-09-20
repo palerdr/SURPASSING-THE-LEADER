@@ -1,3 +1,5 @@
+import { hedged } from "./hedge";
+import { paceDelay } from "./pace";
 import type { Leaderboard, NewGameOptions, Rules, Snapshot, Transcript } from "./types";
 
 export class ApiError extends Error {
@@ -9,11 +11,35 @@ export class ApiError extends Error {
   }
 }
 
+/** A request with no answer after this long is sent a second time. */
+const HEDGE_MS = 900;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // The wait comes first, so the second copy's clock starts at the real send.
+  await paced();
+  return hedged(
+    (signal) => send<T>(path, { ...init, signal }),
+    HEDGE_MS,
+    (error) => error instanceof ApiError,
+  );
+}
+
+/** When the hosted server last answered. A local server never sets this. */
+let lastAnswerAt = Number.NEGATIVE_INFINITY;
+
+/** Hold a request that would leave inside the host's idle window. */
+async function paced(): Promise<void> {
+  const wait = paceDelay(performance.now() - lastAnswerAt);
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+}
+
+async function send<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
+  // Only the hosted server sends this header, so local play is never paced.
+  if (response.headers.has("x-stl-diagnosis")) lastAnswerAt = performance.now();
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -35,7 +61,7 @@ export const getRules = (): Promise<Rules> => request<Rules>("/api/rules");
 
 /** A public read wakes the policy server without loading or changing your game. */
 export const warmServer = (): Promise<Rules> =>
-  request<Rules>("/api/rules", { cache: "no-store", credentials: "omit" });
+  paced().then(() => send<Rules>("/api/rules", { cache: "no-store", credentials: "omit" }));
 
 export const readSession = (): Promise<Snapshot> => request<Snapshot>("/api/session");
 

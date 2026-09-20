@@ -16,6 +16,9 @@ from dth.agent import CompleteDTHAgent
 
 
 def create_production_app(artifact: Path):
+    # httpx logs one INFO line for each call, the in-process game calls
+    # included. A move wrote up to forty lines to Vercel's log pipe.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     # `prepare_vercel` hashes both arrays before it copies them into the
     # bundle, and the bundle is immutable once deployed. Rehashing 2.3 GB on
     # every cold start cost about ten seconds before the first answer.

@@ -63,8 +63,15 @@ matches the local artifact.
 ```sh
 uv run python -m arena.web.prepare_vercel
 npx vercel build --cwd src/arena/web/build/vercel --yes
+uv run python -m arena.web.prepare_vercel --bytecode
 npx vercel deploy --cwd src/arena/web/build/vercel --prebuilt --archive=tgz --target preview
 ```
+
+Vercel ships no bytecode and sets `PYTHONDONTWRITEBYTECODE`, so a new process
+compiled numpy, scipy, and FastAPI from source. The `--bytecode` step compiles
+each Python file that the built function maps, with Python 3.13 and the
+`unchecked-hash` mode, and adds the results to the function's file map. It cut
+the in-process share of a boot from about 4.3 s to about 2.7 s.
 
 You need a linked Vercel project at `.vercel/project.json`. The preparation
 command copies that link into the generated directory. You can pass
@@ -122,6 +129,37 @@ starts a fresh game. "Next game" opens a fresh record in the same way: each
 replayed command costs the next request about 2.6 ms, and a five-game series
 under one record reached 0.5 s for each click. Worker recovery replays the
 current game's commands; an ordinary session read does not restart the game.
+
+Each process keeps the games it last served, up to `HELD_GAMES`, beside the
+Redis text each game matches. Redis stays the authority: every request reads
+the record first. A held game whose text still matches plays the request with
+no rebuild. A held game that another process moved past plays only the
+commands it lacks. A lost compare-and-set or a refused command drops the held
+game, so the next request rebuilds it from the command list. The client's
+cookie-less `/api/rules` warm-up read is answered from one unplayed game.
+
+Vercel gives a request to a new process when the request arrives 0.55 s to
+0.80 s after a process's last answer, even while that process sits idle. We
+swept the gap between one answer and the next request on a preview: gaps in
+that window reached a new process in 25 of 86 requests, and gaps of 0.3 s,
+0.5 s, and 0.85 s to 1.5 s did so in 0 of 108. The route, memory use (245 MB
+of 2 GB), and log volume made no difference. A new process costs the request
+5 s to 7 s: near 3.5 s before the Python process exists and near 2.5 s for
+Python and its imports. A fast player's Continue and Commit presses fall in
+that window, so about one move in three stalled. The browser client therefore
+holds any request that would leave 0.35 s to 1.0 s after the last hosted
+answer until that second ends (`webclient/src/pace.ts`). Outside the window a
+long run still met one new process in about 60 s to 80 s of steady play.
+
+The client also sends a second copy of a request that has no answer after
+0.9 s (`webclient/src/hedge.ts`). The compare-and-set commits one copy of a
+move, both copies compute the same reveal from the same seeds, and the refused
+copy reveals nothing.
+
+Each response carries an `x-stl-diagnosis` header: a random process id, the
+process's uptime and request count, the handler's time, the held-game result
+(`hit`, `behind`, `miss`, or `rules`), the process age, and the bytecode state.
+A stalled request with `n=1` and a small `up` is a process boot.
 
 The server shares one immutable tablebase reader across players. Each player
 has a separate policy sampler. The hosted API hides random seeds and refuses

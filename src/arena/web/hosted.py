@@ -5,8 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import secrets
+import time
+from collections import OrderedDict
 from typing import Awaitable, Callable, Protocol
 
 import httpx
@@ -25,7 +28,29 @@ PLAYER_COOKIE = "stl_player"
 PLAYER_TTL_SECONDS = 365 * 24 * 60 * 60
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 _log = logging.getLogger(__name__)
+# Latency diagnosis: one id and one boot time per process.
+_INSTANCE = secrets.token_hex(4)
+_BOOTED = time.monotonic()
+
+
+def _process_age() -> str:
+    """Seconds since the kernel started this process, where Linux reports it."""
+    try:
+        with open("/proc/self/stat") as file:
+            ticks = int(file.read().rsplit(")", 1)[1].split()[19])
+        with open("/proc/uptime") as file:
+            uptime = float(file.read().split()[0])
+        return f"{uptime - ticks / os.sysconf('SC_CLK_TCK'):.1f}"
+    except (OSError, ValueError, IndexError):
+        return "-"
+
+
+_AGE_AT_IMPORT = _process_age()
+# "yes" when this module loaded from shipped bytecode and not from source.
+_BYTECODE = "yes" if __spec__ and __spec__.cached and os.path.exists(__spec__.cached) else "no"
 _READ_PATHS = {"/api/rules", "/api/session", "/api/transcript"}
+# Games one process keeps between requests. The store stays the authority.
+HELD_GAMES = 256
 _WRITE_PATHS = {
     "/api/session",
     "/api/session/begin",
@@ -150,10 +175,38 @@ def create_hosted_app(
     record with a fresh one and an empty command list, so replay cost follows
     the current game. The hosted Hal is the exact policy and keeps no memory,
     so a game owes nothing to the games before it.
+
+    A process keeps the game it last served beside the stored text that game
+    matches. A request whose stored text still matches plays on that game and
+    skips the rebuild. A held game that another process has moved past plays
+    the commands it lacks. A held game from another record is rebuilt, so a
+    process cannot answer from a stale game.
     """
+    # key -> stored text, game, series, and the commands that game has played.
+    held_games: OrderedDict[str, tuple[str, FastAPI, str, list]] = OrderedDict()
+    unplayed: list[FastAPI] = []
     app = FastAPI(
         title="Surpassing The Leader", docs_url=None, redoc_url=None, openapi_url=None
     )
+
+    served = 0
+
+    @app.middleware("http")
+    async def diagnose(request: Request, call_next):
+        # Latency diagnosis: an answer names its process, that process's age
+        # and request count, the handler's time, and the held-game result.
+        nonlocal served
+        served += 1
+        started = time.monotonic()
+        response = await call_next(request)
+        response.headers["x-stl-diagnosis"] = (
+            f"instance={_INSTANCE} up={started - _BOOTED:.1f} n={served} "
+            f"ms={(time.monotonic() - started) * 1000:.0f} "
+            f"held={getattr(request.state, 'held', '-')} "
+            f"age={_process_age()} age_at_import={_AGE_AT_IMPORT} "
+            f"bytecode={_BYTECODE}"
+        )
+        return response
 
     @app.get("/api/health")
     async def health():
@@ -292,15 +345,39 @@ def create_hosted_app(
                 player_token = secrets.token_urlsafe(32)
             series_id = record["series_id"]
             history = None
-            inner = factory(
-                record["game_seed"],
-                record["policy_seed"],
-                record.get("sequence_start", 0),
-            )
+            # The held game leaves the table while this request uses it, so a
+            # concurrent request for the same player rebuilds its own copy.
+            held = held_games.pop(key, None) if key else None
+            played = len(held[3]) if held else 0
+            if held is not None and held[0] == raw:
+                request.state.held = "hit"
+                inner, pending = held[1], []
+            elif (
+                held is not None
+                and held[2] == series_id
+                and record["events"][:played] == held[3]
+            ):
+                request.state.held = "behind"
+                inner, pending = held[1], record["events"][played:]
+            elif raw is None and route_path == "/api/rules":
+                # The client's warm-up read carries no cookie. The rules of an
+                # unplayed game are the same for every seed, so one game answers.
+                request.state.held = "rules"
+                if not unplayed:
+                    unplayed.append(factory(0, 0, 0))
+                inner, pending = unplayed[0], []
+            else:
+                request.state.held = "miss"
+                inner = factory(
+                    record["game_seed"],
+                    record["policy_seed"],
+                    record.get("sequence_start", 0),
+                )
+                pending = record["events"]
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=inner), base_url="http://arena"
             ) as client:
-                for event in record["events"]:
+                for event in pending:
                     replay = await client.post(event["path"], json=event["body"])
                     if replay.status_code != 200:
                         raise RuntimeError("stored session could not be replayed")
@@ -349,17 +426,30 @@ def create_hosted_app(
                     response = await client.get("/api/session")
                 if response.status_code != 200:
                     raise RuntimeError("fresh game could not be opened")
+                inner = fresh
             elif mutation and response.status_code == 200:
                 record["events"].append({"path": route_path, "body": command})
             if mutation and response.status_code == 200:
                 updated = json.dumps(record, separators=(",", ":"))
                 if not await store.compare_set(key, raw, updated):
                     # The losing request must not reveal its speculative Hal action.
+                    # Its game played a move the store refused, so it is dropped.
                     return JSONResponse(
                         {"detail": "Stale sequence. Reload the current turn."},
                         status_code=409,
                         headers={"Cache-Control": "no-store"},
                     )
+                raw = updated
+            # A refused command leaves the game unheld; the next request rebuilds.
+            if key and raw and (not mutation or response.status_code == 200):
+                held_games[key] = (
+                    raw,
+                    inner,
+                    record["series_id"],
+                    list(record["events"]),
+                )
+                while len(held_games) > HELD_GAMES:
+                    held_games.popitem(last=False)
             # The ledger follows the committed record, so a losing request
             # writes nothing. A restart closes the old series' open game.
             if ledger is not None and restarted:

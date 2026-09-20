@@ -3,6 +3,7 @@
 import asyncio
 import codecs
 import json
+import random
 
 import httpx
 from fastapi.testclient import TestClient
@@ -623,3 +624,120 @@ def test_the_next_game_opens_a_fresh_record_so_replay_follows_one_game():
     assert replacement.post(
         "/api/session/action", json={"sequence": state["sequence"], "second": 60}
     ).status_code == 200
+
+
+class SeededHal:
+    """A Hal whose seconds depend on its seed and on how often it was asked."""
+
+    provider = object()
+
+    def __init__(self, seed):
+        self.random = random.Random(seed)
+
+    def choose_action(self, game, role, turn_duration):
+        return self.random.randint(1, 60)
+
+
+def counted(store, built):
+    def factory(game_seed, policy_seed, sequence_start=0):
+        built.append(game_seed)
+        return create_app(
+            hal_factory=lambda: SeededHal(policy_seed),
+            config=SessionConfig(seed=game_seed),
+            webclient_dist=None,
+            sequence_start=sequence_start,
+        )
+
+    return create_hosted_app(store, factory, version="test", secure_cookie=False)
+
+
+def play(clients, moves):
+    """Play to the end, passing each request to the next client in turn."""
+    state = begin(clients[0])
+    for turn in range(2000):
+        if state["phase"] == "game_over":
+            return state
+        client = clients[turn % len(clients)]
+        # Reads between moves must leave the held game as a replay would find it.
+        assert client.get("/api/session").json() == state
+        client.get("/api/transcript")
+        route, body = "ack", {"sequence": state["sequence"]}
+        if state["phase"] == "awaiting_action":
+            route, body = "action", {**body, "second": moves.randint(1, 60)}
+        response = client.post(f"/api/session/{route}", json=body)
+        assert response.status_code == 200
+        state = response.json()
+    raise AssertionError("the game did not end")
+
+
+def test_one_process_builds_a_game_once_and_a_new_process_replays_the_same_game():
+    store, built = MemoryStore(), []
+    client = TestClient(counted(store, built))
+    final = play([client], random.Random(7))
+    # The session read built the one game; every later request played on it.
+    assert len(built) == 1
+    assert len(json.loads(next(iter(store.rows.values())))["events"]) >= 5
+    replacement = TestClient(counted(store, []))
+    replacement.cookies.update(client.cookies)
+    assert replacement.get("/api/session").json() == final
+
+
+def test_a_process_that_fell_behind_catches_up_and_never_answers_from_a_stale_game():
+    store, built = MemoryStore(), ([], [])
+    first, second = (TestClient(counted(store, games)) for games in built)
+    first.get("/api/session")
+    second.cookies.update(first.cookies)
+    # Requests alternate between two processes, so each held game is stale
+    # at every request. A stale answer would break the sequence or the reads.
+    final = play([first, second], random.Random(11))
+    # Each process built the game once and then played only the commands it lacked.
+    assert [len(games) for games in built] == [1, 1]
+    replacement = TestClient(counted(store, []))
+    replacement.cookies.update(first.cookies)
+    assert replacement.get("/api/session").json() == final
+
+
+def test_a_lost_race_and_a_refused_command_drop_the_held_game():
+    async def exercise():
+        store, built = MemoryStore(), []
+        transport = httpx.ASGITransport(app=counted(store, built))
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            state = (await client.get("/api/session")).json()
+            body = {"sequence": state["sequence"]}
+            state = (await client.post("/api/session/begin", json=body)).json()
+            responses = await asyncio.gather(
+                *[
+                    client.post(
+                        "/api/session/action",
+                        json={"sequence": state["sequence"], "second": second},
+                    )
+                    for second in (1, 60)
+                ]
+            )
+            assert sorted(r.status_code for r in responses) == [200, 409]
+            winner = next(r for r in responses if r.status_code == 200).json()
+            assert (await client.get("/api/session")).json() == winner
+            # A refused command costs one rebuild and changes nothing.
+            before = len(built)
+            refused = await client.post("/api/session/action", json={"sequence": 0, "second": 5})
+            assert refused.status_code != 200
+            assert (await client.get("/api/session")).json() == winner
+            assert len(built) == before + 1
+            fresh = httpx.ASGITransport(app=counted(store, []))
+            async with httpx.AsyncClient(
+                transport=fresh, base_url="http://test", cookies=client.cookies
+            ) as other:
+                assert (await other.get("/api/session")).json() == winner
+
+    asyncio.run(exercise())
+
+
+def test_the_warm_up_read_builds_one_game_for_every_caller():
+    built = []
+    app = counted(MemoryStore(), built)
+    answers = [TestClient(app).get("/api/rules") for _ in range(3)]
+    assert [answer.status_code for answer in answers] == [200, 200, 200]
+    assert answers[0].json() == answers[2].json() and len(built) == 1
+    assert all(COOKIE not in answer.cookies for answer in answers)

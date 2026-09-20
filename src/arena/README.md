@@ -86,7 +86,9 @@ infers identity from presentation labels.
 The Vercel entrypoint uses `web/hosted.py` and `web/production.py` to isolate
 players with secure cookies and Redis command logs. It replays accepted commands
 through the same local HTTP adapter and commits each mutation before returning
-a reveal. `web/ledger.py` then writes the game's public history to Supabase,
+a reveal. A process keeps the game it last served and rebuilds it from the
+command log only when Redis shows that the game moved on elsewhere.
+`web/ledger.py` then writes the game's public history to Supabase,
 and `GET /api/leaderboard` ranks each player's latest game by the winner's
 seconds of life left. A restart and a next game each replace the record with fresh seeds, an empty
 command list, and the next sequence number, so replay covers only the current
