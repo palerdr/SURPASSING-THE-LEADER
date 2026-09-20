@@ -19,6 +19,11 @@ const BACKGROUND = "#000000";
 const SCENE_FILL = 0.11;
 /** The winner's still stands three times as tall as the scene's miniatures. */
 const VICTORY_FILL = 0.33;
+/**
+ * Baku's win still is fine greyscale line work; at the scene's 44 rows the
+ * grin and the chair dissolve into noise, so it keeps three times the rows.
+ */
+const BAKU_WIN_DETAIL = 3;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
@@ -196,14 +201,16 @@ export function drawVictory(
     return;
   }
   const character: Character = humanWon(snapshot) ? "baku" : "hal";
-  const image = frame(character, "win_screen", 0) ?? frame(character, "idle", 0);
+  const still = frame(character, "win_screen", 0);
+  const image = still ?? frame(character, "idle", 0);
+  const detail = still && character === "baku" ? BAKU_WIN_DETAIL : 1;
   const target = height * VICTORY_FILL;
   const aspect = image && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 0.5;
   const figureWidth = target * aspect;
   const x = (width - figureWidth) / 2;
   const top = height * FLOOR - target;
   if (image) {
-    blit(ctx, image, 1, x, top, figureWidth, target);
+    blit(ctx, image, detail, x, top, figureWidth, target);
   } else {
     placeholder(ctx, snapshot.winner_name, x, top, figureWidth, target);
   }
