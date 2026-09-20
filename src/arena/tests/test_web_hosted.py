@@ -39,7 +39,7 @@ class MemoryLedger:
     """The database functions' contract in memory.
 
     A closed game is final, a row keeps its owner and cannot shrink, a name
-    needs a recorded game, and a standing is the player's latest closed game.
+    needs a recorded game, and a standing is the player's best win.
     """
 
     def __init__(self):
@@ -72,15 +72,13 @@ class MemoryLedger:
         return "ok"
 
     async def leaderboard(self, player_id):
-        latest = {}
+        best = {}
         for row in sorted(self.games.values(), key=lambda row: row["updated"]):
-            if row["status"] != "active":
-                latest[row["player_id"]] = row
-        won = [
-            row
-            for row in latest.values()
-            if row["status"] == "finished" and row["human_won"]
-        ]
+            if row["status"] == "finished" and row["human_won"]:
+                held = best.get(row["player_id"])
+                if held is None or row["score"] > held["score"]:
+                    best[row["player_id"]] = row
+        won = list(best.values())
         ranked = sorted(
             (row for row in won if row["player_id"] in self.names),
             key=lambda row: -row["score"],
@@ -422,7 +420,12 @@ def test_a_game_the_human_did_not_win_has_no_score():
     )
 
 
-def test_a_later_abandoned_game_removes_the_standing_and_a_name_needs_a_game():
+def final_score(ledger):
+    (score,) = [row["score"] for row in ledger.games.values() if row["status"] == "finished"]
+    return score
+
+
+def test_a_later_abandoned_game_keeps_the_standing_and_a_name_needs_a_game():
     ledger = MemoryLedger()
     client = TestClient(hosted(MemoryStore(), ledger=ledger))
     client.get("/api/session")
@@ -440,7 +443,9 @@ def test_a_later_abandoned_game_removes_the_standing_and_a_name_needs_a_game():
     assert client.get("/api/leaderboard").json()["your_rank"] == 1
     client.post("/api/session/restart", json={"sequence": state["sequence"]})
     board = client.get("/api/leaderboard").json()
-    assert board["entries"] == [] and board["your_score"] is None
+    abandoned = [row for row in ledger.games.values() if row["status"] == "abandoned"]
+    assert len(abandoned) == 1
+    assert board["your_rank"] == 1 and board["your_score"] == final_score(ledger)
 
 
 def test_the_closing_acknowledgement_repeats_a_failed_final_write():

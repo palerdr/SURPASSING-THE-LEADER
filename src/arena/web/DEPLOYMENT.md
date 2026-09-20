@@ -182,9 +182,11 @@ A second cookie, `stl_player`, identifies the browser for one year. The session
 cookie changes with each code version; the player cookie keeps a standing
 across deployments. The ledger stores its SHA-256 digest only.
 
-The leaderboard ranks each player's latest closed game. A win scores
+The leaderboard ranks each player's best win. A win scores
 `max(0, 300 - ttd_seconds - cylinder_seconds)` for the winner, the seconds of
-life left. A later loss, stopped game, or abandoned game removes the standing.
+life left. A later loss, stopped game, or abandoned game leaves the standing
+in place. The rule lives in the `leaderboard` database function (migration
+`leaderboard_ranks_best_win`), so a change to it needs no deployment.
 Ties order by fewer half-rounds, then by earlier finish. The score uses game
 facts only, so it holds in the leap window, where DTH has no value for 61. The
 browser shows the board after the win screen. A winner posts a name of at most

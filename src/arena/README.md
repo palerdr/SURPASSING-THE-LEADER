@@ -89,7 +89,7 @@ through the same local HTTP adapter and commits each mutation before returning
 a reveal. A process keeps the game it last served and rebuilds it from the
 command log only when Redis shows that the game moved on elsewhere.
 `web/ledger.py` then writes the game's public history to Supabase,
-and `GET /api/leaderboard` ranks each player's latest game by the winner's
+and `GET /api/leaderboard` ranks each player's best win by the winner's
 seconds of life left. A restart and a next game each replace the record with fresh seeds, an empty
 command list, and the next sequence number, so replay covers only the current
 game. The hosted exact Hal keeps no memory, so each hosted game stands alone;

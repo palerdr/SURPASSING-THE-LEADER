@@ -62,7 +62,7 @@ export interface Snapshot {
   stopped: boolean;
 }
 
-/** One standing: a player's latest game, which that player won. */
+/** One standing: a player's best win. */
 export interface LeaderboardEntry {
   rank: number;
   name: string;

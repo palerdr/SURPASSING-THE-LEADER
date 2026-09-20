@@ -130,7 +130,7 @@ _BLANK_GLYPHS = {"\u115f", "\u1160", "\u3164", "\uffa0", "\u2800"}
 
 
 class LeaderboardEntry(BaseModel):
-    """One standing: a player's latest game, which that player won."""
+    """One standing: a player's best win."""
 
     rank: int
     name: str
@@ -142,8 +142,8 @@ class LeaderboardEntry(BaseModel):
 class Leaderboard(BaseModel):
     """The top standings plus the requesting player's own.
 
-    Player identifiers and seeds stay in the ledger. ``your_score`` is set when
-    the player's latest game was a win; ``your_rank`` also needs a posted name.
+    Player identifiers and seeds stay in the ledger. ``your_score`` is the player's
+    best win, if one exists; ``your_rank`` also needs a posted name.
     """
 
     entries: list[LeaderboardEntry]

@@ -6,8 +6,8 @@ import { scoreText, standingText } from "../render/text";
 const NAME_LENGTH = 16;
 
 /**
- * The standings after a finished game. The server ranks each player's latest
- * game, so this screen only lists what it is given. A winner with no posted
+ * The standings after a finished game. The server ranks each player's best
+ * win, so this screen only lists what it is given. A winner with no posted
  * name gets the name field; the score is already in the ledger either way.
  */
 export function renderLeaderboard(
