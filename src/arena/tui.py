@@ -349,7 +349,7 @@ class SceneArt:
         base = Path(root)
         poses: dict[tuple[str, str], tuple[Sprite, ...]] = {}
         wanted = {
-            "baku": _PLAYER_POSES,
+            "baku": (*_PLAYER_POSES, "win_screen"),
             "hal": (*_PLAYER_POSES, "win_screen"),
             "yakou": _YAKOU_POSES,
         }

@@ -44,8 +44,8 @@ export function preload(): void {
     frame(character, "idle", 0);
     frame(character, "dropping", 0);
     frame(character, "seated", 0);
+    frame(character, "win_screen", 0);
   }
-  frame("hal", "win_screen", 0);
   frame("yakou", "idle", 0);
   frame("yakou", "standing", 0);
 }

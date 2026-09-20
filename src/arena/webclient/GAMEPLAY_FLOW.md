@@ -17,7 +17,7 @@ player's ST (the vial) and TTD (total time dead), with the player's name,
 current role, and death count above them. On the result screen, the part of
 a bar that the half-round just added is drawn in red; it returns to white
 when you continue. The top-right corner carries the
-game clock, the round and half, the game number, and the series tally, set
+game clock, the round and half, and the series tally once a series exists, set
 large so the state of the game reads at a glance.
 
 ## The cuts, in order

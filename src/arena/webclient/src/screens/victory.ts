@@ -18,12 +18,10 @@ export function renderVictory(
   if (snapshot.stopped) {
     headline = `<p class="big hint">SESSION STOPPED</p><p class="hint">No winner after ${snapshot.half_rounds} half-rounds.</p>`;
   } else if (snapshot.winner_name === null) {
-    headline = `<p class="big lose">NO WINNER</p><p class="lose">Game over. No surviving winner.</p>`;
+    headline = `<p class="big lose">NO WINNER</p>`;
   } else {
     const won = humanWon(snapshot);
-    headline =
-      `<p class="big ${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name.toUpperCase())} WINS</p>` +
-      `<p class="${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name)} wins the match after ${snapshot.half_rounds} half-rounds.</p>`;
+    headline = `<p class="big ${won ? "win" : "lose"}">${escapeHtml(snapshot.winner_name.toUpperCase())} WINS</p>`;
   }
   // A hosted game stands alone, so a series line appears only once one exists.
   const series = transcript && transcript.games.length > 1

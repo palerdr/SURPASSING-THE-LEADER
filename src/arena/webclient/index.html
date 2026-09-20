@@ -20,7 +20,7 @@
         --field: #0c0c0c;
         --warn: #d8b24a;
         --bad: #c4544a;
-        --good: #7fa87f;
+        --good: #2f9e4f;
         --gain: #ff2a1a;
         color-scheme: dark;
       }
@@ -55,7 +55,7 @@
       .bar > i.gain, .bar.hot > i.gain { background: var(--gain); }
       .value { width: 66px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
       /* The state of the game, set large enough to read from across the room:
-         the clock, the round and half, the game number, and the series. */
+         the clock, the round and half, and the series once one exists. */
       #corner {
         position: absolute; top: 16px; right: 18px; text-align: right; z-index: 2;
         color: var(--dim); font-variant-numeric: tabular-nums;

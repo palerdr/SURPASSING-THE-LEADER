@@ -72,9 +72,10 @@ export function drawHud(
     `<div>Round <strong>${snapshot.round}</strong> · Half <strong>${snapshot.half}</strong>` +
       (snapshot.leap_window ? ' · <span class="leap">⚠ leap second</span>' : "") +
       "</div>",
-    `<div>Game <strong>${snapshot.game_index + 1}</strong>` +
-      (transcript && transcript.games.length > 1 ? ` · Series <strong>${escapeHtml(tallyText(transcript.tally))}</strong>` : "") +
-      "</div>",
   ];
+  // A hosted game stands alone, so a series line appears only once one exists.
+  if (transcript && transcript.games.length > 1) {
+    lines.push(`<div>Series <strong>${escapeHtml(tallyText(transcript.tally))}</strong></div>`);
+  }
   corner.innerHTML = lines.join("");
 }
