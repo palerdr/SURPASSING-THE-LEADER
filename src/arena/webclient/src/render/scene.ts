@@ -17,8 +17,8 @@ const BACKGROUND = "#000000";
  * field, as the panel frames it.
  */
 const SCENE_FILL = 0.11;
-/** The winner's still stands twice as tall as the scene's miniatures. */
-const VICTORY_FILL = 0.22;
+/** The winner's still stands three times as tall as the scene's miniatures. */
+const VICTORY_FILL = 0.33;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
