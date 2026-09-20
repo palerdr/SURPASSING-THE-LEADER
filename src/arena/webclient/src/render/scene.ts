@@ -21,9 +21,9 @@ const SCENE_FILL = 0.11;
 const VICTORY_FILL = 0.33;
 /**
  * Baku's win still is fine greyscale line work; at the scene's 44 rows the
- * grin and the chair dissolve into noise, so it keeps three times the rows.
+ * grin and the chair dissolve into noise, so it keeps 2.25 times the rows.
  */
-const BAKU_WIN_DETAIL = 3;
+const BAKU_WIN_DETAIL = 2.25;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
