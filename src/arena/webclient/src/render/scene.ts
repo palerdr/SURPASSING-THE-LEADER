@@ -23,7 +23,7 @@ const VICTORY_FILL = 0.33;
  * Pixel rows for each win still. The stills are fine line work drawn large;
  * at the scene's 44 rows Baku's grin and chair dissolve into noise.
  */
-const WIN_ROWS = { baku: 99, hal: 99 } as const;
+const WIN_ROWS = { baku: 63, hal: 63 } as const;
 /** Relative figure heights, derived from pose rather than canvas size. */
 const POSE_SCALE: Record<Pose, number> = {
   dropping: 1.0,
