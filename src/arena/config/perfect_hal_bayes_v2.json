@@ -1,0 +1,22 @@
+{
+  "schema": "arena-perfect-hal-bayes-evaluation-v2",
+  "human_train_fraction": 0.6,
+  "human_validation_fraction": 0.2,
+  "minimum_player_games": 5,
+  "prior_pseudocount": 0.5,
+  "games_per_identity": 8,
+  "max_half_rounds": 300,
+  "validation_seed_base": 9021000,
+  "test_seed_base": 9121000,
+  "validation_identities_per_family": 2,
+  "test_identities_per_family": 6,
+  "bootstrap_replicates": 5000,
+  "bootstrap_seed": 9221000,
+  "bayes": {
+    "concentration": 0.5,
+    "context_strength": 1.0,
+    "switch_probability": 0.02,
+    "hazards": [0.005, 0.05, 0.2],
+    "max_run_lengths": 64
+  }
+}
