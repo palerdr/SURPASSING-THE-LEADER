@@ -6,11 +6,9 @@ stage-matrix authority.  This provider uses only revealed public history to
 forecast the opponent, then plays an unrestricted best response in the exact
 continuation-adjusted matrix.
 
-The forecaster is an online mixture of role-separated experts.  Long, short,
-and flash recency models compete with first-order, self-response, state-regime,
-delta, and periodic models under discounted prequential log loss.  This gives
-the provider both persistent memory and rapid response to changed play without a
-checkpoint or simulator-truth input.
+The live forecaster uses Bayesian latent-model filtering and integrates
+change-point uncertainty. We retain the v1 forecaster as the frozen PM source
+and evaluation baseline. Both learn from public reveals.
 """
 
 from __future__ import annotations
@@ -37,7 +35,7 @@ from dth.agent import (
 
 ACTION_COUNT = 60
 ACTIONS = tuple(range(1, ACTION_COUNT + 1))
-PERFECT_HAL_SCHEMA = "arena-perfect-hal-online-adaptive-v1"
+PERFECT_HAL_SCHEMA = "arena-perfect-hal-bayesian-v2"
 PERFECT_HAL_DIAGNOSTICS_SCHEMA = "arena-perfect-hal-diagnostics-v1"
 
 _BASE_EXPERT_NAMES = (
@@ -637,7 +635,11 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
         self.artifact_dir = Path(artifact_dir)
         self.config = config
         self.agent = agent or CompleteDTHAgent(self.artifact_dir)
-        self.opponent_model = opponent_model or PerfectHalOpponentModel(config)
+        if opponent_model is None:
+            from arena.policies.bayesian_hal import BayesianHalOpponentModel
+
+            opponent_model = BayesianHalOpponentModel(config)
+        self.opponent_model = opponent_model
         if self.opponent_model.config != config:
             raise ValueError("Perfect Hal provider and opponent-model configs differ")
         self.decisions: list[PerfectHalDecision] = []
@@ -841,7 +843,9 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
         latest = self.last_decision
         return {
             "schema_version": PERFECT_HAL_DIAGNOSTICS_SCHEMA,
-            "model_schema": PERFECT_HAL_SCHEMA,
+            "model_schema": getattr(self.opponent_model, "schema", "arena-perfect-hal-online-adaptive-v1"),
+            "opponent_model": self.opponent_model.diagnostics()
+            if hasattr(self.opponent_model, "diagnostics") else None,
             "pure_dth_only": True,
             "public_history_only": True,
             "unrestricted_best_response": True,

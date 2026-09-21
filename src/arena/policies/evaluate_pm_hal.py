@@ -48,7 +48,7 @@ from arena.policies.opponent_league import (
     ReactiveDTHOpponent,
     make_opponent,
 )
-from arena.policies.perfect_hal import PerfectHalPolicyProvider
+from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
 from arena.policies.pm_hal import (
     ACTION_COUNT,
     DEFAULT_PM_HAL_CONFIG,
@@ -1309,7 +1309,9 @@ def evaluate_pm_hal(
         and aggro_model is None
     ):
         raise ValueError("PM promotion protocol requires the Aggro ablation")
-    perfect_provider = PerfectHalPolicyProvider(artifact, agent=agent)
+    perfect_provider = PerfectHalPolicyProvider(
+        artifact, agent=agent, opponent_model=PerfectHalOpponentModel()
+    )
     sessions: dict[str, list[dict[str, object]]] = {
         "pm": [],
         "perfect": [],
