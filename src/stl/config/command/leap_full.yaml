@@ -1,0 +1,7 @@
+module: stl.solver.leap_build
+name: leap_full
+description: Sweep and audit the complete public leap game from its opening.
+dth_path: src/dth_compact/artifacts/V.npy
+output: src/stl/outputs/leap-full
+min_clock: 720
+full: true

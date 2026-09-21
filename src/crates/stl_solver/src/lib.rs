@@ -4,6 +4,8 @@ use pyo3::prelude::*;
 
 mod cfr;
 mod game;
+mod leap;
+mod leap_packing;
 mod matrix;
 mod minimax;
 mod payoff;
@@ -98,6 +100,10 @@ fn solve_cfr_plus_rs<'py>(
 
 #[pymodule]
 fn stl_solver_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("LEAP_SOURCE", include_str!("leap.rs"))?;
+    m.add("LEAP_PACKING_SOURCE", include_str!("leap_packing.rs"))?;
+    m.add_function(wrap_pyfunction!(leap::sweep_key_rs, m)?)?;
+    m.add_function(wrap_pyfunction!(leap::solve_packing_rs, m)?)?;
     m.add("EXACT_MINIMAX_AVAILABLE", exact_minimax_available())?;
     m.add_function(wrap_pyfunction!(solve_minimax_rs, m)?)?;
     m.add_function(wrap_pyfunction!(regret_plus_strategy_rs, m)?)?;

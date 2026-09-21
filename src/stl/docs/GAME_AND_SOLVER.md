@@ -393,7 +393,7 @@ so this remains a finite DAG. When a child has `clock > 3600`, the neutral
 adapter supplies its exact DTH tablebase value instead of expanding it.
 
 The initial L2 artifact only needs states reachable from the exact 8:12
-opening. Store values and certified policies with one schema, one builder, and
+opening. Store values with one schema, one builder, and
 one canonical document; do not create `v2` modules or status documents. Hydra
 selects build and audit commands and their parameters.
 

@@ -9,3 +9,6 @@ requires-python = ">=3.12,<3.14"
 
 [tool.maturin]
 features = ["extension-module"]
+
+[dependency-groups]
+dev = ["maturin>=1.14,<2"]

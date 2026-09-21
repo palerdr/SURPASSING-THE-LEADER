@@ -1,0 +1,6 @@
+module: stl.solver.leap_build
+name: leap
+description: Build and retain the L2 calibration segment through clock 3420.
+dth_path: src/dth_compact/artifacts/V.npy
+output: src/stl/outputs/leap
+min_clock: 3420
