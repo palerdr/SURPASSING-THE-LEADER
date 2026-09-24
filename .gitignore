@@ -44,6 +44,10 @@ src/dth/artifacts/
 src/dth_compact/artifacts/
 src/dth/checkpoints/
 
+# Lean/Lake build products and the vendored Mathlib checkout
+src/formal/.lake/
+src/formal/build/
+
 # Imported OCaml/Dune build products
 src/dth_ocaml/_build/
 src/dth_ocaml/_opam/

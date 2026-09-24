@@ -83,8 +83,10 @@ class RunLengthFilter:
         if counts.shape[0] > self.config.max_run_lengths:
             marginal = self.hazard_weights @ joint
             keep = np.argsort(-marginal, kind="stable")[:self.config.max_run_lengths]
-            self.discarded_mass += float(1 - marginal[keep].sum())
+            self.discarded_mass += max(0.0, float(1 - marginal[keep].sum()))
             joint = joint[:, keep]
+            self.hazard_weights *= joint.sum(axis=1)
+            self.hazard_weights /= self.hazard_weights.sum()
             joint /= joint.sum(axis=1, keepdims=True)
             counts = counts[keep]
         self.weights, self.counts = joint, counts
@@ -98,6 +100,8 @@ class _Role:
     observations: int = 0
     previous_opponent_action: int | None = None
     previous_self_action: int | None = None
+    deltas: np.ndarray = field(default_factory=lambda: np.zeros(119))
+    response_deltas: np.ndarray = field(default_factory=lambda: np.zeros(119))
 
 
 class BayesianHalOpponentModel:
@@ -112,7 +116,7 @@ class BayesianHalOpponentModel:
         role_priors: Mapping[str, object] | None = None,
     ):
         self.config, self.bayes = config, bayes
-        self.expert_names = ("population", "global", "changepoint", "repeat", "markov", "response", "state") + tuple(
+        self.expert_names = ("population", "global", "changepoint", "repeat", "delta", "response_delta", "markov", "response", "state") + tuple(
             f"period_{p}" for p in config.periodicities
         )
         if role_priors is not None and set(role_priors) != set(ROLES):
@@ -150,6 +154,14 @@ class BayesianHalOpponentModel:
         counts = state.counts.get(key)
         return prior if counts is None else (counts + strength * prior) / (counts.sum() + strength)
 
+    def _offset(self, counts, previous, fallback):
+        if previous is None or counts.sum() == 0:
+            return fallback
+        # Condition the Dirichlet offset predictive on legal resulting seconds.
+        indices = np.arange(1, 61) - previous + 59
+        masses = counts[indices] + self.bayes.concentration / 119
+        return masses / masses.sum()
+
     def predict(self, opponent_role, *, state_regime, game_index, game_decision_index):
         if opponent_role not in ROLES:
             raise ValueError("opponent role must be dropper or checker")
@@ -167,7 +179,9 @@ class BayesianHalOpponentModel:
         if state.previous_opponent_action is not None:
             repeat *= 0.05
             repeat[state.previous_opponent_action - 1] += 0.95
-        policies = np.stack((prior, global_policy, state.run.predict(), repeat, *(
+        policies = np.stack((prior, global_policy, state.run.predict(), repeat,
+            self._offset(state.deltas, state.previous_opponent_action, global_policy),
+            self._offset(state.response_deltas, state.previous_self_action, global_policy), *(
             self._categorical(state, key, global_policy, self.bayes.context_strength) for key in keys[1:]
         )))
         weights = (1 - self.bayes.switch_probability) * state.weights + self.bayes.switch_probability / len(state.weights)
@@ -190,6 +204,10 @@ class BayesianHalOpponentModel:
         state.weights = np.exp(log_weights - np.logaddexp.reduce(log_weights))
         for key in self._keys(forecast.context):
             state.counts.setdefault(key, np.zeros(ACTION_COUNT))[action - 1] += 1
+        if state.previous_opponent_action is not None:
+            state.deltas[action - state.previous_opponent_action + 59] += 1
+        if state.previous_self_action is not None:
+            state.response_deltas[action - state.previous_self_action + 59] += 1
         state.run.observe(action - 1)
         state.previous_opponent_action, state.previous_self_action = action, own
         state.observations += 1

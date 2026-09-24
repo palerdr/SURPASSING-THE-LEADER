@@ -211,3 +211,68 @@ The local `python -m arena.web` surface retains its one-player process model.
 It keeps no ledger, answers 404 for the leaderboard, and the browser then skips
 that screen.
 Neither deployment mode changes the canonical referee or the leap rule.
+
+## Translated Hal candidate
+
+You can run the frozen candidate on the canonical local browser surface:
+
+```sh
+uv run python -m arena.web --hal-agent perfect-hal --perfect-hal-model translated-v1 --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase --conceal-hal-details
+```
+
+Add `--pure-dth` to use the benchmark's permanent 1..60 game. Old remains
+available as `--perfect-hal-model v1`; the Bayesian and ensemble selectors
+keep their existing behavior. The selected variant reads its frozen parameters
+from `src/arena/config/translated_hal_v1_selection.json`.
+
+For hosted activation, set `STL_HAL_POLICY=translated-v1` in the target
+environment and use the existing preparation and preview commands above.
+Use `--artifact outputs/perfect-hal-bayes-v2/tablebase` with the preparation
+command to package the evaluated artifact. The package includes the candidate
+and its memory adapter. Its policy package uses direct imports so the serving
+process does not need Torch or training modules. This work did not publish a
+preview or change production settings.
+
+Check that `/api/health` reports `policy: "translated-hal-v1"` on your preview.
+Play through a reload and a next game, then use another browser to check
+isolation. The tests cover worker replacement and rejected compare-and-set
+requests. After you review the preview, you can use the existing promotion
+command. Set `STL_HAL_POLICY=exact` and redeploy to restore hosted exact Hal.
+An unset variable also selects exact Hal. A policy or source-version change
+invalidates old session records and their memory.
+
+The memory boundary is the secure `stl_session` cookie, with the existing
+seven-day session lifetime. Reloads and next games retain revealed evidence;
+cookie removal, expiry, or a version change starts a new model. The separate
+leaderboard cookie does not restore model memory across versions or devices.
+The server keeps a compressed JSON checkpoint at each game boundary and
+replays the current game's accepted commands after restoring it. One Redis
+compare-and-set commits both. A rejected mutation changes neither durable
+evidence nor the revealed response. Malformed memory fails with HTTP 503.
+No new Redis key family or database migration is required.
+
+The candidate uses DTH equilibrium during canonical leap turns. Baku may
+submit 61 as Dropper; Checker remains capped at 60. The adapter excludes leap
+reveals from its 60-action model and clears stale sequence references.
+
+You can repeat the local operational check with a new output path:
+
+```sh
+uv run python -m arena.web.check_translated_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --output outputs/translated-hal-v1/runtime-review.json
+uv run python -m pytest src/arena/tests tests/meta -q
+npm --prefix src/arena/webclient run typecheck
+```
+
+The recorded local run covered 32 games and 16 action-61 reveals. It measured
+1.56 ms p95 policy latency, 13.2 ms p95 request latency, and 62.2 ms p95 worker
+recovery. The largest checkpoint was 6,788 bytes. These ASGI measurements use
+the real tablebase and an in-memory CAS store; they exclude Redis network
+latency and hosted cold starts. Keep the preview check before production
+promotion. The compact evidence record links the statistical and runtime
+reports, including the first holdout's failed uncertainty gate.
+
+The arena and architecture suite passes 395 tests. The full repository suite
+passes 837, skips one, and fails eight checks against existing stale Rust
+extensions and `src/dth/artifacts/complete_fast_v1`. We preserved those
+artifacts and the solver validation gates. Package the evaluated artifact
+named above; its source and array checks pass.

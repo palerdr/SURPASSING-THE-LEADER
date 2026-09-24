@@ -1,0 +1,15 @@
+{
+  "schema": "arena-perfect-hal-bayes-selection-v2",
+  "selected_controller": "bayes",
+  "reason": "Uniform-prior Bayesian filtering matches the v1 validation win rate within uncertainty, improves mean logged prediction loss, and avoids the pooled-prior simulation regression.",
+  "config_sha256": "2ea0c51a664356f7ed516bb390650a65e09e40e68131892c5e0c3760b20bce90",
+  "input_sha256": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+  "source_sha256": {
+    "evaluate_bayesian_hal.py": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+    "bayesian_hal.py": "569c41619f09ab769b526a6ba1f1f561153f7e359c309eb0a67f1c773376e0e8",
+    "perfect_hal.py": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13"
+  },
+  "validation_report_sha256": "bb06c82b9071b094026e5e13839315000f9b5851696cd5ce755e0a41878befb9",
+  "test_status_at_selection": "unopened",
+  "claim": "Selection for the new implementation; no established superiority over v1 and no human full-game win-rate claim."
+}

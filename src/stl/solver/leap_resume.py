@@ -141,6 +141,7 @@ def continue_after_ipm(source, fresh_reach, destination):
     build.write_json(destination/'provenance/continuation.json', provenance)
     files['provenance/continuation.json'] = build.file_hash(destination/'provenance/continuation.json')
     checkpoint['identity']['builder_sha256'] = current_hash
+    checkpoint['identity']['residue'] = build.RESIDUE
     for record in checkpoint['records']:
         record['builder_sha256'] = old_hash
     checkpoint['files'] = files

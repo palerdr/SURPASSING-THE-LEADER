@@ -78,7 +78,8 @@ replacement is a sequenced mutation, is allowed only before play or after a
 terminal acknowledgement, and advances the sequence across the replacement.
 The browser server's live provider set is `dth`, `adaptive-dth`,
 `exploit-hal`, and, behind `--pure-dth`, `perfect-hal` and `pm-hal`; terminal
-`arena play` additionally offers `abstract`. The
+`perfect-hal --perfect-hal-model translated-v1` also supports canonical play
+through its leap fallback. Terminal `arena play` offers `abstract`. The
 retired `stl-mcts` surface is not advertised. Browser snapshots carry
 server-owned character, role, and winner-seat fields, so the client never
 infers identity from presentation labels.
@@ -92,8 +93,12 @@ command log only when Redis shows that the game moved on elsewhere.
 and `GET /api/leaderboard` ranks each player's best win by the winner's
 seconds of life left. A restart and a next game each replace the record with fresh seeds, an empty
 command list, and the next sequence number, so replay covers only the current
-game. The hosted exact Hal keeps no memory, so each hosted game stands alone;
-the local server still plays one repeated-opponent series. It shares the immutable tablebase, with separate policy samplers.
+game. The hosted exact Hal keeps no memory. You can opt into translated Hal
+with `STL_HAL_POLICY=translated-v1`. The hosted adapter then stores a private
+opponent checkpoint with each game record and restores it before command
+replay. Reload and next-game requests retain that evidence. Separate cookies
+keep separate models; workers share the immutable tablebase. The local server
+keeps one repeated-opponent series.
 See [deployment instructions](web/DEPLOYMENT.md).
 
 The browser requests a sequenced restart on page load. This abandons the active
@@ -161,16 +166,24 @@ boundaries and never sees an unrevealed simultaneous action. It is an explicit
 hand-written adapter, not evidence that the GRU learned to adapt, and should be
 selected only by validation rather than assumed to be stronger.
 
-**Perfect Hal** is the checkpoint-free, maximally aggressive pure-DTH path.
-It maintains separate Dropper and Checker opponent models and scores a fixed
-ensemble of global, multi-timescale recency, repeat, first-order, response-to-
-own-action, action-delta, public-state-regime, and periodic experts by causal
-prequential log loss. Every revealed action updates the ensemble only after
-the simultaneous decision has resolved. The current ensemble forecast is fed
-through the exact continuation-adjusted DTH matrix, and the default zero
-temperature puts all policy mass on the exact best-response set. Perfect Hal
-never blends equilibrium back in, enforces no epsilon budget, and requires no
-learned checkpoint.
+**Perfect Hal v2** uses a Bayesian opponent model for pure DTH. We keep
+separate evidence for Dropper and Checker. We update latent predictor weights
+with Bayes' rule under a fixed switching prior. We integrate categorical
+predictions over possible change times and a grid of change hazards. We retain
+64 run hypotheses per role and report the posterior mass discarded by pruning.
+Context predictors learn action offsets and responses to Hal's past actions;
+they use public load bands and periodic patterns. Their shrinkage prior uses
+the observed prefix, an empirical Bayes approximation.
+
+We score a forecast before its reveal and update it after resolution. We use
+the posterior predictive mean in the certified DTH stage matrix. At zero
+response temperature, we assign mass to the best-response action set. We keep
+the tablebase as equilibrium continuation authority. This remains a one-step
+exploit policy; it does not plan future learning or certify full-game safety.
+We retain `PerfectHalOpponentModel` as the v1 reference for PM and comparisons.
+The provider API defaults to `BayesianHalOpponentModel`. The terminal and local
+browser keep v1 as their play default after the v2 evaluation. You can select
+v2 with `--perfect-hal-model bayesian-v2`.
 
 The name describes the policy's character, not a mathematical guarantee. It
 is an unrestricted empirical exploiter, not a second DTH solver, a maximin
@@ -178,6 +191,310 @@ certificate, or a claim of unbeatable play. Its opponent memory persists
 across one repeated-opponent session and is cleared only by `reset_session`.
 Like Aggro Hal, it fails closed outside literal actions `1..60` and is exposed
 only by explicit pure-DTH Arena surfaces.
+
+### Frozen translated Hal candidate
+
+You can select `--hal-agent perfect-hal --perfect-hal-model translated-v1`.
+We preserve Old, Bayesian, and both ensemble variants. The new model extends
+Old's expert mixture with offsets from Hal's previous action in the same role
+and from Hal's last revealed action across roles. Each reference has copy and
+mirror forecasts, with full-history and decayed counts. We score forecasts
+before each reveal and use the same unrestricted matrix best response.
+
+Validation selected expert-weight retention `.97` and offset retention `.97`.
+The learning rate remains `1.25`. The frozen configuration and source hashes
+live in `config/translated_hal_v1_selection.json`. Generic Perfect tuning
+flags do not alter this selected variant.
+
+The first holdout improved synthetic wins from 88.62% to 90.43% across 2,048
+games per policy. Human-fitted results tied at 89.06% across 512 games per
+policy. Its uncertainty interval failed the declared one-point regression
+limit. We retained that failure and froze a larger confirmation without
+changing the model or threshold.
+
+The confirmation passed. Translated Hal won 7,493/8,192 synthetic games
+(91.47%); Old won 7,320 (89.36%). The paired identity-bootstrap gain was
+2.11 percentage points, with a 95% interval of [1.55, 2.66]. Against
+human-fitted emulators it won 4,623/5,120 (90.29%); Old won 4,617 (90.18%).
+That paired interval was [-0.33, 0.61] points. The emulator comparison has
+eight source browser identities and does not establish a human win-rate gain.
+Both providers completed these games without a stop.
+
+Translated-response stress wins rose from 88.02% to 97.27% across 768 games.
+The first holdout also compared Bayesian and the policy ensembles, plus an
+offset-free ablation. Removing offsets lost the synthetic gain. Small family
+regressions remain in confirmation; the largest was 0.59 points on multimodal
+opponents. The candidate remains an empirical exploiter with no whole-game
+safety guarantee.
+
+The canonical adapter uses DTH equilibrium during leap turns and leaves Baku's
+Dropper action 61 legal. It skips those reveals in the 60-action model and
+clears sequence references while retaining prior evidence. It makes no
+action-61 optimization claim. The generated reports live under
+`outputs/translated-hal-v1/`; `config/translated_hal_v1_results.json` binds
+their hashes. See [deployment instructions](web/DEPLOYMENT.md) for activation,
+memory lifetime, and local runtime checks. No production deployment formed
+part of this evaluation.
+
+### External human repetition prior experiment
+
+You can reproduce the research experiment from the repository root with a new
+output directory:
+
+```bash
+uv run python -m arena.policies.evaluate_reward_prior fit --output outputs/external-hal-prior-v1-reproduction
+uv run python -m arena.policies.evaluate_reward_prior evaluate --output outputs/external-hal-prior-v1-reproduction
+```
+
+The evaluator downloads the authors' human repeated-game CSV at a pinned
+revision and checks its SHA-256. We used 118 people for fitting, 43 for
+validation, and 34 for the external holdout. We excluded the Psych-201 text
+conversion after finding inconsistent action/payoff labels. We fit repetition
+after zero or positive reward, adjust repetition odds for 60 actions, and add
+one expert to frozen translated Hal. Two neutral-prior controls separate the
+adapter effect from the external prior effect.
+
+We froze the model before target evaluation. The external adapter won
+913/1,024 synthetic games; frozen translated Hal won 914/1,024. Both won
+190/192 offset stress games. On 1,470 logged moves from ten existing browser
+identities, the external prior produced no clear value gain over translated
+Hal and worse prediction loss than the weak neutral prior. The external
+holdout NLL gain over neutral was 0.0176 nats, with a paired 95% interval that
+included zero.
+
+`config/external_hal_prior_v1_results.json` binds the evidence and fitted
+parameters. This experiment has no deployment integration. You need fresh
+STL human participants to test human win-rate gains. Keep the translated
+deployment candidate unchanged.
+
+### Neural research pilots
+
+You can train and test the four neural experiments from the repository root:
+
+```bash
+uv run python -m arena.policies.run_neural_pilots train --output outputs/neural-pilots-v1-reproduction
+uv run python -m arena.policies.run_neural_pilots evaluate --output outputs/neural-pilots-v1-reproduction
+```
+
+Use a new output directory. We record the protocol before training and bind
+selected checkpoints to their source hashes before test. We train on generated
+public histories, with four opponent families excluded from both fitting and
+validation. We preserve the existing Aggro experiments and their gates.
+
+We compare a 42,444-parameter transformer with a 32,748-parameter GRU on the
+same 16-token next-action task. We add each neural forecast to translated Hal
+through online prediction scores. A 7,256-parameter selector learns weights for
+the 24 existing statistical experts. Its inputs include their past errors.
+
+We train a 42,749-parameter GRU actor against frozen translated Hal to search
+for exploitable behavior. We train a second actor on rewards across four-game
+sessions as a probing experiment. The actor retains hidden state across games.
+We compare it with an immediate-payoff learner and a cleared-GRU control.
+Transformer controls shuffle or clear its history window while retaining the
+current public token and statistical memory. Higher session wins alone do not
+establish active information seeking.
+
+These research surfaces require pure DTH actions 1..60. We keep the canonical
+leap adapter and deployment policy unchanged. Checkpoints and full results
+belong under `outputs/neural-pilots-v1/`. You need fresh human games to test
+human win-rate gains.
+
+We fitted the predictors on 16,067 decisions and selected epochs on 5,135
+validation decisions. On the 608-game league holdout, the selector won 555,
+the transformer blend won 553, and the GRU blend won 552. Frozen translated
+Hal won 541. The selector's paired gain was 2.30 percentage points with an
+unadjusted 95% interval of [0.33, 4.28]. Its raw prediction loss fell from
+3.095 to 2.822 nats. On the four reserved behavior families, it won 124/128
+against translated Hal's 123/128. We treat these pilot comparisons as
+exploratory and retain the deployment candidate.
+
+The adversary won 90/256 against translated Hal; its untrained control won
+95/256. The session-reward actor won 462/608 league games against the
+immediate-payoff control's 545/608. Neither experiment supports its proposed
+advantage under this training budget.
+
+We repaired the first shuffle control because it consumed the action RNG.
+We retained the original report and runner source under the output directory.
+The correction changes two runner lines and leaves checkpoint bytes fixed.
+A fresh 1,824-game audit found 550/608 wins for full transformer history,
+550/608 for shuffled history, and 552/608 for cleared history. We found no
+neural-history benefit. You can run this separate audit once per experiment:
+
+```bash
+uv run python -m arena.policies.audit_neural_pilot_memory --output outputs/neural-pilots-v1-reproduction
+```
+
+`config/neural_pilots_v1_results.json` binds the checkpoints and evidence,
+including the superseded shuffle comparison and its corrected audit.
+
+### Neural selector architecture study
+
+You can reproduce the selector study with a new output directory:
+
+```bash
+uv run python -m arena.policies.run_selector_study train --output outputs/selector-study-v1-reproduction
+uv run python -m arena.policies.run_selector_study evaluate --output outputs/selector-study-v1-reproduction
+uv run --with matplotlib python -m arena.policies.plot_selector_study --output outputs/selector-study-v1-reproduction
+```
+
+We compare a 7,256-parameter MLP, a 161,560-parameter residual MLP, and a
+24,001-parameter attention model. The attention model reads one token per
+expert, including its forecast over 60 actions. Each model learns a bounded
+correction to translated Hal's 24 expert weights. We retain the exact DTH
+matrix for the response calculation.
+
+We train each architecture with three seeds on 43,845 public decisions from
+fresh synthetic identities. We select each seed's epoch on 9,483 validation
+decisions, then compare three-seed ensembles on 624 validation games. We
+select the architecture by game score before training its feature ablations.
+We retrain without recent-error inputs, without public-context inputs, and
+without inherited expert weights. If attention wins validation, we also
+retrain without forecast-shape inputs. A fitted static correction and an
+untrained network serve as controls. Removing context or error inputs leaves
+indirect information through the statistical experts.
+
+We freeze sources, checkpoints, and data hashes before test. The test uses
+2,432 fresh games per variant, grouped into four-game opponent sessions. We
+report paired bootstrap intervals over identities. Architecture and ablation
+contrasts use unadjusted intervals. Four families remain outside this study's
+training and selection; prior experiments included those family definitions.
+We make no human win-rate claim. You can inspect the full protocol and frozen
+artifacts under `outputs/selector-study-v1/`.
+
+We selected attention after 600/624 validation wins, compared with 592 for
+the residual MLP and 589 for the small MLP. We then ran 31,616 holdout games:
+
+| Variant | Parameters per member | Members | Wins / 2,432 |
+| --- | ---: | ---: | ---: |
+| Old Hal | Statistical | 1 | 2,123 |
+| Frozen translated Hal | Statistical | 1 | 2,198 |
+| Prior neural pilot | 7,256 | 1 | 2,225 |
+| Retrained small MLP | 7,256 | 3 | 2,232 |
+| Residual MLP | 161,560 | 3 | 2,241 |
+| Selected attention | 24,001 | 3 | 2,235 |
+
+Attention gained 1.52 percentage points over translated Hal, with a paired
+95% interval of [0.49, 2.59]. Its prediction loss fell from 3.164 to 2.863
+nats per action. We found no resolved win-rate gain over the prior neural
+pilot or the small MLP. The residual MLP's gain over the small MLP was 0.37
+points, with an interval of [-0.37, 1.11]. We kept the validation selection.
+
+The retrained no-errors control won 2,247 games. The no-context, no-prior,
+and no-shapes controls won 2,234, 2,236, and 2,232. Their paired contrasts
+with full attention include zero. The static correction won 2,218; one
+attention seed won 2,235. These comparisons do not establish a need for
+attention, each input group, or the three-member ensemble. The untrained
+control matched translated Hal's game records, including its 2,198 wins.
+
+We measured a mean session p95 of 0.507 ms for attention's decision code
+on the local CPU, versus 0.229 ms for translated Hal. This timer excludes
+environment transitions and hosted request overhead. No games reached the
+half-round cap. We retain these networks as research artifacts and preserve
+the deployment candidate. We have not integrated neural memory recovery or
+canonical leap handling into a hosted provider.
+
+`config/selector_study_v1_results.json` records compact evidence and artifact
+hashes. The output directory contains the ablation plot, learning curves,
+and expert-weight heatmap in PNG and SVG formats.
+
+### Bayesian Perfect Hal evaluation
+
+We follow the separation of opponent inference and response in
+[Bayesian Opponent Exploitation](https://arxiv.org/abs/1603.03491).
+We adapt [Bayesian change-point filtering](https://arxiv.org/abs/0710.3742)
+with a hazard grid and posterior-mass pruning. Recent
+[opponent modelling and planning work](https://proceedings.mlr.press/v235/huang24p.html)
+supports treating those as separate components; we make no claim to reproduce
+its planner.
+
+You can run the frozen evaluator with an anonymous ledger export:
+
+```sh
+uv run python -m arena.policies.evaluate_bayesian_hal --human-data outputs/perfect-hal-bayes-v2/human-games.json --artifact outputs/perfect-hal-bayes-v2/tablebase --split test --output outputs/perfect-hal-bayes-v2/test-v2.json
+```
+
+You can play the Bayesian candidate with:
+
+```sh
+uv run python -m arena.web --hal-agent perfect-hal --perfect-hal-model bayesian-v2 --pure-dth --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase
+```
+
+You must choose a fresh output path. The test command checks source and input
+hashes against `config/perfect_hal_bayes_v2_selection.json`. You need a new
+protocol and fresh test seeds to select another model after this test.
+
+We split each player's complete games into chronological training, validation,
+and test partitions. A population prior excludes the target player's identity
+and uses other players' training partitions. We retain incomplete games as
+prediction evidence and exclude leap turns from pure-DTH scoring. We clear
+pattern history after an excluded turn. Logged-state scores measure a one-step
+deviation followed by pure-DTH equilibrium, not a human full-game win rate.
+
+We measure full-game wins in paired-seat simulations against 14 reactive
+families plus uniform and equilibrium opponents. We compare v1, equilibrium,
+and a memory-reset control. Human-fitted categorical and response emulators
+use training games. We group their uncertainty by source browser identity.
+Those emulators omit unobserved human responses, and several browser identities
+can belong to one person. A live randomized comparison is required to establish
+a human win-rate uplift. No production policy or database schema changes form
+part of this experiment.
+
+The September 21 v2 test used 98 recorded games and 1,489 public moves from ten
+browser identities. Eight identities had enough games for a held-out partition.
+Bayesian Hal won 677/768 synthetic games; equilibrium won 393/768 and v1 won
+675/768. The paired score gain over v1 was 0.26 percentage points with a 95%
+identity-bootstrap interval of [-1.56, 2.08]. Against human-fitted emulators,
+Bayesian Hal won 114/128, equilibrium won 63/128, and v1 won 120/128. We retain
+v1 as the play default because v2 did not establish an improvement over it.
+The memory-reset control stopped 40 synthetic games; reports distinguish raw
+wins from scores that assign half a point to a stopped game.
+
+The `PaleRider` test partition contained eleven ordinary-turn decisions.
+Bayesian Hal's mean one-step gain over equilibrium was 3.64 percentage points
+under the pure-DTH projection. This is a small logged-state estimate, not an
+observed human win-rate increase. The generated report lives at
+`outputs/perfect-hal-bayes-v2/test-v2.json`; `config/perfect_hal_bayes_v2_results.json`
+records its hash and compact results.
+
+### Policy ensemble experiment
+
+You can select the Old/Bayesian policy ensemble with
+`--perfect-hal-model ensemble` on the terminal or local browser in pure DTH.
+Both constituent providers propose distributions from the same public history.
+We fetch one certified stage and mix the proposed policies before the reveal.
+We retain separate Old/Bayesian weights for each of Hal's roles across games.
+
+After the reveal, we score each frozen proposal against the opponent's action
+with `M` for Dropper or `-M.T` for Checker. We map utility to `[0, 1]` and apply
+`posterior = normalize(weight * exp(2 * reward))`, followed by
+`weight = .96 * posterior + .02`. Each model retains at least 2% weight.
+Both models learn from the reveal, regardless of Hal's sampled action.
+Session reset clears both models and restores equal weights.
+
+We froze the learning rate and sharing mass before the experiment in
+`config/perfect_hal_ensemble_v1.json`. The evaluator compares exact, Old,
+Bayesian, fixed 50/50, and adaptive mixtures on fresh paired-seat simulations:
+
+```sh
+uv run python -m arena.policies.evaluate_ensemble_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --human-data outputs/perfect-hal-bayes-v2/human-games.json --output outputs/perfect-hal-ensemble-v1/test-v1.json
+```
+
+You must choose a new output path for each run. Reports bind source and input
+hashes and group uncertainty by opponent identity. Human emulator variants and
+replicates share their source browser identity for uncertainty estimates. We
+reuse training prefixes from the prior experiment; fresh simulation seeds do
+not create a new human holdout. We count stopped games as non-wins and report
+them apart from losses. Certified stage rewards assume equilibrium continuation;
+they do not certify the ensemble's full-game win rate or resistance to exploitation.
+
+The frozen experiment completed 10,240 games with no stopped games. Old won
+1,370/1,536 synthetic games (89.19%); the ensemble won 1,355 (88.22%), the equal
+mixture won 1,362 (88.67%), and Bayesian won 1,349 (87.83%). Against human-fitted
+emulators, Old won 473/512 (92.38%); both mixtures won 465 (90.82%), and Bayesian
+won 462 (90.23%). The ensemble-minus-Old 95% identity-bootstrap intervals were
+[-2.02, 0.07] percentage points for synthetic opponents and [-3.32, 0.20] for
+human-fitted opponents. We retain Old as the play default. These results do not
+establish an ensemble improvement or a difference in real human win rates.
 
 **Perfect Mode (PM) Hal** is the synthesis layer for repeated pure-DTH play.
 It keeps Adaptive Hal's role-separated Dirichlet evidence and independently

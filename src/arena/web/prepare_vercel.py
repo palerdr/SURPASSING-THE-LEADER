@@ -54,6 +54,48 @@ def add_bytecode(target: Path) -> int:
     return written
 
 
+def copy_runtime_sources(root: Path, target: Path) -> None:
+    """Copy the hosted provider and its source dependencies."""
+    files = [
+        "arena/__init__.py",
+        "arena/agent.py",
+        "arena/contracts.py",
+        "arena/dth_adapter.py",
+        "arena/session.py",
+        "arena/tui.py",
+        "arena/sprites.py",
+        "arena/web/__init__.py",
+        "arena/web/app.py",
+        "arena/web/schema.py",
+        "arena/web/hosted.py",
+        "arena/web/ledger.py",
+        "arena/web/names.py",
+        "arena/web/production.py",
+        "arena/web/opponent_memory.py",
+        "arena/translated_hal_adapter.py",
+        "arena/policies/perfect_hal.py",
+        "arena/policies/translated_hal.py",
+        "arena/config/translated_hal_v1_selection.json",
+        "dth/__init__.py",
+        "dth/agent.py",
+        "dth/solver.py",
+        "dth/packed.py",
+        "dth/support_solver.py",
+        "dth/complete_tablebase.py",
+        "dth/fast_kernel.py",
+        "dth/fast_kernel.c",
+        "stl/__init__.py",
+    ]
+    files.extend(
+        str(p.relative_to(root / "src")) for p in (root / "src/stl/engine").glob("*.py")
+    )
+    for name in files:
+        destination = target / "runtime/src" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "src" / name, destination)
+    (target / "runtime/src/arena/policies/__init__.py").write_text('"""Direct policy imports for the hosted runtime."""\n')
+
+
 def main():
     root = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -84,38 +126,7 @@ def main():
         check=True,
     )
     shutil.copytree(root / "src/arena/webclient/dist", target / "public")
-    files = [
-        "arena/__init__.py",
-        "arena/agent.py",
-        "arena/contracts.py",
-        "arena/dth_adapter.py",
-        "arena/session.py",
-        "arena/tui.py",
-        "arena/sprites.py",
-        "arena/web/__init__.py",
-        "arena/web/app.py",
-        "arena/web/schema.py",
-        "arena/web/hosted.py",
-        "arena/web/ledger.py",
-        "arena/web/names.py",
-        "arena/web/production.py",
-        "dth/__init__.py",
-        "dth/agent.py",
-        "dth/solver.py",
-        "dth/packed.py",
-        "dth/support_solver.py",
-        "dth/complete_tablebase.py",
-        "dth/fast_kernel.py",
-        "dth/fast_kernel.c",
-        "stl/__init__.py",
-    ]
-    files.extend(
-        str(p.relative_to(root / "src")) for p in (root / "src/stl/engine").glob("*.py")
-    )
-    for name in files:
-        destination = target / "runtime/src" / name
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(root / "src" / name, destination)
+    copy_runtime_sources(root, target)
     shutil.copy2(root / "uv.lock", target / "runtime/uv.lock")
     artifact = target / "runtime/src/dth/artifacts/complete_fast_v1"
     artifact.mkdir(parents=True)

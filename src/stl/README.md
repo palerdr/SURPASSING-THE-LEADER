@@ -67,6 +67,40 @@ original matrix at the same 1e-6 gate.
 The scalar retry sequence uses the failure payoff, then the first success
 payoff, as common offsets if earlier attempts fail.
 
+The full sweep solves H1 and H2 residue inside the kernel, as
+`leap_build.RESIDUE` selects. Each 1024-class chunk moves the certified
+support of its preceding residue class with the success-payoff kink and tries
+it once. On a miss, the chunk runs the packing LP from the recurrence crash
+basis. REV keys keep the Python fallback and its revival cache, and their
+packing LP also starts from the crash basis. Every stored value still passes
+the full 1e-6 matrix gate; [`LEAP_CERTIFICATE.md`](../crates/docs/LEAP_CERTIFICATE.md)
+holds the equations. Records count kernel LP solves as `kernel_native_solves`
+and support hits as `support_solves`, and `failures` still counts all
+residue. The kernel time then includes the residue LPs, so compare residue
+paths on sweep time. A change to `RESIDUE` changes the builder hash, so a
+checkpoint cannot resume across it.
+
+You can replay whole keys against the certified `outputs/leap-full-native/`
+artifact before a full run:
+
+```bash
+uv run python -m stl.solver.benchmark_leap_replay --keys H2_47 H2_35 --configs baseline kernel-crash kernel-crash-kink1
+uv run python -m stl.solver.benchmark_leap_replay --summarize --exclude H2_39
+```
+
+The replay restores each key's children, runs the production `sweep_key` once
+per configuration, and aborts if a value differs from the artifact by more
+than 1e-6. Run it on AC power: H1_44's baseline took 213.6 s on battery and
+122.9 s on AC. On 2026-09-22 we replayed H2_47, H2_35, H2_31, H1_40, and
+H1_44 on AC power, 155.5M residue classes in total. Per residue class, the
+baseline took 8.5 µs of sweep time, the kernel crash path 1.7 µs, and one
+kink attempt 1.05 µs. The seeds certified 70% to 75% of the residue. On H2_39,
+two and four attempts ran slower than one. Every value matched the artifact
+within 5.0e-7, and no class needed HiGHS. The projection gives about 1,160 s
+of sweep time, against 5,070 s for the prior residue path and 12,195 s in the
+recorded run, which solved its first keys with HiGHS. The reports and the
+projection live under `outputs/leap-replay/`.
+
 You can test reduced support reuse with `leap_lp.SupportFallback`. It seeds
 each Checker row with a HiGHS policy, tries the recurrence-based reduced
 system and paired edge moves, and checks the complete saddle gap at 1e-6.

@@ -220,6 +220,9 @@ def continue_centered(source, fresh_reach, destination, dth_path, *, native_revi
     build.write_json(destination/f'{archive}/continuation.json', provenance)
     files[f'{archive}/continuation.json'] = build.file_hash(destination/f'{archive}/continuation.json')
     checkpoint['identity']['builder_sha256'] = current_hash
+    # The continuation's run_full keys use the current residue path; each
+    # prefix record keeps its own builder hash.
+    checkpoint['identity']['residue'] = build.RESIDUE
     for record in checkpoint['records']:
         record.setdefault('builder_sha256', old_hash)
     checkpoint['files'] = files

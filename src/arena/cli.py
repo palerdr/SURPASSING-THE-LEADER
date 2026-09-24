@@ -147,19 +147,32 @@ def _make_aggro_hal_provider(args: argparse.Namespace):
 
 
 def _make_perfect_hal_provider(args: argparse.Namespace):
+    if args.perfect_hal_model == "translated-v1":
+        from arena.translated_hal_adapter import TranslatedHalPolicyProvider
+
+        return TranslatedHalPolicyProvider(_dth_artifact_dir(args))
     from arena.policies.perfect_hal import (
         PerfectHalConfig,
-        make_live_provider,
+        PerfectHalOpponentModel,
+        PerfectHalPolicyProvider,
     )
 
-    return make_live_provider(
+    config = PerfectHalConfig(
+        prior_strength=args.perfect_hal_prior_strength,
+        expert_learning_rate=args.perfect_hal_expert_learning_rate,
+        expert_weight_retention=args.perfect_hal_expert_weight_retention,
+        response_temperature=args.perfect_hal_response_temperature,
+    )
+    if args.perfect_hal_model == "ensemble":
+        from arena.policies.ensemble_hal import EnsembleHalPolicyProvider
+
+        return EnsembleHalPolicyProvider(_dth_artifact_dir(args), config)
+    # Keep the v1 play default after the v2 human-emulator promotion failure.
+    model = PerfectHalOpponentModel(config) if args.perfect_hal_model == "v1" else None
+    return PerfectHalPolicyProvider(
         artifact_dir=_dth_artifact_dir(args),
-        config=PerfectHalConfig(
-            prior_strength=args.perfect_hal_prior_strength,
-            expert_learning_rate=args.perfect_hal_expert_learning_rate,
-            expert_weight_retention=args.perfect_hal_expert_weight_retention,
-            response_temperature=args.perfect_hal_response_temperature,
-        ),
+        config=config,
+        opponent_model=model,
     )
 
 
@@ -486,6 +499,8 @@ def _play_one_game(
 def command_play(args: argparse.Namespace) -> int:
     args.human_name = validate_human_display_name(args.human_name)
     pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
+    if args.perfect_hal_model == "translated-v1":
+        pure_dth_only.remove("perfect-hal")
     if args.hal_agent in pure_dth_only and not args.pure_dth:
         raise ValueError(
             f"{args.hal_agent} is a pure-DTH policy; pass --pure-dth so action "
@@ -634,22 +649,28 @@ def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
         help="blend concentrated public action evidence into Aggro Hal's forecast",
     )
     parser.add_argument(
+        "--perfect-hal-model",
+        choices=("v1", "bayesian-v2", "ensemble", "translated-v1"),
+        default="v1",
+        help="v1 remains the default; translated-v1 uses frozen parameters and a leap fallback",
+    )
+    parser.add_argument(
         "--perfect-hal-prior-strength",
         type=float,
         default=0.02,
-        help="public pseudo-observation mass before Perfect Hal sees an action",
+        help="v1 public pseudo-observation mass before Perfect Hal sees an action",
     )
     parser.add_argument(
         "--perfect-hal-expert-learning-rate",
         type=float,
         default=1.25,
-        help="Perfect Hal prequential expert-score learning rate",
+        help="v1 Perfect Hal prequential expert-score learning rate",
     )
     parser.add_argument(
         "--perfect-hal-expert-weight-retention",
         type=float,
         default=0.92,
-        help="Perfect Hal expert-score retention across public reveals",
+        help="v1 Perfect Hal expert-score retention across public reveals",
     )
     parser.add_argument(
         "--perfect-hal-response-temperature",
@@ -706,6 +727,8 @@ def command_match(args: argparse.Namespace) -> int:
     from arena.match import run_paired_series, write_report
 
     pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
+    if args.perfect_hal_model == "translated-v1":
+        pure_dth_only.remove("perfect-hal")
     if (
         pure_dth_only.intersection({args.candidate, args.opponent})
         and not args.pure_dth

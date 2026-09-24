@@ -224,6 +224,8 @@ def create_app(
     base_config = config or SessionConfig()
     series_config = series or SeriesConfig()
     hal_agent = hal_factory()
+    # The hosted adapter checkpoints provider memory at game boundaries.
+    app.state.hal_provider = getattr(hal_agent, "provider", None)
     series_seed = base_config.seed
     lock = threading.Lock()
     state: dict[str, object] = {

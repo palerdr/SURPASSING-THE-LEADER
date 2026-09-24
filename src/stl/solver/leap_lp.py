@@ -180,16 +180,36 @@ class Fallback:
 
 
 class NativeFallback(Fallback):
-    """We try certified native pivots, then send the remaining residue to HiGHS."""
-    def __init__(self, workers=None):
+    """We try certified native pivots, then send the remaining residue to HiGHS.
+
+    With crash, each packing LP starts from the recurrence basis. With
+    kernel_native, sweep_key asks the kernel to solve H1 and H2 residue inside
+    its workers, and to try kink_attempts moved supports before each LP. REV
+    keys keep this Python path so they can reuse cached revival values.
+    """
+    def __init__(self, workers=None, *, crash=False, kernel_native=False, kink_attempts=0):
         super().__init__(workers)
         import stl_solver_rs
         from pathlib import Path
         root = Path(__file__).resolve().parents[2]/'crates/stl_solver/src'
         if stl_solver_rs.LEAP_PACKING_SOURCE != (root/'leap_packing.rs').read_text():
             raise ValueError('stale packing extension; rebuild with maturin')
+        if kink_attempts < 0 or (kink_attempts and not kernel_native):
+            raise ValueError('kink attempts need the kernel residue mode')
+        self.crash = crash; self.kernel_native = kernel_native; self.kink_attempts = kink_attempts
         self.native_solves = 0
         self.native_seconds = self.highs_seconds = 0.
+
+    @property
+    def config(self):
+        return {'crash': self.crash, 'kernel_native': self.kernel_native,
+                'kink_attempts': self.kink_attempts}
+
+    def kernel_options(self, key):
+        """We return the kernel keywords for one key; REV keys keep the cache path."""
+        if not self.kernel_native or key[0] == 'REV':
+            return {}
+        return {'native': True, 'crash': self.crash, 'kink_attempts': self.kink_attempts}
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
         import time
@@ -205,7 +225,7 @@ class NativeFallback(Fallback):
         s = np.ascontiguousarray(-succ_table[ds[:,None], p.succ[cs]])
         f = np.ascontiguousarray(p.rev[cs]*-fail_table[ds,columns]+1-p.rev[cs])
         values = np.empty(len(missing)); kind = np.empty(len(missing),np.uint8)
-        failed = solve_packing_rs(s,f,window,values,kind)
+        failed = solve_packing_rs(s,f,window,values,kind,crash=self.crash)
         self.native_seconds += time.perf_counter()-tick
         self.native_solves += len(missing)-failed
         residual = np.flatnonzero(kind == 255)

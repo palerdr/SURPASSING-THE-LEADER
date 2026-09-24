@@ -110,3 +110,15 @@ validation = [
   "npm --prefix src/arena/webclient run typecheck",
   "npm --prefix src/arena/webclient run build",
 ]
+
+[[project]]
+id = "formal"
+path = "src/formal"
+instruction_readme = "src/formal/README.md"
+kind = "verification"
+languages = ["lean"]
+rung = "L1-L2"
+status = "reference"
+public_interfaces = []
+root_validation = true
+validation = ["lake -d src/formal build"]

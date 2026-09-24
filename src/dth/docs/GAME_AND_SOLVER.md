@@ -53,7 +53,7 @@ p_{\mathrm{revive}}(s_c,t_c)
 
 The dose factor reaches zero exactly at the documentary lethal dose \(q=300\)
 and nowhere else; the largest survivable injection is \(s_c=239\), where the
-probability is \(0.95/240=0.003958\). The TTD factor has a 144.3-second
+probability is \(0.95/240=0.003958\). The TTD factor has a 144.6-second
 half-life. STL's referee floor is omitted because it cannot bind while
 eligibility forces \(t_c\le240\).
 

@@ -24,6 +24,60 @@ def reverse_support(mask):
     return int(f'{mask:060b}'[::-1], 2)
 
 
+def kink_index(s):
+    """We return the first index k of the most negative step s[k]-s[k-1], or None.
+
+    A nondecreasing s with f > s[0] gives nonnegative recurrence weights, so
+    a residue stage needs at least one negative step.
+    """
+    s = np.asarray(s, np.float64)
+    steps = s[1:]-s[:-1]
+    k = int(np.argmin(steps))
+    return k+1 if steps[k] < 0 else None
+
+
+def holes(mask):
+    """We list the maximal runs of absent actions as inclusive (start, end) pairs."""
+    runs = []; i = 0
+    while i < 60:
+        if mask >> i & 1:
+            i += 1
+            continue
+        start = i
+        while i+1 < 60 and not mask >> (i+1) & 1:
+            i += 1
+        runs.append((start, i)); i += 1
+    return runs
+
+
+def move_holes(mask, near, old, delta):
+    """We move each hole with the nearer of the anchors near and 59-old.
+
+    A hole at the first anchor moves by delta and a hole at the second by
+    -delta. A hole that starts at action 0 keeps its place. We clip moved
+    holes to actions 0..59.
+    """
+    far = 59-old; out = ALL_ACTIONS
+    for start, end in holes(mask):
+        shift = 0 if start == 0 else (delta if abs(end-near) <= abs(end-far) else -delta)
+        for x in range(max(start+shift, 0), min(end+shift, 59)+1):
+            out &= ~(1 << x)
+    return out
+
+
+def kink_seed(p_mask, q_mask, old, new):
+    """We move a certified support from kink old to kink new.
+
+    Dropper holes use the anchors old and 59-old; Checker holes use old-1 and
+    59-old. We return the masks unchanged when either kink is absent or the
+    two kinks agree.
+    """
+    if old is None or new is None or old == new:
+        return p_mask, q_mask
+    delta = new-old
+    return move_holes(p_mask, old, old, delta), move_holes(q_mask, old-1, old, delta)
+
+
 def recurrence(s, f):
     d = s[0]-f
     if abs(d) < 1e-12:
@@ -128,8 +182,12 @@ def edge_candidates(p_mask, q_mask):
                 seen.add(pair); yield pair; count += 1
 
 
-def solve_supported(s, f, window, p_mask, q_mask, *, edges=True):
-    """We accept a guessed support only after a complete saddle certificate."""
+def solve_supported(s, f, window, p_mask, q_mask, *, edges=True, max_attempts=None):
+    """We accept a guessed support only after a complete saddle certificate.
+
+    You can cap the number of supports we try, counting the guess as the
+    first, with max_attempts.
+    """
     s = np.asarray(s, np.float64); p_mask = int(p_mask); q_mask = int(q_mask)
     if s.shape != (60,) or not np.isfinite(s).all() or not math.isfinite(f):
         raise ValueError('stage needs 60 finite successes and a finite failure')
@@ -145,6 +203,8 @@ def solve_supported(s, f, window, p_mask, q_mask, *, edges=True):
         candidates.extend(edge_candidates(p_mask, q_mask))
     matrix = stage_matrix(s, f, False)
     for attempt, (pp, qq) in enumerate(candidates, 1):
+        if max_attempts is not None and attempt > max_attempts:
+            return None
         q = reduced_weights(r, pp, qq)
         if q is None:
             continue

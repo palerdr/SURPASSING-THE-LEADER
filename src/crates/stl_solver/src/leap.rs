@@ -30,6 +30,9 @@ unsafe extern "C" {
     fn fegetround() -> i32;
 }
 
+/// We collect each chunk's certified bases as (class, Dropper mask, Checker mask).
+type Bases = Vec<(usize, u64, u64)>;
+
 fn environment_ok() -> bool {
     // We require round-to-nearest and gradual underflow for the certificate.
     // We use black_box to keep the underflow probe as a runtime operation.
@@ -39,17 +42,35 @@ fn environment_ok() -> bool {
 /// We certify the residue through a packing LP, with a fresh basis per stage.
 /// We return NaN and kind 255 for unsupported or uncertified stages. Python
 /// sends those stages to HiGHS. Kind 3 records a full-matrix certificate.
+/// Set `crash` to start each stage from the recurrence basis; we restart from
+/// the slack basis when that path fails. You can pass `support_out` with shape
+/// `[class, 2]` to receive each certified basis as Dropper and Checker masks,
+/// the seed that native kernel mode keeps; we write zeros for failed classes.
 #[pyfunction]
+#[pyo3(signature = (s, f, window, out, kind, crash=false, support_out=None))]
 pub fn solve_packing_rs(
     s: PyReadonlyArray2<'_, f64>,
     f: PyReadonlyArray1<'_, f64>,
     window: bool,
     mut out: PyReadwriteArray1<'_, f64>,
     mut kind: PyReadwriteArray1<'_, u8>,
+    crash: bool,
+    mut support_out: Option<PyReadwriteArray2<'_, u64>>,
 ) -> PyResult<u64> {
     if s.shape() != [f.len(), A] || out.len() != f.len() || kind.len() != f.len() {
         return Err(PyValueError::new_err("packing shape mismatch"));
     }
+    let supports = match support_out.as_mut() {
+        Some(array) => {
+            if array.shape() != [f.len(), 2] {
+                return Err(PyValueError::new_err("packing support shape mismatch"));
+            }
+            let values = array.as_slice_mut()?;
+            values.fill(0);
+            Some(values)
+        }
+        None => None,
+    };
     let s = s.as_slice()?;
     let f = f.as_slice()?;
     let out = out.as_slice_mut()?;
@@ -62,10 +83,11 @@ pub fn solve_packing_rs(
             "unsupported floating-point environment",
         ));
     }
-    out.par_chunks_mut(2048)
+    let (failures, bases) = out
+        .par_chunks_mut(2048)
         .zip(kind.par_chunks_mut(2048))
         .enumerate()
-        .map(|(chunk, (values, kinds))| -> PyResult<u64> {
+        .map(|(chunk, (values, kinds))| -> PyResult<(u64, Bases)> {
             if !environment_ok() {
                 return Err(PyValueError::new_err(
                     "unsupported worker floating-point environment",
@@ -74,11 +96,16 @@ pub fn solve_packing_rs(
             let mut solver = crate::leap_packing::Solver::new();
             let mut stage = [0.; A + 1];
             let mut failed = 0;
+            let mut bases = Vec::new();
             for i in 0..values.len() {
                 let j = chunk * 2048 + i;
                 stage[..A].copy_from_slice(&s[j * A..(j + 1) * A]);
                 stage[A] = f[j];
-                let solved = solver.solve(&stage, false);
+                let solved = if crash {
+                    solver.solve_crash(&stage)
+                } else {
+                    solver.solve(&stage, false)
+                };
                 values[i] = f64::NAN;
                 kinds[i] = 255;
                 if solved[0].is_finite() {
@@ -92,13 +119,30 @@ pub fn solve_packing_rs(
                     }
                     values[i] = value;
                     kinds[i] = 3;
+                    if supports.is_some() {
+                        bases.push((j, solver.support.0, solver.support.1));
+                    }
                 } else {
                     failed += 1;
                 }
             }
-            Ok(failed)
+            Ok((failed, bases))
         })
-        .try_reduce(|| 0, |a, b| Ok(a + b))
+        .try_reduce(
+            || (0, Vec::new()),
+            |mut a, mut b| {
+                a.0 += b.0;
+                a.1.append(&mut b.1);
+                Ok(a)
+            },
+        )?;
+    if let Some(output) = supports {
+        for (j, p, q) in bases {
+            output[2 * j] = p;
+            output[2 * j + 1] = q;
+        }
+    }
+    Ok(failures)
 }
 
 /// We certify one value per input class and return the count that needs HiGHS.
@@ -137,6 +181,18 @@ pub fn solve_packing_rs(
 /// the square game's actions; the existing constant-row proof lifts a window
 /// certificate. Optional supports leave the original two-rung API unchanged.
 ///
+/// Set `native` to solve the residue inside each worker. We then run the
+/// packing LP of `leap_packing.rs` on each class that fails the two rungs and
+/// record kind 3. Set `crash` to start that LP from the recurrence basis. Set
+/// `kink_attempts` above zero to try a support guess before the LP. We move
+/// the certified support of the preceding residue class in the same
+/// 1024-class chunk with the success-payoff kink (see `kink_seed`), then try
+/// at most `kink_attempts` supports: the
+/// moved guess records kind 4 and a later edge move records kind 5. In this
+/// mode we keep kinds 3, 4, and 5 in window stages, so Python can count the
+/// residue; kind 255 then marks only the classes that need HiGHS. The native
+/// mode excludes `supports`, `support_out`, and `stop_on_support_miss`.
+///
 /// # Errors
 ///
 /// We reject incompatible shapes or layouts, invalid indices or probabilities,
@@ -144,7 +200,7 @@ pub fn solve_packing_rs(
 /// gathered payoffs or accepted values outside the utility range. On an error,
 /// you must discard both output buffers: workers may have written some entries.
 #[pyfunction]
-#[pyo3(signature = (pcs, pds, succ_table, fail_table, succ_col, fail_col, rev, window, saddle_tolerance, out, kind, supports=None, support_out=None, stop_on_support_miss=false))]
+#[pyo3(signature = (pcs, pds, succ_table, fail_table, succ_col, fail_col, rev, window, saddle_tolerance, out, kind, supports=None, support_out=None, stop_on_support_miss=false, native=false, crash=false, kink_attempts=0))]
 #[allow(clippy::too_many_arguments)]
 pub fn sweep_key_rs(
     pcs: PyReadonlyArray1<'_, i32>,
@@ -161,10 +217,21 @@ pub fn sweep_key_rs(
     supports: Option<PyReadonlyArray2<'_, u64>>,
     mut support_out: Option<PyReadwriteArray2<'_, u64>>,
     stop_on_support_miss: bool,
+    native: bool,
+    crash: bool,
+    kink_attempts: usize,
 ) -> PyResult<u64> {
     let error = |s: &str| PyValueError::new_err(s.to_owned());
     if saddle_tolerance != GAP {
         return Err(error("saddle tolerance must be 1e-6"));
+    }
+    if (crash || kink_attempts > 0) && !native {
+        return Err(error(
+            "crash and kink seeds require the native residue mode",
+        ));
+    }
+    if native && (supports.is_some() || support_out.is_some() || stop_on_support_miss) {
+        return Err(error("native residue mode excludes support seeds"));
     }
     if !environment_ok() {
         return Err(error("unsupported floating-point environment"));
@@ -262,6 +329,11 @@ pub fn sweep_key_rs(
                 let mut previous_pc = usize::MAX;
                 let mut blocked_pc = usize::MAX;
                 let mut previous_support = (0, 0);
+                // In native mode each 1024-class chunk owns one packing tableau
+                // and the certified support of its preceding residue class, with
+                // that class's kink index. Seeds therefore restart at each chunk.
+                let mut packer = crate::leap_packing::Solver::new();
+                let mut residue_seed: Option<(u64, u64, Option<usize>)> = None;
                 // We index scratch as [action][lane] to keep the lane loop contiguous.
                 // We reuse q for recurrence coefficients and Checker weights.
                 let mut s = [[0.0_f64; L]; A];
@@ -379,11 +451,28 @@ pub fn sweep_key_rs(
                         } else {
                             rung = 1;
                             if d[lane].abs() < 1e-12 || !sum[lane].is_finite() || sum[lane] <= 0.0 {
-                                blocked_pc = current_pc;
-                                failed += 1;
-                                continue;
-                            }
-                            if nonnegative[lane] && bounded[lane] && d[lane].abs() >= GAP {
+                                if !native {
+                                    blocked_pc = current_pc;
+                                    failed += 1;
+                                    continue;
+                                }
+                                let Some((value, accepted_kind)) = solve_residue(
+                                    &std::array::from_fn(
+                                        |k| if k < A { s[k][lane] } else { f[lane] },
+                                    ),
+                                    &std::array::from_fn(|k| r[k][lane]),
+                                    window,
+                                    crash,
+                                    kink_attempts,
+                                    &mut residue_seed,
+                                    &mut packer,
+                                ) else {
+                                    failed += 1;
+                                    continue;
+                                };
+                                v = value;
+                                rung = accepted_kind;
+                            } else if nonnegative[lane] && bounded[lane] && d[lane].abs() >= GAP {
                                 // Under the certificate's hypotheses, we enclose both
                                 // saddle bounds within 1e-10 of this weight-sum value.
                                 // We can omit the matrix product on this branch.
@@ -434,6 +523,7 @@ pub fn sweep_key_rs(
                                             &recurrence,
                                             previous_support,
                                             window,
+                                            usize::MAX,
                                         );
                                     }
                                     if let Some((value, accepted_kind, p_mask, q_mask)) = reduced {
@@ -441,6 +531,23 @@ pub fn sweep_key_rs(
                                         rung = accepted_kind;
                                         previous_support = (p_mask, q_mask);
                                         updates.push((chunk * 1024 + i, p_mask, q_mask));
+                                    } else if native {
+                                        let Some((value, accepted_kind)) = solve_residue(
+                                            &std::array::from_fn(|k| {
+                                                if k < A { s[k][lane] } else { f[lane] }
+                                            }),
+                                            &std::array::from_fn(|k| r[k][lane]),
+                                            window,
+                                            crash,
+                                            kink_attempts,
+                                            &mut residue_seed,
+                                            &mut packer,
+                                        ) else {
+                                            failed += 1;
+                                            continue;
+                                        };
+                                        v = value;
+                                        rung = accepted_kind;
                                     } else {
                                         blocked_pc = current_pc;
                                         failed += 1;
@@ -452,7 +559,8 @@ pub fn sweep_key_rs(
                         if window {
                             // We choose between the square-stage value and the
                             // constant leap row; ties belong to kind 2 by contract.
-                            if f[lane] >= v {
+                            // Native mode keeps its residue kinds for counting.
+                            if f[lane] >= v && !(native && rung >= 3) {
                                 rung = 2;
                             }
                             v = v.max(f[lane]);
@@ -742,15 +850,17 @@ fn support_neighbors(mask: u64) -> Vec<u64> {
 }
 
 /// We try the preceding row support, then at most 64 paired boundary moves.
+/// We stop after `limit` support attempts, counting the seed as the first.
 fn solve_support(
     s: &[f64; A],
     f: f64,
     r: &[f64; A],
     seed: (u64, u64),
     window: bool,
+    limit: usize,
 ) -> Option<(f64, u8, u64, u64)> {
     let (p, q) = seed;
-    if p == 0 || q == 0 || r.iter().any(|x| !x.is_finite()) {
+    if limit == 0 || p == 0 || q == 0 || r.iter().any(|x| !x.is_finite()) {
         return None;
     }
     if let Some(value) = support_attempt(s, f, r, p, q, window) {
@@ -764,6 +874,9 @@ fn solve_support(
             shifted_isolated_holes(q, mode),
         );
         if pair != seed && !tried[..count].contains(&pair) {
+            if count + 1 >= limit {
+                return None;
+            }
             tried[count] = pair;
             count += 1;
             if let Some(value) = support_attempt(s, f, r, pair.0, pair.1, window) {
@@ -778,6 +891,9 @@ fn solve_support(
             let pair = (p ^ (3 << i), q ^ (3 << (A - 2 - i)));
             if tried[..count].contains(&pair) {
                 continue;
+            }
+            if count + 1 >= limit {
+                return None;
             }
             tried[count] = pair;
             count += 1;
@@ -796,7 +912,7 @@ fn solve_support(
             {
                 continue;
             }
-            if count == EDGE_LIMIT {
+            if count == EDGE_LIMIT || count + 1 >= limit {
                 return None;
             }
             tried[count] = (pp, qq);
@@ -807,4 +923,141 @@ fn solve_support(
         }
     }
     None
+}
+
+/// We return the index `k` of the most negative success-payoff step
+/// `s[k] - s[k-1]`, the first on a tie, or `None` when no step is negative.
+/// A nondecreasing `s` with `f > s[0]` gives nonnegative recurrence weights,
+/// so a residue class needs at least one negative step.
+fn kink_index(s: &[f64; A]) -> Option<usize> {
+    let mut best = 0.0;
+    let mut index = None;
+    for k in 1..A {
+        let step = s[k] - s[k - 1];
+        if step < best {
+            best = step;
+            index = Some(k);
+        }
+    }
+    index
+}
+
+/// We move each hole of `mask` with the nearer of two kink anchors. The first
+/// anchor is `near` (the kink `old` for the Dropper, `old - 1` for the
+/// Checker); the second is `59 - old`. A hole at the first anchor moves by
+/// `delta`, and a hole at the second moves by `-delta`. A hole that starts at
+/// action 0 keeps its place. We clip moved holes to actions 0..59.
+fn move_holes(mask: u64, near: i64, old: i64, delta: i64) -> u64 {
+    let far = A as i64 - 1 - old;
+    let mut out = SUPPORT_BITS;
+    let mut i = 0;
+    while i < A {
+        if (mask >> i) & 1 == 1 {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i + 1 < A && (mask >> (i + 1)) & 1 == 0 {
+            i += 1;
+        }
+        let end = i as i64;
+        let shift = if start == 0 {
+            0
+        } else if (end - near).abs() <= (end - far).abs() {
+            delta
+        } else {
+            -delta
+        };
+        let low = (start as i64 + shift).max(0);
+        let high = (end + shift).min(A as i64 - 1);
+        for x in low..=high {
+            out &= !(1 << x);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// We express a certified support relative to its kink and move it to a new
+/// kink. We return the masks unchanged when either kink is absent or the two
+/// kinks agree.
+fn kink_seed(p: u64, q: u64, old: Option<usize>, new: Option<usize>) -> (u64, u64) {
+    match (old, new) {
+        (Some(old), Some(new)) if old != new => {
+            let (old, delta) = (old as i64, new as i64 - old as i64);
+            (
+                move_holes(p, old, old, delta),
+                move_holes(q, old - 1, old, delta),
+            )
+        }
+        _ => (p, q),
+    }
+}
+
+/// We solve one residue stage in the worker. We first try the moved seed
+/// support and at most `kink_attempts` supports. We then run the packing LP.
+/// We return the square-stage value and its kind, or `None` for HiGHS. Each
+/// accepted support or LP basis becomes the next seed.
+fn solve_residue(
+    stage: &[f64; A + 1],
+    r: &[f64; A],
+    window: bool,
+    crash: bool,
+    kink_attempts: usize,
+    seed: &mut Option<(u64, u64, Option<usize>)>,
+    packer: &mut crate::leap_packing::Solver,
+) -> Option<(f64, u8)> {
+    let s: &[f64; A] = stage[..A].try_into().unwrap();
+    let f = stage[A];
+    let kink = kink_index(s);
+    if let Some((p, q, old)) = *seed {
+        let guess = kink_seed(p, q, old, kink);
+        if let Some((value, kind, p, q)) = solve_support(s, f, r, guess, window, kink_attempts) {
+            *seed = Some((p, q, kink));
+            return Some((value, kind));
+        }
+    }
+    let solved = if crash {
+        packer.solve_crash(stage)
+    } else {
+        packer.solve(stage, false)
+    };
+    if !solved[0].is_finite() {
+        return None;
+    }
+    *seed = Some((packer.support.0, packer.support.1, kink));
+    Some((solved[0], 3))
+}
+
+/// We expose the kink index for parity tests against `leap_support.py`.
+#[pyfunction]
+pub fn kink_index_rs(s: PyReadonlyArray1<'_, f64>) -> PyResult<Option<usize>> {
+    let s: [f64; A] = s
+        .as_slice()?
+        .try_into()
+        .map_err(|_| PyValueError::new_err("kink index needs 60 payoffs"))?;
+    if s.iter().any(|x| !x.is_finite()) {
+        return Err(PyValueError::new_err("kink index needs finite payoffs"));
+    }
+    Ok(kink_index(&s))
+}
+
+/// We expose the kink seed move for parity tests against `leap_support.py`.
+#[pyfunction]
+#[pyo3(signature = (p, q, old, new))]
+pub fn kink_seed_rs(
+    p: u64,
+    q: u64,
+    old: Option<usize>,
+    new: Option<usize>,
+) -> PyResult<(u64, u64)> {
+    if (p | q) & !SUPPORT_BITS != 0
+        || old.is_some_and(|k| k == 0 || k >= A)
+        || new.is_some_and(|k| k == 0 || k >= A)
+    {
+        return Err(PyValueError::new_err(
+            "kink seed needs actions 0..59 and kinks 1..59",
+        ));
+    }
+    Ok(kink_seed(p, q, old, new))
 }

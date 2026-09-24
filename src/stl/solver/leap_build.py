@@ -18,6 +18,9 @@ from stl.solver.leap_oracle import solve_lp, solve_stage
 
 POP = np.array([i.bit_count() for i in range(256)], np.uint8)
 TOTALS = {'H1': 4180634990, 'H2': 4188677815, 'REV': 1084020312}
+# The full sweep's residue path. Each option keeps the 1e-6 full-matrix gate.
+# benchmark_leap_replay selected one kink attempt; more attempts ran slower.
+RESIDUE = {'crash': True, 'kernel_native': True, 'kink_attempts': 1}
 
 
 def key_clock(key):
@@ -280,6 +283,11 @@ def sweep_key(key, bitmap, store, dth, *, min_clock=3420, full=False, fallback=N
     success_table = dth if success_key is None else store.load(success_key)
     full_pds = p.s0 if key[0] == 'REV' else np.arange(N, dtype=np.int32)
     states = failures = lp_solves = cached_failures = 0; kernel_seconds = lp_seconds = 0.
+    kernel_native = support_solves = 0
+    # The kernel solves H1 and H2 residue itself when the fallback asks for it.
+    # Its LP time then counts in kernel_seconds, so compare residue paths on
+    # sweep time; native_solves and native_seconds cover the Python path only.
+    options = fallback.kernel_options(key) if hasattr(fallback, 'kernel_options') else {}
     native_before = getattr(fallback, 'native_solves', 0)
     native_time_before = getattr(fallback, 'native_seconds', 0.)
     highs_before = getattr(fallback, 'highs_seconds', None)
@@ -304,8 +312,12 @@ def sweep_key(key, bitmap, store, dth, *, min_clock=3420, full=False, fallback=N
             out = np.empty(len(pcs)); kind = np.empty(len(pcs), np.uint8)
             tick = time.perf_counter()
             failed = sweep_key_rs(pcs, pds, success_table, fail_table, p.succ,
-                                  fail_col, p.rev, is_window(key), 1e-6, out, kind)
+                                  fail_col, p.rev, is_window(key), 1e-6, out, kind, **options)
             kernel_seconds += time.perf_counter()-tick
+            if options:
+                # Kinds 3, 4, and 5 are residue that the kernel certified itself.
+                solved = int(np.count_nonzero(kind == 3)); guessed = int(np.count_nonzero((kind == 4) | (kind == 5)))
+                kernel_native += solved; support_solves += guessed; failures += solved+guessed
             failures += failed
             if failed:
                 tick = time.perf_counter()
@@ -341,6 +353,7 @@ def sweep_key(key, bitmap, store, dth, *, min_clock=3420, full=False, fallback=N
             'lp_seconds': lp_seconds if highs_before is None else fallback.highs_seconds-highs_before,
             'native_solves': getattr(fallback, 'native_solves', 0)-native_before,
             'native_seconds': getattr(fallback, 'native_seconds', 0.)-native_time_before,
+            'kernel_native_solves': kernel_native, 'support_solves': support_solves,
             'lp_solves': lp_solves, 'cached_failures': cached_failures}
 
 
@@ -509,7 +522,7 @@ def run_full(dth_path, directory):
     identity = {'schema': 'stl-leap-values-v1', 'builder_sha256': builder_hash(),
                 'dth_sha256': file_hash(dth_path), 'saddle_tolerance': 1e-6,
                 'minimum_clock': 720, 'mode': 'full', 'python': sys.version, 'numpy': np.__version__,
-                'highs': highspy.Highs().version()}
+                'highs': highspy.Highs().version(), 'residue': RESIDUE}
     checkpoint_path = directory/'checkpoint.json'; store = TableStore(directory/'tables')
     records = []; files = {}; elapsed_base = 0.; prior_peak = 0
     if checkpoint_path.exists():
@@ -542,7 +555,7 @@ def run_full(dth_path, directory):
     if not files:
         files = {str(path.relative_to(directory)): file_hash(path) for path in reach_dir.glob('*')}
     done = {tuple(r['key']) for r in records}
-    with NativeFallback() as fallback:
+    with NativeFallback(**RESIDUE) as fallback:
         for key in sorted(reach.counts, key=key_clock, reverse=True):
             if key in done:
                 continue
@@ -574,6 +587,8 @@ def run_full(dth_path, directory):
               'keys': len(records), 'failures': sum(r['failures'] for r in records),
               'lp_solves': sum(r['lp_solves'] for r in records),
               'native_solves': sum(r.get('native_solves', 0) for r in records),
+              'kernel_native_solves': sum(r.get('kernel_native_solves', 0) for r in records),
+              'support_solves': sum(r.get('support_solves', 0) for r in records),
               'native_seconds': sum(r.get('native_seconds', 0.) for r in records),
               'fallback_seconds': sum(r.get('fallback_seconds', r['lp_seconds']) for r in records),
               'cached_failures': sum(r['cached_failures'] for r in records),

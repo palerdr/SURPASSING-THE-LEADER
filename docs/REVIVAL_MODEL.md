@@ -37,7 +37,7 @@ Two factors and one constant:
   linear in the *dose* and reaches zero exactly at the documentary lethal dose
   `q = 300`.
 - **`0.75^(t/60)` — prior damage, geometric.** Each accrued death-minute costs a
-  quarter of the remaining odds. Half-life 144.3 seconds.
+  quarter of the remaining odds. Half-life `60 ln 2 / ln(4/3) ≈ 144.6` seconds.
 
 `240 = 300 - 60` is the survivable ST span. It is the same constant in the
 denominator of the dose factor and in the eligibility bound `s + t <= 240`; both
@@ -103,7 +103,7 @@ rather than carried.
 The pre-freeze STL engine took four inputs: dose, TTD, referee CPR count, and
 per-player physicality. The unified engine instead folds physicality into the
 baseline and the CPR count into `t` — each death
-costs at least 60 seconds of TTD, so `t/60` is a lower bound on deaths — gives a
+costs at least 60 seconds of TTD, so `t/60` is an upper bound on deaths — gives a
 two-variable surface faithful to the earlier structure and portable to every
 formulation. Current STL, DTH, abstract, Rust, and OCaml engines all execute
 that same two-variable rule. This is a modeling bridge, not a claim that
@@ -238,7 +238,7 @@ artifacts.
 No numerical revival probability appears anywhere in the source material. The
 evidence fixes the capacity, the dose composition, the eligibility inequalities,
 and the sign of both effects. It does not fix `0.95`, `0.75`, the linear dose
-shape, or the 144.3-second half-life.
+shape, or the 144.6-second half-life.
 
 These are declared solver constants. They must be cited as such in any writeup,
 must be versioned together, and must never be described as documentary odds.

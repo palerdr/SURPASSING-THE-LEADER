@@ -18,7 +18,7 @@ from arena.session import validate_human_display_name
 from arena.web.app import DEFAULT_WEBCLIENT_DIST, SeriesConfig, SessionConfig, create_app
 from stl.engine.game import OPENING_START_CLOCK
 
-# Perfect and PM Hal are pure-DTH policies with no action-61 contract.
+# The translated Perfect variant adds a canonical leap fallback.
 PURE_DTH_ONLY = frozenset({"perfect-hal", "pm-hal"})
 
 
@@ -73,7 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.human_name = validate_human_display_name(args.human_name)
-    if args.hal_agent in PURE_DTH_ONLY and not args.pure_dth:
+    translated = args.hal_agent == "perfect-hal" and args.perfect_hal_model == "translated-v1"
+    if args.hal_agent in PURE_DTH_ONLY and not args.pure_dth and not translated:
         raise SystemExit(
             f"{args.hal_agent} is a pure-DTH policy; pass --pure-dth so action "
             "61 is impossible"

@@ -16,6 +16,8 @@
   `src/dth_ocaml/` are peer projects. They must not import one another.
   `src/arena/` is a neutral play surface: it may consume their public
   interfaces, but they must not import it or one another.
+- `src/formal/` is a Lean project that machine-checks the solvers' mathematics.
+  It imports no other project, and no project imports it.
 - `src/crates/` is a shared Rust workspace; Python remains behavioral authority
   until an explicit parity contract says otherwise.
 - `src/arena/webclient/` is the TypeScript browser client and `src/arena/web/`
@@ -72,6 +74,7 @@ cargo test --workspace
 npm --prefix src/arena/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
+lake -d src/formal build
 ```
 
 The typecheck needs `npm --prefix src/arena/webclient install` once. The browser

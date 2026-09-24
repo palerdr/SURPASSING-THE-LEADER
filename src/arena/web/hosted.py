@@ -65,6 +65,11 @@ class SessionStore(Protocol):
     async def compare_set(self, key: str, old: str | None, new: str) -> bool: ...
 
 
+class SessionMemory(Protocol):
+    def dump(self, app: FastAPI) -> str: ...
+    def restore(self, app: FastAPI, memory: str) -> None: ...
+
+
 class RedisSessionStore:
     """Use an atomic Redis compare-and-set to serialize competing mutations."""
 
@@ -167,14 +172,17 @@ def create_hosted_app(
     version: str,
     secure_cookie: bool = True,
     ledger: GameLedger | None = None,
+    memory: SessionMemory | None = None,
+    policy_label: str = "certified-dth",
 ):
     """Replay accepted commands with private seeds; persist before revealing.
 
     A record is one game: its seeds, the sequence its session starts at, and
     the commands accepted since. A restart and a next game each replace the
     record with a fresh one and an empty command list, so replay cost follows
-    the current game. The hosted Hal is the exact policy and keeps no memory,
-    so a game owes nothing to the games before it.
+    the current game. An optional memory adapter checkpoints opponent evidence
+    at each game boundary. A new worker restores that evidence before replay.
+    The checkpoint and accepted commands share one compare-and-set record.
 
     A process keeps the game it last served beside the stored text that game
     matches. A request whose stored text still matches plays on that game and
@@ -210,7 +218,7 @@ def create_hosted_app(
 
     @app.get("/api/health")
     async def health():
-        return {"status": "ok", "policy": "certified-dth", "version": version}
+        return {"status": "ok", "policy": policy_label, "version": version}
 
     async def board(player_id: str | None) -> JSONResponse:
         # An unknown player reads the same public standings with no row marked.
@@ -373,6 +381,8 @@ def create_hosted_app(
                     record["policy_seed"],
                     record.get("sequence_start", 0),
                 )
+                if memory is not None and record.get("opponent_memory") is not None:
+                    memory.restore(inner, record["opponent_memory"])
                 pending = record["events"]
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=inner), base_url="http://arena"
@@ -405,6 +415,7 @@ def create_hosted_app(
             restarted = snapshot is not None and route_path == "/api/session/restart"
             next_game = snapshot is not None and mutation and route_path == "/api/session"
             if restarted or next_game:
+                checkpoint = memory.dump(inner) if memory is not None else None
                 # The old record validated this request. Open the new game as
                 # its own record: new seeds, so a reload cannot rehearse Hal's
                 # samples, and the next sequence number, so a request from
@@ -417,9 +428,13 @@ def create_hosted_app(
                     "sequence_start": int(response.json()["sequence"]),
                     "events": [],
                 }
+                if checkpoint is not None:
+                    record["opponent_memory"] = checkpoint
                 fresh = factory(
                     record["game_seed"], record["policy_seed"], record["sequence_start"]
                 )
+                if checkpoint is not None:
+                    memory.restore(fresh, checkpoint)
                 async with httpx.AsyncClient(
                     transport=httpx.ASGITransport(app=fresh), base_url="http://arena"
                 ) as client:

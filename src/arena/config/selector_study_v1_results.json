@@ -1,0 +1,1453 @@
+{
+  "schema": "arena-selector-study-evidence-v1",
+  "decision": "Retain the frozen attention ensemble as a research artifact. Replicate the learned-selector gain over translated Hal. Do not promote a neural deployment provider or claim superiority over the small selector.",
+  "scope": "Research-only pure DTH. No human win-rate claim, deployment change, or action-61 optimization.",
+  "interpretation": {
+    "primary": "The validation-selected attention ensemble gained 1.52 percentage points over translated Hal; the paired 95% interval is [0.49, 2.59].",
+    "capacity": "The 22-times-larger residual MLP won nine more games than the retrained small MLP. Its paired interval includes zero. Added capacity has no resolved win-rate advantage in this study.",
+    "ablations": "Each feature-removal contrast includes zero. Full attention also has no resolved advantage over a static correction or one attention seed. Absence of a resolved difference does not prove equivalence.",
+    "prediction": "Attention has the lowest observed common-corpus next-action NLL among these variants. Better NLL does not ensure more game wins.",
+    "selection": "Attention won validation. We kept that choice after the larger MLP and no-errors control scored more holdout wins.",
+    "uncertainty": "Identity-bootstrap intervals are unadjusted. Architecture and ablation contrasts are exploratory; family definitions appeared in prior experiments. No human win-rate claim.",
+    "masks": "Ablations remove explicit gate inputs. Statistical experts retain public history and indirect context. The no-prior control removes both inherited gate weights and their direct logit path.",
+    "deployment": "Existing variants and the hosted deployment candidate remain intact. This study does not establish a neural provider with persistent memory recovery or canonical action-61 handling.",
+    "latency": "Mean of within-session p95 decision timings on the local CPU. This excludes environment transitions and hosted request overhead."
+  },
+  "selected": "attention",
+  "training": {
+    "decisions": 43845,
+    "validation_decisions": 9483,
+    "training_seeds": [
+      210,
+      211,
+      212
+    ],
+    "checkpoints": 24,
+    "selected_epochs": {
+      "small": [
+        11,
+        12,
+        12
+      ],
+      "wide": [
+        7,
+        9,
+        10
+      ],
+      "attention": [
+        6,
+        9,
+        3
+      ],
+      "no_errors": [
+        12,
+        9,
+        10
+      ],
+      "no_context": [
+        5,
+        9,
+        11
+      ],
+      "no_prior": [
+        11,
+        10,
+        11
+      ],
+      "no_shapes": [
+        11,
+        9,
+        3
+      ],
+      "static": [
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "validation_selection": {
+    "selected": "attention",
+    "scores": {
+      "small": {
+        "score": 0.9439102564102564,
+        "nll": 2.8155922889709473,
+        "parameters_per_member": 7256
+      },
+      "wide": {
+        "score": 0.9487179487179487,
+        "nll": 2.8075506687164307,
+        "parameters_per_member": 161560
+      },
+      "attention": {
+        "score": 0.9615384615384616,
+        "nll": 2.786489963531494,
+        "parameters_per_member": 24001
+      }
+    }
+  },
+  "holdout": {
+    "identities": 608,
+    "games_per_variant": 2432,
+    "variants": 13,
+    "total_games": 31616,
+    "prediction_decisions": 19172
+  },
+  "parameter_counts": {
+    "small": 21768,
+    "wide": 484680,
+    "attention": 72003,
+    "no_errors": 72003,
+    "no_context": 72003,
+    "no_prior": 72003,
+    "no_shapes": 72003,
+    "static": 72,
+    "pilot": 7256,
+    "untrained": 7256,
+    "single_seed": 24001
+  },
+  "summary": {
+    "translated": {
+      "games": 2432,
+      "wins": 2198,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9037828947368421,
+        "interval_95": [
+          0.8889802631578947,
+          0.9177631578947368
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.22893112247976732,
+      "by_seat": {
+        "Hal": 0.9259868421052632,
+        "Baku": 0.881578947368421
+      }
+    },
+    "old": {
+      "games": 2432,
+      "wins": 2123,
+      "stopped": 0,
+      "score": {
+        "mean": 0.8729440789473685,
+        "interval_95": [
+          0.8569078947368421,
+          0.8889802631578947
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": -0.030838815789473683,
+        "interval_95": [
+          -0.041529605263157895,
+          -0.020970394736842105
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": -0.046052631578947366,
+        "interval_95": [
+          -0.0625,
+          -0.03125
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.32738274254179006,
+      "by_seat": {
+        "Hal": 0.8947368421052632,
+        "Baku": 0.8511513157894737
+      }
+    },
+    "small": {
+      "games": 2432,
+      "wins": 2232,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9177631578947368,
+        "interval_95": [
+          0.9041940789473685,
+          0.930921052631579
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.013980263157894737,
+        "interval_95": [
+          0.003700657894736842,
+          0.02425986842105263
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.009046052631578948,
+        "interval_95": [
+          -0.0024671052631578946,
+          0.02055921052631579
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.3152969966609625,
+      "by_seat": {
+        "Hal": 0.9292763157894737,
+        "Baku": 0.90625
+      }
+    },
+    "wide": {
+      "games": 2432,
+      "wins": 2241,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9214638157894737,
+        "interval_95": [
+          0.9087171052631579,
+          0.9337993421052632
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.01768092105263158,
+        "interval_95": [
+          0.0069901315789473685,
+          0.02837171052631579
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.012335526315789474,
+        "interval_95": [
+          0.0,
+          0.024671052631578948
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.36752216760521006,
+      "by_seat": {
+        "Hal": 0.9342105263157895,
+        "Baku": 0.9087171052631579
+      }
+    },
+    "attention": {
+      "games": 2432,
+      "wins": 2235,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9189967105263158,
+        "interval_95": [
+          0.90625,
+          0.9321546052631579
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.015213815789473685,
+        "interval_95": [
+          0.004934210526315789,
+          0.025904605263157895
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.012335526315789474,
+        "interval_95": [
+          0.0008223684210526315,
+          0.023848684210526317
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.5073759894577577,
+      "by_seat": {
+        "Hal": 0.9342105263157895,
+        "Baku": 0.9037828947368421
+      }
+    },
+    "no_errors": {
+      "games": 2432,
+      "wins": 2247,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9239309210526315,
+        "interval_95": [
+          0.9107730263157895,
+          0.936266447368421
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.020148026315789474,
+        "interval_95": [
+          0.009457236842105263,
+          0.030838815789473683
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.013980263157894737,
+        "interval_95": [
+          0.0008223684210526315,
+          0.027138157894736843
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.5104717655022365,
+      "by_seat": {
+        "Hal": 0.9416118421052632,
+        "Baku": 0.90625
+      }
+    },
+    "no_context": {
+      "games": 2432,
+      "wins": 2234,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9185855263157895,
+        "interval_95": [
+          0.905016447368421,
+          0.9317434210526315
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.014802631578947368,
+        "interval_95": [
+          0.004523026315789474,
+          0.025082236842105265
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.013157894736842105,
+        "interval_95": [
+          0.001644736842105263,
+          0.024671052631578948
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.5077938767690763,
+      "by_seat": {
+        "Hal": 0.9350328947368421,
+        "Baku": 0.9021381578947368
+      }
+    },
+    "no_prior": {
+      "games": 2432,
+      "wins": 2236,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9194078947368421,
+        "interval_95": [
+          0.9058388157894737,
+          0.9325657894736842
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.015625,
+        "interval_95": [
+          0.004934210526315789,
+          0.02631578947368421
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01069078947368421,
+        "interval_95": [
+          -0.001644736842105263,
+          0.023026315789473683
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.5086076845576539,
+      "by_seat": {
+        "Hal": 0.9333881578947368,
+        "Baku": 0.9054276315789473
+      }
+    },
+    "no_shapes": {
+      "games": 2432,
+      "wins": 2232,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9177631578947368,
+        "interval_95": [
+          0.9046052631578947,
+          0.930921052631579
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.013980263157894737,
+        "interval_95": [
+          0.003289473684210526,
+          0.02425986842105263
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.011513157894736841,
+        "interval_95": [
+          0.0,
+          0.023026315789473683
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.5070061130984533,
+      "by_seat": {
+        "Hal": 0.9317434210526315,
+        "Baku": 0.9037828947368421
+      }
+    },
+    "static": {
+      "games": 2432,
+      "wins": 2218,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9120065789473685,
+        "interval_95": [
+          0.8988486842105263,
+          0.9247532894736842
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.008223684210526315,
+        "interval_95": [
+          0.0012335526315789473,
+          0.015625
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.004111842105263158,
+        "interval_95": [
+          -0.005756578947368421,
+          0.013980263157894737
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.27709167586037536,
+      "by_seat": {
+        "Hal": 0.928453947368421,
+        "Baku": 0.8955592105263158
+      }
+    },
+    "pilot": {
+      "games": 2432,
+      "wins": 2225,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9148848684210527,
+        "interval_95": [
+          0.9013157894736842,
+          0.9280427631578947
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.011101973684210526,
+        "interval_95": [
+          0.0008223684210526315,
+          0.02138157894736842
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01069078947368421,
+        "interval_95": [
+          -0.001644736842105263,
+          0.023026315789473683
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.269483949810628,
+      "by_seat": {
+        "Hal": 0.9300986842105263,
+        "Baku": 0.899671052631579
+      }
+    },
+    "untrained": {
+      "games": 2432,
+      "wins": 2198,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9037828947368421,
+        "interval_95": [
+          0.8889802631578947,
+          0.9177631578947368
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.26950130247170917,
+      "by_seat": {
+        "Hal": 0.9259868421052632,
+        "Baku": 0.881578947368421
+      }
+    },
+    "single_seed": {
+      "games": 2432,
+      "wins": 2235,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9189967105263158,
+        "interval_95": [
+          0.9058388157894737,
+          0.9321546052631579
+        ],
+        "identities": 608
+      },
+      "paired_vs_baseline": {
+        "mean": 0.015213815789473685,
+        "interval_95": [
+          0.004523026315789474,
+          0.025904605263157895
+        ],
+        "identities": 608
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.005756578947368421,
+        "interval_95": [
+          -0.006578947368421052,
+          0.018092105263157895
+        ],
+        "identities": 608
+      },
+      "mean_session_p95_ms": 0.34514722967861944,
+      "by_seat": {
+        "Hal": 0.9358552631578947,
+        "Baku": 0.9021381578947368
+      }
+    }
+  },
+  "prediction": {
+    "small": {
+      "nll": {
+        "mean": 2.8786552735653363,
+        "interval_95": [
+          2.770738722735673,
+          2.9867112832290954
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.28562284430096807,
+        "interval_95": [
+          -0.31403486943791475,
+          -0.25801898285342184
+        ],
+        "identities": 608
+      }
+    },
+    "wide": {
+      "nll": {
+        "mean": 2.9031225703901757,
+        "interval_95": [
+          2.798329642801668,
+          3.007325818691721
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.26115554786826434,
+        "interval_95": [
+          -0.30034329982927854,
+          -0.22186735470436122
+        ],
+        "identities": 608
+      }
+    },
+    "attention": {
+      "nll": {
+        "mean": 2.8634212038871882,
+        "interval_95": [
+          2.755767992037152,
+          2.9709333471469828
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.30085691397911624,
+        "interval_95": [
+          -0.3306389986120753,
+          -0.2717728650803972
+        ],
+        "identities": 608
+      }
+    },
+    "no_errors": {
+      "nll": {
+        "mean": 2.898509458001507,
+        "interval_95": [
+          2.7943066930349327,
+          3.003159540973751
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.2657686598157804,
+        "interval_95": [
+          -0.300251455241079,
+          -0.23133809383051765
+        ],
+        "identities": 608
+      }
+    },
+    "no_context": {
+      "nll": {
+        "mean": 2.8772571525095323,
+        "interval_95": [
+          2.76935983629113,
+          2.9839754388594115
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.2870209653567719,
+        "interval_95": [
+          -0.3171688351234862,
+          -0.2574872727083091
+        ],
+        "identities": 608
+      }
+    },
+    "no_prior": {
+      "nll": {
+        "mean": 2.9017455121747364,
+        "interval_95": [
+          2.798598720487452,
+          3.005664501194597
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.262532605397466,
+        "interval_95": [
+          -0.30076916511538193,
+          -0.22444966876830322
+        ],
+        "identities": 608
+      }
+    },
+    "no_shapes": {
+      "nll": {
+        "mean": 2.8743592503137494,
+        "interval_95": [
+          2.766660031570906,
+          2.9815229811442183
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.2899188675525549,
+        "interval_95": [
+          -0.32052947684485267,
+          -0.2598288612593407
+        ],
+        "identities": 608
+      }
+    },
+    "static": {
+      "nll": {
+        "mean": 3.091747452676492,
+        "interval_95": [
+          2.9767832789055415,
+          3.2056993789358166
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.07253066518981206,
+        "interval_95": [
+          -0.08333983863581365,
+          -0.06175718542225169
+        ],
+        "identities": 608
+      }
+    },
+    "pilot": {
+      "nll": {
+        "mean": 2.8862589534470127,
+        "interval_95": [
+          2.7774560766110787,
+          2.9946174177040934
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.2780191644192918,
+        "interval_95": [
+          -0.3037091372614285,
+          -0.25303152788148603
+        ],
+        "identities": 608
+      }
+    },
+    "untrained": {
+      "nll": {
+        "mean": 3.164278063298154,
+        "interval_95": [
+          3.04341858815751,
+          3.2843240632424373
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -5.456815032582534e-08,
+        "interval_95": [
+          -7.093982084801322e-08,
+          -3.8073324647388966e-08
+        ],
+        "identities": 608
+      }
+    },
+    "single_seed": {
+      "nll": {
+        "mean": 2.882130753690083,
+        "interval_95": [
+          2.7748270385482003,
+          2.989324877099256
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": -0.2821473641762216,
+        "interval_95": [
+          -0.3140186431787075,
+          -0.2507129948053166
+        ],
+        "identities": 608
+      }
+    },
+    "translated": {
+      "nll": {
+        "mean": 3.164278117866304,
+        "interval_95": [
+          3.0434186438227218,
+          3.2843241184876346
+        ],
+        "identities": 608
+      },
+      "paired_vs_translated": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 608
+      }
+    }
+  },
+  "selected_minus_controls": {
+    "no_errors": {
+      "score": {
+        "mean": -0.004934210526315789,
+        "interval_95": [
+          -0.012335526315789474,
+          0.0024671052631578946
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": -0.001644736842105263,
+        "interval_95": [
+          -0.01069078947368421,
+          0.007401315789473684
+        ],
+        "identities": 608
+      }
+    },
+    "no_context": {
+      "score": {
+        "mean": 0.00041118421052631577,
+        "interval_95": [
+          -0.006578947368421052,
+          0.007401315789473684
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": -0.0008223684210526315,
+        "interval_95": [
+          -0.009046052631578948,
+          0.007401315789473684
+        ],
+        "identities": 608
+      }
+    },
+    "no_prior": {
+      "score": {
+        "mean": -0.00041118421052631577,
+        "interval_95": [
+          -0.007401315789473684,
+          0.006578947368421052
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.001644736842105263,
+        "interval_95": [
+          -0.006578947368421052,
+          0.009868421052631578
+        ],
+        "identities": 608
+      }
+    },
+    "no_shapes": {
+      "score": {
+        "mean": 0.0012335526315789473,
+        "interval_95": [
+          -0.005756578947368421,
+          0.008634868421052632
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.0008223684210526315,
+        "interval_95": [
+          -0.008223684210526315,
+          0.009868421052631578
+        ],
+        "identities": 608
+      }
+    },
+    "static": {
+      "score": {
+        "mean": 0.0069901315789473685,
+        "interval_95": [
+          -0.003289473684210526,
+          0.017269736842105265
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.008223684210526315,
+        "interval_95": [
+          -0.004111842105263158,
+          0.02055921052631579
+        ],
+        "identities": 608
+      }
+    },
+    "untrained": {
+      "score": {
+        "mean": 0.015213815789473685,
+        "interval_95": [
+          0.004934210526315789,
+          0.025904605263157895
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.012335526315789474,
+        "interval_95": [
+          0.0008223684210526315,
+          0.023848684210526317
+        ],
+        "identities": 608
+      }
+    },
+    "pilot": {
+      "score": {
+        "mean": 0.004111842105263158,
+        "interval_95": [
+          -0.003700657894736842,
+          0.011924342105263159
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.001644736842105263,
+        "interval_95": [
+          -0.008223684210526315,
+          0.011513157894736841
+        ],
+        "identities": 608
+      }
+    },
+    "single_seed": {
+      "score": {
+        "mean": 0.0,
+        "interval_95": [
+          -0.006167763157894737,
+          0.006578947368421052
+        ],
+        "identities": 608
+      },
+      "late_score": {
+        "mean": 0.006578947368421052,
+        "interval_95": [
+          -0.0008223684210526315,
+          0.013980263157894737
+        ],
+        "identities": 608
+      }
+    }
+  },
+  "architecture_contrasts": {
+    "wide_minus_small": {
+      "mean": 0.003700657894736842,
+      "interval_95": [
+        -0.003700657894736842,
+        0.011101973684210526
+      ],
+      "identities": 608
+    },
+    "attention_minus_small": {
+      "mean": 0.0012335526315789473,
+      "interval_95": [
+        -0.006167763157894737,
+        0.008634868421052632
+      ],
+      "identities": 608
+    },
+    "attention_minus_wide": {
+      "mean": -0.0024671052631578946,
+      "interval_95": [
+        -0.011101973684210526,
+        0.006167763157894737
+      ],
+      "identities": 608
+    },
+    "attention_minus_old": {
+      "mean": 0.046052631578947366,
+      "interval_95": [
+        0.03289473684210526,
+        0.060032894736842105
+      ],
+      "identities": 608
+    }
+  },
+  "excluded_family_summary": {
+    "translated": {
+      "games": 512,
+      "wins": 489,
+      "stopped": 0,
+      "score": {
+        "mean": 0.955078125,
+        "interval_95": [
+          0.935546875,
+          0.97265625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.22082709479036566,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.9375
+      }
+    },
+    "old": {
+      "games": 512,
+      "wins": 480,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9375,
+        "interval_95": [
+          0.9140625,
+          0.958984375
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": -0.017578125,
+        "interval_95": [
+          -0.037109375,
+          0.0
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": -0.03125,
+        "interval_95": [
+          -0.0625,
+          0.0
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.3173005310145527,
+      "by_seat": {
+        "Hal": 0.9609375,
+        "Baku": 0.9140625
+      }
+    },
+    "small": {
+      "games": 512,
+      "wins": 494,
+      "stopped": 0,
+      "score": {
+        "mean": 0.96484375,
+        "interval_95": [
+          0.94921875,
+          0.978515625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.009765625,
+        "interval_95": [
+          -0.0078125,
+          0.02734375
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.015625,
+        "interval_95": [
+          0.0,
+          0.03515625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.2973506940634252,
+      "by_seat": {
+        "Hal": 0.96484375,
+        "Baku": 0.96484375
+      }
+    },
+    "wide": {
+      "games": 512,
+      "wins": 492,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9609375,
+        "interval_95": [
+          0.943359375,
+          0.978515625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.005859375,
+        "interval_95": [
+          -0.009765625,
+          0.021484375
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.015625,
+        "interval_95": [
+          0.0,
+          0.03515625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.3466750970801513,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.94921875
+      }
+    },
+    "attention": {
+      "games": 512,
+      "wins": 495,
+      "stopped": 0,
+      "score": {
+        "mean": 0.966796875,
+        "interval_95": [
+          0.951171875,
+          0.98046875
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.01171875,
+        "interval_95": [
+          -0.005859375,
+          0.029296875
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01953125,
+        "interval_95": [
+          0.00390625,
+          0.0390625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.4845580216624512,
+      "by_seat": {
+        "Hal": 0.96875,
+        "Baku": 0.96484375
+      }
+    },
+    "no_errors": {
+      "games": 512,
+      "wins": 496,
+      "stopped": 0,
+      "score": {
+        "mean": 0.96875,
+        "interval_95": [
+          0.953125,
+          0.982421875
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.013671875,
+        "interval_95": [
+          -0.0078125,
+          0.033203125
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.015625,
+        "interval_95": [
+          -0.00390625,
+          0.03515625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.48400811283499934,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.96484375
+      }
+    },
+    "no_context": {
+      "games": 512,
+      "wins": 492,
+      "stopped": 0,
+      "score": {
+        "mean": 0.9609375,
+        "interval_95": [
+          0.943359375,
+          0.9765625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.005859375,
+        "interval_95": [
+          -0.0078125,
+          0.01953125
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0078125,
+        "interval_95": [
+          -0.0078125,
+          0.0234375
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.4836347201035096,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.94921875
+      }
+    },
+    "no_prior": {
+      "games": 512,
+      "wins": 489,
+      "stopped": 0,
+      "score": {
+        "mean": 0.955078125,
+        "interval_95": [
+          0.9375,
+          0.970703125
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          -0.021484375,
+          0.021484375
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01953125,
+        "interval_95": [
+          0.0,
+          0.0390625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.49385468619220774,
+      "by_seat": {
+        "Hal": 0.953125,
+        "Baku": 0.95703125
+      }
+    },
+    "no_shapes": {
+      "games": 512,
+      "wins": 493,
+      "stopped": 0,
+      "score": {
+        "mean": 0.962890625,
+        "interval_95": [
+          0.947265625,
+          0.978515625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0078125,
+        "interval_95": [
+          -0.009765625,
+          0.025390625
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01953125,
+        "interval_95": [
+          0.00390625,
+          0.0390625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.48692096338527335,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.953125
+      }
+    },
+    "static": {
+      "games": 512,
+      "wins": 491,
+      "stopped": 0,
+      "score": {
+        "mean": 0.958984375,
+        "interval_95": [
+          0.94140625,
+          0.974609375
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.00390625,
+        "interval_95": [
+          -0.005859375,
+          0.015625
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          -0.01953125,
+          0.01953125
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.2618090653413674,
+      "by_seat": {
+        "Hal": 0.9765625,
+        "Baku": 0.94140625
+      }
+    },
+    "pilot": {
+      "games": 512,
+      "wins": 487,
+      "stopped": 0,
+      "score": {
+        "mean": 0.951171875,
+        "interval_95": [
+          0.93359375,
+          0.96875
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": -0.00390625,
+        "interval_95": [
+          -0.01953125,
+          0.01171875
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.01171875,
+        "interval_95": [
+          -0.0078125,
+          0.03125
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.2577148968612164,
+      "by_seat": {
+        "Hal": 0.95703125,
+        "Baku": 0.9453125
+      }
+    },
+    "untrained": {
+      "games": 512,
+      "wins": 489,
+      "stopped": 0,
+      "score": {
+        "mean": 0.955078125,
+        "interval_95": [
+          0.935546875,
+          0.97265625
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.0,
+        "interval_95": [
+          0.0,
+          0.0
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.25294023544120137,
+      "by_seat": {
+        "Hal": 0.97265625,
+        "Baku": 0.9375
+      }
+    },
+    "single_seed": {
+      "games": 512,
+      "wins": 495,
+      "stopped": 0,
+      "score": {
+        "mean": 0.966796875,
+        "interval_95": [
+          0.951171875,
+          0.98046875
+        ],
+        "identities": 128
+      },
+      "paired_vs_baseline": {
+        "mean": 0.01171875,
+        "interval_95": [
+          -0.005859375,
+          0.03125
+        ],
+        "identities": 128
+      },
+      "late_paired_vs_baseline": {
+        "mean": 0.015625,
+        "interval_95": [
+          0.0,
+          0.03515625
+        ],
+        "identities": 128
+      },
+      "mean_session_p95_ms": 0.32585934491180524,
+      "by_seat": {
+        "Hal": 0.96875,
+        "Baku": 0.96484375
+      }
+    }
+  },
+  "untrained_matches_translated_game_records": true,
+  "verification": {
+    "arena_and_architecture_tests_passed": 431,
+    "new_tests_passed": 17,
+    "frozen_hashes_verified_after_evaluation": true,
+    "graphify_updated": true,
+    "plots_rendered_and_inspected": true
+  },
+  "source_sha256": {
+    "src/arena/policies/selector_study.py": "537206b80c7028f4a38b1e0a4236997f9de99c543d6df70bce31beb2e42a93c8",
+    "src/arena/policies/run_selector_study.py": "c95a894e5d90ee7314acb5565282981f6e290058a32965ea3a9e3b8e4f7e286b",
+    "src/arena/policies/plot_selector_study.py": "e356a2158748eca7052e332d9d0bd98ed4b8e003eb448419afc3ceb9070d0f63",
+    "src/arena/tests/test_selector_study.py": "853d0c30599dd1fb008f5210631de1a83912714b731ada82d6c3ce6233749a0d"
+  },
+  "artifacts": {
+    "outputs/selector-study-v1/ablation.png": "65de0465c0f1ef4736abb87ace52b31f88487b9317f369259b75bc52681b3eb1",
+    "outputs/selector-study-v1/ablation.svg": "ebec1ea27d99899d79abc57970a050768d065e8f7c8a4894d2b56fa54cce2af7",
+    "outputs/selector-study-v1/architecture-selection.json": "ce26e5bda8ff1a58e1a7cc0818322f74357d3028524e49f729d6686a12d8abe2",
+    "outputs/selector-study-v1/attention-no_context-210.pt": "b1fc3a2e6ea7585a3bc78fa3c883174ee4da160648b437f14ea94f9ca4429d3b",
+    "outputs/selector-study-v1/attention-no_context-211.pt": "de9824e13b80968fe76e0efe41f322dff280dac9a890b6e863f0396ff26d3de1",
+    "outputs/selector-study-v1/attention-no_context-212.pt": "4da5856d786daaea22bb65c8f45be04749a494fba527af924a4f94a0d0ca40a9",
+    "outputs/selector-study-v1/attention-no_errors-210.pt": "08924a083be343058a14e70d8ae9b06e479c714c2e85ec2f0fe33ddb40495be5",
+    "outputs/selector-study-v1/attention-no_errors-211.pt": "f50f7e9964e0e4227a64f661cadcf0be5b3162e01194bc788bcdc183ff8ac05a",
+    "outputs/selector-study-v1/attention-no_errors-212.pt": "7e6c387b6015d016ac3ac00440444ab2fc8395ad5c6a0725fc038e4d315e83d5",
+    "outputs/selector-study-v1/attention-no_prior-210.pt": "2f47d6abffec6f334761a2c1998448304c5974745bde34b2dfc5c6c57e0f157f",
+    "outputs/selector-study-v1/attention-no_prior-211.pt": "d6484446d3dd92c7dfde2f04f7592261ae2fc423ca25a8cbf3c02c659fcba11c",
+    "outputs/selector-study-v1/attention-no_prior-212.pt": "ea4da0ff5150ddc6f76b12aedc18e0287c20547c8f4a682027fee403941b12d7",
+    "outputs/selector-study-v1/attention-no_shapes-210.pt": "54bb8525c2864ecf51524f31fd22719283be796e6f0d8d26a5ba55e99f3cc0ba",
+    "outputs/selector-study-v1/attention-no_shapes-211.pt": "4a4143e58464186acd875123888bf00c752ee05e734913b3c0f26e7b69362542",
+    "outputs/selector-study-v1/attention-no_shapes-212.pt": "7353338815faf78fc648e527abf813f1166c04803f5ac4d553a5d458d9635d3b",
+    "outputs/selector-study-v1/attention-none-210.pt": "c7db777ed705fc1ad58b87030d64a43686a6cd9d56aaee3a5778780ba9159d21",
+    "outputs/selector-study-v1/attention-none-211.pt": "f0ecf7e506b2df333bc702bf459a138d4791ff261fab60bbefbab210c505a8f4",
+    "outputs/selector-study-v1/attention-none-212.pt": "a6047a63c28d7f9f57f826e3febe6a59a39df722704118dce70275cee9405ba2",
+    "outputs/selector-study-v1/evaluate.log": "476f359be52604d7ebdc5f38950f48ee6565bfefbc95593bf1682980840b8156",
+    "outputs/selector-study-v1/evaluation-start.json": "0ee384e112326aafc19ac1a4ed03b31a95ed49cfea6be3bb0fb5f1c78c9d2e77",
+    "outputs/selector-study-v1/expert-weights.png": "b16f01c79d9b5b1c1a0d3cfc177d4968264bb4e09305e9e1807d2339eb118b62",
+    "outputs/selector-study-v1/expert-weights.svg": "64d192c5a0c4892e2ec34c33bd9749d4db9d8e5aead1b32e6e3dc2c3f029a3a6",
+    "outputs/selector-study-v1/freeze.json": "1123195bcbdb272c23b50067255da7aa1c6362ec0e840de347504b5d1dd9cafb",
+    "outputs/selector-study-v1/learning-curves.png": "c9528b27d2a4c2bbeb27073c65e5b8de4c2e343edf7735998d0fba0dd4d42f0c",
+    "outputs/selector-study-v1/learning-curves.svg": "7a0c6a8f3a3afbb7742899cbfe1a3a448cb3340ea33fe2f3c8d124a76444cf12",
+    "outputs/selector-study-v1/protocol.json": "286a0567f20255073bbcca27cb3df829a68e47c3e3492dc0add603caf9e63039",
+    "outputs/selector-study-v1/results.json": "c6553f770c64367b2d3f065fc29e5865572268681641362e26886cb68b2311ed",
+    "outputs/selector-study-v1/small-none-210.pt": "731394209804c989e0e6168391d7f8df9376838879f8040b0a9d4ed7183044c9",
+    "outputs/selector-study-v1/small-none-211.pt": "95c1e906cc10d1cbddf5d2cf2289791a8b4b5f361874e06eaeb6cbd49aae6818",
+    "outputs/selector-study-v1/small-none-212.pt": "d338d5cdbdc253876a494ede4c0ecd24d34cfd209705ae0f2bb236e298d4799f",
+    "outputs/selector-study-v1/static-none-210.pt": "a61eaf31197768c670c6218b29c760a7d07a4cd7a24198cf5d62d83cfec601c7",
+    "outputs/selector-study-v1/static-none-211.pt": "b35be4af5ade7be6df48de6a08701064b390441a03d08f8891d2c066c926ddd2",
+    "outputs/selector-study-v1/static-none-212.pt": "95366b6669463b2e96379230af28d24c0c2a287583c8f954768eb00244f34dbc",
+    "outputs/selector-study-v1/supplementary-contrasts.json": "5d94a925bda6a96705da3b1c840712a26b6ba67ef44f1c935591682054bae552",
+    "outputs/selector-study-v1/test.npz": "649520da78b9a24193d95f2f3c7b34082a621c304a9c2f675f1df2de3c8b8e93",
+    "outputs/selector-study-v1/train.log": "296e203c885d8c5a141e95a2bf35c714595837f6dea537ba1b3ced4c3c30a6eb",
+    "outputs/selector-study-v1/train.npz": "658724d645556aa42a9b3e490b7f896116d4afd2bd26610b162ea1a68776f2a4",
+    "outputs/selector-study-v1/training.json": "abbe9550893f3e9a1329703aab0a4b40dc4dba9c21295a3d313e076322766d14",
+    "outputs/selector-study-v1/validation.npz": "2666071644c89e8fbda4cf20609f591cb91a6843df6df44e232959a28348620e",
+    "outputs/selector-study-v1/wide-none-210.pt": "e4fc237eeb93fffc844aeafe59823b6c8ccca633360840cd5f78539ed83836dd",
+    "outputs/selector-study-v1/wide-none-211.pt": "06206539589492b45c74dfa776cd24ac971c54fceae2ed44352ac6fb142344cf",
+    "outputs/selector-study-v1/wide-none-212.pt": "90c0e65c79e970bbf3469542ff09faa082cee9807db64b72b5fab289e311bf0a"
+  }
+}
