@@ -1,11 +1,14 @@
 # Hal research
 
 This document holds the Hal research narrative: how each Hal provider works
-and what its training and evaluation found. The text comes from
-`src/arena/README.md` without edits, except for links, which now resolve
-from this directory. A path in a code span, such as
+and what its training and evaluation found. We copied the text from
+`src/arena/README.md` and changed two things: the links, which now resolve
+from this directory, and the paths and commands of the files that moved to
+`src/hal_lab/`. A path in a code span that starts with `config/`, such as
 `config/translated_hal_v1_selection.json`, names a file under `src/arena/`.
-Each command names the module that runs it today.
+Each command names the module that runs it today, and a reproduction command
+writes its new run under `src/hal_lab/outputs/`.
+`src/hal_lab/evidence/PATH_MAP.toml` gives the earlier path of each moved file.
 [`src/hal_lab/README.md`](../README.md) holds the rules for this evidence.
 
 ## Exact, Adaptive, Exploit, Aggro, Perfect, and PM Hal
@@ -134,7 +137,7 @@ The canonical adapter uses DTH equilibrium during leap turns and leaves Baku's
 Dropper action 61 legal. It skips those reveals in the 60-action model and
 clears sequence references while retaining prior evidence. It makes no
 action-61 optimization claim. The generated reports live under
-`outputs/translated-hal-v1/`; `config/translated_hal_v1_results.json` binds
+`outputs/translated-hal-v1/`; `src/hal_lab/experiments/translated_hal_v1/translated_hal_v1_results.json` binds
 their hashes. See [deployment instructions](../../browser/deploy/DEPLOYMENT.md) for activation,
 memory lifetime, and local runtime checks. No production deployment formed
 part of this evaluation.
@@ -145,8 +148,8 @@ You can reproduce the research experiment from the repository root with a new
 output directory:
 
 ```bash
-uv run python -m arena.policies.evaluate_reward_prior fit --output outputs/external-hal-prior-v1-reproduction
-uv run python -m arena.policies.evaluate_reward_prior evaluate --output outputs/external-hal-prior-v1-reproduction
+uv run python -m hal_lab.experiments.external_hal_prior_v1.evaluate_reward_prior fit --output src/hal_lab/outputs/external-hal-prior-v1-reproduction
+uv run python -m hal_lab.experiments.external_hal_prior_v1.evaluate_reward_prior evaluate --output src/hal_lab/outputs/external-hal-prior-v1-reproduction
 ```
 
 The evaluator downloads the authors' human repeated-game CSV at a pinned
@@ -165,7 +168,7 @@ Hal and worse prediction loss than the weak neutral prior. The external
 holdout NLL gain over neutral was 0.0176 nats, with a paired 95% interval that
 included zero.
 
-`config/external_hal_prior_v1_results.json` binds the evidence and fitted
+`src/hal_lab/experiments/external_hal_prior_v1/external_hal_prior_v1_results.json` binds the evidence and fitted
 parameters. This experiment has no deployment integration. You need fresh
 STL human participants to test human win-rate gains. Keep the translated
 deployment candidate unchanged.
@@ -175,8 +178,8 @@ deployment candidate unchanged.
 You can train and test the four neural experiments from the repository root:
 
 ```bash
-uv run python -m arena.policies.run_neural_pilots train --output outputs/neural-pilots-v1-reproduction
-uv run python -m arena.policies.run_neural_pilots evaluate --output outputs/neural-pilots-v1-reproduction
+uv run python -m hal_lab.experiments.neural_pilots_v1.run_neural_pilots train --output src/hal_lab/outputs/neural-pilots-v1-reproduction
+uv run python -m hal_lab.experiments.neural_pilots_v1.run_neural_pilots evaluate --output src/hal_lab/outputs/neural-pilots-v1-reproduction
 ```
 
 Use a new output directory. We record the protocol before training and bind
@@ -224,10 +227,10 @@ A fresh 1,824-game audit found 550/608 wins for full transformer history,
 neural-history benefit. You can run this separate audit once per experiment:
 
 ```bash
-uv run python -m arena.policies.audit_neural_pilot_memory --output outputs/neural-pilots-v1-reproduction
+uv run python -m hal_lab.experiments.neural_pilots_v1.audit_neural_pilot_memory --output src/hal_lab/outputs/neural-pilots-v1-reproduction
 ```
 
-`config/neural_pilots_v1_results.json` binds the checkpoints and evidence,
+`src/hal_lab/experiments/neural_pilots_v1/neural_pilots_v1_results.json` binds the checkpoints and evidence,
 including the superseded shuffle comparison and its corrected audit.
 
 ### Neural selector architecture study
@@ -235,9 +238,9 @@ including the superseded shuffle comparison and its corrected audit.
 You can reproduce the selector study with a new output directory:
 
 ```bash
-uv run python -m arena.policies.run_selector_study train --output outputs/selector-study-v1-reproduction
-uv run python -m arena.policies.run_selector_study evaluate --output outputs/selector-study-v1-reproduction
-uv run --with matplotlib python -m arena.policies.plot_selector_study --output outputs/selector-study-v1-reproduction
+uv run python -m hal_lab.experiments.selector_study_v1.run_selector_study train --output src/hal_lab/outputs/selector-study-v1-reproduction
+uv run python -m hal_lab.experiments.selector_study_v1.run_selector_study evaluate --output src/hal_lab/outputs/selector-study-v1-reproduction
+uv run --with matplotlib python -m hal_lab.experiments.selector_study_v1.plot_selector_study --output src/hal_lab/outputs/selector-study-v1-reproduction
 ```
 
 We compare a 7,256-parameter MLP, a 161,560-parameter residual MLP, and a
@@ -296,7 +299,7 @@ half-round cap. We retain these networks as research artifacts and preserve
 the deployment candidate. We have not integrated neural memory recovery or
 canonical leap handling into a hosted provider.
 
-`config/selector_study_v1_results.json` records compact evidence and artifact
+`src/hal_lab/experiments/selector_study_v1/selector_study_v1_results.json` records compact evidence and artifact
 hashes. The output directory contains the ablation plot, learning curves,
 and expert-weight heatmap in PNG and SVG formats.
 
@@ -313,7 +316,7 @@ its planner.
 You can run the frozen evaluator with an anonymous ledger export:
 
 ```sh
-uv run python -m arena.policies.evaluate_bayesian_hal --human-data outputs/perfect-hal-bayes-v2/human-games.json --artifact outputs/perfect-hal-bayes-v2/tablebase --split test --output outputs/perfect-hal-bayes-v2/test-v2.json
+uv run python -m hal_lab.experiments.perfect_hal_bayes_v2.evaluate_bayesian_hal --human-data outputs/perfect-hal-bayes-v2/human-games.json --artifact outputs/perfect-hal-bayes-v2/tablebase --split test --output outputs/perfect-hal-bayes-v2/test-v2.json
 ```
 
 You can play the Bayesian candidate with:
@@ -323,7 +326,7 @@ uv run python -m browser --hal-agent perfect-hal --perfect-hal-model bayesian-v2
 ```
 
 You must choose a fresh output path. The test command checks source and input
-hashes against `config/perfect_hal_bayes_v2_selection.json`. You need a new
+hashes against `src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_bayes_v2_selection.json`. You need a new
 protocol and fresh test seeds to select another model after this test.
 
 We split each player's complete games into chronological training, validation,
@@ -356,7 +359,7 @@ The `PaleRider` test partition contained eleven ordinary-turn decisions.
 Bayesian Hal's mean one-step gain over equilibrium was 3.64 percentage points
 under the pure-DTH projection. This is a small logged-state estimate, not an
 observed human win-rate increase. The generated report lives at
-`outputs/perfect-hal-bayes-v2/test-v2.json`; `config/perfect_hal_bayes_v2_results.json`
+`outputs/perfect-hal-bayes-v2/test-v2.json`; `src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_bayes_v2_results.json`
 records its hash and compact results.
 
 ### Policy ensemble experiment
@@ -375,11 +378,11 @@ Both models learn from the reveal, regardless of Hal's sampled action.
 Session reset clears both models and restores equal weights.
 
 We froze the learning rate and sharing mass before the experiment in
-`config/perfect_hal_ensemble_v1.json`. The evaluator compares exact, Old,
+`src/hal_lab/experiments/perfect_hal_ensemble_v1/perfect_hal_ensemble_v1.json`. The evaluator compares exact, Old,
 Bayesian, fixed 50/50, and adaptive mixtures on fresh paired-seat simulations:
 
 ```sh
-uv run python -m arena.policies.evaluate_ensemble_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --human-data outputs/perfect-hal-bayes-v2/human-games.json --output outputs/perfect-hal-ensemble-v1/test-v1.json
+uv run python -m hal_lab.experiments.perfect_hal_ensemble_v1.evaluate_ensemble_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --human-data outputs/perfect-hal-bayes-v2/human-games.json --output outputs/perfect-hal-ensemble-v1/test-v1.json
 ```
 
 You must choose a new output path for each run. Reports bind source and input
@@ -445,8 +448,10 @@ opt in with `hal_lab match --pure-dth`.
 
 ## Training, checkpoints, and evaluation
 
-Tracked configurations live in `src/arena/config/`; generated checkpoints,
-trajectories, and reports belong under gitignored `outputs/exploit-hal-v2/`.
+Tracked v2 configurations live in `src/arena/config/`, and the three v1
+configurations live in `src/hal_lab/experiments/exploit_hal_v2/config/`.
+Generated checkpoints, trajectories, and reports belong under gitignored
+`outputs/exploit-hal-v2/`.
 The supported training-protocol schema is v2. The three v1 configuration files
 are retained byte-for-byte as historical declarations, but are intentionally
 incompatible because they name scripted opponents from the removed STL play
@@ -517,22 +522,22 @@ Reproducible commands from the repository root:
 
 ```bash
 # 1. Throughput-calibration smoke training.
-uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_smoke_v2.yaml --output-dir outputs/exploit-hal-v2/smoke
+uv run python -m hal_lab.training.train_exploit_hal train --config src/arena/config/exploit_hal_smoke_v2.yaml --output-dir outputs/exploit-hal-v2/smoke
 
 # 2. One resumable v2-protocol seed (500-update total target).
-uv run python -m arena.policies.train_exploit_hal train --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/v2 --resume outputs/exploit-hal-v2/v2/maskable-ppo.zip
+uv run python -m hal_lab.training.train_exploit_hal train --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/v2 --resume outputs/exploit-hal-v2/v2/maskable-ppo.zip
 
 # 3. Complete/resume the predeclared four-seed overnight protocol.
-uv run python -m arena.policies.train_exploit_hal overnight --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/overnight-4x500
+uv run python -m hal_lab.training.train_exploit_hal overnight --config src/arena/config/exploit_hal_v2.yaml --output-dir outputs/exploit-hal-v2/overnight-4x500
 
 # 4. Validation evaluation of the smoke checkpoint.
-uv run python -m arena.policies.train_exploit_hal evaluate --config src/arena/config/exploit_hal_smoke_v2.yaml --checkpoint outputs/exploit-hal-v2/smoke/checkpoint.pt --output-dir outputs/exploit-hal-v2/smoke-validation
+uv run python -m hal_lab.training.train_exploit_hal evaluate --config src/arena/config/exploit_hal_smoke_v2.yaml --checkpoint outputs/exploit-hal-v2/smoke/checkpoint.pt --output-dir outputs/exploit-hal-v2/smoke-validation
 
 # 5. Paired Exact/Adaptive/Exploit/oracle v2-protocol final benchmark.
-uv run python -m arena.policies.train_exploit_hal benchmark --config src/arena/config/exploit_hal_v2.yaml --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt --output-dir outputs/exploit-hal-v2/v2-benchmark
+uv run python -m hal_lab.training.train_exploit_hal benchmark --config src/arena/config/exploit_hal_v2.yaml --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt --output-dir outputs/exploit-hal-v2/v2-benchmark
 
 # 6. Checkpoint metadata inspection.
-uv run python -m arena.policies.train_exploit_hal inspect --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
+uv run python -m hal_lab.training.train_exploit_hal inspect --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
 
 # 7. Interactive deterministic Exploit Hal play.
 uv run python -m terminal play --hal-agent exploit-hal --exploit-hal-config src/arena/config/exploit_hal_v2.yaml --exploit-hal-checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
@@ -572,16 +577,16 @@ Generated artifacts belong under `outputs/aggro-hal-v1/`:
 
 ```bash
 # CPU smoke train.
-uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/aggro_hal_smoke_v1.yaml --output-dir outputs/aggro-hal-v1/smoke
+uv run python -m hal_lab.training.train_aggro_hal train --config src/hal_lab/experiments/aggro_hal_v1/aggro_hal_smoke_v1.yaml --output-dir outputs/aggro-hal-v1/smoke
 
 # Full tracked warm start plus recurrent PPO target.
-uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/aggro_hal_v1.yaml --output-dir outputs/aggro-hal-v1/v1
+uv run python -m hal_lab.training.train_aggro_hal train --config src/arena/config/aggro_hal_v1.yaml --output-dir outputs/aggro-hal-v1/v1
 
 # CPU-only validation. Model shape is read from the strict checkpoint.
-uv run python -m arena.policies.evaluate_aggro_hal --checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --split validation --output outputs/aggro-hal-v1/v1/validation-report.json
+uv run python -m hal_lab.experiments.aggro_hal_v1.evaluate_aggro_hal --checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --split validation --output outputs/aggro-hal-v1/v1/validation-report.json
 
 # Causal recurrent-memory probe at one- and eight-cover delays.
-uv run python -m arena.policies.evaluate_aggro_hal_memory --checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/memory-latent-twin-report.json --protocol-output outputs/aggro-hal-v1/v1/memory-latent-twin-protocol.json --twin-seeds 32 --cover-games 1 8 --bootstrap-replicates 5000
+uv run python -m hal_lab.experiments.aggro_hal_v1.evaluate_aggro_hal_memory --checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/memory-latent-twin-report.json --protocol-output outputs/aggro-hal-v1/v1/memory-latent-twin-protocol.json --twin-seeds 32 --cover-games 1 8 --bootstrap-replicates 5000
 
 # Pure-DTH agent match. Canonical STL play intentionally does not offer Aggro.
 uv run python -m hal_lab match --candidate aggro-hal --opponent dth --pure-dth --games 50 --aggro-hal-checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/vs-exact.json
@@ -593,7 +598,7 @@ uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth
 uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 report_path=outputs/pm-hal/dth-complete-v2-report.json backend=rust lp_workers=4 progress_every=50
 
 # Frozen bounded training run for PM's compatible recurrent component candidate.
-uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/pm_hal_aggro_component_v1.yaml --output-dir outputs/pm-hal/aggro-component-v1
+uv run python -m hal_lab.training.train_aggro_hal train --config src/hal_lab/experiments/pm_hal_v3/pm_hal_aggro_component_v1.yaml --output-dir outputs/pm-hal/aggro-component-v1
 
 # Full PM Hal match with the compatible recurrent component.
 uv run python -m hal_lab match --candidate pm-hal --opponent dth --pure-dth --games 50 --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/vs-exact.json
@@ -603,7 +608,7 @@ uv run python -m terminal play --hal-agent pm-hal --pure-dth --dth-complete-tabl
 
 # Git-registered v3 confirmation: 56 identities, every family, common sessions,
 # no-Aggro ablation, and independent matrix-based risk audit.
-uv run python -m arena.policies.evaluate_pm_hal --config src/arena/config/pm_hal_evaluation_v3.json --pm-config src/arena/config/pm_hal_controller_v3.json --artifact-dir src/dth/artifacts/complete_full_v1 --aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/evaluation-report.json
+uv run python -m hal_lab.experiments.pm_hal_v3.evaluate_pm_hal --config src/arena/config/pm_hal_evaluation_v3.json --pm-config src/arena/config/pm_hal_controller_v3.json --artifact-dir src/dth/artifacts/complete_full_v1 --aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/evaluation-report.json
 ```
 
 The artifact directory is generated and gitignored despite its historical
@@ -703,9 +708,9 @@ and counters, performs 60 supervised warm-start updates, and performs zero PPO
 updates:
 
 ```bash
-uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/aggro_hal_adaptive_memory_v1.yaml --output-dir outputs/aggro-hal-v1/adaptive-memory-v1 --initial-checkpoint outputs/aggro-hal-v1/corrected-v1/checkpoint.pt
+uv run python -m hal_lab.training.train_aggro_hal train --config src/arena/config/aggro_hal_adaptive_memory_v1.yaml --output-dir outputs/aggro-hal-v1/adaptive-memory-v1 --initial-checkpoint outputs/aggro-hal-v1/corrected-v1/checkpoint.pt
 
-uv run python -m arena.policies.evaluate_aggro_hal_adaptive --checkpoint outputs/aggro-hal-v1/adaptive-memory-v1/checkpoint.pt --output outputs/aggro-hal-v1/adaptive-memory-v1/candidate-validation.json --protocol-output outputs/aggro-hal-v1/adaptive-memory-v1/validation-protocol.json --split validation --bootstrap-replicates 5000 --bootstrap-seed 20260809
+uv run python -m hal_lab.experiments.aggro_hal_v1.evaluate_aggro_hal_adaptive --checkpoint outputs/aggro-hal-v1/adaptive-memory-v1/checkpoint.pt --output outputs/aggro-hal-v1/adaptive-memory-v1/candidate-validation.json --protocol-output outputs/aggro-hal-v1/adaptive-memory-v1/validation-protocol.json --split validation --bootstrap-replicates 5000 --bootstrap-seed 20260809
 ```
 
 Promotion has no pooled escape hatch. In every Dropper/Checker by mode A/B

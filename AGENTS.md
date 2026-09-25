@@ -89,9 +89,11 @@ such as `paper/*.py`.
   `abstract` enter through the adapters and `arena/policies/`.
 - `stl`, `dth`, `abstract`, `dth_compact`, `arena`, `terminal`, and `browser`
   do not import `torch`, `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The
-  files in `forbid_imports_exempt` are today's exceptions: arena's Hal
-  training and evaluation code. Add no file to that list. `arena/policies/__init__.py`
-  imports nothing. `hal_lab` may import these packages.
+  files in `forbid_imports_exempt` are the exceptions: the three torch Hal
+  providers `arena/policies/{exploit_hal,aggro_hal,pm_hal}.py` and the arena
+  tests that exercise them. Add no file to that list. `arena/policies/__init__.py`
+  imports nothing. `hal_lab` may import these packages, and Hal training and
+  evaluation code lives there.
 - `tests/meta/test_root_layout.py` limits the root to the governance files,
   `docs/`, `paper/`, `src/`, `tests/`, and the ignored `outputs/` store. Its
   legacy list names the tracked root entries that a planned move removes.

@@ -213,14 +213,6 @@ def test_dth_provider_serves_only_complete_exact_policies(
     assert "1 exact moves" in provider.match_summary()
 
 
-def test_sprt_thresholds_are_predeclared_and_reachable() -> None:
-    from arena.match import sprt_verdict
-
-    assert sprt_verdict(0, 0)["decision"] == "continue"
-    assert sprt_verdict(30, 2)["decision"] == "accept-h1"
-    assert sprt_verdict(2, 30)["decision"] == "accept-h0"
-
-
 def test_abstract_adapter_falls_back_to_uniform_outside_the_closure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,

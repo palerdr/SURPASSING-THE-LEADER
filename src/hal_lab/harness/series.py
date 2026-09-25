@@ -3,20 +3,28 @@
 The Hal seat drops first and the Baku seat holds the leap-window action
 asymmetry, so ``run_paired_series`` plays each base seed twice, once in each
 seating, and credits each result to an agent whichever seat it held.
-``arena.match`` plays each game and holds the SPRT: a one-sided test on
-decisive games, H0 win probability 0.5 against H1 0.65 at alpha = beta = 0.05.
-Games stopped by the half-round cap count for neither hypothesis, and the
-report lists them.
+``arena.match`` plays each game.
+
+The strength gate is a predeclared one-sided SPRT on decisive games:
+H0 win probability 0.5 against H1 0.65 at alpha = beta = 0.05. Games stopped
+by the half-round cap count for neither hypothesis, and the report lists them.
+``hal_lab.training.train_exploit_hal`` reads ``sprt_verdict`` from here too.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from arena.match import play_match_game, sprt_verdict
+from arena.match import play_match_game
+
+SPRT_P0 = 0.5
+SPRT_P1 = 0.65
+SPRT_ALPHA = 0.05
+SPRT_BETA = 0.05
 
 
 @dataclass(frozen=True)
@@ -25,6 +33,36 @@ class GameOutcome:
     first_seat_agent: str
     winner_agent: str | None
     half_rounds: int
+
+
+def sprt_verdict(wins: int, losses: int) -> dict[str, float | str | int]:
+    """One-sided SPRT for the candidate's decisive-game win probability."""
+
+    decisive = wins + losses
+    llr = wins * math.log(SPRT_P1 / SPRT_P0) + losses * math.log(
+        (1.0 - SPRT_P1) / (1.0 - SPRT_P0)
+    )
+    upper = math.log((1.0 - SPRT_BETA) / SPRT_ALPHA)
+    lower = math.log(SPRT_BETA / (1.0 - SPRT_ALPHA))
+    if llr >= upper:
+        decision = "accept-h1"
+    elif llr <= lower:
+        decision = "accept-h0"
+    else:
+        decision = "continue"
+    return {
+        "p0": SPRT_P0,
+        "p1": SPRT_P1,
+        "alpha": SPRT_ALPHA,
+        "beta": SPRT_BETA,
+        "decisive_games": decisive,
+        "wins": wins,
+        "losses": losses,
+        "llr": llr,
+        "upper_bound": upper,
+        "lower_bound": lower,
+        "decision": decision,
+    }
 
 
 def run_paired_series(

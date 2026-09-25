@@ -145,30 +145,11 @@ may_import = [
 forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 forbid_imports_exempt = [
   "src/arena/policies/aggro_hal.py",
-  "src/arena/policies/aggro_memory_curriculum.py",
-  "src/arena/policies/audit_neural_pilot_memory.py",
-  "src/arena/policies/evaluate_aggro_hal.py",
-  "src/arena/policies/evaluate_aggro_hal_adaptive.py",
-  "src/arena/policies/evaluate_aggro_hal_memory.py",
   "src/arena/policies/exploit_hal.py",
-  "src/arena/policies/exploit_hal_gym.py",
-  "src/arena/policies/neural_pilots.py",
   "src/arena/policies/pm_hal.py",
-  "src/arena/policies/run_neural_pilots.py",
-  "src/arena/policies/run_selector_study.py",
-  "src/arena/policies/selector_study.py",
-  "src/arena/policies/train_aggro_hal.py",
-  "src/arena/policies/train_exploit_hal.py",
   "src/arena/tests/test_aggro_hal_model.py",
-  "src/arena/tests/test_aggro_memory_curriculum.py",
-  "src/arena/tests/test_evaluate_aggro_hal.py",
-  "src/arena/tests/test_evaluate_aggro_hal_adaptive.py",
-  "src/arena/tests/test_evaluate_aggro_hal_memory.py",
   "src/arena/tests/test_exploit_hal.py",
-  "src/arena/tests/test_neural_pilots.py",
   "src/arena/tests/test_pm_hal.py",
-  "src/arena/tests/test_selector_study.py",
-  "src/arena/tests/test_train_aggro_hal.py",
 ]
 core_modules = ["arena.contracts", "arena.agent", "arena.session", "arena.match", "arena.variants"]
 core_may_import = ["stl.engine"]

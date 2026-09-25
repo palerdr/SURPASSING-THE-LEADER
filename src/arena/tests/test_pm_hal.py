@@ -15,7 +15,6 @@ from arena.contracts import (
     PublicPlayerState,
 )
 from arena.policies.aggro_hal import AggroHalConfig, AggroHalNetwork
-from arena.policies.train_aggro_hal import load_training_config
 from arena.policies.pm_hal import (
     ACTION_COUNT,
     CategoricalChangePointModel,
@@ -24,7 +23,6 @@ from arena.policies.pm_hal import (
     PMHalPolicyProvider,
     _OutcomeConditionedModel,
     _PosteriorView,
-    load_pm_hal_config,
 )
 from dth.agent import CertifiedStageGame
 
@@ -171,26 +169,6 @@ def test_config_freezes_pure_dth_and_ordered_aggression_caps() -> None:
             press_confidence_threshold=0.8,
             dominate_confidence_threshold=0.7,
         )
-
-
-def test_tracked_pm_aggro_component_config_targets_the_current_artifact() -> None:
-    model, trainer = load_training_config(
-        "src/arena/config/pm_hal_aggro_component_v1.yaml"
-    )
-    assert model.hidden_size == 128
-    assert trainer.dth_artifact == "src/dth/artifacts/complete_full_v1"
-    assert trainer.warmstart_updates == 16
-    assert trainer.ppo_updates == 4
-
-
-def test_tracked_overbearing_controller_matches_code_defaults() -> None:
-    tracked = load_pm_hal_config()
-    assert tracked == PMHalConfig()
-    assert tracked.minimum_role_observations == 1
-    assert tracked.press_confidence_threshold == pytest.approx(0.15)
-    assert tracked.game_epsilon_budget == pytest.approx(12.0)
-    assert tracked.dominate_epsilon_cap == pytest.approx(2.0)
-    assert load_pm_hal_config("src/arena/config/pm_hal_controller_v2.json") == tracked
 
 
 def test_outcome_expert_uses_immediately_previous_public_outcome_across_roles() -> None:

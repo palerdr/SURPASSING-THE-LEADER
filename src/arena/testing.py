@@ -5,6 +5,8 @@ this one.
 
 - ``StageAgent`` stands in for ``CompleteDTHAgent.stage_game`` with a fixed
   certified stage, and ``certified_stage`` builds that stage.
+- ``pure_policy`` puts all mass on one of the 60 actions, and ``drop_stage``
+  builds the certified stage that the Exploit Hal tests share.
 - ``make_decision`` builds one canonical decision, and ``make_reveal`` builds
   one public half-round reveal. ``make_forecast`` asks an opponent model for
   one forecast.
@@ -75,6 +77,26 @@ class StageAgent:
             check_policy=stage.check_policy,
             saddle_gap=stage.saddle_gap,
         )
+
+
+def pure_policy(index: int) -> np.ndarray:
+    policy = np.zeros(60, dtype=np.float64)
+    policy[index] = 1.0
+    return policy
+
+
+def drop_stage() -> CertifiedStageGame:
+    matrix = np.zeros((60, 60), dtype=np.float64)
+    matrix[0, 0] = 1.0
+    matrix[0, 1:] = -1.0
+    return CertifiedStageGame(
+        state=(0, 0, 0, 0),
+        value=0.0,
+        matrix=matrix,
+        drop_policy=pure_policy(1),
+        check_policy=pure_policy(1),
+        saddle_gap=0.0,
+    )
 
 
 def make_decision(

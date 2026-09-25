@@ -152,3 +152,11 @@ def test_match_cli_exposes_pm_hal_only_with_explicit_pure_dth() -> None:
     assert pure.pm_hal_aggro_checkpoint is None
     assert pure.pm_hal_config.endswith("pm_hal_controller_v3.json")
     assert pure.pm_hal_game_epsilon_budget is None
+
+
+def test_sprt_thresholds_are_predeclared_and_reachable() -> None:
+    from hal_lab.harness.series import sprt_verdict
+
+    assert sprt_verdict(0, 0)["decision"] == "continue"
+    assert sprt_verdict(30, 2)["decision"] == "accept-h1"
+    assert sprt_verdict(2, 30)["decision"] == "accept-h0"

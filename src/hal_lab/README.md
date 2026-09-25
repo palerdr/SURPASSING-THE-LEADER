@@ -2,10 +2,7 @@
 
 `src/hal_lab/` owns Hal research: the code that trains and evaluates Hal
 policies, and the frozen evidence of each finished study. No project imports
-it. Today the package holds the match command with its series harness, and
-the evidence verifier with its path map. The training and study modules stay in
-`src/arena/policies/` until they move here, and their tests stay with arena
-until then.
+it.
 
 [`docs/HAL_RESEARCH.md`](docs/HAL_RESEARCH.md) holds the research narrative,
 with the commands and results of each study.
@@ -22,8 +19,37 @@ plan.
 - hal_lab may import `torch`, `gymnasium`, `stable_baselines3`, and
   `sb3_contrib`. The torch firewall of the other projects stops at this
   directory.
-- Put new research code under `src/hal_lab/`. `src/arena/` keeps the Hal
-  providers that the terminal and the browser play.
+- Put new research code under `src/hal_lab/`. `src/arena/policies/` keeps
+  the Hal providers that the terminal and the browser play, and the provider
+  code that a study or a trainer shares with play.
+
+## Layout
+
+- `cli.py` holds the match command. `provenance.py` holds the evidence
+  verifier, and `evidence/` holds its path map and its baseline.
+- `harness/` holds the code that more than one study or trainer uses:
+  `series.py` plays the paired-seat series and holds the SPRT, and
+  `opponent_league.py` holds the deterministic public-history opponent
+  families. Put new shared research code here.
+- `training/` holds the trainers: `train_exploit_hal.py` with its gym
+  `exploit_hal_gym.py`, and `train_aggro_hal.py` with its environment
+  `aggro_env.py` and its curriculum `aggro_memory_curriculum.py`.
+- `experiments/<study>/` holds one finished study: its runner, its study
+  model, its configs, and its frozen records. The studies are
+  `perfect_hal_bayes_v2`, `perfect_hal_ensemble_v1`, `translated_hal_v1`,
+  `external_hal_prior_v1`, `neural_pilots_v1`, `selector_study_v1`,
+  `pm_hal_v3`, and `aggro_hal_v1`. `exploit_hal_v2/config/` holds the three
+  historical Exploit Hal v1 configs.
+- A study can import the frozen module of an earlier study.
+  `translated_hal_v1` imports `perfect_hal_bayes_v2` and
+  `perfect_hal_ensemble_v1`, and `selector_study_v1` imports
+  `neural_pilots_v1`. Do not edit a frozen runner to share its code; put the
+  shared code in `harness/`.
+- A runner that hashes its input modules finds an `arena.policies` provider,
+  or a module in another hal_lab package, through that module's `__file__`.
+  The runner uses `Path(__file__).with_name(...)` only for a sibling file in
+  its own study folder. If you move a sibling out of the study folder, change
+  its lookup to the moved module's `__file__`.
 
 ## Match command
 
@@ -40,9 +66,9 @@ uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth
   `arena.policies.registry` builds every play agent. The registry's one
   pure-DTH gate also covers `aggro-hal`.
 - `harness/series.py` plays each base seed in both seatings and stops when the
-  predeclared SPRT decides. `arena.match` plays each game and gives the SPRT
-  verdict. The verdict stays in arena while `arena.policies.train_exploit_hal`
-  reads it, because arena imports no hal_lab module.
+  predeclared SPRT decides. `arena.match.play_match_game` plays each game.
+  `series.py` holds the SPRT constants and `sprt_verdict`, and
+  `training/train_exploit_hal.py` reads the verdict from there.
 - The report keeps the `arena-match-report-v1` schema of the earlier
   `python -m arena match` command.
 
@@ -75,11 +101,11 @@ uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth
   `outputs/neural-pilots-v1/run_neural_pilots-original.py` keeps those bytes.
   The five bindings under `outputs/aggro-hal-v1/` are missing on this disk.
 
-## Sealed records in `src/arena/config`
+## Records and configs in `src/arena/config`
 
 hal_lab owns six records that stay in `src/arena/config/`, because
-`test_evaluate_pm_hal.py` and `test_aggro_adaptive_config.py` read them at
-the paths that the records hold:
+`tests/test_evaluate_pm_hal.py` and `tests/test_aggro_adaptive_config.py` read
+them at the paths that the records hold:
 
 - `pm_hal_confirmation_v3.json`
 - `pm_hal_evaluation_v3.json`
@@ -90,14 +116,33 @@ the paths that the records hold:
 
 Keep each one at its path with its bytes unchanged.
 
+Five configs stay there too. The Hal providers read
+`translated_hal_v1_selection.json`, which is also a frozen record,
+`pm_hal_controller_v3.json`, and `exploit_hal_v2.yaml`. The Exploit Hal v2
+smoke configs `exploit_hal_smoke_v2.yaml` and
+`exploit_hal_outcome_only_smoke_v2.yaml` stay beside `exploit_hal_v2.yaml`.
+They share its v2 schema, which the live loader accepts, and
+`tests/test_train_exploit_hal_contract.py` reads the three files from one
+directory.
+
 ## The collector label
 
-`src/arena/policies/train_aggro_hal.py:309` writes the string
+`training/train_aggro_hal.py:309` writes the string
 `arena.policies.opponent_league.make_opponent` into the default session
 collector binding. The string is an identity label; no code imports it. An
 Aggro resume compares the binding in a checkpoint with that default, so a
-changed label makes each existing Aggro checkpoint refuse to resume. Keep the
-string verbatim when `opponent_league.py` moves.
+changed label makes each existing Aggro checkpoint refuse to resume.
+`opponent_league.py` now lives in `harness/`, and the label keeps its earlier
+module path. Keep the string verbatim.
+
+## Exploit Hal archives
+
+`training/train_exploit_hal.py` lived at `arena.policies.train_exploit_hal`
+before it moved here. Each `maskable-ppo.zip` archive pickles the class of the
+feature extractor. `load_maskable_ppo` maps the earlier module name to the
+trainer before it loads an archive, so an archive that pickled the class by
+that name still loads. The archives under `outputs/exploit-hal-v1/` came from
+`python -m` runs, which pickle the class by value, and load without the map.
 
 ## Outputs
 
@@ -112,5 +157,11 @@ string verbatim when `opponent_league.py` moves.
 
 Run `uv run python -m pytest src/hal_lab/tests -q` and
 `uv run python -m hal_lab.provenance --check`. `tests/test_match.py` covers the
-match command and the series harness. The provenance checks that read the tag
-skip in a checkout without it, such as the CI clone.
+match command, the series harness, and the SPRT. The other tests cover the
+trainers, the opponent league, and the study runners and configs. The
+provenance checks that read the tag skip in a checkout without it, such as the
+CI clone.
+
+The trainers and the runners are modules. Run each one with
+`uv run python -m hal_lab.<package>.<module>`, for example
+`uv run python -m hal_lab.training.train_aggro_hal --help`.

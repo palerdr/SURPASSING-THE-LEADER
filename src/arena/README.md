@@ -29,6 +29,15 @@ projects must not import it.
   window; arena keeps that canonical action even though DTH has no 61 policy.
 - Projection adapters may not alter canonical game state or transitions.
 - Keep generated artifacts in the owning project, never under `src/arena/`.
+- `policies/` holds the runtime Hal providers: `adaptive.py`,
+  `perfect_hal.py`, `bayesian_hal.py`, `ensemble_hal.py`, `translated_hal.py`,
+  `exploit_hal.py`, `aggro_hal.py`, and `pm_hal.py`, with `registry.py` and
+  `exploit_hal_config.py`. Hal training, evaluation, and study code lives in
+  [`src/hal_lab/`](../hal_lab/README.md).
+- `config/` holds the runtime configs that the providers read, the two
+  Exploit v2 smoke configs that the training contract tests load beside
+  `exploit_hal_v2.yaml`, and the six sealed Hal records that hal_lab owns.
+  The hal_lab README lists them.
 - `policies/registry.py` is the one Hal provider registry. It holds the play
   choices, the play flags, the provider factories, and the pure-DTH gate. The
   terminal app and the browser app build Hal through it.
@@ -46,8 +55,8 @@ projects must not import it.
 - `variants.py` holds `PureDTHGame`. `contracts.py`, `agent.py`, `session.py`,
   `match.py`, and `variants.py` import no project except `stl.engine`; `dth`
   and `abstract` enter through the adapters and `policies/`.
-- `match.py` plays one agent-versus-agent game and holds the SPRT verdict.
-  `python -m hal_lab match` runs the paired-seat series in
+- `match.py` plays one agent-versus-agent game. `python -m hal_lab match`
+  runs the paired-seat series and its SPRT in
   `src/hal_lab/harness/series.py`.
 - `testing.py` holds the fakes that the tests of more than one project share,
   such as `StageAgent` and `make_session`. No runtime module imports it.
