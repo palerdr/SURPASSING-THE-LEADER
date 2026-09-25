@@ -210,9 +210,10 @@ the identity-specific multiplier the unified model deliberately absorbs.
 ## Implementation status
 
 Every executable formulation now uses this frozen surface: pure DTH, both
-abstract tablebases, the Python and Rust STL engines, and the pure-DTH OCaml
-engine and solver. Arena and both terminal renderers display the probability
-recorded by their engine; neither carries a separate revival calculation.
+abstract tablebases, the Python and Rust STL engines, the OCaml STL engine in
+`src/dth_ocaml/play/`, and the pure-DTH OCaml solver. Arena and both terminal
+renderers display the probability recorded by their engine; neither carries a
+separate revival calculation.
 The implementation record is in
 [`REGENERATION_PLAN.md`](REGENERATION_PLAN.md).
 
@@ -224,7 +225,7 @@ The implementation record is in
 | `src/crates/abstract_solver/src/lib.rs` | frozen Rust kernel; parity verified |
 | `src/stl/engine/game.py` | frozen linear/geometric surface |
 | `src/crates/stl_solver/src/game.rs` | frozen linear/geometric surface |
-| `src/dth_ocaml/lib/engine/referee.ml` | frozen linear/geometric surface |
+| `src/dth_ocaml/play/engine/referee.ml` | frozen linear/geometric surface |
 | `src/dth_ocaml/lib/solver/exact.ml` | frozen linear/geometric surface |
 
 `src/dth/solver.py`'s `solver_schema_hash()` now hashes the source of every

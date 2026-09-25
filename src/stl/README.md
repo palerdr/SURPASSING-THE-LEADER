@@ -33,6 +33,17 @@ version-suffixed names.
   the artifact read-only. It sits outside `solver/`, so the builder hash does
   not cover it; keep it there. `tests/test_reader.py` reproduces the paper's
   16 H1 records and skips when `outputs/leap-full-native/` is absent.
+- `experiments/` holds the leap benchmarks: `benchmark_leap.py`,
+  `benchmark_leap_run.py`, `benchmark_leap_replay.py`, and the rung 2b
+  benchmarks in `experiments/rung2b/`. They read the builder and its
+  artifacts and write no sweep table.
+- `provenance/` holds `leap_resume.py` and `leap_recover.py`, the one-shot
+  tools that carried earlier runs across reviewed source changes. They keep
+  the bytes they had in `solver/`, so their allow-lists still name
+  `src/stl/solver/`. `leap_recover.py` imports `stl.solver.leap_resume`, and
+  `provenance/__init__.py` registers the moved module under that name. The
+  builder hash no longer covers them, and they cannot certify the current
+  source.
 - Repository-wide canonical rules and formulation contracts belong in root
   `docs/`. Generated experiment data remains gitignored and STL-owned.
 
@@ -96,8 +107,8 @@ You can replay whole keys against the certified `outputs/leap-full-native/`
 artifact before a full run:
 
 ```bash
-uv run python -m stl.solver.benchmark_leap_replay --keys H2_47 H2_35 --configs baseline kernel-crash kernel-crash-kink1
-uv run python -m stl.solver.benchmark_leap_replay --summarize --exclude H2_39
+uv run python -m stl.experiments.benchmark_leap_replay --keys H2_47 H2_35 --configs baseline kernel-crash kernel-crash-kink1
+uv run python -m stl.experiments.benchmark_leap_replay --summarize --exclude H2_39
 ```
 
 The replay restores each key's children, runs the production `sweep_key` once
@@ -124,25 +135,43 @@ preserves its original behavior when you omit them. See
 [`LEAP_CERTIFICATE.md`](../crates/docs/LEAP_CERTIFICATE.md) for the equations
 and acceptance rule, and `solver/leap_support.py` for the Python authority.
 
-You can reproduce the packing, native pivot, traversal, and REV reuse
-benchmarks with `uv run python -m stl.solver.benchmark_leap_run`. This command
-requires the retained `outputs/leap-full-centered/` children and the rung-2b
-samples. It writes measurements under `outputs/leap-hypotheses/` and preserves
-the sweep checkpoint. The native prototype lives in the Rust `leap_bench`
-example. It certifies the original 60-action matrix after each packing solve;
-the benchmark sends rejected stages to HiGHS. These benchmarks do not enable
-a new full-sweep backend. Solve timings include process startup and fallback;
-the REV experiment includes writes of sampled table rows and their flushes.
+`uv run python -m stl.experiments.benchmark_leap_run` reproduced the packing,
+native pivot, traversal, and REV reuse benchmarks. It reads children from the
+superseded partial runs `outputs/leap-full-centered/`, `leap-full-ipm/`,
+`leap-full/`, `leap-full-initial/`, and `leap/`, the stopped H2_42 batch of
+`leap-full-centered/`, and the rung 2b samples. We removed those five runs on
+2026-09-25, so the command now stops and names the missing inputs. Git never
+held the runs. Uncommitted builders made `leap-full/`, `leap-full-ipm/`, and
+`leap-full-centered/` (`aea64aaf...`, `fcbe4f9c...`, `19bd5373...`), and
+`outputs/leap-full-native/provenance/` keeps their sources. A new build from
+any commit finishes H2_42 under another builder, so it cannot recreate the
+stopped batch, and the benchmark cannot run again. The measurements of the
+last run remain under `outputs/leap-hypotheses/`. The native prototype lives in the
+Rust `leap_bench` example. It certifies the original 60-action matrix after
+each packing solve; the benchmark sends rejected stages to HiGHS. These
+benchmarks do not enable a new full-sweep backend. Solve timings include
+process startup and fallback; the REV experiment includes writes of sampled
+table rows and their flushes.
 
-`solver/leap_resume.py` can retain a prefix from before this retry addition.
+The rung 2b benchmarks of 2026-09-20 compare HiGHS with reduced-support
+reuse. `uv run python -m stl.experiments.rung2b.benchmark` reads
+`outputs/leap-rung2b-samples.npz`, then runs `rung2b/throughput_benchmark.py`
+and `rung2b/batch_benchmark.py`. Those two read dense tables of the removed
+partial runs, and `batch_benchmark.py` also needs the stopped H2_42 batch. A
+new build does not recreate those inputs, so the two scripts cannot run again.
+All three write their JSON reports to `outputs/`, where the 2026-09-20
+reports remain.
+
+`provenance/leap_resume.py` retained a prefix from before this retry addition.
 It accepts only that source change, verifies the original source snapshot and
 file hashes, and compares a new reachability pass with the saved bitmaps. It
 also audits the complete prefix's membership and finite values. The new
 artifact retains the original source hash on each prefix record and archives
-its source and checkpoint under `provenance/`.
-`solver/leap_recover.py` applies the same source restrictions to the centered
-retry. It archives the old partial table, reruns the kernel, and reuses its
-certified LP values. It records recovered work and the missing LP timing scope.
+its source and checkpoint in the artifact's own `provenance/` folder.
+`provenance/leap_recover.py` applies the same source restrictions to the
+centered retry. It archives the old partial table, reruns the kernel, and
+reuses its certified LP values. It records recovered work and the missing LP
+timing scope.
 Its `--native-review` option binds the packing upgrade to exact source hashes.
 It rejects changes to protected game and dependency files, checks a fresh
 reachability pass against the saved bitmaps, and audits the completed prefix.

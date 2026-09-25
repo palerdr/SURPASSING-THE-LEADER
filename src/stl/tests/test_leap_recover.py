@@ -4,7 +4,7 @@ import pytest
 
 
 def test_centered_upgrade_rejects_changes_to_certificate():
-    from stl.solver.leap_recover import verify_centered_change
+    from stl.provenance.leap_recover import verify_centered_change
     old = '''
 def solve_lp(s, f, window, *, _method='highs'):
     matrix = stage_matrix(s, f, window)
@@ -34,7 +34,7 @@ def solve_lp(s, f, window, *, _method='highs'):
 
 def test_partial_recovery_reuses_certified_lp_values(tmp_path, monkeypatch):
     from stl.solver import leap_build as b
-    from stl.solver.leap_recover import recover_key, partial_membership
+    from stl.provenance.leap_recover import recover_key, partial_membership
     monkeypatch.setattr(b, 'N', 8)
     key = ('REV', 3600); store = b.TableStore(tmp_path/'tables')
     table = store.create(key); table[0, 0] = .2; table[0, 1] = .3; table.flush()
@@ -60,7 +60,7 @@ def test_partial_recovery_reuses_certified_lp_values(tmp_path, monkeypatch):
 
 
 def test_centered_audit_keeps_input_validation():
-    from stl.solver.leap_recover import verify_centered_change
+    from stl.provenance.leap_recover import verify_centered_change
     old = '''
 def certify_matrix(matrix, *, _method='highs'):
     if not finite(matrix):
@@ -85,8 +85,8 @@ def certify_matrix(matrix, *, _method='highs'):
 
 def test_reviewed_upgrade_binds_sources_and_protects_game(tmp_path, monkeypatch):
     from stl.solver import leap_build as b
-    from stl.solver.leap_resume import _framed_digest
-    from stl.solver.leap_recover import verify_reviewed_change
+    from stl.provenance.leap_resume import _framed_digest
+    from stl.provenance.leap_recover import verify_reviewed_change
     old = tmp_path/'old'; new = tmp_path/'new'
     oracle = 'src/stl/solver/leap_oracle.py'; game = 'src/stl/engine/game.py'
     for root in (old,new):

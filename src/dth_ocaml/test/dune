@@ -1,3 +1,4 @@
 (test
  (name exact_test)
- (libraries dth_solver dth_engine))
+ (package dth)
+ (libraries dth_solver dth_play.engine))

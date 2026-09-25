@@ -1,5 +1,5 @@
 (library
  (name dth_engine)
- (public_name dth.engine)
+ (public_name dth_play.engine)
  (instrumentation
   (backend bisect_ppx)))

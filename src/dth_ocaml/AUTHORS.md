@@ -12,5 +12,6 @@ The OCaml project originated as a CS 3110 Spring 2026 project by James Cenawood
 - **Alcotest:** tests use [`alcotest`](https://github.com/mirage/alcotest) (ISC).
 - **Dune:** the build uses [`dune`](https://github.com/ocaml/dune) (MIT).
 
-The current subtree is an independent pure-DTH reference. It does not claim the
-STL-only leap-window mechanics.
+The solver library in `lib/solver/` is an independent pure-DTH reference. It
+does not claim the STL-only leap-window mechanics. The class project's STL
+engine and terminal UI live in `play/`.

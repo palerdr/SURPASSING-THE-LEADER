@@ -8,7 +8,7 @@ This repository contains deliberately separate game-solving projects:
 | `src/dth/` | Completed pure Drop the Handkerchief solve and its audit | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
 | `src/dth_compact/` | The paper's solver: one numba file that builds the complete 289,374,121-class table in about 49 s | Pure DTH; literal seconds 1..60 |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
-| `src/dth_ocaml/` | Hand-written exact OCaml reference | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
+| `src/dth_ocaml/` | Hand-written exact OCaml reference; `play/` keeps the CS 3110 STL engine and terminal UI | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
 | `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
 | `src/arena/` | Game library: session, provider adapters, runtime Hal providers, shared presentation | Canonical STL referee with pluggable policy-provider adapters |

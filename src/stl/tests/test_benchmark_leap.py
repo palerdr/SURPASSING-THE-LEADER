@@ -7,7 +7,7 @@ from stl.tests.test_leap_support import S, F, VALUE
 
 
 def test_packing_formulation_matches_original_game():
-    from stl.solver.benchmark_leap import PackingLP
+    from stl.experiments.benchmark_leap import PackingLP
     solver = PackingLP()
     rng = np.random.default_rng(914)
     stages = [(S, F), (np.linspace(-.4, .7, 60), .5)]
@@ -22,7 +22,7 @@ def test_packing_formulation_matches_original_game():
 
 
 def test_packing_rejects_invalid_sign_and_nonfinite_stage():
-    from stl.solver.benchmark_leap import PackingLP
+    from stl.experiments.benchmark_leap import PackingLP
     solver = PackingLP()
     with pytest.raises(ValueError, match='diagonal'):
         solver.solve(np.ones(60), .5)
@@ -31,7 +31,7 @@ def test_packing_rejects_invalid_sign_and_nonfinite_stage():
 
 
 def test_native_pivots_certify_asymmetric_and_random_stages(tmp_path):
-    from stl.solver.benchmark_leap import native_batch
+    from stl.experiments.benchmark_leap import native_batch
     rng = np.random.default_rng(231)
     successes = np.vstack([S, S+.001, *[rng.uniform(-.9, .9, 60) for _ in range(24)]])
     failures = np.r_[F, F+.001, np.full(24, .95)]
@@ -45,7 +45,7 @@ def test_native_pivots_certify_asymmetric_and_random_stages(tmp_path):
 
 
 def test_rev_signatures_include_both_children_and_window():
-    from stl.solver.benchmark_leap import rev_signature
+    from stl.experiments.benchmark_leap import rev_signature
     from stl.solver.leap_profiles import profiles
     p = profiles()
     for pc in (0, 29, 59, 1000):
@@ -56,7 +56,7 @@ def test_rev_signatures_include_both_children_and_window():
 
 
 def test_native_rejects_invalid_and_small_diagonals(tmp_path):
-    from stl.solver.benchmark_leap import native_batch
+    from stl.experiments.benchmark_leap import native_batch
     s = np.zeros((3, 60)); s[0, 3] = np.nan
     result, timing = native_batch(s, np.array([1., -1., 1e-13]), np.zeros(3),
                                   tmp_path, warm=True, threads=1)
@@ -64,7 +64,7 @@ def test_native_rejects_invalid_and_small_diagonals(tmp_path):
 
 
 def test_native_certifies_plateau_after_support_change(tmp_path):
-    from stl.solver.benchmark_leap import native_batch
+    from stl.experiments.benchmark_leap import native_batch
     plateau = np.r_[.30501604147760514, .3054351558364657, .30585071224070093,
                     .3066373930873052, .3070028766823562, .3076328036693285,
                     .3081612091176772, .30861711515298623, .3090184553403741,

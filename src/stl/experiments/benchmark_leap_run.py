@@ -1,4 +1,13 @@
-"""You can reproduce four leap hypotheses with retained, read-only children."""
+"""You can reproduce four leap hypotheses with retained, read-only children.
+
+The children and the stopped H2_42 batch came from the superseded partial runs
+in PARTIALS. We removed those runs on 2026-09-25, and git never held them.
+Uncommitted builders made leap-full, leap-full-ipm and leap-full-centered
+(aea64aaf..., fcbe4f9c..., 19bd5373...). src/stl/outputs/leap-full-native/
+provenance/ keeps their sources. A new build from any commit finishes H2_42
+under another builder, so it cannot recreate the stopped batch, and this
+command cannot run again.
+"""
 import argparse
 from concurrent.futures import ProcessPoolExecutor
 import json
@@ -10,19 +19,20 @@ import time
 import numpy as np
 
 from stl.solver import leap_build as build
-from stl.solver.benchmark_leap import PackingLP, native_batch, rev_signature, ROOT
+from stl.experiments.benchmark_leap import PackingLP, native_batch, rev_signature, ROOT
 from stl.solver.leap_lp import WarmLP
 from stl.solver.leap_oracle import solve_lp
 from stl.solver.leap_profiles import N, profiles
 
 OUTPUTS = ROOT/'src/stl/outputs'
-PREFIX = OUTPUTS/'leap-full-centered'
+PARTIALS = ('leap-full-centered', 'leap-full-ipm', 'leap-full', 'leap-full-initial', 'leap')
+PREFIX = OUTPUTS/PARTIALS[0]
 
 
 def table(key):
     if key is None:
         return np.load(ROOT/'src/dth_compact/artifacts/V.npy', mmap_mode='r')
-    for folder in ('leap-full-centered', 'leap-full-ipm', 'leap-full', 'leap-full-initial', 'leap'):
+    for folder in PARTIALS:
         path = OUTPUTS/folder/'tables'/f'{build.key_name(key)}.npy'
         if path.exists():
             return np.load(path, mmap_mode='r')
@@ -236,7 +246,14 @@ def main():
     parser.add_argument('--output', type=Path, default=OUTPUTS/'leap-hypotheses')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--workers', type=int, default=16)
-    args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
+    args = parser.parse_args()
+    missing = [str((OUTPUTS/name).relative_to(ROOT)) for name in PARTIALS if not (OUTPUTS/name).is_dir()]
+    if missing:
+        parser.exit(2, f'missing inputs: {", ".join(missing)}. We removed these superseded partial runs on '
+                       '2026-09-25, and git never held them. src/stl/outputs/leap-full-native/provenance/ '
+                       'keeps the sources of the uncommitted builders that made three of them. A new build '
+                       'cannot recreate the stopped H2_42 batch, so this benchmark cannot run again.\n')
+    args.output.mkdir(parents=True, exist_ok=True)
     row_sample = np.load(OUTPUTS/'leap-rung2b-row-samples.npz')
     first = args.output/'H2_43_rows.npz'; second = args.output/'H2_42_batch.npz'
     third = args.output/'H1_44_holdout.npz'
@@ -254,7 +271,7 @@ def main():
         build.write_json(args.output/'report.json', report)
     report['rev'] = rev_bench(args.output, args.repeats)
     report['code_hashes'] = {str(path.relative_to(ROOT)): build.file_hash(path) for path in
-                           [Path(__file__), ROOT/'src/stl/solver/benchmark_leap.py',
+                           [Path(__file__), ROOT/'src/stl/experiments/benchmark_leap.py',
                             ROOT/'src/crates/stl_solver/examples/leap_bench.rs']}
     build.write_json(args.output/'report.json', report)
     print(json.dumps(report['rev']), flush=True)

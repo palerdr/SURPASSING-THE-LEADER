@@ -7,7 +7,7 @@ import pytest
 
 
 def test_retry_upgrade_accepts_only_the_numerical_retry():
-    from stl.solver.leap_resume import verify_retry_change
+    from stl.provenance.leap_resume import verify_retry_change
     old = '''
 def solve_lp(s, f, window):
     result = linprog(method='highs')
@@ -40,7 +40,7 @@ def solve_lp(s, f, window, *, _method='highs'):
 
 
 def test_source_snapshot_verifies_bytes_and_framed_digest(tmp_path):
-    from stl.solver.leap_resume import snapshot_digest
+    from stl.provenance.leap_resume import snapshot_digest
     name = 'one.py'; data = b'x = 1\n'; (tmp_path/name).write_bytes(data)
     digest = hashlib.sha256(len(name).to_bytes(8, 'big')+name.encode()+len(data).to_bytes(8, 'big')+data).hexdigest()
     manifest = {'builder_sha256': digest, 'files': {name: hashlib.sha256(data).hexdigest()}}
@@ -53,7 +53,7 @@ def test_source_snapshot_verifies_bytes_and_framed_digest(tmp_path):
 
 def test_prefix_audit_rejects_wrong_dense_membership(tmp_path, monkeypatch):
     from stl.solver import leap_build as b
-    from stl.solver.leap_resume import verify_prefix_tables
+    from stl.provenance.leap_resume import verify_prefix_tables
     monkeypatch.setattr(b, 'N', 8)
     store = b.TableStore(tmp_path/'tables'); key = ('REV', 3600)
     table = store.create(key); table[0, 0] = .2; table.flush()

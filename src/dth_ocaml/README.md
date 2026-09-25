@@ -5,6 +5,10 @@ role-relative state and chance-branch types, the transition expansion, and the
 frozen revival model. `lib/solver/matrix_game.ml` turns one simultaneous 60x60
 payoff matrix into a certified value.
 
+`play/` holds the STL engine and the terminal UI from the CS 3110 class
+project. The engine has the STL leap-second window, so it is not part of the
+pure-DTH reference.
+
 ## Matrix values come from GLPK
 
 `matrix_game.ml` does not implement a simplex method. It builds both players'
@@ -35,11 +39,24 @@ formatter commands, and [`RULES.md`](RULES.md) for the executable contract.
 
 ## Working in this subtree
 
-This subtree is a standalone Dune project holding one library, `dth_solver`,
-with `lib/solver/exact.ml` for states, transitions, and the revival model, and
-`lib/solver/matrix_game.ml` for simultaneous matrix values. Keep it independent
-of the Python and Rust peer projects; GLPK is a C build dependency, not a peer.
+This subtree is a standalone Dune project with two packages. The `dth`
+package is the pure-DTH reference: the `dth_solver` library in `lib/solver/`,
+the `dth-solve-tablebase` executable in `bin/`, and the tests in `test/`.
+`lib/solver/exact.ml` holds states, transitions, and the revival model, and
+`lib/solver/matrix_game.ml` holds simultaneous matrix values. The `dth_play`
+package in `play/` holds the class project's STL engine, the `dth_engine`
+library in `play/engine/`, and its terminal UI, the `dth-play` executable in
+`play/bin/`. `test/exact_test.ml` links the engine by its public name,
+`dth_play.engine`, to check that the solver and the engine share one revival
+surface. Opam builds the `dth` tests with `-p dth`, which hides the
+`dth_play` sources, so a private name would not resolve there; the
+`(dth_play :with-test)` dependency installs the library instead. Keep the
+project independent of the Python and Rust peer projects; GLPK is a C build
+dependency, not a peer.
 
+- Keep `lib/solver/` and `bin/solve_tablebase.ml` pure DTH, with actions
+  `1..60` and no leap window. They do not link `dth_engine`. STL mechanics
+  belong in `play/`.
 - Do not implement a simplex method here. `matrix_game.ml` delegates to GLPK
   and its job is to state the two linear programs and certify the answer.
 - Every accepted matrix value carries a saddle gap of at most `1e-6`, matching

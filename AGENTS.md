@@ -134,10 +134,13 @@ such as `paper/*.py`.
 - In STL's leap window only Baku as Dropper may choose 61; Checker remains
   capped at 60. Both players know the leap rule from game initialization.
 - DTH and abstract do not inherit STL-only leap or information-state mechanics.
-- The `dth_ocaml` project is an independent OCaml implementation of **pure
+- The `dth_ocaml` solver library in `lib/solver/`, its tests, and
+  `bin/solve_tablebase.ml` are an independent OCaml implementation of **pure
   DTH**, not STL: actions are literal seconds 1..60 and it has no leap window.
   It exists as a hand-written reference for the exact solver and is held to
   the same frozen rules and the same 1e-6 saddle-gap gate as its Python peer.
+  `src/dth_ocaml/play/` is a second dune package that holds the CS 3110 STL
+  engine and its terminal UI. The solver library does not link it.
 - The `dth_compact` project is the paper's one-file solver of **pure DTH**. It
   shares `src/dth/`'s rules, revival surface, and reference anchors, is held
   to the same 1e-6 saddle-gap gate, and is not the arena's policy provider.

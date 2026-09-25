@@ -12,6 +12,10 @@ This directory holds cited literature. Primary game evidence lives in
   rule commentary used by the evidence ledger.
 - `../game-sources/Leader-Deviation-Strategy.pdf` — deviation-plan analysis and
   cylinder-overflow evidence.
+- `../game-sources/STL Rules.pdf` — a one-page scan of the rules spread in
+  chapter 493, *Sound of Time*, PDF page 1. It shows the general rules, the
+  success and failure injections, near-death and CPR, the violations, and the
+  winning condition. The OCaml class project kept it until 2026-09-25.
 - [`../game-sources/IN_DEPTH_SUMMARY.md`](../game-sources/IN_DEPTH_SUMMARY.md) —
   a full round-by-round reading of the arc. Its per-turn state headers are a
   complete numeric ledger of the canonical match and carry the repository's
