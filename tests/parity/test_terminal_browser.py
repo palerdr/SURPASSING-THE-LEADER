@@ -7,9 +7,11 @@ options, or the same seed, and compares what they build or record.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
+from arena.policies import registry
 from arena.policies.ensemble_hal import EnsembleHalPolicyProvider
 from arena.testing import StageAgent as _StageAgent
 from browser.tests.fakes import StubHal as _StubHal, make_client as _client, play_out as _play_out
@@ -21,6 +23,8 @@ def test_cli_and_browser_select_the_declared_model(monkeypatch, choice, expected
     from browser.__main__ import build_parser as web_parser
     from arena.policies import perfect_hal
     monkeypatch.setattr(perfect_hal, "CompleteDTHAgent", lambda *args, **kwargs: object())
+    # The stub agent opens no tablebase, so the registry's artifact check has nothing to find.
+    monkeypatch.setattr(registry, "dth_artifact_dir", lambda args: Path(args.dth_complete_tablebase))
     arguments = ["--hal-agent", "perfect-hal", "--pure-dth", "--perfect-hal-model", choice]
     for args in (cli.build_parser().parse_args(["play", *arguments]), web_parser().parse_args(arguments)):
         provider = cli._make_perfect_hal_provider(args)
@@ -33,6 +37,8 @@ def test_cli_and_browser_can_select_ensemble(monkeypatch):
     from browser.__main__ import build_parser
     from arena.policies import ensemble_hal
     monkeypatch.setattr(ensemble_hal, "CompleteDTHAgent", lambda *a: _StageAgent())
+    # The stub agent opens no tablebase, so the registry's artifact check has nothing to find.
+    monkeypatch.setattr(registry, "dth_artifact_dir", lambda args: Path(args.dth_complete_tablebase))
     args = ["--hal-agent", "perfect-hal", "--perfect-hal-model", "ensemble", "--pure-dth"]
     for parsed in (cli.build_parser().parse_args(["play", *args]), build_parser().parse_args(args)):
         assert isinstance(cli._make_perfect_hal_provider(parsed), EnsembleHalPolicyProvider)
