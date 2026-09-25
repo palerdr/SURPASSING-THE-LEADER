@@ -1,7 +1,7 @@
 # Browser gameplay flow
 
 This is the design brief for the browser surface, in the author's terms. The
-server (`src/arena/web/`) and the STL engine own every rule; this document
+server (`src/browser/`) and the STL engine own every rule; this document
 describes only what the player sees, hears, and does, and in what order. The
 second half records every preference the author has stated, so a later
 change can be checked against them.

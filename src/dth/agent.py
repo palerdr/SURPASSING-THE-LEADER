@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dth.complete_tablebase import CompleteTablebase
+from dth.complete_tablebase import CompleteTablebase, _source_digest_inputs
 from dth.solver import (
     NTState,
     SADDLE_GAP_TOLERANCE,
@@ -18,6 +18,27 @@ from dth.solver import (
 )
 
 CERTIFIED_SADDLE_GAP_TOLERANCE = SADDLE_GAP_TOLERANCE
+
+
+def runtime_source_files() -> tuple[str, ...]:
+    """Return the files that a copy of this agent needs, by repository path.
+
+    A serving bundle that copies these paths under one directory, in the
+    repository layout, can import `CompleteDTHAgent` and open a complete
+    artifact built by the C backend. The list holds the modules that the agent
+    imports and each input of that artifact's `code_config_digest`, the root
+    `uv.lock` included. The digest labels each input with its path from the
+    common root, so a bundle must keep these paths unchanged.
+    """
+
+    package = Path(__file__).resolve().parent
+    root = package.parent.parent
+    files = [
+        package / "__init__.py",
+        package / "agent.py",
+        *_source_digest_inputs(include_rust=False, include_fast=True),
+    ]
+    return tuple(path.relative_to(root).as_posix() for path in files)
 
 
 @dataclass(frozen=True)

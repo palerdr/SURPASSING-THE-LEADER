@@ -1,8 +1,8 @@
 # Arena Project Instructions
 
-`src/arena/` is the neutral executable surface for matches between peer projects.
-It may import public interfaces from `stl`, `dth`, and `abstract`; peer projects
-must not import one another in return.
+`src/arena/` is the game library that the two game apps and the Hal lab share.
+It may import public interfaces from `stl`, `dth`, and `abstract`, and those
+projects must not import it.
 
 - The STL engine remains the only canonical live-game referee.
 - The completed DTH tablebase is the default Hal policy provider.
@@ -21,6 +21,9 @@ must not import one another in return.
 - [`src/terminal/`](../terminal/README.md) is the terminal game,
   `python -m terminal play`. Its README holds the invariants of the play flags
   and the rules screen.
+- [`src/browser/`](../browser/README.md) is the browser game,
+  `python -m browser`, with the hosted Vercel deployment. Its README holds the
+  server, hosted-session, and deploy invariants.
 - DTH projection is exact for the shared state and actions 1..60. The only
   prospective mismatch is Baku's legal Dropper action 61 in the public leap
   window; arena keeps that canonical action even though DTH has no 61 policy.
@@ -28,14 +31,14 @@ must not import one another in return.
 - Keep generated artifacts in the owning project, never under `src/arena/`.
 - `policies/registry.py` is the one Hal provider registry. It holds the play
   choices, the play flags, the provider factories, and the pure-DTH gate. The
-  terminal app and `web/__main__.py` build Hal through it.
+  terminal app and the browser app build Hal through it.
   `python -m hal_lab match` builds every play agent there too. hal_lab owns
   the research-only Aggro Hal choice, its flags, and its factory; the
   registry's pure-DTH gate still lists `aggro-hal`.
 - `policies/__init__.py` imports nothing. Import each provider from its own
   module, so the hosted runtime never loads torch or the stable-baselines3
-  training stack. `tests/test_runtime_imports.py` checks this in a fresh
-  interpreter.
+  training stack. `src/browser/tests/test_runtime_imports.py` checks this in
+  a fresh interpreter.
 - `presentation/` holds the sprite pipeline (`sprites.py`, `scene_art.py`) and
   the player-facing rules text (`rules_text.py`). The terminal app and the
   browser both read it, and the browser never imports the terminal app. Art
@@ -48,7 +51,7 @@ must not import one another in return.
   `src/hal_lab/harness/series.py`.
 - `testing.py` holds the fakes that the tests of more than one project share,
   such as `StageAgent` and `make_session`. No runtime module imports it.
-- No arena module imports `terminal` or `hal_lab`.
+- No arena module imports `terminal`, `browser`, or `hal_lab`.
   `tests/meta/test_layer_boundaries.py` enforces this rule.
 
 ## Play surfaces and the session
@@ -56,8 +59,8 @@ must not import one another in return.
 `session.py` owns the phase machine every interactive surface drives:
 `RULES -> AWAITING_ACTION -> AWAITING_ACK -> GAME_OVER`. It performs no I/O and
 no rendering; it only sequences the referee calls. `src/terminal/cli.py` and
-`web/app.py` are both thin adapters over it, so a rules change lands in one
-place.
+`src/browser/app.py` are both thin adapters over it, so a rules change lands in
+one place.
 
 Hal's action is chosen inside `PlaySession.submit`, after the human's second has
 been accepted and validated. That ordering is the hidden-information guarantee,
@@ -65,66 +68,9 @@ not a convenience: while a client is deciding, Hal's second does not exist in
 the process, so no snapshot can leak it. Do not hoist that call earlier to
 "prepare" a move.
 
-`web/app.py` serves the TypeScript client in `webclient/`. It builds its
-provider once at startup — provider construction memory-maps a
-multi-gigabyte artifact and the `abstract` provider can build a tablebase
-outright, so neither may happen on a request path; `python -m arena.web`
-refuses `--hal-agent abstract` for that reason. `web/schema.py` holds the only
-serializer that faces the browser, so the seat-scoping rule has exactly one
-place to be enforced and one place to be tested.
-
-The browser server is one repeated-opponent series, the same unit as
-`python -m terminal play --games N`: one Hal is retained across games, game
-`N` is seeded with the base seed plus `N`, and every finished game is appended
-to a public transcript in the CLI's `arena-public-play-session-v1` shape. `GET
-/api/transcript` serves that transcript plus the live game's resolved
-half-rounds, and `--transcript PATH` rewrites the same JSON after every
-finished game. `--public-hal-label`, `--conceal-hal-details`, `--pure-dth`,
-and every agent option of `python -m terminal play` are accepted with the same
-meaning.
-When `webclient/dist/` has been built, the Python server serves it at `/`, so
-one process is the whole game.
-
-Engine identities remain exactly `Hal` and `Baku`. `--human-name` and the web
-session's `human_name` are presentation labels only; they never replace Baku's
-rule-bearing identity. `Hal` is reserved as a display label. Browser session
-replacement is a sequenced mutation, is allowed only before play or after a
-terminal acknowledgement, and advances the sequence across the replacement.
-The browser server's live provider set is `dth`, `adaptive-dth`,
-`exploit-hal`, and, behind `--pure-dth`, `perfect-hal` and `pm-hal`; terminal
-`perfect-hal --perfect-hal-model translated-v1` also supports canonical play
-through its leap fallback. `python -m terminal play` offers `abstract`. The
-retired `stl-mcts` surface is not advertised. Browser snapshots carry
-server-owned character, role, and winner-seat fields, so the client never
-infers identity from presentation labels.
-
-The Vercel entrypoint uses `web/hosted.py` and `web/production.py` to isolate
-players with secure cookies and Redis command logs. It replays accepted commands
-through the same local HTTP adapter and commits each mutation before returning
-a reveal. A process keeps the game it last served and rebuilds it from the
-command log only when Redis shows that the game moved on elsewhere.
-`web/ledger.py` then writes the game's public history to Supabase,
-and `GET /api/leaderboard` ranks each player's best win by the winner's
-seconds of life left. A restart and a next game each replace the record with fresh seeds, an empty
-command list, and the next sequence number, so replay covers only the current
-game. The hosted exact Hal keeps no memory. You can opt into translated Hal
-with `STL_HAL_POLICY=translated-v1`. The hosted adapter then stores a private
-opponent checkpoint with each game record and restores it before command
-replay. Reload and next-game requests retain that evidence. Separate cookies
-keep separate models; workers share the immutable tablebase. The local server
-keeps one repeated-opponent series.
-See [deployment instructions](web/DEPLOYMENT.md).
-
-The browser requests a sequenced restart on page load. This abandons the active
-game and clears the visible series before returning the title page. Ordinary
-session reads still recover state for stale-request handling and worker replay.
+Engine identities remain exactly `Hal` and `Baku`. A display label never
+replaces Baku's rule-bearing identity, and `Hal` is reserved as a display
+label.
 
 The Hal research narrative, with its training commands and frozen results,
 lives in [`src/hal_lab/docs/HAL_RESEARCH.md`](../hal_lab/docs/HAL_RESEARCH.md).
-
-## Browser deployment
-
-See [web/DEPLOYMENT.md](web/DEPLOYMENT.md) for the certified recurrence build,
-local launch commands, and the per-player session changes needed for Vercel.
-The complete DTH reader accepts its source-bound v3 artifact. The browser
-keeps the existing commit-before-sampling and reveal contracts.

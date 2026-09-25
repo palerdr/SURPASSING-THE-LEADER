@@ -1,4 +1,4 @@
-// Mirrors arena/web/schema.py. Kept by hand; a Python test asserts field names,
+// Mirrors browser/schema.py. Kept by hand; a Python test asserts field names,
 // types, nullability, and requiredness so drift fails before browser runtime.
 
 export type Phase = "rules" | "awaiting_action" | "awaiting_ack" | "game_over";

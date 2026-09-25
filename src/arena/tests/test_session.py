@@ -9,11 +9,9 @@ import pytest
 
 from arena.session import Phase, PlaySession, SessionPhaseError
 from arena.testing import RecordingHal as _RecordingHal, make_session as _session
-from arena.web.schema import snapshot_from_session
 from stl.engine.game import (
     LS_WINDOW_START,
     PHYSICALITY_BAKU,
-    TOTAL_TTD_MAX,
     Player,
 )
 
@@ -180,33 +178,6 @@ def test_session_rejects_reserved_display_and_foreign_players() -> None:
             hal=session.hal,
             human=outsider,
         )
-
-
-@pytest.mark.parametrize(
-    ("half", "human_second", "fatal_player", "winner_is_human"),
-    [
-        (1, 1, "human", False),
-        (2, 60, "hal", True),
-    ],
-)
-def test_snapshot_carries_authoritative_winner_seat(
-    half: int,
-    human_second: int,
-    fatal_player: str,
-    winner_is_human: bool,
-) -> None:
-    session = _session(human_display_name="A display label")
-    session.game.current_half = half
-    player = session.human if fatal_player == "human" else session.hal
-    player.ttd = TOTAL_TTD_MAX
-    session.begin()
-    session.submit(human_second)
-
-    snapshot = snapshot_from_session(session)
-    assert snapshot.last_outcome is not None
-    assert snapshot.last_outcome.game_over is True
-    assert snapshot.last_outcome.session_ending is True
-    assert snapshot.winner_is_human is winner_is_human
 
 
 def test_only_a_human_dropper_may_use_the_leap_second() -> None:

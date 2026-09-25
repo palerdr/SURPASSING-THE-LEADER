@@ -8,11 +8,21 @@ import py_compile
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from arena.presentation.scene_art import SceneArt
 from arena.presentation.sprites import encode_png
+from browser.deploy.manifest import RUNTIME_FILES
 from dth.agent import CompleteDTHAgent
+
+# The bundle, the client, and the Vercel project link, by repository path.
+BUNDLE = "src/browser/build/vercel"
+WEBCLIENT = "src/browser/webclient"
+VERCEL_LINK = "src/browser/.vercel/project.json"
+# The packages the function installs. Their versions come from the root
+# uv.lock, which also pins the environment that built the artifact.
+BUNDLE_PACKAGES = ("fastapi", "numpy", "scipy", "httpx", "uvicorn")
 
 
 def add_bytecode(target: Path) -> int:
@@ -55,48 +65,27 @@ def add_bytecode(target: Path) -> int:
 
 
 def copy_runtime_sources(root: Path, target: Path) -> None:
-    """Copy the hosted provider and its source dependencies."""
-    files = [
-        "arena/__init__.py",
-        "arena/agent.py",
-        "arena/contracts.py",
-        "arena/dth_adapter.py",
-        "arena/session.py",
-        "arena/variants.py",
-        "arena/presentation/__init__.py",
-        "arena/presentation/rules_text.py",
-        "arena/presentation/scene_art.py",
-        "arena/presentation/sprites.py",
-        "arena/web/__init__.py",
-        "arena/web/app.py",
-        "arena/web/schema.py",
-        "arena/web/hosted.py",
-        "arena/web/ledger.py",
-        "arena/web/names.py",
-        "arena/web/production.py",
-        "arena/web/opponent_memory.py",
-        "arena/translated_hal_adapter.py",
-        "arena/policies/__init__.py",
-        "arena/policies/perfect_hal.py",
-        "arena/policies/translated_hal.py",
-        "arena/config/translated_hal_v1_selection.json",
-        "dth/__init__.py",
-        "dth/agent.py",
-        "dth/solver.py",
-        "dth/packed.py",
-        "dth/support_solver.py",
-        "dth/complete_tablebase.py",
-        "dth/fast_kernel.py",
-        "dth/fast_kernel.c",
-        "stl/__init__.py",
-    ]
-    files.extend(
-        str(p.relative_to(root / "src")) for p in (root / "src/stl/engine").glob("*.py")
-    )
-    for name in files:
-        destination = target / "runtime/src" / name
+    """Copy each file of the runtime manifest to ``runtime/`` in the bundle.
+
+    The copy keeps each file's path from the repository root, so the DTH
+    digest labels ``src/dth/...`` and ``uv.lock`` still match at cold start.
+    """
+    for entry in RUNTIME_FILES:
+        destination = target / "runtime" / entry.path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(root / "src" / name, destination)
+        shutil.copy2(root / entry.path, destination)
+
+
+def locked_versions(lock: Path, names: tuple[str, ...] = BUNDLE_PACKAGES) -> dict[str, str]:
+    """Return the one version that ``lock`` pins for each package in ``names``."""
+    found: dict[str, set[str]] = {name: set() for name in names}
+    for package in tomllib.loads(lock.read_text(encoding="utf-8")).get("package", []):
+        if package.get("name") in found:
+            found[package["name"]].add(str(package["version"]))
+    for name, versions in found.items():
+        if len(versions) != 1:
+            raise SystemExit(f"{lock} must pin one version of {name}; it pins {sorted(versions)}")
+    return {name: versions.pop() for name, versions in found.items()}
 
 
 def main():
@@ -112,7 +101,7 @@ def main():
     )
     options = parser.parse_args()
     if options.bytecode:
-        count = add_bytecode(root / "src/arena/web/build/vercel")
+        count = add_bytecode(root / BUNDLE)
         print(f"Added {count} bytecode files to the built function.")
         return
     agent = CompleteDTHAgent(options.artifact)
@@ -120,17 +109,17 @@ def main():
     print(
         f"Certified artifact: opening value={opening.value}, gap={opening.saddle_gap}"
     )
-    target = root / "src/arena/web/build/vercel"
+    target = root / BUNDLE
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
     subprocess.run(
-        ["npm", "--prefix", str(root / "src/arena/webclient"), "run", "build"],
+        ["npm", "--prefix", str(root / WEBCLIENT), "run", "build"],
         check=True,
     )
-    shutil.copytree(root / "src/arena/webclient/dist", target / "public")
+    shutil.copytree(root / WEBCLIENT / "dist", target / "public")
+    # The manifest holds the root uv.lock, so runtime/uv.lock comes with it.
     copy_runtime_sources(root, target)
-    shutil.copy2(root / "uv.lock", target / "runtime/uv.lock")
     artifact = target / "runtime/src/dth/artifacts/complete_fast_v1"
     artifact.mkdir(parents=True)
     for name in ("tablebase.json", "value.npy", "solver_kind.npy"):
@@ -147,14 +136,15 @@ def main():
         "import sys\nfrom pathlib import Path\n"
         "root = Path(__file__).resolve().parent\n"
         'sys.path.insert(0, str(root / "runtime/src"))\n'
-        "from arena.web.production import create_production_app\n"
+        "from browser.deploy.production import create_production_app\n"
         'app = create_production_app(root / "runtime/src/dth/artifacts/complete_fast_v1")\n'
     )
+    pins = locked_versions(root / "uv.lock")
+    dependencies = ", ".join(f'"{name}=={version}"' for name, version in pins.items())
     (target / "pyproject.toml").write_text(
         '[project]\nname = "stl-browser"\nversion = "0.1.0"\n'
         'requires-python = ">=3.13,<3.14"\n'
-        'dependencies = ["fastapi==0.141.1", "numpy==2.5.0", '
-        '"scipy==1.18.0", "httpx==0.28.1", "uvicorn==0.52.1"]\n'
+        f"dependencies = [{dependencies}]\n"
     )
     config = {
         "$schema": "https://openapi.vercel.sh/vercel.json",
@@ -168,7 +158,7 @@ def main():
         ],
     }
     (target / "vercel.json").write_text(json.dumps(config, indent=2) + "\n")
-    link = root / ".vercel/project.json"
+    link = root / VERCEL_LINK
     if link.exists():
         (target / ".vercel").mkdir()
         shutil.copy2(link, target / ".vercel/project.json")

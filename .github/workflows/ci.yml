@@ -84,14 +84,14 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: src/arena/webclient
+        working-directory: src/browser/webclient
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/arena/webclient/package-lock.json
+          cache-dependency-path: src/browser/webclient/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm test --if-present

@@ -30,7 +30,8 @@ GOVERNANCE = frozenset(
     }
 )
 # docs/ holds the canonical contracts, paper/ the TeX papers, src/ the
-# projects, and tests/ the repository meta-tests. outputs/ is the ignored
+# projects, and tests/ the repository meta-tests (tests/meta) and the
+# terminal-versus-browser parity tests (tests/parity). outputs/ is the ignored
 # legacy store of the Hal research runs; frozen evidence keys name its paths.
 DIRECTORIES = frozenset({"docs", "paper", "src", "tests", "outputs"})
 # Tracked root entries that a later restructure stage moves. Remove a name in

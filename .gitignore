@@ -65,9 +65,14 @@ src/dth_ocaml/bisect*.coverage
 # The prepared-frame cache stays derived — its filenames carry a pipeline hash.
 art/.sprite-cache/
 
-# Browser front end
-src/arena/webclient/node_modules/
-src/arena/webclient/dist/
+# Browser app: client dependencies and build, and the Vercel bundle. The
+# unanchored outputs/ and .vercel patterns cover src/browser/outputs/ and the
+# project link in src/browser/.vercel/.
+src/browser/webclient/node_modules/
+src/browser/webclient/dist/
+src/browser/build/
+# The Vercel bundle from before the browser app left src/arena/. Remove this
+# line when that directory is deleted.
 src/arena/web/build/
 
 # OS/editor noise

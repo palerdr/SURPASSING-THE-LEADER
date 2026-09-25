@@ -4,7 +4,7 @@ You can build the arena's complete pure-DTH policy artifact with:
 
 ```sh
 uv run python -m dth complete --config-name complete_fast_v1
-uv run python -m arena.web --dth-complete-tablebase src/dth/artifacts/complete_fast_v1
+uv run python -m browser --dth-complete-tablebase src/dth/artifacts/complete_fast_v1
 ```
 
 Use `output_dir=src/dth/artifacts/complete_full_v1` on the build command
@@ -80,4 +80,4 @@ sample. Neither result establishes cross-machine performance or byte parity.
 The values occupy 2,314,992,968 bytes before the NumPy header. Route bytes
 add 289,374,121 bytes. The recurrence changes build and policy reconstruction
 time. It does not compress the tablebase or extend pure DTH to STL's leap
-window. See the [arena deployment notes](../../arena/web/DEPLOYMENT.md).
+window. See the [browser deployment notes](../../browser/deploy/DEPLOYMENT.md).

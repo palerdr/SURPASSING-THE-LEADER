@@ -18,8 +18,8 @@ RUNTIME_MODULES = (
     "arena.policies.perfect_hal",
     "arena.policies.translated_hal",
     "arena.translated_hal_adapter",
-    "arena.web.opponent_memory",
-    "arena.web.production",
+    "browser.opponent_memory",
+    "browser.deploy.production",
 )
 TRAINING_MODULES = ("torch", "gymnasium", "stable_baselines3", "sb3_contrib")
 TERMINAL_MODULES = ("terminal", "terminal.cli", "terminal.tui")
@@ -29,7 +29,7 @@ TERMINAL_MODULES = ("terminal", "terminal.cli", "terminal.tui")
 _SERVE_RULES_AND_ART = """
 from fastapi.testclient import TestClient
 from arena.presentation.scene_art import SceneArt
-from arena.web.app import create_app
+from browser.app import create_app
 client = TestClient(create_app(hal_factory=object, art_loader=SceneArt, webclient_dist=None))
 assert client.get("/api/rules").status_code == 200
 assert client.get("/art/hal/idle/0.png").status_code == 404

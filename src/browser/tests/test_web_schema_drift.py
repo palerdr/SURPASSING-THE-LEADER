@@ -1,6 +1,6 @@
 """Keep the hand-written TypeScript types honest.
 
-``webclient/src/types.ts`` mirrors :mod:`arena.web.schema` by hand. A hand-kept mirror
+``webclient/src/types.ts`` mirrors :mod:`browser.schema` by hand. A hand-kept mirror
 is the right trade for a surface this small, but only if drift fails the suite
 rather than surfacing as ``undefined`` in a browser.
 """
@@ -17,7 +17,7 @@ from typing import Literal, Union, get_args, get_origin
 import pytest
 from pydantic import BaseModel
 
-from arena.web.schema import (
+from browser.schema import (
     Leaderboard,
     LeaderboardEntry,
     OutcomeView,

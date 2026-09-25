@@ -63,7 +63,7 @@ COMMAND = "uv run python tests/meta/formal_citations.py"
 
 # Generated trees. A file under one of these directory names is never a
 # citation target, so vendored Mathlib under src/formal/build, the Lake cache in
-# src/formal/.lake, and bundles such as src/arena/web/build do not make a bare
+# src/formal/.lake, and bundles such as src/browser/build do not make a bare
 # file name ambiguous.
 IGNORED_PARTS = frozenset(
     {

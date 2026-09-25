@@ -17,8 +17,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from arena.web.ledger import GameLedger, game_row
-from arena.web.schema import PlayerNameRequest, top_standings
+from browser.ledger import GameLedger, game_row
+from browser.schema import PlayerNameRequest, top_standings
 
 COOKIE = "stl_session"
 TTL_SECONDS = 7 * 24 * 60 * 60

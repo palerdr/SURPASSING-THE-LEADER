@@ -2389,7 +2389,7 @@ Finally run the repository-wide checks required after integration:
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 cargo test --workspace
-npm --prefix src/arena/webclient run typecheck
+npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 graphify update .

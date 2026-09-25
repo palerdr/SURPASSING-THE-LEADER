@@ -8,24 +8,11 @@ import random
 import httpx
 from fastapi.testclient import TestClient
 
-from arena.web.app import SessionConfig, create_app
-from arena.web.hosted import COOKIE, PLAYER_COOKIE, create_hosted_app
-from arena.web.ledger import game_row, life_left
-from arena.web.names import is_offensive
-
-
-class MemoryStore:
-    def __init__(self):
-        self.rows = {}
-
-    async def get(self, key):
-        return self.rows.get(key)
-
-    async def compare_set(self, key, old, new):
-        if self.rows.get(key) != old:
-            return False
-        self.rows[key] = new
-        return True
+from browser.app import SessionConfig, create_app
+from browser.hosted import COOKIE, PLAYER_COOKIE, create_hosted_app
+from browser.ledger import game_row, life_left
+from browser.names import is_offensive
+from browser.tests.fakes import MemoryStore, begin
 
 
 class Hal:
@@ -124,13 +111,6 @@ def hosted(store, version="test", ledger=None):
         secure_cookie=False,
         ledger=ledger,
     )
-
-
-def begin(client):
-    state = client.get("/api/session").json()
-    response = client.post("/api/session/begin", json={"sequence": state["sequence"]})
-    assert response.status_code == 200
-    return response.json()
 
 
 def test_players_are_isolated_and_a_fresh_worker_recovers_the_game():
@@ -471,7 +451,7 @@ def test_a_row_that_cannot_be_built_does_not_hide_a_committed_reveal(monkeypatch
     def broken(**_):
         raise KeyError("current_game")
 
-    monkeypatch.setattr("arena.web.hosted.game_row", broken)
+    monkeypatch.setattr("browser.hosted.game_row", broken)
     client = TestClient(hosted(MemoryStore(), ledger=MemoryLedger()))
     state = begin(client)
     response = client.post(

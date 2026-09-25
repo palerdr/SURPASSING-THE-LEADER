@@ -57,6 +57,3 @@ draws the full-screen ANSI scene that `--tui` selects.
 ## Working in this subtree
 
 Run `uv run python -m pytest src/terminal/tests -q`.
-`tests/test_browser_parity.py` gives the terminal and `python -m arena.web` the
-same options and compares the results. It imports the browser test helpers
-from `arena.tests.test_web_api`.

@@ -12,7 +12,9 @@ The registry gives each project three kinds of import rule:
 The check covers every ``src/<id>/**/*.py``, tests included. It reads each
 import statement in the file, including imports inside functions, because a
 lazy import is still a dependency. The torch firewall skips imports under
-``if TYPE_CHECKING:``, because those never run.
+``if TYPE_CHECKING:``, because those never run. The root ``tests/`` directory
+lies outside every project, so the check skips it: ``tests/parity`` imports
+both the terminal and the browser app, which neither app may do.
 
 A ``[[consumer]]`` entry, such as ``paper``, names a directory outside src/
 whose scripts import projects. The check holds each of its scripts to the

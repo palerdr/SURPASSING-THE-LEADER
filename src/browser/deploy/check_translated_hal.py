@@ -12,9 +12,10 @@ from fastapi.testclient import TestClient
 
 from arena.agent import PolicyDrivenAgent
 from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-from arena.web.app import SessionConfig, SeriesConfig, create_app
-from arena.web.hosted import create_hosted_app
-from arena.web.opponent_memory import OpponentMemory
+from browser.app import SessionConfig, SeriesConfig, create_app
+from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
+from browser.hosted import create_hosted_app
+from browser.opponent_memory import OpponentMemory
 from dth.agent import CompleteDTHAgent
 from stl.engine.game import LS_WINDOW_START
 
@@ -102,6 +103,14 @@ def main():
                 memory_sizes.append(len(record["opponent_memory"]))
                 record_sizes.append(len(next(iter(store.rows.values()))))
 
+    # The sources behind the measured runtime: this check, the files that
+    # enter the translated-v1 code version, and the artifact's tablebase.json.
+    sources = {str(Path(__file__)): Path(__file__)}
+    sources.update(
+        (entry.path, REPOSITORY_ROOT / entry.path) for entry in version_entries("translated-v1")
+    )
+    sources[str(args.artifact / "tablebase.json")] = args.artifact / "tablebase.json"
+
     def stats(values):
         return {"count": len(values), "p50_ms": float(np.quantile(values, .5)),
             "p95_ms": float(np.quantile(values, .95)), "max_ms": max(values)}
@@ -113,10 +122,8 @@ def main():
         "leap_61_reveals": leap_actions, "games": 32,
         "max_checkpoint_bytes": max(memory_sizes), "max_boundary_record_bytes": max(record_sizes),
         "gates": {"decision_p95_ms": 100, "request_p95_ms": 300, "recovery_p95_ms": 2000},
-        "source_sha256": {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in [Path(__file__), Path("src/arena/translated_hal_adapter.py"),
-                Path("src/arena/web/opponent_memory.py"), Path("src/arena/web/hosted.py"),
-                Path("src/arena/web/app.py"), args.artifact / "tablebase.json"]}}
+        "source_sha256": {label: hashlib.sha256(path.read_bytes()).hexdigest()
+            for label, path in sources.items()}}
     report["passed"] = (report["decision"]["p95_ms"] < 100
         and report["request"]["p95_ms"] < 300
         and report["worker_recovery"]["p95_ms"] < 2000 and leap_actions > 0)

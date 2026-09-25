@@ -3,8 +3,8 @@
 You can run the browser against the complete policy provider:
 
 ```sh
-npm --prefix src/arena/webclient run build
-uv run python -m arena.web --port 8766
+npm --prefix src/browser/webclient run build
+uv run python -m browser --port 8766
 ```
 
 The default path is `src/dth/artifacts/complete_full_v1`. The local v3 artifact
@@ -61,11 +61,16 @@ run the build on macOS. We checked that Vercel's Linux rule-profile digest
 matches the local artifact.
 
 ```sh
-uv run python -m arena.web.prepare_vercel
-npx vercel build --cwd src/arena/web/build/vercel --yes
-uv run python -m arena.web.prepare_vercel --bytecode
-npx vercel deploy --cwd src/arena/web/build/vercel --prebuilt --archive=tgz --target preview
+uv run python -m browser.deploy.prepare_vercel
+npx vercel build --cwd src/browser/build/vercel --yes
+uv run python -m browser.deploy.prepare_vercel --bytecode
+npx vercel deploy --cwd src/browser/build/vercel --prebuilt --archive=tgz --target preview
 ```
+
+`manifest.py` lists each runtime file that the preparation command copies
+into `runtime/`, in the repository layout. `production.py` hashes the files
+that the list flags `in_version` into the hosted code version. The preparation
+command reads the pins of the function's packages from the root `uv.lock`.
 
 Vercel ships no bytecode and sets `PYTHONDONTWRITEBYTECODE`, so a new process
 compiled numpy, scipy, and FastAPI from source. The `--bytecode` step compiles
@@ -73,7 +78,8 @@ each Python file that the built function maps, with Python 3.13 and the
 `unchecked-hash` mode, and adds the results to the function's file map. It cut
 the in-process share of a boot from about 4.3 s to about 2.7 s.
 
-You need a linked Vercel project at `.vercel/project.json`. The preparation
+You need a linked Vercel project at `src/browser/.vercel/project.json`;
+`npx vercel link --cwd src/browser` writes it. The preparation
 command copies that link into the generated directory. You can pass
 `--artifact PATH` to select a different complete artifact. Generated packages
 and tablebases remain outside Git. Use the prebuilt archive upload; a direct
@@ -169,7 +175,7 @@ a different referee or sampler.
 
 ## Game ledger and leaderboard
 
-`web/ledger.py` writes one Supabase row for each game. The server rewrites the
+`ledger.py` writes one Supabase row for each game. The server rewrites the
 row after each resolved half-round, once the session store has committed that
 half-round, so a closed tab leaves its moves behind and a losing concurrent
 request writes nothing. A restart marks the old series' open game `abandoned`.
@@ -192,7 +198,7 @@ facts only, so it holds in the leap window, where DTH has no value for 61. The
 browser shows the board after the win screen. A winner posts a name of at most
 16 characters. The server normalizes it to NFC and refuses control, format, and
 other invisible characters, names with no letter or digit, and runs of more
-than two combining marks. `web/names.py` refuses slurs and a few hate terms,
+than two combining marks. `names.py` refuses slurs and a few hate terms,
 through spacing, repeated letters, digit substitutions, and Cyrillic or Greek
 lookalikes; ordinary profanity passes. `names.py` stays out of the version
 digest on purpose, because a word-list change must not end active games. A
@@ -207,7 +213,7 @@ it never stops the game.
 Both tables enable row level security with no policy, and the four database
 functions grant execute to `service_role` alone.
 
-The local `python -m arena.web` surface retains its one-player process model.
+The local `python -m browser` surface retains its one-player process model.
 It keeps no ledger, answers 404 for the leaderboard, and the browser then skips
 that screen.
 Neither deployment mode changes the canonical referee or the leap rule.
@@ -217,7 +223,7 @@ Neither deployment mode changes the canonical referee or the leap rule.
 You can run the frozen candidate on the canonical local browser surface:
 
 ```sh
-uv run python -m arena.web --hal-agent perfect-hal --perfect-hal-model translated-v1 --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase --conceal-hal-details
+uv run python -m browser --hal-agent perfect-hal --perfect-hal-model translated-v1 --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase --conceal-hal-details
 ```
 
 Add `--pure-dth` to use the benchmark's permanent 1..60 game. Old remains
@@ -258,9 +264,9 @@ reveals from its 60-action model and clears stale sequence references.
 You can repeat the local operational check with a new output path:
 
 ```sh
-uv run python -m arena.web.check_translated_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --output outputs/translated-hal-v1/runtime-review.json
-uv run python -m pytest src/arena/tests src/terminal/tests tests/meta -q
-npm --prefix src/arena/webclient run typecheck
+uv run python -m browser.deploy.check_translated_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --output outputs/translated-hal-v1/runtime-review.json
+uv run python -m pytest src/arena/tests src/browser/tests tests/parity tests/meta -q
+npm --prefix src/browser/webclient run typecheck
 ```
 
 The recorded local run covered 32 games and 16 action-61 reveals. It measured

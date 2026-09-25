@@ -1,4 +1,4 @@
-"""Run the local browser server: ``uv run python -m arena.web``.
+"""Run the local browser server: ``uv run python -m browser``.
 
 Hal is built once here, at startup, through ``arena.policies.registry``: the
 same provider construction and the same agent options that
@@ -16,12 +16,12 @@ import uvicorn
 
 from arena.policies import registry
 from arena.session import validate_human_display_name
-from arena.web.app import DEFAULT_WEBCLIENT_DIST, SeriesConfig, SessionConfig, create_app
+from browser.app import DEFAULT_WEBCLIENT_DIST, SeriesConfig, SessionConfig, create_app
 from stl.engine.game import OPENING_START_CLOCK
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m arena.web")
+    parser = argparse.ArgumentParser(prog="python -m browser")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(

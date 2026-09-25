@@ -1,6 +1,6 @@
 """Prepare the clock samples from the chosen 44.1 kHz mono TikTok WAV.
 
-Run with: uv run python src/arena/webclient/tools/prepare_clock_audio.py SOURCE.wav
+Run with: uv run python src/browser/webclient/tools/prepare_clock_audio.py SOURCE.wav
 We retain the source pitch and suppress the music with a smooth spectral mask.
 We cannot recover a separate clock stem from a mono mix without some loss.
 """

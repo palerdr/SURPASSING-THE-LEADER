@@ -16,24 +16,30 @@
 - `docs/papers/` owns primary evidence and cited literature.
 - `src/stl/`, `src/dth/`, `src/dth_compact/`, `src/abstract/`, and
   `src/dth_ocaml/` are peer projects. They must not import one another.
-  `src/arena/` is a neutral play surface: it may consume their public
-  interfaces, but they must not import it or one another.
+  `src/arena/` is the game library that the apps and the lab share: it may
+  consume their public interfaces, but they must not import it or one another.
 - `src/formal/` is a Lean project that machine-checks the solvers' mathematics.
   It imports no other project, and no project imports it.
 - `src/crates/` is a shared Rust workspace; Python remains behavioral authority
   until an explicit parity contract says otherwise.
 - `src/terminal/` is the terminal game app, `python -m terminal play`. It may
   import `arena` and `stl.engine`, and no project imports it.
-- `src/arena/webclient/` is the TypeScript browser client and `src/arena/web/`
-  is its server. Both are arena play surfaces, like the terminal app. The
-  client renders state and collects input; it never derives game rules and
-  never receives an unrevealed action.
+- `src/browser/` is the browser game app, `python -m browser`: the FastAPI
+  server, the TypeScript client in `src/browser/webclient/`, and the Vercel
+  deploy pipeline in `src/browser/deploy/`. It may import `arena`,
+  `stl.engine`, and `dth.agent`, and no project imports it. The client renders
+  state and collects input; it never derives game rules and never receives an
+  unrevealed action.
 - `src/hal_lab/` is the Hal research lab. It owns Hal training, the
   `python -m hal_lab match` series, and the frozen evidence of the finished
   studies, with the ignored root `outputs/` store.
   It may import `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`,
   `dth.agent`, and `dth.solver`, and no project imports it.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.
+- The root `tests/` holds the repository meta-tests in `tests/meta/` and the
+  terminal-versus-browser parity tests in `tests/parity/`. A parity test runs
+  both apps with the same options. It lives outside `src/`, because neither
+  app may import the other.
 - Generated data must remain gitignored. Character sprites under `art/sprites/`
   are source art, not generated data, and are tracked.
 
@@ -57,16 +63,19 @@ such as `paper/*.py`.
 | Peers | `stl`, `dth`, `dth_compact`, `abstract`, `dth_ocaml`, `dth_cpp` | No other project |
 | Shared accelerators | `crates` | No other project |
 | Proofs | `formal` | Nothing |
-| Play surface | `arena` | `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver`, `abstract` |
+| Library | `arena` | `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver`, `abstract` |
 | App | `terminal` | `arena`, `stl.engine` |
+| App | `browser` | `arena`, `stl.engine`, `dth.agent` |
 | Lab | `hal_lab` | `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver` |
 | Consumer | `paper` | `stl.reader`, `main` (`src/dth_compact/main.py`) |
 
 - A cross-project import must sit under a `may_import` entry of the importer
   and under a `public_interfaces` entry of the owner. The compiled `*_rs`
   extension modules are outside this check.
-- `hal_lab` and `terminal` declare no public interface, so no project can
-  import them.
+- `hal_lab`, `terminal`, and `browser` declare no public interface, so no
+  project can import them.
+- The layer check scans `src/<id>/` alone. The root `tests/` directory sits
+  outside it, so `tests/parity/` may import both apps.
 - `FORBIDDEN_EDGES` in `tests/meta/test_layer_boundaries.py` holds the edges
   that no `may_import` entry can open: `arena` imports no `terminal`,
   `browser`, or `hal_lab` module, and `terminal` imports no `browser` or
@@ -78,8 +87,8 @@ such as `paper/*.py`.
 - Inside `arena`, `contracts.py`, `agent.py`, `session.py`, `match.py`, and
   `variants.py` import `stl.engine` and each other alone. `dth` and
   `abstract` enter through the adapters and `arena/policies/`.
-- `stl`, `dth`, `abstract`, `dth_compact`, `arena`, and `terminal` do not
-  import `torch`, `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The
+- `stl`, `dth`, `abstract`, `dth_compact`, `arena`, `terminal`, and `browser`
+  do not import `torch`, `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The
   files in `forbid_imports_exempt` are today's exceptions: arena's Hal
   training and evaluation code. Add no file to that list. `arena/policies/__init__.py`
   imports nothing. `hal_lab` may import these packages.
@@ -144,13 +153,13 @@ uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 cargo test --workspace
-npm --prefix src/arena/webclient run typecheck
+npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 lake -d src/formal build
 ```
 
-The typecheck needs `npm --prefix src/arena/webclient install` once. The browser
+The typecheck needs `npm --prefix src/browser/webclient install` once. The browser
 client is not covered by `pytest`, so skipping it leaves the front end
 unchecked.
 

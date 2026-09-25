@@ -135,7 +135,7 @@ Dropper action 61 legal. It skips those reveals in the 60-action model and
 clears sequence references while retaining prior evidence. It makes no
 action-61 optimization claim. The generated reports live under
 `outputs/translated-hal-v1/`; `config/translated_hal_v1_results.json` binds
-their hashes. See [deployment instructions](../../arena/web/DEPLOYMENT.md) for activation,
+their hashes. See [deployment instructions](../../browser/deploy/DEPLOYMENT.md) for activation,
 memory lifetime, and local runtime checks. No production deployment formed
 part of this evaluation.
 
@@ -319,7 +319,7 @@ uv run python -m arena.policies.evaluate_bayesian_hal --human-data outputs/perfe
 You can play the Bayesian candidate with:
 
 ```sh
-uv run python -m arena.web --hal-agent perfect-hal --perfect-hal-model bayesian-v2 --pure-dth --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase
+uv run python -m browser --hal-agent perfect-hal --perfect-hal-model bayesian-v2 --pure-dth --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase
 ```
 
 You must choose a fresh output path. The test command checks source and input

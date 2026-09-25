@@ -1,8 +1,8 @@
 """Local HTTP surface for browser play.
 
 A front end onto the same session as the terminal app (``terminal.cli`` and
-``terminal.tui``). It imports only ``stl`` and ``arena``, so it introduces no new
-peer project and no new import edge that ``AGENTS.md`` forbids. It shares the
+``terminal.tui``). It imports only ``stl.engine`` and ``arena``, the imports
+that ``docs/PROJECTS.toml`` allows the browser app. It shares the
 rules text and the prepared art with the terminal through
 ``arena.presentation``, and it never imports the terminal renderer. The STL
 engine remains the only referee; this module sequences requests and serializes
@@ -45,7 +45,7 @@ from arena.session import (
     validate_human_display_name,
 )
 from arena.variants import PureDTHGame
-from arena.web.schema import (
+from browser.schema import (
     ActionRequest,
     NewSessionRequest,
     SequencedRequest,
@@ -69,10 +69,10 @@ PANELS = {"stl_rules": ("stl_rules.png", "image/png")}
 
 TRANSCRIPT_SCHEMA = "arena-public-play-session-v1"
 
-# The built browser client. ``npm --prefix src/arena/webclient run build``
+# The built browser client. ``npm --prefix src/browser/webclient run build``
 # writes it; when it exists the Python server serves it alone, with no Vite
 # process, and when it does not the root route explains how to get it.
-DEFAULT_WEBCLIENT_DIST = Path(__file__).resolve().parents[1] / "webclient" / "dist"
+DEFAULT_WEBCLIENT_DIST = Path(__file__).resolve().parent / "webclient" / "dist"
 
 _NO_CLIENT_PAGE = """<!doctype html>
 <meta charset="utf-8">
@@ -81,10 +81,10 @@ _NO_CLIENT_PAGE = """<!doctype html>
 <h1 style="font-size:15px;letter-spacing:.22em">SURPASSING THE LEADER</h1>
 <p>The API is running, but the browser client has not been built.</p>
 <p>Either build it once and reload this page:</p>
-<pre>npm --prefix src/arena/webclient install
-npm --prefix src/arena/webclient run build</pre>
+<pre>npm --prefix src/browser/webclient install
+npm --prefix src/browser/webclient run build</pre>
 <p>or run the development client, which proxies to this server:</p>
-<pre>npm --prefix src/arena/webclient run dev</pre>
+<pre>npm --prefix src/browser/webclient run dev</pre>
 </body>
 """
 

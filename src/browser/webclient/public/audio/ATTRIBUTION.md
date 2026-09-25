@@ -23,7 +23,7 @@ an exact isolated clock stem. Listening validation remains open.
 Use the existing NumPy and SciPy environment to reproduce the cuts:
 
 ```bash
-uv run python src/arena/webclient/tools/prepare_clock_audio.py /path/to/ref.wav
+uv run python src/browser/webclient/tools/prepare_clock_audio.py /path/to/ref.wav
 ```
 
 The input is a mono, 16-bit, 44.1 kHz WAV, 41.1893 seconds long. Its SHA-256 is

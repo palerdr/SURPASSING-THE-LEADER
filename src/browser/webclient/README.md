@@ -1,12 +1,13 @@
 # Browser Client
 
-`src/arena/webclient/` is the TypeScript client for canonical STL play, and one
-of arena's play surfaces alongside the terminal app in `src/terminal/`. It is a
-rendering and input surface only. Its server is `src/arena/web/`, which holds
-every piece of game state, and the STL engine remains the only referee.
+`src/browser/webclient/` is the TypeScript client for canonical STL play. It
+is the browser app's play surface, beside the terminal app in `src/terminal/`.
+It is a rendering and input surface only. Its server is the Python package in
+`src/browser/`, which holds every piece of game state, and the STL engine
+remains the only referee.
 
-This file is documentation nested inside the arena subtree, not an instruction
-file; arena's binding guidance is `src/arena/README.md`.
+This file is documentation nested inside the browser subtree, not an
+instruction file; the browser's binding guidance is `src/browser/README.md`.
 
 ## Working in this subtree
 
@@ -26,7 +27,7 @@ file; arena's binding guidance is `src/arena/README.md`.
   then blown up with hard edges (`pixelated` in `scene.ts`). Sampling the
   full-size frame with nearest neighbour instead picked different source
   pixels on each idle frame, which shimmered white round Yakou's edge.
-- `src/types.ts` mirrors `src/arena/web/schema.py` by hand. A Python test
+- `src/types.ts` mirrors `src/browser/schema.py` by hand. A Python test
   asserts field names, types, nullability, and requiredness, so drift fails the
   suite. Update both.
 - Text received from the API must be assigned with `textContent` or passed
@@ -138,24 +139,24 @@ as the referee twitching.
 One process, once the client is built:
 
 ```bash
-npm --prefix src/arena/webclient run build        # writes dist/, gitignored
-uv run python -m arena.web                        # game on 127.0.0.1:8000
+npm --prefix src/browser/webclient run build       # writes dist/, gitignored
+uv run python -m browser                          # game on 127.0.0.1:8000
 ```
 
-`python -m arena.web` takes the same agent, seed, start-clock, label,
+`python -m browser` takes the same agent, seed, start-clock, label,
 transcript, and `--pure-dth` options as `python -m terminal play`. For client
 development run the Vite server instead, which proxies `/api` and `/art` to the
 Python server:
 
 ```bash
-uv run python -m arena.web                        # server on 127.0.0.1:8000
-npm --prefix src/arena/webclient run dev          # client on 127.0.0.1:5173
+uv run python -m browser                          # server on 127.0.0.1:8000
+npm --prefix src/browser/webclient run dev         # client on 127.0.0.1:5173
 ```
 
 Validate with:
 
 ```bash
-npm --prefix src/arena/webclient test
-npm --prefix src/arena/webclient run typecheck
-npm --prefix src/arena/webclient run build
+npm --prefix src/browser/webclient test
+npm --prefix src/browser/webclient run typecheck
+npm --prefix src/browser/webclient run build
 ```

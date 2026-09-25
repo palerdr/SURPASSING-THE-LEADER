@@ -24,7 +24,7 @@ from arena.session import (
     PlaySession,
     validate_human_display_name,
 )
-from arena.web.names import is_offensive
+from browser.names import is_offensive
 from stl.engine.game import (
     CYLINDER_MAX,
     TOTAL_TTD_MAX,

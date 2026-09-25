@@ -16,8 +16,6 @@ from typing import Mapping
 import numpy as np
 
 from arena.contracts import CanonicalDecision
-# PureDTHGame moved to arena.variants; existing importers still find it here.
-from arena.variants import PureDTHGame  # noqa: F401
 from dth.agent import CompleteDTHAgent, MoveDecision
 
 

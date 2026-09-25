@@ -13,16 +13,16 @@ from fastapi.testclient import TestClient
 
 from arena.agent import PolicyDrivenAgent
 from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-from arena.web.app import SessionConfig, SeriesConfig, create_app
-from arena.web.hosted import create_hosted_app
-from arena.web.opponent_memory import OpponentMemory
+from browser.app import SessionConfig, SeriesConfig, create_app
+from browser.hosted import create_hosted_app
+from browser.opponent_memory import OpponentMemory
 from arena.testing import (
     StageAgent as _StageAgent,
     make_decision as _decision,
     make_forecast as _forecast,
     make_reveal as _reveal,
 )
-from arena.tests.test_web_hosted import MemoryStore, begin
+from browser.tests.fakes import MemoryStore, begin
 from stl.engine.game import LS_WINDOW_START
 
 
@@ -199,7 +199,7 @@ def test_leap_fallback_keeps_evidence_and_clears_sequence_references():
 
 
 def test_hosted_package_imports_the_candidate_without_training_dependencies(tmp_path):
-    from arena.web.prepare_vercel import copy_runtime_sources
+    from browser.deploy.prepare_vercel import copy_runtime_sources
 
     root = Path(__file__).resolve().parents[3]
     copy_runtime_sources(root, tmp_path)
@@ -207,7 +207,7 @@ def test_hosted_package_imports_the_candidate_without_training_dependencies(tmp_
     code = (
         "import sys; sys.path.insert(0, sys.argv[1]); "
         "from arena.translated_hal_adapter import TranslatedHalPolicyProvider; "
-        "from arena.web.production import create_production_app; "
+        "from browser.deploy.production import create_production_app; "
         "p = TranslatedHalPolicyProvider('unused', agent=object()); "
         "assert p.config.offset_retention == 0.97; "
         "assert 'torch' not in sys.modules; "
@@ -235,7 +235,7 @@ def test_corrupt_durable_memory_fails_closed():
 
 @pytest.mark.parametrize("policy, label", [("exact", "certified-dth"), ("translated-v1", "translated-hal-v1")])
 def test_production_requires_an_explicit_candidate_switch(monkeypatch, policy, label):
-    from arena.web import production
+    from browser.deploy import production
 
     agent = _StageAgent()
     agent.tablebase = SimpleNamespace(metadata={"code_config_digest": "test"})

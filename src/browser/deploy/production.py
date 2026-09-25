@@ -9,9 +9,10 @@ from pathlib import Path
 
 from arena.agent import PolicyDrivenAgent
 from arena.dth_adapter import project_to_dth_state
-from arena.web.app import SessionConfig, SeriesConfig, create_app
-from arena.web.hosted import RedisSessionStore, create_hosted_app
-from arena.web.ledger import SupabaseLedger
+from browser.app import SessionConfig, SeriesConfig, create_app
+from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
+from browser.hosted import RedisSessionStore, create_hosted_app
+from browser.ledger import SupabaseLedger
 from dth.agent import CompleteDTHAgent
 
 
@@ -29,7 +30,7 @@ def create_production_app(artifact: Path):
     memory = None
     if policy_name == "translated-v1":
         from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-        from arena.web.opponent_memory import OpponentMemory
+        from browser.opponent_memory import OpponentMemory
 
         memory = OpponentMemory()
 
@@ -52,28 +53,12 @@ def create_production_app(artifact: Path):
             sequence_start=sequence_start,
         )
 
+    # The hosted code version. deploy/manifest.py flags the files that enter
+    # it for each policy.
     digest = hashlib.sha256()
     digest.update(policy_name.encode())
-    source = Path(__file__).resolve().parents[2]
-    for path in [
-        source / "arena/agent.py",
-        source / "arena/contracts.py",
-        source / "arena/dth_adapter.py",
-        source / "arena/session.py",
-        source / "arena/web/app.py",
-        source / "arena/web/hosted.py",
-        source / "arena/web/ledger.py",
-        source / "arena/web/production.py",
-        source / "arena/web/schema.py",
-        source / "stl/engine/game.py",
-        source / "stl/engine/actions.py",
-    ]:
-        digest.update(path.read_bytes())
-    if policy_name == "translated-v1":
-        for name in ("translated_hal_adapter.py", "web/opponent_memory.py",
-                     "policies/perfect_hal.py", "policies/translated_hal.py",
-                     "config/translated_hal_v1_selection.json"):
-            digest.update((source / "arena" / name).read_bytes())
+    for entry in version_entries(policy_name):
+        digest.update((REPOSITORY_ROOT / entry.path).read_bytes())
     digest.update(agent.tablebase.metadata["code_config_digest"].encode())
     url = os.environ.get("KV_REST_API_URL") or os.environ.get(
         "UPSTASH_REDIS_REST_URL", ""

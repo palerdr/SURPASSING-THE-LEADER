@@ -1,6 +1,6 @@
 """The terminal and the local browser server agree.
 
-Each test gives ``python -m terminal play`` and ``python -m arena.web`` the same
+Each test gives ``python -m terminal play`` and ``python -m browser`` the same
 options, or the same seed, and compares what they build or record.
 """
 
@@ -12,13 +12,13 @@ import pytest
 
 from arena.policies.ensemble_hal import EnsembleHalPolicyProvider
 from arena.testing import StageAgent as _StageAgent
-from arena.tests.test_web_api import _StubHal, _client, _play_out
+from browser.tests.fakes import StubHal as _StubHal, make_client as _client, play_out as _play_out
 
 
 @pytest.mark.parametrize("choice,expected", [("v1", "PerfectHalOpponentModel"), ("bayesian-v2", "BayesianHalOpponentModel")])
 def test_cli_and_browser_select_the_declared_model(monkeypatch, choice, expected):
     from terminal import cli
-    from arena.web.__main__ import build_parser as web_parser
+    from browser.__main__ import build_parser as web_parser
     from arena.policies import perfect_hal
     monkeypatch.setattr(perfect_hal, "CompleteDTHAgent", lambda *args, **kwargs: object())
     arguments = ["--hal-agent", "perfect-hal", "--pure-dth", "--perfect-hal-model", choice]
@@ -30,7 +30,7 @@ def test_cli_and_browser_select_the_declared_model(monkeypatch, choice, expected
 
 def test_cli_and_browser_can_select_ensemble(monkeypatch):
     from terminal import cli
-    from arena.web.__main__ import build_parser
+    from browser.__main__ import build_parser
     from arena.policies import ensemble_hal
     monkeypatch.setattr(ensemble_hal, "CompleteDTHAgent", lambda *a: _StageAgent())
     args = ["--hal-agent", "perfect-hal", "--perfect-hal-model", "ensemble", "--pure-dth"]

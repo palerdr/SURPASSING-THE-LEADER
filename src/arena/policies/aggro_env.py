@@ -33,8 +33,9 @@ from arena.contracts import (
     observe_provider,
     reset_provider_game,
 )
-from arena.dth_adapter import PureDTHGame, project_to_dth_state
+from arena.dth_adapter import project_to_dth_state
 from arena.policies.aggro_hal import encode_public_observation
+from arena.variants import PureDTHGame
 from dth.agent import CompleteDTHAgent
 from stl.engine.actions import validate_action
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL, Player, Referee
