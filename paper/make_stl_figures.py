@@ -2,10 +2,13 @@
 
 Run from the repository root with:
     uv run --with matplotlib python paper/make_stl_figures.py
+
+The script reads the table through ``stl.reader``, which checks the manifest
+and the DTH tail hash. Set STL_LEAP_ARTIFACT or STL_LEAP_DTH to an absolute
+path to read another copy.
 """
 
 from pathlib import Path
-import hashlib
 import json
 import sys
 
@@ -18,43 +21,29 @@ from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from stl.solver.leap_audit import PackedReader, certify_matrix, explicit_matrix, stage_inputs
-from stl.solver.leap_profiles import profiles
+from stl.reader import open_leap
 
-ARTIFACT = ROOT / "src/stl/outputs/leap-full-native"
 OUTPUT = ROOT / "paper/build/figures/stl"
+
+
+def source(path):
+    """Name the artifact by its repository path when it lies inside the repository."""
+    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
 
 
 def reconstruct():
     """Hold both profiles fixed and certify each reachable clock slice."""
-    manifest = json.loads((ARTIFACT / "manifest.json").read_text())
-    if not manifest["complete"]:
-        raise ValueError("the figure requires a completed STL table")
-    dth_path = ROOT / "src/dth_compact/artifacts/V.npy"
-    with dth_path.open("rb") as stream:
-        if hashlib.file_digest(stream, "sha256").hexdigest() != manifest["dth_sha256"]:
-            raise ValueError("the DTH tail differs from the audited solve")
-    dth = np.load(dth_path, mmap_mode="r")
-    reader = PackedReader(ARTIFACT / "tables")
-    p = profiles()
-    checker = int(np.flatnonzero((p.st == 60) & (p.ttd == 120))[0])
-    dropper = int(np.flatnonzero((p.st == 0) & (p.ttd == 180))[0])
-    records = []
-    for minute in range(44, 60):
-        key = ("H1", minute)
-        stored = float(reader.get(key, checker, dropper))
-        success, failure = stage_inputs(reader, key, checker, dropper, dth)
-        matrix = explicit_matrix(success, failure, False)
-        result = certify_matrix(matrix)
-        residual = abs(stored - result["value"])
-        if residual > 1e-6:
-            raise ValueError(f"clock {minute}: Bellman residual exceeds 1e-6")
-        records.append({"minute": minute, "stored_value": stored,
-                        "bellman_residual": residual, **result})
+    table = open_leap()
+    identity = table.identity
+    checker = table.profile_index(st=60, ttd=120)
+    dropper = table.profile_index(st=0, ttd=180)
+    # stage() raises when a Bellman residual or a saddle gap exceeds 1e-6.
+    records = [{"minute": minute, **table.stage(("H1", minute), checker, dropper)}
+               for minute in range(44, 60)]
     evidence = {
-        "source": str(ARTIFACT.relative_to(ROOT)),
-        "builder_sha256": manifest["builder_sha256"],
-        "dth_sha256": manifest["dth_sha256"],
+        "source": source(identity.artifact),
+        "builder_sha256": identity.builder_sha256,
+        "dth_sha256": identity.dth_sha256,
         "hal": {"st": 0, "ttd": 180, "role": "dropper"},
         "baku": {"st": 60, "ttd": 120, "role": "checker"},
         "records": records,

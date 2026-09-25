@@ -10,7 +10,9 @@
 
 - `docs/` owns repository-wide canonical game and solver contracts.
 - `paper/` owns the project's mathematical paper. Re-render and visually
-  inspect its PDF after changing the TeX.
+  inspect its PDF after changing the TeX. Its figure scripts read the STL
+  leap artifact through `stl.reader` and the compact DTH solver through
+  `src/dth_compact/main.py`, and import no other project module.
 - `docs/papers/` owns primary evidence and cited literature.
 - `src/stl/`, `src/dth/`, `src/dth_compact/`, `src/abstract/`, and
   `src/dth_ocaml/` are peer projects. They must not import one another.
@@ -26,8 +28,8 @@
   never receives an unrevealed action.
 - `src/hal_lab/` is the Hal research lab. It owns Hal training and the frozen
   evidence of the finished studies, with the ignored root `outputs/` store.
-  It may import `arena`, `stl.engine`, `stl.solver.canonical`, `dth.agent`,
-  and `dth.solver`, and no project imports it.
+  It may import `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`,
+  `dth.agent`, and `dth.solver`, and no project imports it.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.
 - Generated data must remain gitignored. Character sprites under `art/sprites/`
   are source art, not generated data, and are tracked.
@@ -44,20 +46,26 @@ Code loads them all as instruction files. Adding a subtree means adding its
 `docs/PROJECTS.toml` declares the import rules of each project.
 `tests/meta/test_layer_boundaries.py` enforces them on every
 `src/<id>/**/*.py` file, tests included, and it reads imports inside
-functions too.
+functions too. It also checks the scripts of each `[[consumer]]` entry,
+such as `paper/*.py`.
 
 | Layer | Projects | May import |
 | --- | --- | --- |
 | Peers | `stl`, `dth`, `dth_compact`, `abstract`, `dth_ocaml`, `dth_cpp` | No other project |
 | Shared accelerators | `crates` | No other project |
 | Proofs | `formal` | Nothing |
-| Play surface | `arena` | `stl.engine`, `stl.solver.canonical`, `dth.agent`, `dth.solver`, `abstract` |
-| Lab | `hal_lab` | `arena`, `stl.engine`, `stl.solver.canonical`, `dth.agent`, `dth.solver` |
+| Play surface | `arena` | `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver`, `abstract` |
+| Lab | `hal_lab` | `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver` |
+| Consumer | `paper` | `stl.reader`, `main` (`src/dth_compact/main.py`) |
 
 - A cross-project import must sit under a `may_import` entry of the importer
   and under a `public_interfaces` entry of the owner. The compiled `*_rs`
   extension modules are outside this check.
 - `hal_lab` declares no public interface, so no project can import it.
+- `paper` is a `[[consumer]]` entry, not a project, because it owns no
+  importable module. `stl.reader` is the one read path into a completed leap
+  artifact. Code outside `stl` reads leap tables through it, not through the
+  `stl.solver.leap_*` builder modules.
 - Inside `arena`, `contracts.py`, `agent.py`, `session.py`, `match.py`, and
   `variants.py` import `stl.engine` and each other alone. `dth` and
   `abstract` enter through the adapters and `arena/policies/`.

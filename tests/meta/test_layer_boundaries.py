@@ -13,6 +13,10 @@ The check covers every ``src/<id>/**/*.py``, tests included. It reads each
 import statement in the file, including imports inside functions, because a
 lazy import is still a dependency. The torch firewall skips imports under
 ``if TYPE_CHECKING:``, because those never run.
+
+A ``[[consumer]]`` entry, such as ``paper``, names a directory outside src/
+whose scripts import projects. The check holds each of its scripts to the
+entry's ``may_import`` and to the owners' ``public_interfaces``.
 """
 
 from __future__ import annotations
@@ -53,7 +57,9 @@ IGNORED_PARTS = frozenset(
 # one provider must not load torch through a sibling module.
 IMPORT_FREE = ("src/arena/policies/__init__.py",)
 
-PROJECTS = {str(entry["id"]): entry for entry in tomllib.loads(REGISTRY.read_text(encoding="utf-8"))["project"]}
+DOCUMENT = tomllib.loads(REGISTRY.read_text(encoding="utf-8"))
+PROJECTS = {str(entry["id"]): entry for entry in DOCUMENT["project"]}
+CONSUMERS = {str(entry["id"]): entry for entry in DOCUMENT.get("consumer", [])}
 
 
 @dataclass(frozen=True)
@@ -187,13 +193,36 @@ def python_files() -> tuple[tuple[str, str, str, list[Import]], ...]:
     return tuple(found)
 
 
+@cache
+def consumer_files() -> tuple[tuple[str, str, list[Import]], ...]:
+    """List (consumer id, repository path, imports) for the consumers' scripts."""
+
+    found = []
+    for consumer_id, entry in CONSUMERS.items():
+        base = ROOT / str(entry["path"])
+        for path in _walk(base):
+            module = ".".join(path.relative_to(base).with_suffix("").parts)
+            imports = imports_of(path.read_text(encoding="utf-8"), module)
+            found.append((consumer_id, path.relative_to(ROOT).as_posix(), imports))
+    return tuple(found)
+
+
 def layer_violations(project_id: str, imports: list[Import]) -> list[str]:
     entry = PROJECTS[project_id]
     allowed = [str(prefix) for prefix in entry.get("may_import", [])]
+    return _violations(project_id, allowed, imports)
+
+
+def consumer_violations(consumer_id: str, imports: list[Import]) -> list[str]:
+    allowed = [_interface(str(prefix)) for prefix in CONSUMERS[consumer_id].get("may_import", [])]
+    return _violations(None, allowed, imports)
+
+
+def _violations(own: str | None, allowed: list[str], imports: list[Import]) -> list[str]:
     problems = []
     for statement in imports:
         owner = owner_of(statement.candidates[0])
-        if owner is None or owner == project_id:
+        if owner is None or owner == own:
             continue
         interfaces = [_interface(str(name)) for name in PROJECTS.get(owner, {}).get("public_interfaces", [])]
         if any(
@@ -253,6 +282,29 @@ def test_every_project_declares_may_import_under_public_interfaces():
     assert not problems, "\n".join(problems)
 
 
+def test_every_consumer_lies_outside_src_and_imports_public_interfaces():
+    problems = []
+    for consumer_id, entry in CONSUMERS.items():
+        base = ROOT / str(entry["path"])
+        if consumer_id in PROJECTS:
+            problems.append(f"{consumer_id}: a consumer id must differ from every project id")
+        if not base.is_dir() or base.resolve().is_relative_to(SOURCE_ROOT.resolve()):
+            problems.append(f"{consumer_id}: path {entry['path']} must be a directory outside src/")
+        allowed = entry.get("may_import")
+        if not isinstance(allowed, list):
+            problems.append(f"{consumer_id}: may_import must be a list")
+            continue
+        for prefix in allowed:
+            name = _interface(str(prefix))
+            owner = owner_of(name)
+            interfaces = [_interface(str(face)) for face in PROJECTS.get(owner, {}).get("public_interfaces", [])]
+            if owner is None:
+                problems.append(f"{consumer_id}: may_import {prefix!r} names no Python project")
+            elif not any(_under(name, face) for face in interfaces):
+                problems.append(f"{consumer_id}: may_import {prefix!r} is outside {owner}'s public interfaces")
+    assert not problems, "\n".join(problems)
+
+
 def test_exempt_files_exist_and_still_import_a_forbidden_package():
     imports = {path: found for _, _, path, found in python_files()}
     problems = []
@@ -296,6 +348,11 @@ def test_cross_project_imports_follow_may_import():
     assert not any(problems.values()), _report(problems)
 
 
+def test_consumer_scripts_follow_may_import():
+    problems = {path: consumer_violations(consumer, found) for consumer, path, found in consumer_files()}
+    assert not any(problems.values()), _report(problems)
+
+
 def test_core_modules_import_their_allowed_modules_alone():
     problems = {path: core_violations(owner, module, found) for owner, module, path, found in python_files()}
     assert not any(problems.values()), _report(problems)
@@ -332,6 +389,23 @@ def test_checker_accepts_public_interfaces_and_rejects_internals():
     relative = imports_of("from ..solver import leap_build\n", "stl.engine.game")
     assert relative[0].candidates == ("stl.solver", "stl.solver.leap_build")
     assert layer_violations("stl", relative) == []
+
+
+def test_checker_holds_the_paper_to_stl_reader_and_the_compact_solver():
+    public = imports_of(
+        "from stl.reader import open_leap\nfrom stl import reader\nimport main as solver\nimport numpy\n",
+        "make_stl_figures",
+    )
+    assert consumer_violations("paper", public) == []
+    internal = imports_of(
+        "from stl.solver.leap_audit import PackedReader\nimport stl.engine.game\nimport arena.session\n",
+        "make_stl_figures",
+    )
+    assert consumer_violations("paper", internal) == [
+        "line 1 imports stl.solver.leap_audit.PackedReader (stl); may_import = ['stl.reader', 'main']",
+        "line 2 imports stl.engine.game (stl); may_import = ['stl.reader', 'main']",
+        "line 3 imports arena.session (arena); may_import = ['stl.reader', 'main']",
+    ]
 
 
 def test_checker_holds_core_modules_to_stl_engine():

@@ -21,6 +21,18 @@ version-suffixed names.
   `solver/leap_oracle.py` certifies scalar stages; `solver/leap_build.py` owns
   reachability, calibration, and the full sweep checkpoint. Python remains the
   behavioral authority for the opt-in Rust leap kernel.
+- `reader.py` is the public read path into a completed leap artifact
+  (`stl.reader` in `docs/PROJECTS.toml`). Other projects and the paper's
+  figure scripts read leap tables through it, not through `solver/`.
+  `open_leap()` checks the manifest schema, the complete flag, and the SHA-256
+  of the DTH tail before it returns a table. `verify="files"` also re-hashes
+  each file that the manifest lists. `LeapTable.stage()` re-certifies one
+  stored value with HiGHS and raises when the Bellman residual or the saddle
+  gap exceeds 1e-6. Default paths resolve from this package, or from the
+  absolute paths in `STL_LEAP_ARTIFACT` and `STL_LEAP_DTH`. The module opens
+  the artifact read-only. It sits outside `solver/`, so the builder hash does
+  not cover it; keep it there. `tests/test_reader.py` reproduces the paper's
+  16 H1 records and skips when `outputs/leap-full-native/` is absent.
 - Repository-wide canonical rules and formulation contracts belong in root
   `docs/`. Generated experiment data remains gitignored and STL-owned.
 

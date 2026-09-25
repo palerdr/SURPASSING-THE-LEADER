@@ -10,6 +10,11 @@ schema_version = 1
 #   one of the packages, so the list shrinks as files move out.
 # - core_modules can import each other and the modules in core_may_import,
 #   and no other first-party module.
+#
+# A [[consumer]] entry names a tracked directory outside src/ whose scripts
+# import projects but own no importable module, such as paper/. It lists
+# may_import alone, and the same test checks each of its scripts. An entry
+# may name a flat module by its file, as main.py.
 
 [[project]]
 id = "stl"
@@ -19,7 +24,7 @@ kind = "peer"
 languages = ["python"]
 rung = "L2"
 status = "implemented-unsolved"
-public_interfaces = ["stl.engine", "stl.solver.canonical"]
+public_interfaces = ["stl.engine", "stl.solver.canonical", "stl.reader"]
 may_import = []
 forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
@@ -128,6 +133,7 @@ public_interfaces = ["arena", "arena.web"]
 may_import = [
   "stl.engine",
   "stl.solver.canonical",
+  "stl.reader",
   "dth.agent",
   "dth.solver",
   "abstract",
@@ -186,6 +192,7 @@ may_import = [
   "arena",
   "stl.engine",
   "stl.solver.canonical",
+  "stl.reader",
   "dth.agent",
   "dth.solver",
 ]
@@ -207,3 +214,10 @@ public_interfaces = []
 may_import = []
 root_validation = true
 validation = ["lake -d src/formal build"]
+
+# The paper's figure scripts. They read the STL leap artifact through
+# stl.reader and the compact DTH solver through its one-file main.py.
+[[consumer]]
+id = "paper"
+path = "paper"
+may_import = ["stl.reader", "main.py"]
