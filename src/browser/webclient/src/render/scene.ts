@@ -1,6 +1,7 @@
-// The staged scene, after art/panels/stl1.jpg: the seated player on the left,
-// Yakou standing at the centre, the Dropper on the right. Roles swap between
-// halves, so the two players trade places while Yakou never moves.
+// The staged scene, after docs/game-sources/reference-art/panels/stl1.jpg: the
+// seated player on the left, Yakou standing at the centre, the Dropper on the
+// right. Roles swap between halves, so the two players trade places while Yakou
+// never moves.
 //
 // Constants are taken from src/terminal/tui.py so both front ends stage the scene
 // identically.

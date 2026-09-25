@@ -11,17 +11,18 @@ This repository contains deliberately separate game-solving projects:
 | `src/dth_ocaml/` | Hand-written exact OCaml reference; `play/` keeps the CS 3110 STL engine and terminal UI | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
 | `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
-| `src/arena/` | Game library: session, provider adapters, runtime Hal providers, shared presentation | Canonical STL referee with pluggable policy-provider adapters |
+| `src/arena/` | Game library: session, provider adapters, runtime Hal providers, shared presentation and its art | Canonical STL referee with pluggable policy-provider adapters |
 | `src/terminal/` | Terminal game app: `python -m terminal play` | Canonical STL, or pure DTH with `--pure-dth`, through `src/arena/` |
 | `src/browser/` | Browser game app: `python -m browser`, the TypeScript client, and the hosted Vercel deployment | Canonical STL, or pure DTH with `--pure-dth`, through `src/arena/` |
 | `src/hal_lab/` | Hal research lab: training, evaluation, and the frozen study evidence with its git-history verifier | Pure DTH and canonical STL through `src/arena/`; no project imports it |
 
 Repository-wide game contracts live in [`docs/`](docs/). The mathematical
-paper — a certified exact solution of the complete DTH game — lives at
-[`paper/`](paper/); primary game evidence lives in
-[`docs/game-sources/`](docs/game-sources/) and cited research in
-[`docs/papers/`](docs/papers/). The OCaml project records its authorship in
-[`src/dth_ocaml/AUTHORS.md`](src/dth_ocaml/AUTHORS.md).
+paper, a certified exact solution of the complete DTH game, lives at
+[`paper/`](paper/). Primary game evidence lives in
+[`docs/game-sources/`](docs/game-sources/), with the manga reference images in
+[`docs/game-sources/reference-art/`](docs/game-sources/reference-art/), and
+cited research lives in [`docs/papers/`](docs/papers/). The OCaml project
+records its authorship in [`src/dth_ocaml/AUTHORS.md`](src/dth_ocaml/AUTHORS.md).
 The machine-readable project catalog is [`docs/PROJECTS.toml`](docs/PROJECTS.toml),
 and [`docs/PROJECT_TEMPLATE.md`](docs/PROJECT_TEMPLATE.md) defines the common
 language-neutral project envelope.

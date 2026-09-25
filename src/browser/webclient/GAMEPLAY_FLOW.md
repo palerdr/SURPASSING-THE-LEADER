@@ -24,9 +24,9 @@ large so the state of the game reads at a glance.
 
 1. **Title, then rules.** The first screen shows DROP THE HANDKERCHIEF
    and one Start button on black. Start or Enter opens the chapter's rules
-   PNG (`art/panels/stl_rules.png`) without a server wait. Beneath the panel,
-   Begin starts play. One footer explains same-second checks and the modeled
-   revival odds. These screens contain no name form or HUD.
+   PNG (`src/arena/art/panels/stl_rules.png`) without a server wait. Beneath
+   the panel, Begin starts play. One footer explains same-second checks and
+   the modeled revival odds. These screens contain no name form or HUD.
    Opening or reloading returns to the title and resets the series, with the
    opening clock and empty score and history. Begin or Enter on the rules
    during startup waits for preparation. The client resets and begins the

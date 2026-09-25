@@ -36,7 +36,7 @@ GOVERNANCE = frozenset(
 DIRECTORIES = frozenset({"docs", "paper", "src", "tests", "outputs"})
 # Tracked root entries that a later restructure stage moves. Remove a name in
 # the change that moves it; the second test fails while a listed name is gone.
-LEGACY = frozenset({"art"})
+LEGACY = frozenset()
 
 
 def _root_entries() -> set[str]:

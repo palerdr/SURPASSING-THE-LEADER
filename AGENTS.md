@@ -40,8 +40,9 @@
   terminal-versus-browser parity tests in `tests/parity/`. A parity test runs
   both apps with the same options. It lives outside `src/`, because neither
   app may import the other.
-- Generated data must remain gitignored. Character sprites under `art/sprites/`
-  are source art, not generated data, and are tracked.
+- Generated data must remain gitignored. The character sprites under
+  `src/arena/art/sprites/` and the rules spread in `src/arena/art/panels/` are
+  source art, not generated data, and are tracked.
 
 Read the nearest nested `README.md` only when working in that subtree. Do not
 place subsystem status, plans, or invariants in the repository root.

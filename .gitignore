@@ -59,11 +59,11 @@ src/dth_ocaml/bisect*.coverage
 # Character sprites are source art, not generated output: the browser front end
 # and the terminal scene both read them, and a fresh clone without them renders
 # labelled placeholders instead of a game.
-!art/sprites/**/*.png
+!src/arena/art/sprites/**/*.png
 # The chapter's rules spread is source art too: the browser's opening slide.
-!art/panels/stl_rules.png
-# The prepared-frame cache stays derived — its filenames carry a pipeline hash.
-art/.sprite-cache/
+!src/arena/art/panels/stl_rules.png
+# The prepared-frame cache stays derived. Its filenames carry a pipeline hash.
+src/arena/art/.sprite-cache/
 
 # Browser app: client dependencies and build, and the Vercel bundle. The
 # unanchored outputs/ and .vercel patterns cover src/browser/outputs/ and the
@@ -71,9 +71,6 @@ art/.sprite-cache/
 src/browser/webclient/node_modules/
 src/browser/webclient/dist/
 src/browser/build/
-# The Vercel bundle from before the browser app left src/arena/. Remove this
-# line when that directory is deleted.
-src/arena/web/build/
 
 # OS/editor noise
 .DS_Store

@@ -467,7 +467,7 @@ def create_app(
 
     @app.get("/art/panel/{name}")
     def panel(name: str) -> Response:
-        """A manga panel from ``art/panels``, by bare name; only known names."""
+        """A manga panel from ``PANEL_ROOT``, by bare name; only known names."""
 
         entry = PANELS.get(name)
         if entry is None:

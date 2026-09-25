@@ -11,7 +11,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from arena.presentation.scene_art import SceneArt
+from arena.presentation.scene_art import PANEL_ROOT, SceneArt
 from arena.presentation.sprites import encode_png
 from browser.deploy.manifest import RUNTIME_FILES
 from dth.agent import CompleteDTHAgent
@@ -124,14 +124,14 @@ def main():
     artifact.mkdir(parents=True)
     for name in ("tablebase.json", "value.npy", "solver_kind.npy"):
         shutil.copy2(options.artifact / name, artifact / name)
-    for (character, pose), frames in SceneArt.load(root / "art/sprites").poses.items():
+    for (character, pose), frames in SceneArt.load().poses.items():
         folder = target / "public/art" / character / pose
         folder.mkdir(parents=True, exist_ok=True)
         for index, frame in enumerate(frames):
             (folder / f"{index}.png").write_bytes(encode_png(frame))
     panel = target / "public/art/panel/stl_rules"
     panel.parent.mkdir(parents=True)
-    shutil.copy2(root / "art/panels/stl_rules.png", panel)
+    shutil.copy2(PANEL_ROOT / "stl_rules.png", panel)
     (target / "app.py").write_text(
         "import sys\nfrom pathlib import Path\n"
         "root = Path(__file__).resolve().parent\n"

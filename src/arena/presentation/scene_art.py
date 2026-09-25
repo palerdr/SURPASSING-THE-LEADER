@@ -1,6 +1,6 @@
 """Prepared character art shared by the terminal and the browser front ends.
 
-This module turns the source sprite sheets under the repository ``art/`` tree
+This module turns the source sprite sheets under this package's ``art/`` tree
 into keyed, split, and mirrored frames. The terminal draws those frames as
 character cells, and the browser server serves them as PNG images. Every path
 resolves from this file, so a front end finds the art from any working
@@ -26,14 +26,14 @@ _WORK_EDGE = 320
 # Bumped whenever the preparation pipeline changes, so stale caches are ignored.
 _PIPELINE_VERSION = 5
 
-# The repository ``art/`` tree. This file sits in src/arena/presentation/, so
-# parents[3] is the repository root.
-ART_ROOT = Path(__file__).resolve().parents[3] / "art"
+# The package's ``art/`` tree. This file sits in src/arena/presentation/, so
+# parents[1] is src/arena/.
+ART_ROOT = Path(__file__).resolve().parents[1] / "art"
 
 _ART_ROOT = ART_ROOT / "sprites"
 
 # Prepared frames are memoised here. Generated data, so it stays gitignored and
-# lives beside the art it derives from rather than under arena/.
+# lives beside the art it derives from.
 _CACHE_DIR = ART_ROOT / ".sprite-cache"
 
 # Manga panels, such as the rules spread that opens the browser game.

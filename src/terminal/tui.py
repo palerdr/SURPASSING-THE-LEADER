@@ -5,10 +5,10 @@ engine objects and returns text; none of them advance the clock, resolve a
 half-round, or write to a :class:`~stl.engine.game.Player`. The STL engine
 remains the only referee, exactly as ``src/arena/README.md`` requires.
 
-The scene is staged after ``art/panels/stl1.jpg``: the seated player on the
-left, Yakou standing at the centre, and the Dropper on the right facing left
-with the handkerchief held inward. Roles swap between halves, so the two players
-swap around Yakou, who never moves.
+The scene is staged after ``docs/game-sources/reference-art/panels/stl1.jpg``:
+the seated player on the left, Yakou standing at the centre, and the Dropper on
+the right facing left with the handkerchief held inward. Roles swap between
+halves, so the two players swap around Yakou, who never moves.
 
 ``arena.presentation`` prepares the sprite art and holds the rules text; the
 browser server reads the same modules. When the art is missing the scene

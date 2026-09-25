@@ -10,8 +10,9 @@ dependency and the arena must not add one. Only the subset the art pipeline
 actually produces is supported: 8-bit non-interlaced greyscale, RGB, indexed,
 and their alpha variants.
 
-Sprites live in the repository's ``art/`` tree, which is gitignored, so every
-entry point here must tolerate a missing file rather than fail the play loop.
+Sprites live in this package's ``art/`` tree. The Vercel bundle's runtime holds
+no copy of that tree, so every entry point here must tolerate a missing file
+rather than fail the play loop.
 """
 
 from __future__ import annotations
@@ -436,8 +437,8 @@ def write_png(sprite: Sprite, path: str | Path) -> None:
 def load_sprite(path: str | Path, max_edge: int | None = None) -> Sprite | None:
     """Decode a sprite, returning ``None`` when the art is absent or unreadable.
 
-    The art tree is gitignored, so a missing sprite is an ordinary condition
-    and must never break the play loop.
+    A checkout can lack a sprite or hold an unreadable one, so a missing
+    sprite must never break the play loop.
     """
     try:
         return decode_png(path, max_edge)

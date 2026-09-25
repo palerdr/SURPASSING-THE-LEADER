@@ -27,6 +27,20 @@ This directory holds cited literature. Primary game evidence lives in
 The ledger records one transcription error, catalogued as
 [E-LEDGER-ERRATUM](../game-sources/EVIDENCE.md#e-ledger-erratum).
 
+## Reference art
+
+[`../game-sources/reference-art/`](../game-sources/reference-art/) holds 14
+manga reference images. They support no rule, and no code reads them. They
+moved from the root `art/` directory on 2026-09-25.
+
+- `panels/stl1.jpg` is the spread that the terminal and browser scenes follow:
+  the seated player on the left, Yakou at the centre, and the Dropper on the
+  right with the handkerchief. `panels/stl2.jpg` and `panels/stl3.webp` are two
+  more panels of the match.
+- `baku/` (four images) and `hal/` (seven images, with the chair and cube
+  references) are character references for the sprites. The sprites that the
+  games draw are in `src/arena/art/sprites/`.
+
 ## Project paper
 
 The mathematical paper lives at the repository root:

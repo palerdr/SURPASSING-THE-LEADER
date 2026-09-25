@@ -127,8 +127,9 @@ one full-screen stage rather than a scrolling page:
 - `src/main.ts` — holds the latest snapshot and transcript and re-renders on
   change.
 
-The scene is staged after `art/panels/stl1.jpg` and uses the same constants as
-`src/terminal/tui.py`, so both front ends frame it identically.
+The scene is staged after `docs/game-sources/reference-art/panels/stl1.jpg`
+and uses the same constants as `src/terminal/tui.py`, so both front ends frame
+it identically.
 One difference is deliberate: the terminal cycles Yakou's four-frame idle
 sheet, while the browser holds his first frame. The sheet's frames are separate
 drawings, each re-centred on a shared canvas, and on a screen the cycle read
