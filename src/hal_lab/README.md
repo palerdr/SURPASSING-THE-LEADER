@@ -30,7 +30,11 @@ plan.
 - `harness/` holds the code that more than one study or trainer uses:
   `series.py` plays the paired-seat series and holds the SPRT, and
   `opponent_league.py` holds the deterministic public-history opponent
-  families. Put new shared research code here.
+  families. `baselines.py` holds the exact, uniform, and memory-reset
+  providers and the fitted human opponent. `human_data.py` splits recorded
+  games by player and builds Hal-side observations and priors. `stats.py`
+  holds the identity-clustered bootstrap interval and the hard best response.
+  Put new shared research code here, and import these modules directly.
 - `training/` holds the trainers: `train_exploit_hal.py` with its gym
   `exploit_hal_gym.py`, and `train_aggro_hal.py` with its environment
   `aggro_env.py` and its curriculum `aggro_memory_curriculum.py`.
@@ -44,7 +48,9 @@ plan.
   `translated_hal_v1` imports `perfect_hal_bayes_v2` and
   `perfect_hal_ensemble_v1`, and `selector_study_v1` imports
   `neural_pilots_v1`. Do not edit a frozen runner to share its code; put the
-  shared code in `harness/`.
+  shared code in `harness/`. `perfect_hal_bayes_v2/evaluate_bayesian_hal.py`
+  imports its baselines, data helpers, and statistics from `harness/` under
+  their earlier names, so the studies that import them through it still run.
 - A runner that hashes its input modules finds an `arena.policies` provider,
   or a module in another hal_lab package, through that module's `__file__`.
   The runner uses `Path(__file__).with_name(...)` only for a sibling file in

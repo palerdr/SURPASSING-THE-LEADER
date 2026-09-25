@@ -16,79 +16,18 @@ import time
 
 import numpy as np
 
-from arena.contracts import CanonicalDecision
 from arena.dth_adapter import project_to_dth_state
 from arena.match import play_match_game
 from arena.policies import bayesian_hal, perfect_hal
-from arena.policies.bayesian_hal import BayesianHalConfig, BayesianHalOpponentModel, ROLES
+from arena.policies.bayesian_hal import BayesianHalConfig, BayesianHalOpponentModel
 from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
 from dth.agent import CompleteDTHAgent
+from hal_lab.harness.baselines import ExactProvider, FittedHumanOpponent, ResetMemoryProvider, UniformProvider
+from hal_lab.harness.human_data import fit_priors, human_observation, split_games
 from hal_lab.harness.opponent_league import ReactiveDTHOpponent, SUPPORTED_FAMILIES
+from hal_lab.harness.stats import cluster_interval, hard_response
 
 CONTROLLERS = ("exact", "legacy", "bayes", "bayes_population", "bayes_reset")
-
-
-def split_games(games, protocol):
-    """Hold out complete later games within each anonymous player identity."""
-    players = defaultdict(list)
-    for game in sorted(games, key=lambda g: g["ordinal"]):
-        players[game["player"]].append(game)
-    result = {}
-    for player, records in players.items():
-        n = len(records)
-        train_end = max(1, int(n * protocol["human_train_fraction"]))
-        validation_end = train_end + max(1, int(n * protocol["human_validation_fraction"]))
-        if n < protocol["minimum_player_games"]:
-            result[player] = {"train": records, "validation": [], "test": []}
-        else:
-            result[player] = {"train": records[:train_end], "validation": records[train_end:validation_end], "test": records[validation_end:]}
-    return result
-
-
-def human_observation(move):
-    """Build Hal's decision using pre-reveal public fields, with no native state."""
-    before = move["public_state_before"]
-    if before["turn_duration"] != 60:
-        return None
-    drop, check = move["drop_second"], move["check_second"]
-    if any(isinstance(a, bool) or not isinstance(a, int) or not 1 <= a <= 60 for a in (drop, check)):
-        raise ValueError("invalid recorded ordinary-turn action")
-    players = {p["name"]: p for p in before["players"]}
-    if set(players) != {"Hal", "Baku"} or {move["dropper"], move["checker"]} != set(players):
-        raise ValueError("recorded player identities are malformed")
-    d, c = players[move["dropper"]], players[move["checker"]]
-    hal_role = "dropper" if move["dropper"] == "Hal" else "checker"
-    decision = CanonicalDecision(hal_role, "Hal", 60, tuple(range(1, 61)),
-        c["cylinder_seconds"], c["ttd_seconds"], d["cylinder_seconds"], d["ttd_seconds"], None)
-    return decision, ("checker" if hal_role == "dropper" else "dropper"), (check if hal_role == "dropper" else drop), (drop if hal_role == "dropper" else check)
-
-
-def fit_priors(partitions, pseudocount, excluded_player=None):
-    """Use training partitions only; leave the target player's identity out."""
-    counts = {role: np.full(60, pseudocount) for role in ROLES}
-    for player, splits in partitions.items():
-        if player == excluded_player:
-            continue
-        for game in splits["train"]:
-            for move in game["public_history"]:
-                observation = human_observation(move)
-                if observation is not None:
-                    counts[observation[1]][observation[2] - 1] += 1
-    return {role: values / values.sum() for role, values in counts.items()}
-
-
-def cluster_interval(values, protocol):
-    values = np.asarray(values, dtype=float)
-    if not len(values):
-        return {"mean": None, "interval_95": None, "identities": 0}
-    rng = np.random.default_rng(protocol["bootstrap_seed"])
-    samples = rng.choice(values, (protocol["bootstrap_replicates"], len(values)), replace=True).mean(axis=1)
-    return {"mean": float(values.mean()), "interval_95": np.quantile(samples, [0.025, 0.975]).tolist() if len(values) > 1 else None, "identities": len(values)}
-
-
-def hard_response(values):
-    winners = values >= np.max(values) - 1e-12
-    return winners / winners.sum()
 
 
 def evaluate_logs(partitions, agent, bayes_config, protocol, split):
@@ -143,69 +82,6 @@ def evaluate_logs(partitions, agent, bayes_config, protocol, split):
         "paired_gain_over_exact": {name: cluster_interval([p["controllers"][name]["gain_over_exact"] for p in player_results if p["controllers"]], protocol) for name in CONTROLLERS if name != "exact"},
         "paired_nll_vs_legacy": {name: cluster_interval([p["controllers"][name]["nll"] - p["controllers"]["legacy"]["nll"] for p in player_results if p["controllers"]], protocol) for name in ("bayes", "bayes_population")},
     }
-
-
-class ExactProvider:
-    def __init__(self, agent):
-        self.agent = agent
-
-    def policy(self, decision):
-        move = self.agent.decide(project_to_dth_state(decision))
-        policy = move.drop_policy if decision.role == "dropper" else move.check_policy
-        return {i + 1: float(p) for i, p in enumerate(policy) if p > 0}
-
-
-class UniformProvider:
-    def policy(self, decision):
-        return {i: 1 / 60 for i in range(1, 61)}
-
-
-class ResetMemoryProvider:
-    def __init__(self, provider):
-        self.provider = provider
-
-    def policy(self, decision):
-        self.provider.opponent_model.reset()
-        return self.provider.policy(decision)
-
-    def __getattr__(self, name):
-        return getattr(self.provider, name)
-
-
-class FittedHumanOpponent:
-    """Independent smoothed categorical/response emulator fit to early games."""
-
-    def __init__(self, games, *, reactive, pseudocount=0.5):
-        self.reactive = reactive
-        self.counts = {r: np.full(60, pseudocount) for r in ROLES}
-        self.responses = {r: {} for r in ROLES}
-        previous = {r: None for r in ROLES}
-        for game in games:
-            for move in game["public_history"]:
-                obs = human_observation(move)
-                if obs is None:
-                    previous = {r: None for r in ROLES}
-                    continue
-                _, role, action, hal_action = obs
-                self.counts[role][action - 1] += 1
-                if previous[role] is not None:
-                    self.responses[role].setdefault(previous[role], np.zeros(60))[action - 1] += 1
-                previous[role] = hal_action
-        self.previous = {r: None for r in ROLES}
-
-    def policy(self, decision):
-        self.name = decision.actor_name
-        role = decision.role
-        prior = self.counts[role] / self.counts[role].sum()
-        counts = self.responses[role].get(self.previous[role]) if self.reactive else None
-        policy = prior if counts is None else (counts + 5 * prior) / (counts.sum() + 5)
-        return {i + 1: float(p) for i, p in enumerate(policy)}
-
-    def observe(self, record):
-        if record.dropper_name == self.name:
-            self.previous["dropper"] = record.check_time
-        else:
-            self.previous["checker"] = record.drop_time
 
 
 def make_provider(name, artifact, agent, bayes_config, priors):
