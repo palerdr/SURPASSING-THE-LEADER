@@ -38,10 +38,10 @@ completed artifact in arena play.
 
 ## Research status
 
-Dataset generation, neural training, self-play, CFR, and MCTS remain available
-for compression, explanation, robustness studies, and comparisons. Their
-outputs are experimental measurements downstream of the exact solution. They
-do not establish DTH values or policy authority.
+We removed the closed research line of dataset generation, neural training,
+self-play, CFR, and MCTS from the tree. The `pre-restructure` Git tag keeps its
+last version. Its outputs were experimental measurements downstream of the
+exact solution and never established DTH values or policy authority.
 
 ## Validation
 

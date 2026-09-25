@@ -5,7 +5,7 @@ This repository contains deliberately separate game-solving projects:
 | Project | Purpose | Rules |
 | --- | --- | --- |
 | `src/stl/` | Canonical leap-aware referee compatibility layer and formulation shell; no complete STL solver yet | L2 public game; only Baku as Dropper may use second 61 |
-| `src/dth/` | Completed pure Drop the Handkerchief solve and optional research tooling | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
+| `src/dth/` | Completed pure Drop the Handkerchief solve and its audit | Exact 289,374,121-class quotient tablebase; literal seconds 1..60 |
 | `src/dth_compact/` | The paper's solver: one numba file that builds the complete 289,374,121-class table in about 49 s | Pure DTH; literal seconds 1..60 |
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
 | `src/dth_ocaml/` | Hand-written exact OCaml reference | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
@@ -44,13 +44,12 @@ opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
 # Neutral STL Hydra experiment harness
 uv run python -m stl.cli --help
 
-# Pure DTH complete solution and optional research tools
+# Pure DTH complete solution and its audit
 uv run python -m dth --help
 
 # Complete exact DTH quotient tablebase
 uv run python -m dth complete
-uv run python -m dth dataset --help
-uv run python -m dth train --help
+uv run python -m dth complete-audit
 
 # The paper's compact solver: its own uv project (numba is not a root dependency)
 uv run --project src/dth_compact src/dth_compact/main.py

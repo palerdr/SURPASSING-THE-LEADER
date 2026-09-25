@@ -36,18 +36,6 @@ status = "solved"
 public_interfaces = ["dth.solver", "dth.agent"]
 may_import = []
 forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
-# The closed DTH research modules and their tests import torch today.
-forbid_imports_exempt = [
-  "src/dth/mcts.py",
-  "src/dth/network.py",
-  "src/dth/readiness.py",
-  "src/dth/research_agent.py",
-  "src/dth/torch_cfr.py",
-  "src/dth/train.py",
-  "src/dth/tests/test_network.py",
-  "src/dth/tests/test_torch_cfr.py",
-  "src/dth/tests/test_train.py",
-]
 root_validation = true
 validation = ["uv run python -m pytest src/dth/tests -q"]
 

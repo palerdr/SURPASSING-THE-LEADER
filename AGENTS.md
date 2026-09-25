@@ -58,8 +58,8 @@ functions too.
 - `stl`, `dth`, `abstract`, `dth_compact`, and `arena` do not import `torch`,
   `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The files in
   `forbid_imports_exempt` are today's exceptions: arena's Hal training and
-  evaluation code and the closed DTH research modules. Add no file to that
-  list. `arena/policies/__init__.py` imports nothing.
+  evaluation code. Add no file to that list. `arena/policies/__init__.py`
+  imports nothing.
 - `tests/meta/test_root_layout.py` limits the root to the governance files,
   `docs/`, `paper/`, `src/`, `tests/`, and the ignored `outputs/` store. Its
   legacy list names the tracked root entries that a planned move removes.
