@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from arena.agent import PolicyDrivenAgent
-from arena.dth_adapter import project_to_dth_state
+from arena.dth_adapter import DTHCompletePolicyProvider
 from browser.app import SessionConfig, SeriesConfig, create_app
 from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
 from browser.hosted import create_hosted_app
@@ -35,17 +35,10 @@ def create_production_app(artifact: Path):
 
         memory = OpponentMemory()
 
-    class Policy:
-        def policy(self, decision):
-            move = agent.decide(project_to_dth_state(decision))
-            row = move.drop_policy if decision.role == "dropper" else move.check_policy
-            return {
-                second: float(mass) for second, mass in enumerate(row, 1) if mass > 0
-            }
-
     def factory(game_seed, policy_seed, sequence_start=0):
         policy = (TranslatedHalPolicyProvider(artifact, agent=agent)
-                  if policy_name == "translated-v1" else Policy())
+                  if policy_name == "translated-v1"
+                  else DTHCompletePolicyProvider(artifact, agent=agent, record_decisions=False))
         return create_app(
             hal_factory=lambda: PolicyDrivenAgent(policy, seed=policy_seed),
             config=SessionConfig(seed=game_seed),

@@ -35,21 +35,32 @@ def project_to_dth_state(decision: CanonicalDecision) -> tuple[int, int, int, in
 
 @dataclass
 class DTHCompletePolicyProvider:
-    """Serve exact equilibrium policies from the completed tablebase."""
+    """Serve exact equilibrium policies from the completed tablebase.
+
+    ``agent`` shares one opened tablebase between providers; the hosted
+    runtime passes the agent that it opened once for every player. With
+    ``record_decisions`` false the provider keeps no per-move record, so a
+    long-lived provider does not grow.
+    """
 
     artifact_dir: Path
     decisions: list[MoveDecision] = field(default_factory=list, repr=False)
+    agent: CompleteDTHAgent | None = field(default=None, repr=False)
+    record_decisions: bool = True
     _agent: CompleteDTHAgent = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._agent = CompleteDTHAgent(self.artifact_dir)
+        self._agent = (
+            self.agent if self.agent is not None else CompleteDTHAgent(self.artifact_dir)
+        )
 
     def close(self) -> None:
         """Match the provider lifecycle contract; memmaps need no explicit close."""
 
     def policy(self, decision: CanonicalDecision) -> Mapping[int, float]:
         move = self._agent.decide(project_to_dth_state(decision))
-        self.decisions.append(move)
+        if self.record_decisions:
+            self.decisions.append(move)
         row = move.drop_policy if decision.role == "dropper" else move.check_policy
         return {
             second: float(probability)
