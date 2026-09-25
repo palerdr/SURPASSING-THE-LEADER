@@ -212,3 +212,58 @@ controls acceptance. We retain the constant-row proof for window games.
 The Python binding checks finite inputs and the floating-point environment
 on the calling thread and on Rayon workers. It records native certificates
 and HiGHS solves as separate counts.
+
+## Recurrence crash basis
+
+The packing constraints are `A^T y <= 1`. The matrix `A^T` is lower
+triangular Toeplitz with first column `a[k] = (f-s[k])/d`, and `a[0] = 1`.
+Lower triangular Toeplitz matrices multiply as truncated power series, so the
+inverse of `A^T` is lower triangular Toeplitz with first column `c`:
+
+\[
+c_0=1,\qquad c_k=-\sum_{m=1}^{k}a_m c_{k-m}.
+\]
+
+In the basis where every packing variable is basic, the basic values are
+`(A^T)^{-1} 1`, so `y[i] = c[0] + ... + c[i]`. The reduced cost of slack `j`
+is `-(c[0] + ... + c[59-j])`. The kernel coefficients satisfy
+`b[m] = a[m-1] - a[m]`, so its recurrence weights are the same prefix sums:
+`r[k] = c[0] + ... + c[k]`. We therefore write this basis from one series
+recurrence, without a factorization.
+
+A residue stage has a negative `r[k]`, so this start is neither primal nor
+dual feasible. We set each positive reduced cost to zero. The start is then
+dual feasible for the changed costs, and the dual simplex reaches primal
+feasibility. We rebuild the objective row for the true costs and finish with
+the primal simplex. If either phase fails, we restart from the slack basis.
+The start can change the pivot count, the final basis, and the stored value
+within its certified interval. The full-matrix certificate of the packing
+fallback controls acceptance on every path, so two starts can store values
+that differ by at most the 1e-6 gate.
+
+## Kink-relative support seeds
+
+A residue stage needs a negative step `s[k] - s[k-1]`. With `f > s[0]` and a
+nondecreasing `s`, every `b[m]` is nonnegative, so every `r[k]` is
+nonnegative and the equalizer certifies. We call the index of the most
+negative step the kink `k*` (`kink_index`). In the measured residue, Dropper
+holes end at `k*` and `59-k*`, and Checker holes end at `k*-1` and `59-k*`.
+A one-second increase in Checker ST shifts the success payoffs by one index
+and moves the kink by -1. The hole at the first anchor then moves with the
+kink, and the hole at `59-k*` moves the other way.
+
+In native mode each 1024-class chunk of the kernel keeps the certified
+support of its preceding residue class and that class's kink. The first
+residue class of a chunk has no seed and goes to the packing LP. For the next class, `kink_seed` moves
+each hole with its nearer anchor. It keeps a hole that starts at action 0 and
+clips moved holes to actions 0..59. We try the moved support with the
+reduced solve of rung 2b, then at most `kink_attempts - 1` edge moves. We
+send a miss to the packing LP. Its final basis supplies the next seed: the
+basic Dropper variables and the nonbasic Checker slacks, which have equal
+counts. The seed proposes mixtures; the full payoff check controls
+acceptance, as for rung 2b. `leap_support.py` holds the Python authority for
+`kink_index` and `kink_seed`.
+
+Window stages with `f > s[0]` never reach the residue. There `v60 <= f`, so
+the lifted pure bounds meet at `f`. A window residue stage therefore has
+`f <= s[0]`, which the packing LP rejects, and goes to HiGHS.

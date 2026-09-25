@@ -24,7 +24,7 @@ fail closed.
 
 ## Arena behavior
 
-`python -m arena play` selects DTH by default. Arena projects the canonical
+`python -m terminal play` selects DTH by default. Arena projects the canonical
 STL role-relative state directly onto the literal-second DTH coordinates and
 uses the tablebase policy for actions 1..60. STL remains the referee and owns
 all state transitions, revival rolls, clocks, and leap legality. The only
@@ -34,14 +34,14 @@ inside the public leap window.
 There is no play-time compatibility artifact, checkpoint leaf evaluator, or
 finite-horizon fallback. Research code may train
 or evaluate approximators, but it cannot replace or silently stand in for the
-completed artifact in arena play.
+completed artifact in terminal play.
 
 ## Research status
 
-Dataset generation, neural training, self-play, CFR, and MCTS remain available
-for compression, explanation, robustness studies, and comparisons. Their
-outputs are experimental measurements downstream of the exact solution. They
-do not establish DTH values or policy authority.
+We removed the closed research line of dataset generation, neural training,
+self-play, CFR, and MCTS from the tree. The `pre-restructure` Git tag keeps its
+last version. Its outputs were experimental measurements downstream of the
+exact solution and never established DTH values or policy authority.
 
 ## Validation
 

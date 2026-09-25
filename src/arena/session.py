@@ -1,6 +1,6 @@
 """Headless, resumable play session for one canonical STL game.
 
-The terminal loop in :mod:`arena.cli` used to drive a game by *pulling* the
+The terminal loop in :mod:`terminal.cli` used to drive a game by *pulling* the
 human's action through a blocking ``input()``. That works for a terminal and
 nowhere else: a browser, a socket, or any client-driven front end needs the
 server to suspend at "waiting for the human" and resume when a request arrives.

@@ -28,8 +28,20 @@
   ; lp-glpk links GLPK in process, so a system GLPK must be installed --
   ; conf-glpk provides no Windows depext, see README.md.
   lp
-  lp-glpk)
+  lp-glpk
+  ; test/exact_test.ml checks the solver's revival model against the play
+  ; engine's referee.
+  (dth_play :with-test))
  (tags
   (game ocaml solver)))
+
+(package
+ (name dth_play)
+ (synopsis "STL engine and terminal UI from the CS 3110 project")
+ (description
+  "The class project's STL referee, with the leap-second window, and its terminal UI. The dth solver does not link it.")
+ (depends dune bisect_ppx ocaml)
+ (tags
+  (game ocaml)))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

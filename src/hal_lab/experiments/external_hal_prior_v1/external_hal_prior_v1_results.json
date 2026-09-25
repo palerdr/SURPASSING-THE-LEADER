@@ -1,0 +1,1014 @@
+{
+  "schema": "arena-external-human-prior-evidence-v1",
+  "decision": "Do not promote this prior. Preserve frozen translated Hal. No live human win-rate gain established.",
+  "source": {
+    "url": "https://raw.githubusercontent.com/eliaka/repeatedgames/224a605a21127cac69763f990e077f7b05abd422/human_experiment/analysis/repgames.csv",
+    "sha256": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+    "license": "MIT",
+    "population": "Human Prolific participants playing two ten-round games against GPT-4; exclude LLM simulation folders.",
+    "excluded_conversion": "Psych-201 akata2023repeatedgames text contains inconsistent action/payoff labels; use the original CSV choice and score columns."
+  },
+  "protocol": {
+    "schema": "arena-external-reward-prior-v1",
+    "source_url": "https://raw.githubusercontent.com/eliaka/repeatedgames/224a605a21127cac69763f990e077f7b05abd422/human_experiment/analysis/repgames.csv",
+    "source_sha256": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+    "source_population": "Human Prolific participants playing two ten-round games against GPT-4; exclude LLM simulation folders.",
+    "split": "SHA256('external-hal-prior-v1:' + participant) modulo 10: 0..5 train, 6..7 validation, 8..9 test. Both games stay with their participant.",
+    "fit": "Two beta-binomial population priors for repeat after previous score zero/positive. Pool counts within each training participant. Fit alpha and beta in [0.05,100].",
+    "selection": "Choose concentration multiplier from [0.25,1,4] by equal-participant validation prequential NLL. Do not refit on validation.",
+    "transfer": "Preserve repeat odds relative to uniform chance: p60=a/(a+59*b), preserve concentration. A successful check or an evaded check is favorable. This mapping is a transfer hypothesis.",
+    "controls": "Frozen translated and Old; adapter with binary Beta(1,1); adapter with external concentration and neutral binary mean; external adapter.",
+    "adapter": "One additional expert with separate role/outcome counts; global distribution over alternatives. Use the frozen translated expert scoring rates. No target-domain selection.",
+    "external_online": "Reset repeat counts at each new game; score trials 2..10 before updating.",
+    "retrospective": "Score all recorded ordinary moves from a cold start per browser identity; reset all models after excluded leap turns. These identities appeared in prior experiments. No fresh STL human test exists in this corpus.",
+    "claim_boundary": "Logged-state one-step DTH projections and fresh synthetic games do not establish live human win-rate gains. This protocol has no deployment authority.",
+    "bootstrap_seed": 78199000,
+    "bootstrap_replicates": 5000,
+    "simulation_seed_base": 78100000,
+    "identities_per_family": 8,
+    "games_per_identity": 8,
+    "max_half_rounds": 240
+  },
+  "fit": {
+    "baseline_config": {
+      "action_count": 60,
+      "prior_strength": 0.02,
+      "conditional_prior_strength": 0.1,
+      "recency_retentions": [
+        0.995,
+        0.82,
+        0.3
+      ],
+      "expert_learning_rate": 1.25,
+      "expert_weight_retention": 0.97,
+      "expert_weight_floor": 0.002,
+      "log_probability_floor": 1e-09,
+      "periodicities": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8
+      ],
+      "response_temperature": 0.0,
+      "best_response_tolerance": 1e-12,
+      "offset_retention": 0.97,
+      "translated": true
+    },
+    "binary_prior": [
+      [
+        3.4493787166465344,
+        2.730060443292549
+      ],
+      [
+        2.483866575530152,
+        0.6520815359919679
+      ]
+    ],
+    "fit_diagnostics": [
+      {
+        "negative_log_marginal_without_constant": 390.4558165442172,
+        "participants_with_evidence": 114,
+        "repeats": 318,
+        "switches": 252,
+        "at_bound": false
+      },
+      {
+        "negative_log_marginal_without_constant": 759.7573885857512,
+        "participants_with_evidence": 118,
+        "repeats": 1244,
+        "switches": 310,
+        "at_bound": false
+      }
+    ],
+    "concentration_scale": 0.25,
+    "validation_nll": {
+      "0.25": 0.527436807553748,
+      "1.0": 0.5422567646700934,
+      "4.0": 0.5592753239203205
+    }
+  },
+  "split_counts": {
+    "train": 118,
+    "validation": 43,
+    "test": 34
+  },
+  "artifacts": {
+    "outputs/external-hal-prior-v1/protocol.json": "51e49b80c92a89e59be04ce5b0d649002df969285aedad22353b1ba19c76e163",
+    "outputs/external-hal-prior-v1/freeze.json": "86731ea48347a7fa4b773155acf29a777ea9616fa523154a213d7807fa239411",
+    "outputs/external-hal-prior-v1/results.json": "9bfdffc4d675a9c206f82053a6bf02a02dac832042e04fb5d6abd69a59115e47",
+    "outputs/external-hal-prior-v1/human.csv": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+    "outputs/external-hal-prior-v1/source-LICENSE.md": "efffba77db6fd2e7810213fcff131d7346b329e820bc091e58b92305d652d6c4"
+  },
+  "external_holdout": {
+    "neutral": {
+      "mean": 0.6034857898670498,
+      "interval_95": [
+        0.5544017828514334,
+        0.6482555455403713
+      ],
+      "identities": 34
+    },
+    "matched_neutral": {
+      "mean": 0.6059875973581357,
+      "interval_95": [
+        0.565123280560262,
+        0.6429129854705753
+      ],
+      "identities": 34
+    },
+    "external": {
+      "mean": 0.5858468947195135,
+      "interval_95": [
+        0.5175685374876067,
+        0.6485030241768547
+      ],
+      "identities": 34
+    },
+    "paired_external_minus_neutral": {
+      "mean": -0.017638895147536242,
+      "interval_95": [
+        -0.04534441704355438,
+        0.01031767227537416
+      ],
+      "identities": 34
+    },
+    "paired_external_minus_matched_neutral": {
+      "mean": -0.020140702638622183,
+      "interval_95": [
+        -0.051955082908495515,
+        0.009645141452426766
+      ],
+      "identities": 34
+    }
+  },
+  "retrospective_stl": {
+    "moves": 1470,
+    "identities": 10,
+    "excluded_leaps": 19,
+    "summary": {
+      "old": {
+        "nll": {
+          "mean": 1.3270528938912975,
+          "interval_95": [
+            0.5993484909744035,
+            2.380472759988173
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": 0.5566835383983383,
+          "interval_95": [
+            0.4820207389854453,
+            0.6311927616528842
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": 2.3517883892963702,
+          "interval_95": [
+            1.5978157853810757,
+            3.2297868891482433
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.5060700911723746,
+          "interval_95": [
+            0.4330389376723807,
+            0.5738186737508679
+          ],
+          "identities": 10
+        },
+        "paired_vs_translated": {
+          "nll": {
+            "mean": -0.0313995729029939,
+            "interval_95": [
+              -0.06402585914973047,
+              -0.005227659417125633
+            ],
+            "identities": 10
+          },
+          "one_step_value": {
+            "mean": 0.00047150552336279184,
+            "interval_95": [
+              7.341625418656351e-05,
+              0.0010153067392270126
+            ],
+            "identities": 10
+          },
+          "early_nll": {
+            "mean": 0.050716288371171384,
+            "interval_95": [
+              -0.08032030201608695,
+              0.23398629267130538
+            ],
+            "identities": 10
+          },
+          "early_one_step_value": {
+            "mean": 0.0004705462999572585,
+            "interval_95": [
+              4.500467355170748e-05,
+              0.0011380292543885008
+            ],
+            "identities": 10
+          }
+        }
+      },
+      "translated": {
+        "nll": {
+          "mean": 1.3584524667942914,
+          "interval_95": [
+            0.6157187336030983,
+            2.4424353137958805
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": 0.5562120328749754,
+          "interval_95": [
+            0.48181758835648947,
+            0.6308335189101124
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": 2.301072100925199,
+          "interval_95": [
+            1.5208199762402599,
+            3.2314688637653175
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.5055995448724173,
+          "interval_95": [
+            0.4326512852363958,
+            0.5730701486153447
+          ],
+          "identities": 10
+        },
+        "paired_vs_translated": {
+          "nll": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 10
+          },
+          "one_step_value": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 10
+          },
+          "early_nll": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 10
+          },
+          "early_one_step_value": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 10
+          }
+        }
+      },
+      "neutral": {
+        "nll": {
+          "mean": 1.334754072726259,
+          "interval_95": [
+            0.618648683763518,
+            2.367102269077497
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": 0.5562990534656034,
+          "interval_95": [
+            0.4818070555727985,
+            0.630911087687788
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": 2.2732322569536096,
+          "interval_95": [
+            1.52130852353634,
+            3.160679202359677
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.5057124339022119,
+          "interval_95": [
+            0.43274686531822976,
+            0.5730180422621459
+          ],
+          "identities": 10
+        },
+        "paired_vs_translated": {
+          "nll": {
+            "mean": -0.023698394068032272,
+            "interval_95": [
+              -0.07494222930811492,
+              0.003277763850025444
+            ],
+            "identities": 10
+          },
+          "one_step_value": {
+            "mean": 8.70205906278454e-05,
+            "interval_95": [
+              -8.382707129686028e-05,
+              0.0002818592164157585
+            ],
+            "identities": 10
+          },
+          "early_nll": {
+            "mean": -0.027839843971589597,
+            "interval_95": [
+              -0.08790817903455826,
+              0.01008599989899232
+            ],
+            "identities": 10
+          },
+          "early_one_step_value": {
+            "mean": 0.00011288902979463278,
+            "interval_95": [
+              -0.0007367300128912624,
+              0.0011592830511721387
+            ],
+            "identities": 10
+          }
+        }
+      },
+      "matched_neutral": {
+        "nll": {
+          "mean": 1.334848412241232,
+          "interval_95": [
+            0.6187589366012503,
+            2.3672200210139764
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": 0.5562370733629292,
+          "interval_95": [
+            0.4818039565676648,
+            0.6309095381852212
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": 2.27271654185393,
+          "interval_95": [
+            1.52109726234242,
+            3.160096349923201
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.5057124339022119,
+          "interval_95": [
+            0.43274686531822976,
+            0.5730180422621459
+          ],
+          "identities": 10
+        },
+        "paired_vs_translated": {
+          "nll": {
+            "mean": -0.023604054553059202,
+            "interval_95": [
+              -0.07483373759566062,
+              0.0033270476993274125
+            ],
+            "identities": 10
+          },
+          "one_step_value": {
+            "mean": 2.5040487953742473e-05,
+            "interval_95": [
+              -0.00010029741567989525,
+              0.00017390232827070308
+            ],
+            "identities": 10
+          },
+          "early_nll": {
+            "mean": -0.028355559071268875,
+            "interval_95": [
+              -0.08962744354063862,
+              0.010079796028323332
+            ],
+            "identities": 10
+          },
+          "early_one_step_value": {
+            "mean": 0.00011288902979463278,
+            "interval_95": [
+              -0.0007367300128912624,
+              0.0011592830511721387
+            ],
+            "identities": 10
+          }
+        }
+      },
+      "external": {
+        "nll": {
+          "mean": 1.3352795761683853,
+          "interval_95": [
+            0.6189500714196869,
+            2.3675714187023975
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": 0.5562352462900142,
+          "interval_95": [
+            0.48179737912576537,
+            0.6309087818502569
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": 2.2692515794729506,
+          "interval_95": [
+            1.5188954632865141,
+            3.156825262281219
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.5057124339022119,
+          "interval_95": [
+            0.43274686531822976,
+            0.5730180422621459
+          ],
+          "identities": 10
+        },
+        "paired_vs_translated": {
+          "nll": {
+            "mean": -0.023172890625905995,
+            "interval_95": [
+              -0.07443024361708996,
+              0.0037194694415492104
+            ],
+            "identities": 10
+          },
+          "one_step_value": {
+            "mean": 2.3213415038703112e-05,
+            "interval_95": [
+              -0.00010363379513852466,
+              0.00017092420122926828
+            ],
+            "identities": 10
+          },
+          "early_nll": {
+            "mean": -0.03182052145224825,
+            "interval_95": [
+              -0.09367422132274064,
+              0.010103369266632715
+            ],
+            "identities": 10
+          },
+          "early_one_step_value": {
+            "mean": 0.00011288902979463278,
+            "interval_95": [
+              -0.0007367300128912624,
+              0.0011592830511721387
+            ],
+            "identities": 10
+          }
+        }
+      },
+      "external_vs_matched_neutral": {
+        "nll": {
+          "mean": 0.00043116392715320526,
+          "interval_95": [
+            -2.5131283917887712e-05,
+            0.0009657646910096069
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": -1.8270729150393628e-06,
+          "interval_95": [
+            -1.0803206003873189e-05,
+            6.1160548867400525e-06
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": -0.003464962380979375,
+          "interval_95": [
+            -0.0111503623744083,
+            0.0007368619276536892
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 10
+        }
+      },
+      "external_vs_neutral": {
+        "nll": {
+          "mean": 0.0005255034421262766,
+          "interval_95": [
+            0.00019639334656817165,
+            0.000917483591800767
+          ],
+          "identities": 10
+        },
+        "one_step_value": {
+          "mean": -6.380717558914229e-05,
+          "interval_95": [
+            -0.0001839547002221831,
+            0.0
+          ],
+          "identities": 10
+        },
+        "early_nll": {
+          "mean": -0.003980677480658656,
+          "interval_95": [
+            -0.012258109946421557,
+            0.00028879023462493816
+          ],
+          "identities": 10
+        },
+        "early_one_step_value": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 10
+        }
+      }
+    }
+  },
+  "simulation_summary": {
+    "synthetic": {
+      "old": {
+        "score": {
+          "mean": 0.869140625,
+          "interval_95": [
+            0.83984375,
+            0.896484375
+          ],
+          "identities": 128
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": -0.0234375,
+            "interval_95": [
+              -0.0390625,
+              -0.0087890625
+            ],
+            "identities": 128
+          }
+        },
+        "games": 1024,
+        "wins": 890,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.87890625,
+          "Baku": 0.859375
+        },
+        "by_family": {
+          "bait_then_reverse": 0.953125,
+          "copy_recent": 0.703125,
+          "counter_recent": 0.875,
+          "deterministic": 1.0,
+          "early": 0.953125,
+          "equilibrium": 0.546875,
+          "fixed": 0.90625,
+          "late": 0.875,
+          "multimodal": 0.875,
+          "narrow": 1.0,
+          "periodic": 0.859375,
+          "retreat_after_detected_exploitation": 0.84375,
+          "state_threshold": 0.703125,
+          "switch": 0.921875,
+          "uniform": 0.953125,
+          "win_stay_lose_shift": 0.9375
+        }
+      },
+      "translated": {
+        "score": {
+          "mean": 0.892578125,
+          "interval_95": [
+            0.8652099609375,
+            0.919921875
+          ],
+          "identities": 128
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 128
+          }
+        },
+        "games": 1024,
+        "wins": 914,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.89453125,
+          "Baku": 0.890625
+        },
+        "by_family": {
+          "bait_then_reverse": 0.953125,
+          "copy_recent": 0.96875,
+          "counter_recent": 0.96875,
+          "deterministic": 1.0,
+          "early": 0.96875,
+          "equilibrium": 0.515625,
+          "fixed": 0.90625,
+          "late": 0.875,
+          "multimodal": 0.875,
+          "narrow": 1.0,
+          "periodic": 0.875,
+          "retreat_after_detected_exploitation": 0.859375,
+          "state_threshold": 0.703125,
+          "switch": 0.921875,
+          "uniform": 0.953125,
+          "win_stay_lose_shift": 0.9375
+        }
+      },
+      "neutral": {
+        "score": {
+          "mean": 0.892578125,
+          "interval_95": [
+            0.865234375,
+            0.919921875
+          ],
+          "identities": 128
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              -0.0078125,
+              0.0078125
+            ],
+            "identities": 128
+          }
+        },
+        "games": 1024,
+        "wins": 914,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.896484375,
+          "Baku": 0.888671875
+        },
+        "by_family": {
+          "bait_then_reverse": 0.953125,
+          "copy_recent": 0.96875,
+          "counter_recent": 0.96875,
+          "deterministic": 1.0,
+          "early": 0.96875,
+          "equilibrium": 0.515625,
+          "fixed": 0.90625,
+          "late": 0.859375,
+          "multimodal": 0.875,
+          "narrow": 1.0,
+          "periodic": 0.90625,
+          "retreat_after_detected_exploitation": 0.84375,
+          "state_threshold": 0.71875,
+          "switch": 0.90625,
+          "uniform": 0.9375,
+          "win_stay_lose_shift": 0.953125
+        }
+      },
+      "matched_neutral": {
+        "score": {
+          "mean": 0.892578125,
+          "interval_95": [
+            0.865234375,
+            0.919921875
+          ],
+          "identities": 128
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              -0.0078125,
+              0.0078125
+            ],
+            "identities": 128
+          }
+        },
+        "games": 1024,
+        "wins": 914,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.896484375,
+          "Baku": 0.888671875
+        },
+        "by_family": {
+          "bait_then_reverse": 0.953125,
+          "copy_recent": 0.96875,
+          "counter_recent": 0.96875,
+          "deterministic": 1.0,
+          "early": 0.96875,
+          "equilibrium": 0.515625,
+          "fixed": 0.90625,
+          "late": 0.859375,
+          "multimodal": 0.875,
+          "narrow": 1.0,
+          "periodic": 0.90625,
+          "retreat_after_detected_exploitation": 0.84375,
+          "state_threshold": 0.71875,
+          "switch": 0.90625,
+          "uniform": 0.9375,
+          "win_stay_lose_shift": 0.953125
+        }
+      },
+      "external": {
+        "score": {
+          "mean": 0.8916015625,
+          "interval_95": [
+            0.8642578125,
+            0.9189697265624996
+          ],
+          "identities": 128
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": -0.0009765625,
+            "interval_95": [
+              -0.0078125,
+              0.0068359375
+            ],
+            "identities": 128
+          }
+        },
+        "games": 1024,
+        "wins": 913,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.89453125,
+          "Baku": 0.888671875
+        },
+        "by_family": {
+          "bait_then_reverse": 0.953125,
+          "copy_recent": 0.96875,
+          "counter_recent": 0.96875,
+          "deterministic": 1.0,
+          "early": 0.96875,
+          "equilibrium": 0.515625,
+          "fixed": 0.90625,
+          "late": 0.859375,
+          "multimodal": 0.875,
+          "narrow": 1.0,
+          "periodic": 0.90625,
+          "retreat_after_detected_exploitation": 0.84375,
+          "state_threshold": 0.703125,
+          "switch": 0.90625,
+          "uniform": 0.9375,
+          "win_stay_lose_shift": 0.953125
+        }
+      },
+      "external_vs_matched_neutral": {
+        "score": {
+          "mean": -0.0009765625,
+          "interval_95": [
+            -0.0029296875,
+            0.0
+          ],
+          "identities": 128
+        }
+      },
+      "external_vs_neutral": {
+        "score": {
+          "mean": -0.0009765625,
+          "interval_95": [
+            -0.0029296875,
+            0.0
+          ],
+          "identities": 128
+        }
+      }
+    },
+    "offset_stress": {
+      "old": {
+        "score": {
+          "mean": 0.8697916666666666,
+          "interval_95": [
+            0.8177083333333334,
+            0.921875
+          ],
+          "identities": 24
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": -0.11979166666666667,
+            "interval_95": [
+              -0.171875,
+              -0.06770833333333333
+            ],
+            "identities": 24
+          }
+        },
+        "games": 192,
+        "wins": 167,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.8854166666666666,
+          "Baku": 0.8541666666666666
+        },
+        "by_family": {
+          "mirror_offset": 0.9375,
+          "switch_offset": 0.84375,
+          "translated_offset": 0.828125
+        }
+      },
+      "translated": {
+        "score": {
+          "mean": 0.9895833333333334,
+          "interval_95": [
+            0.9739583333333334,
+            1.0
+          ],
+          "identities": 24
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 24
+          }
+        },
+        "games": 192,
+        "wins": 190,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.9791666666666666,
+          "Baku": 1.0
+        },
+        "by_family": {
+          "mirror_offset": 1.0,
+          "switch_offset": 1.0,
+          "translated_offset": 0.96875
+        }
+      },
+      "neutral": {
+        "score": {
+          "mean": 0.9895833333333334,
+          "interval_95": [
+            0.9739583333333334,
+            1.0
+          ],
+          "identities": 24
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 24
+          }
+        },
+        "games": 192,
+        "wins": 190,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.9791666666666666,
+          "Baku": 1.0
+        },
+        "by_family": {
+          "mirror_offset": 1.0,
+          "switch_offset": 1.0,
+          "translated_offset": 0.96875
+        }
+      },
+      "matched_neutral": {
+        "score": {
+          "mean": 0.9895833333333334,
+          "interval_95": [
+            0.9739583333333334,
+            1.0
+          ],
+          "identities": 24
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 24
+          }
+        },
+        "games": 192,
+        "wins": 190,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.9791666666666666,
+          "Baku": 1.0
+        },
+        "by_family": {
+          "mirror_offset": 1.0,
+          "switch_offset": 1.0,
+          "translated_offset": 0.96875
+        }
+      },
+      "external": {
+        "score": {
+          "mean": 0.9895833333333334,
+          "interval_95": [
+            0.9739583333333334,
+            1.0
+          ],
+          "identities": 24
+        },
+        "paired_vs_translated": {
+          "score": {
+            "mean": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ],
+            "identities": 24
+          }
+        },
+        "games": 192,
+        "wins": 190,
+        "stopped": 0,
+        "by_seat": {
+          "Hal": 0.9791666666666666,
+          "Baku": 1.0
+        },
+        "by_family": {
+          "mirror_offset": 1.0,
+          "switch_offset": 1.0,
+          "translated_offset": 0.96875
+        }
+      },
+      "external_vs_matched_neutral": {
+        "score": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 24
+        }
+      },
+      "external_vs_neutral": {
+        "score": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 24
+        }
+      }
+    }
+  },
+  "validation": {
+    "new_tests": "10 passed",
+    "arena_and_architecture": "404 passed, 1 existing random-seed replay test failed its minimum-event-count assertion; isolated rerun passed. Tests unchanged except new experiment tests.",
+    "graphify": "Passed; existing SQL parser and graph-size warnings."
+  },
+  "fresh_stl_human_test": "unavailable",
+  "deployment_promoted": false,
+  "input_sha256": {
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/evaluate_reward_prior.py": "8837d45e6fcfc76e5827dad9e5e6c69aebf20da9d89a0e05904e408b5aecffae",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/reward_prior_hal.py": "fd244f3b62d7dc21e2a9d6b6b5d9ec2eb25415898e82505443e2773d5196274a",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/translated_hal.py": "5cb1126937d5605fddc03fb8c29b0e223431364d7031d89677f2179e03555b9b",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/perfect_hal.py": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/evaluate_bayesian_hal.py": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/evaluate_translated_hal.py": "95e92749911960391bc95c85d1ec8ac0b2bc674bb1053bb36d46255ee3a1ebf7",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/policies/opponent_league.py": "b0d86f36be3a3528a6633e5a711f24324a4bbceb9363b6448b77b4da0764f71c",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/match.py": "41f51469303818c514a8c16d5d7b61e32b700f7bd5ccf0fadf92696cfe74dd40",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/contracts.py": "18c5904dd5a4afff1aee72d49541efa0e62849b7fa89a322863944bb4c9363e5",
+    "/Users/palerider/Desktop/projects/usogui/stl/src/arena/config/translated_hal_v1_selection.json": "8e3aa265c7765b4896d4fecbdfbcb43bb2896a61a4cf166ca3402620c3b170f8",
+    "/Users/palerider/Desktop/projects/usogui/stl/outputs/perfect-hal-bayes-v2/human-games.json": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+    "/Users/palerider/Desktop/projects/usogui/stl/outputs/perfect-hal-bayes-v2/tablebase/tablebase.json": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+    "/Users/palerider/Desktop/projects/usogui/stl/outputs/external-hal-prior-v1/human.csv": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a"
+  }
+}

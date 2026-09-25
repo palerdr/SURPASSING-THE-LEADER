@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import torch
 
-from arena.cli import build_parser, command_match, command_play
 from arena.contracts import (
     CanonicalDecision,
     PublicDecisionState,
@@ -16,7 +15,6 @@ from arena.contracts import (
     PublicPlayerState,
 )
 from arena.policies.aggro_hal import AggroHalConfig, AggroHalNetwork
-from arena.policies.train_aggro_hal import load_training_config
 from arena.policies.pm_hal import (
     ACTION_COUNT,
     CategoricalChangePointModel,
@@ -25,7 +23,6 @@ from arena.policies.pm_hal import (
     PMHalPolicyProvider,
     _OutcomeConditionedModel,
     _PosteriorView,
-    load_pm_hal_config,
 )
 from dth.agent import CertifiedStageGame
 
@@ -172,26 +169,6 @@ def test_config_freezes_pure_dth_and_ordered_aggression_caps() -> None:
             press_confidence_threshold=0.8,
             dominate_confidence_threshold=0.7,
         )
-
-
-def test_tracked_pm_aggro_component_config_targets_the_current_artifact() -> None:
-    model, trainer = load_training_config(
-        "src/arena/config/pm_hal_aggro_component_v1.yaml"
-    )
-    assert model.hidden_size == 128
-    assert trainer.dth_artifact == "src/dth/artifacts/complete_full_v1"
-    assert trainer.warmstart_updates == 16
-    assert trainer.ppo_updates == 4
-
-
-def test_tracked_overbearing_controller_matches_code_defaults() -> None:
-    tracked = load_pm_hal_config()
-    assert tracked == PMHalConfig()
-    assert tracked.minimum_role_observations == 1
-    assert tracked.press_confidence_threshold == pytest.approx(0.15)
-    assert tracked.game_epsilon_budget == pytest.approx(12.0)
-    assert tracked.dominate_epsilon_cap == pytest.approx(2.0)
-    assert load_pm_hal_config("src/arena/config/pm_hal_controller_v2.json") == tracked
 
 
 def test_outcome_expert_uses_immediately_previous_public_outcome_across_roles() -> None:
@@ -490,49 +467,3 @@ def test_diagnostics_are_json_serializable_and_scope_the_claim(tmp_path: Path) -
     assert diagnostics["fixed_share"] is True
     assert diagnostics["aggro_enabled"] is False
     json.dumps(diagnostics)
-
-
-def test_match_cli_exposes_pm_hal_only_with_explicit_pure_dth() -> None:
-    parser = build_parser()
-    args = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "pm-hal",
-            "--opponent",
-            "dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    with pytest.raises(ValueError, match="pure-DTH"):
-        command_match(args)
-
-    pure = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "pm-hal",
-            "--opponent",
-            "dth",
-            "--pure-dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    assert pure.candidate == "pm-hal"
-    assert pure.pure_dth is True
-    assert pure.pm_hal_aggro_checkpoint is None
-    assert pure.pm_hal_config.endswith("pm_hal_controller_v3.json")
-    assert pure.pm_hal_game_epsilon_budget is None
-
-
-def test_human_play_requires_pm_hal_pure_dth_surface() -> None:
-    args = build_parser().parse_args(["play", "--hal-agent", "pm-hal", "--skip-rules"])
-    with pytest.raises(ValueError, match="pure-DTH"):
-        command_play(args)
-
-    pure = build_parser().parse_args(
-        ["play", "--hal-agent", "pm-hal", "--pure-dth", "--skip-rules"]
-    )
-    assert pure.pure_dth is True

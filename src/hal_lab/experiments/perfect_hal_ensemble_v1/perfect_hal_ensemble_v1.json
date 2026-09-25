@@ -1,0 +1,17 @@
+{
+  "schema_version": "arena-perfect-hal-policy-ensemble-protocol-v1",
+  "learning_rate": 2.0,
+  "share": 0.04,
+  "test_seed_base": 23100000,
+  "test_identities_per_family": 12,
+  "human_emulator_replicates": 4,
+  "games_per_identity": 8,
+  "max_half_rounds": 240,
+  "bootstrap_seed": 23200000,
+  "bootstrap_replicates": 5000,
+  "human_train_fraction": 0.6,
+  "human_validation_fraction": 0.2,
+  "minimum_player_games": 5,
+  "selection_rule": "Freeze these parameters before this experiment. Do not tune on this test. Keep v1 as play default unless further evidence supports promotion.",
+  "human_data_interpretation": "Reuse the existing training prefixes to fit emulators. Fresh simulation seeds do not constitute a new human holdout or measure human treatment effects."
+}

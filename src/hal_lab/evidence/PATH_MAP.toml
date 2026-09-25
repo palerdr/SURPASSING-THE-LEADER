@@ -1,0 +1,110 @@
+# Maps the file keys of the frozen Hal evidence records to repository paths.
+#
+# hal_lab.provenance reads this file. The records keep their keys as written,
+# and a change that moves a file edits this map, never a record.
+schema_version = 1
+
+# The checkout roots that absolute keys name. The verifier removes the root
+# and reads the rest as a repository path at the pre-restructure tag.
+absolute_roots = ["/Users/palerider/Desktop/projects/usogui/stl/"]
+
+# Bare file names that records use as keys, with the repository path of each
+# name at the pre-restructure tag.
+[basename]
+"bayesian_hal.py" = "src/arena/policies/bayesian_hal.py"
+"evaluate_bayesian_hal.py" = "src/arena/policies/evaluate_bayesian_hal.py"
+"perfect_hal.py" = "src/arena/policies/perfect_hal.py"
+
+# The repository path at the pre-restructure tag, mapped to the current path.
+# The list holds every frozen record, every tracked file that a record binds,
+# and every Hal research source, config, and test that moved to hal_lab. The
+# verifier reads a tracked binding from the tag, so the entry of a source file
+# tells a reader where that file lives now. The verifier reads a record or an
+# ignored output at its current path. A path that this table omits has not
+# moved; the ignored outputs/ store stays in place.
+[path]
+# The play command of cli.py moved to src/terminal/cli.py, and its match
+# command moved to src/hal_lab/cli.py.
+"src/arena/cli.py" = "src/terminal/cli.py"
+"src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json" = "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json"
+"src/arena/config/aggro_hal_adaptive_memory_v1.yaml" = "src/arena/config/aggro_hal_adaptive_memory_v1.yaml"
+"src/arena/config/aggro_hal_smoke_v1.yaml" = "src/hal_lab/experiments/aggro_hal_v1/aggro_hal_smoke_v1.yaml"
+"src/arena/config/aggro_hal_tactical_baseline_v1.json" = "src/arena/config/aggro_hal_tactical_baseline_v1.json"
+"src/arena/config/aggro_hal_v1.yaml" = "src/arena/config/aggro_hal_v1.yaml"
+"src/arena/config/exploit_hal_outcome_only_smoke_v1.yaml" = "src/hal_lab/experiments/exploit_hal_v2/config/exploit_hal_outcome_only_smoke_v1.yaml"
+"src/arena/config/exploit_hal_smoke_v1.yaml" = "src/hal_lab/experiments/exploit_hal_v2/config/exploit_hal_smoke_v1.yaml"
+"src/arena/config/exploit_hal_v1.yaml" = "src/hal_lab/experiments/exploit_hal_v2/config/exploit_hal_v1.yaml"
+"src/arena/config/external_hal_prior_v1_results.json" = "src/hal_lab/experiments/external_hal_prior_v1/external_hal_prior_v1_results.json"
+"src/arena/config/neural_pilots_v1_results.json" = "src/hal_lab/experiments/neural_pilots_v1/neural_pilots_v1_results.json"
+"src/arena/config/perfect_hal_bayes_v2.json" = "src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_bayes_v2.json"
+"src/arena/config/perfect_hal_bayes_v2_results.json" = "src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_bayes_v2_results.json"
+"src/arena/config/perfect_hal_bayes_v2_selection.json" = "src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_bayes_v2_selection.json"
+"src/arena/config/perfect_hal_ensemble_v1.json" = "src/hal_lab/experiments/perfect_hal_ensemble_v1/perfect_hal_ensemble_v1.json"
+"src/arena/config/perfect_hal_ledger_export.sql" = "src/hal_lab/experiments/perfect_hal_bayes_v2/perfect_hal_ledger_export.sql"
+"src/arena/config/pm_hal_aggro_component_v1.yaml" = "src/hal_lab/experiments/pm_hal_v3/pm_hal_aggro_component_v1.yaml"
+"src/arena/config/pm_hal_confirmation_v3.json" = "src/arena/config/pm_hal_confirmation_v3.json"
+"src/arena/config/pm_hal_controller_v2.json" = "src/hal_lab/experiments/pm_hal_v3/pm_hal_controller_v2.json"
+"src/arena/config/pm_hal_controller_v3.json" = "src/arena/config/pm_hal_controller_v3.json"
+"src/arena/config/pm_hal_evaluation_v1.json" = "src/hal_lab/experiments/pm_hal_v3/pm_hal_evaluation_v1.json"
+"src/arena/config/pm_hal_evaluation_v2.json" = "src/hal_lab/experiments/pm_hal_v3/pm_hal_evaluation_v2.json"
+"src/arena/config/pm_hal_evaluation_v3.json" = "src/arena/config/pm_hal_evaluation_v3.json"
+"src/arena/config/selector_study_v1_results.json" = "src/hal_lab/experiments/selector_study_v1/selector_study_v1_results.json"
+"src/arena/config/translated_hal_v1_results.json" = "src/hal_lab/experiments/translated_hal_v1/translated_hal_v1_results.json"
+"src/arena/config/translated_hal_v1_selection.json" = "src/arena/config/translated_hal_v1_selection.json"
+"src/arena/contracts.py" = "src/arena/contracts.py"
+"src/arena/dth_adapter.py" = "src/arena/dth_adapter.py"
+"src/arena/match.py" = "src/arena/match.py"
+"src/arena/policies/__init__.py" = "src/arena/policies/__init__.py"
+"src/arena/policies/adaptive.py" = "src/arena/policies/adaptive.py"
+"src/arena/policies/aggro_env.py" = "src/hal_lab/training/aggro_env.py"
+"src/arena/policies/aggro_hal.py" = "src/arena/policies/aggro_hal.py"
+"src/arena/policies/aggro_memory_curriculum.py" = "src/hal_lab/training/aggro_memory_curriculum.py"
+"src/arena/policies/audit_neural_pilot_memory.py" = "src/hal_lab/experiments/neural_pilots_v1/audit_neural_pilot_memory.py"
+"src/arena/policies/bayesian_hal.py" = "src/arena/policies/bayesian_hal.py"
+"src/arena/policies/confirm_translated_hal.py" = "src/hal_lab/experiments/translated_hal_v1/confirm_translated_hal.py"
+"src/arena/policies/ensemble_hal.py" = "src/arena/policies/ensemble_hal.py"
+"src/arena/policies/evaluate_aggro_hal.py" = "src/hal_lab/experiments/aggro_hal_v1/evaluate_aggro_hal.py"
+"src/arena/policies/evaluate_aggro_hal_adaptive.py" = "src/hal_lab/experiments/aggro_hal_v1/evaluate_aggro_hal_adaptive.py"
+"src/arena/policies/evaluate_aggro_hal_memory.py" = "src/hal_lab/experiments/aggro_hal_v1/evaluate_aggro_hal_memory.py"
+"src/arena/policies/evaluate_bayesian_hal.py" = "src/hal_lab/experiments/perfect_hal_bayes_v2/evaluate_bayesian_hal.py"
+"src/arena/policies/evaluate_ensemble_hal.py" = "src/hal_lab/experiments/perfect_hal_ensemble_v1/evaluate_ensemble_hal.py"
+"src/arena/policies/evaluate_pm_hal.py" = "src/hal_lab/experiments/pm_hal_v3/evaluate_pm_hal.py"
+"src/arena/policies/evaluate_reward_prior.py" = "src/hal_lab/experiments/external_hal_prior_v1/evaluate_reward_prior.py"
+"src/arena/policies/evaluate_translated_hal.py" = "src/hal_lab/experiments/translated_hal_v1/evaluate_translated_hal.py"
+"src/arena/policies/exploit_hal.py" = "src/arena/policies/exploit_hal.py"
+"src/arena/policies/exploit_hal_gym.py" = "src/hal_lab/training/exploit_hal_gym.py"
+"src/arena/policies/neural_pilots.py" = "src/hal_lab/experiments/neural_pilots_v1/neural_pilots.py"
+"src/arena/policies/opponent_league.py" = "src/hal_lab/harness/opponent_league.py"
+"src/arena/policies/perfect_hal.py" = "src/arena/policies/perfect_hal.py"
+"src/arena/policies/plot_selector_study.py" = "src/hal_lab/experiments/selector_study_v1/plot_selector_study.py"
+"src/arena/policies/pm_hal.py" = "src/arena/policies/pm_hal.py"
+"src/arena/policies/reward_prior_hal.py" = "src/hal_lab/experiments/external_hal_prior_v1/reward_prior_hal.py"
+"src/arena/policies/run_neural_pilots.py" = "src/hal_lab/experiments/neural_pilots_v1/run_neural_pilots.py"
+"src/arena/policies/run_selector_study.py" = "src/hal_lab/experiments/selector_study_v1/run_selector_study.py"
+"src/arena/policies/selector_study.py" = "src/hal_lab/experiments/selector_study_v1/selector_study.py"
+"src/arena/policies/train_aggro_hal.py" = "src/hal_lab/training/train_aggro_hal.py"
+"src/arena/policies/train_exploit_hal.py" = "src/hal_lab/training/train_exploit_hal.py"
+"src/arena/policies/translated_hal.py" = "src/arena/policies/translated_hal.py"
+"src/arena/tests/test_aggro_adaptive_config.py" = "src/hal_lab/tests/test_aggro_adaptive_config.py"
+"src/arena/tests/test_aggro_env.py" = "src/hal_lab/tests/test_aggro_env.py"
+"src/arena/tests/test_aggro_memory_curriculum.py" = "src/hal_lab/tests/test_aggro_memory_curriculum.py"
+"src/arena/tests/test_evaluate_aggro_hal.py" = "src/hal_lab/tests/test_evaluate_aggro_hal.py"
+"src/arena/tests/test_evaluate_aggro_hal_adaptive.py" = "src/hal_lab/tests/test_evaluate_aggro_hal_adaptive.py"
+"src/arena/tests/test_evaluate_aggro_hal_memory.py" = "src/hal_lab/tests/test_evaluate_aggro_hal_memory.py"
+"src/arena/tests/test_evaluate_pm_hal.py" = "src/hal_lab/tests/test_evaluate_pm_hal.py"
+"src/arena/tests/test_neural_pilots.py" = "src/hal_lab/tests/test_neural_pilots.py"
+"src/arena/tests/test_opponent_league.py" = "src/hal_lab/tests/test_opponent_league.py"
+"src/arena/tests/test_reward_prior_hal.py" = "src/hal_lab/tests/test_reward_prior_hal.py"
+"src/arena/tests/test_selector_study.py" = "src/hal_lab/tests/test_selector_study.py"
+"src/arena/tests/test_train_aggro_hal.py" = "src/hal_lab/tests/test_train_aggro_hal.py"
+"src/arena/tests/test_train_exploit_hal_contract.py" = "src/hal_lab/tests/test_train_exploit_hal_contract.py"
+"src/arena/translated_hal_adapter.py" = "src/arena/translated_hal_adapter.py"
+# The browser server moved from src/arena/web/ to the browser app, and its
+# deploy modules to src/browser/deploy/.
+"src/arena/web/__main__.py" = "src/browser/__main__.py"
+"src/arena/web/app.py" = "src/browser/app.py"
+"src/arena/web/check_translated_hal.py" = "src/browser/deploy/check_translated_hal.py"
+"src/arena/web/hosted.py" = "src/browser/hosted.py"
+"src/arena/web/opponent_memory.py" = "src/browser/opponent_memory.py"
+"src/arena/web/prepare_vercel.py" = "src/browser/deploy/prepare_vercel.py"
+"src/arena/web/production.py" = "src/browser/deploy/production.py"

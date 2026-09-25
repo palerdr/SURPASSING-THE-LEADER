@@ -12,7 +12,10 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
   value, continuation-adjusted finite 60x60 matrix, both equilibrium policies,
   and a freshly recomputed saddle gap. It enforces the same `1e-6` gate and
   fails closed on malformed or incompatible artifacts.
-- `cfr.py`, `mcts.py`, data generation, and learning depend only on DTH code.
+- Git history is the archive for the closed research line (CFR, MCTS,
+  datasets, training, self-play, and readiness gates); the `pre-restructure`
+  tag keeps its last version. Do not restore it under `legacy`, `old`, or
+  version-suffixed names.
 - All configs and artifacts remain under `src/dth/`.
 - Never import `stl` or `abstract`.
 - Schema mismatches fail closed; do not load legacy `pure-*` artifacts.
@@ -26,16 +29,14 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
   over adding a new script.
 - Keep transient runners, reports, checkpoints, and fixtures in their existing
   generated/ignored locations or in focused tests. Add a new module only when
-  it has a durable role in the DTH training, evaluation, solver, or artifact
-  contract.
+  it has a durable role in the DTH evaluation, solver, or artifact contract.
 
 Read `docs/GAME_AND_SOLVER.md` for the model, `docs/EXACTNESS_PROOF.md` for
 the completed proof, and `docs/AGENT_GOAL.md` for the exact play contract.
-Dataset, training, self-play, and MCTS workflows remain optional research
-surfaces downstream of the solved game. Their tracked presets are classified in
-`docs/RESEARCH_CONFIGS.md`; none is production value authority. The packed
-tablebase's Rust kernel must satisfy `docs/DTH_COMPLETE_PARITY.md` before it can
-become a default backend. Run `uv run python -m pytest src/dth/tests -q`.
+`config/` holds the three production presets: `complete_full_v1`,
+`complete_fast_v1`, and `complete_audit_v1`. The packed tablebase's Rust
+kernel must satisfy `docs/DTH_COMPLETE_PARITY.md` before it can become a
+default backend. Run `uv run python -m pytest src/dth/tests -q`.
 
 After a canonical complete build, `uv run python -m dth complete-audit`
 re-solves the full LP-routed tail and independently checks the lowest-mass

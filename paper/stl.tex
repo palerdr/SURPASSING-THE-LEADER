@@ -7,7 +7,7 @@
 \usepackage{microtype}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt}
-\linespread{0.94}
+\linespread{1.04}
 \usepackage[font=footnotesize,labelfont=bf,skip=3pt]{caption}
 \usepackage{tikz}
 \usepackage{pgfplots}
@@ -57,35 +57,30 @@ We compute \textbf{9.45 billion reachable state classes} with the leap second av
 
 \begin{minipage}[t]{0.55\textwidth}
 \vspace{0pt}
-\head{1. The game}
-In Toshio Sako's \emph{Usogui}, Baku and Hal play Drop the Handkerchief
-to decide who leads Kakerou. They begin at 8:12 AM with no accumulated
-time. Hal drops first and Baku checks; they swap roles after each half-round.
-Both know about the leap second at 8:59:60.
+\head{1. From DTH to STL}
+We extend \emph{Solving Drop the Handkerchief} [1]. We keep its rules
+and survival model, with $s$ for squandered time (ST) and $t$ for
+total time dead (TTD). Both players start with $(s,t)=(0,0)$ at
+8:12 AM. Hal drops first and Baku checks.
 
-Each player chooses a second from 1 to 60 without seeing the other's
-choice. In the leap window, Baku as Dropper can choose 61. The Checker
-must still choose from 1 to 60, so a drop at 61 forces a failed check.
-We solve the public game with this extra action. Hal's memory and the
-players' private plans are outside this model.
+Timekeepers add a leap second to keep atomic-clock time aligned with
+Earth's rotation. At a scheduled year-end insertion, the UTC clock
+passes through 23:59:60 on December 31. Japan is nine hours ahead,
+so the extra second occurs at 8:59:60 AM on January 1 [2].
 
-For each player, $s$ is squandered time (ST), the seconds in their
-cylinder, and $t$ is total time dead (TTD), the sum of prior doses.
-A check at $c\ge d$ adds $\ell=c-d+1$ to the Checker's ST;
-at $s_c+\ell\ge300$, the Checker loses. A failed check injects
-$q=s_c+60$ seconds. The Checker survives with probability
-\[
-p(s,t)=\begin{cases}
-0.95(1-s/240)\,0.75^{t/60},&s\le239,\ s+t\le240,\\
-0,&\text{otherwise}.
-\end{cases}
-\]
-On revival, their ST resets to zero and their TTD gains $q$.
-Otherwise, they lose. We use the same survival model as the base game;
-the manga does not specify a probability formula.
+The match takes place on January 1, with a leap second due that
+morning. Yakou uses a broadcast speaking clock. Baku plans to be
+the Dropper at 8:59, so he can hold the handkerchief through 60
+seconds and drop during the extra second, before the clock reaches
+9:00. He still drops within that clock minute [3].
 
-\head{2. Equivalence Class}
-We keep the role-relative profiles and add identity and time:
+We model this by allowing Baku as Dropper to choose second 61 in
+that minute. The Checker remains capped at 60, so Baku can force
+a failed check. Both players know this rule from the start in our
+solve. They must account for who will drop in the leap window and
+how much time an injection will consume before the next turn.
+
+We add player identity and a clock to the DTH state:
 \[
 x=(s_c,t_c,s_d,t_d,h,\tau).
 \]
@@ -93,21 +88,17 @@ Hal drops in half $h=1$; Baku drops in half $h=2$.
 We measure $\tau$ in physical seconds from 8:00, including the leap
 second. The opening has $h=1$ and $\tau=720$.
 
-We merge failure-fatal profiles with the same ST, replacing their TTD
-with $\bot$. This gives the same 17,011 profiles per player as DTH.
-\textbf{Proof.} A successful check changes ST and advances the clock
-without using TTD. A failed check ends the game when $p=0$.
-Thus the merged profiles have the same transitions and payoffs at a
-fixed half and clock. \textup{QED}
-
-We group reachable states by half and clock. After Hal revives,
+We use the 17,011 player profiles from the DTH quotient
+[1, Section 2]. At a fixed half and clock, the same grouping holds:
+a successful check does not use TTD, and a failed check ends the
+game for a failure-fatal profile. We count 9,453,333,117 reachable
+classes across 2,243 half-and-clock groups. After Baku revives,
 we need only 183 Dropper profiles because his ST is zero.
-We count 9,453,333,117 classes across 2,243 groups.
 
-\head{3. Clock and backwards sweep}
+\head{2. The clock}
 Let $T(\tau)=61$ for $3540\le\tau\le3600$, and 60 otherwise.
-We set $q=0$ after success and use the injected dose after revival.
-For a live child, define
+We set $q=0$ after success and use the injected dose $q=s_c+60$
+after revival. For a live child, define
 \[
 e=\tau+T(\tau)+(q+120)\mathbf1_{q>0},\qquad
 \tau'=\begin{cases}e+60,&h=1,\\ \nu(e),&h=2.\end{cases}
@@ -116,9 +107,10 @@ Here $\nu(e)$ is the next minute boundary strictly after $e$,
 with 9:00 at $\tau=3601$. We swap roles and change $h$.
 The dose therefore affects when the next player can act.
 
-We sweep clock groups in reverse order, solving each live child before
-its parent. For $\tau'>3600$, we read the DTH table: both players
+We solve clock groups in reverse order, with each live child before
+its parent. For $\tau'>3600$, we use the DTH solution: both players
 have the base game's action sets for the rest of play.
+
 \end{minipage}\hfill
 \begin{minipage}[t]{0.42\textwidth}
 \vspace{0pt}
@@ -135,18 +127,19 @@ have the base game's action sets for the rest of play.
 \node[anchor=north,align=center,text=figteal!70!black] at (4.4,-0.25) {Baku may drop at 61\\$3540\le\tau\le3600$};
 \node[anchor=south,align=center,text=figpurple] at (6.35,0.6) {DTH\\tail};
 \end{tikzpicture}
-\figcap{We keep the exact clock until the leap second passes. Both players know the extra action from the opening. The timeline is schematic.}
+\figcap{Baku can drop at 61 in the leap window. After 9:00, both players use seconds 1 to 60. The timeline is schematic.}
 \vspace{12pt}
 \begin{tikzpicture}
 \begin{axis}[
  width=0.94\linewidth,height=4.4cm,xbar,
- xmin=0,xmax=4.65,ytick={1,2,3},
+ xmin=0,xmax=5.1,ytick={1,2,3},
  yticklabels={After revival,Baku drops,Hal drops},
  y dir=normal,bar width=10pt,
  xlabel={reachable classes (billions)},
  xtick={0,1,2,3,4},axis lines=left,
- enlarge y limits=0.3,nodes near coords,
- nodes near coords style={font=\footnotesize},
+ enlarge y limits=0.35,nodes near coords,
+ nodes near coords align={horizontal},
+ nodes near coords style={font=\footnotesize,anchor=west,xshift=3pt},
  point meta=explicit symbolic,
 ]
 \addplot[fill=figblue!65,draw=none] coordinates {
@@ -156,21 +149,14 @@ have the base game's action sets for the rest of play.
 };
 \end{axis}
 \end{tikzpicture}
-\figcap{We count each reachable quotient state once. The revival group contains Baku's turns after a survived injection into Hal.}
+\figcap{We count each reachable quotient state once. The revival group contains Baku's turns after he survives an injection.}
 \raggedright
-\head{4. The extra second}
-Let $V$ be the current Dropper's win probability minus loss probability.
-For the success child $x_\ell$ and revival child $x_f$, set
-\[
-S_\ell=\begin{cases}1,&s_c+\ell\ge300,\\-V(x_\ell),&\text{otherwise},\end{cases}
-\]
-\[
-F=\begin{cases}1,&p=0,\\1-p-pV(x_f),&p>0.\end{cases}
-\]
-For the ordinary seconds, we solve
-\[
-M_{d,c}=\begin{cases}S_{c-d+1},&c\ge d,\\F,&c<d.\end{cases}
-\]
+\head{3. The extra second}
+We use the DTH payoff matrix $M$ [1, Section 4], with success
+payoffs $S_\ell$ and failure payoff $F$. The value $V$ is the current
+Dropper's win probability minus loss probability; a role swap negates it.
+We evaluate the continuation states at their new clocks.
+
 Successes share one child clock; failures share another for the given
 Checker profile. We still need only 60 success payoffs and $F$.
 In Baku's window, we add a row of 60 copies of $F$.
@@ -188,32 +174,13 @@ The Checker can use a minimizing mixture for $M$ in either case.
 \newpage
 \begin{minipage}[t]{0.55\textwidth}
 \vspace{0pt}
-\head{5. Computing both players' strategies}
-We first test fixed seconds with a row-minimum and column-maximum scan.
-For a mixed strategy, put $D=S_1-F$ and $\Delta_m=S_{m+1}-S_m$.
-For $D\ne0$, compute
-\[
-\boxed{r_1=1,\qquad r_k=-\frac{1}{D}\sum_{m=1}^{k-1}\Delta_m r_{k-m}
-\quad(2\le k\le60).}
-\]
-For finite nonnegative weights, normalize with $W=\sum_k r_k$:
-$a_k=r_k/W$ and $b_k=a_{61-k}$.
-\textbf{Proof.} Subtract adjacent row payoffs:
-\[
-(Mb)_d-(Mb)_{d+1}=D b_d+\sum_{m=1}^{60-d}\Delta_m b_{d+m}.
-\]
-Setting these differences to zero gives the recurrence in reverse
-order. Column differences give the same weights for the Dropper.
-Both players make their opponent indifferent between seconds.
-\textup{QED}
+\head{4. Solving the round}
+We use the fixed-action test and mixed-strategy recurrence from
+DTH [1, Section 4]. We check each candidate against the same
+$10^{-6}$ saddle-gap limit. The extra second changes the continuation
+values, and some states need linear programming to meet this limit.
 
-We compute the value as $F+D/W$ when the nonnegative weights meet
-the rounding-bound assumptions. We enclose both saddle bounds within
-$10^{-10}$ of this center. For clipped weights, we check the matrix.
-The leap continuation changes the payoffs, so the recurrence need
-not produce an accepted pair at each state.
-
-\head{6. Packing and error bounds}
+\head{5. Linear programming}
 For an unresolved stage with $\delta=F-S_1>0$, define
 \[
 A_{ij}=\begin{cases}(F-S_{j-i+1})/\delta,&j\ge i,\\0,&j<i.\end{cases}
@@ -232,100 +199,65 @@ $a^{\mathsf T}M\ge(F-\delta/Z)\mathbf1^{\mathsf T}$ and
 $Mb\le(F-\delta/Z)\mathbf1$. Thus $v_{60}=F-\delta/Z$.
 \textup{QED}
 
-We use a Rust simplex kernel with at most 512 pivots per candidate.
-We send unsupported or rejected stages to HiGHS. For a candidate
-pair, we check the original matrix with
+We solve the remaining stages by linear programming. For a candidate
+Dropper mixture $a$ and Checker mixture $b$, we bound the value with
 \[
 L=\min_c(a^{\mathsf T}M)_c,\qquad U=\max_d(Mb)_d.
 \]
-We require $U-L\le10^{-6}$. In the window, we replace each bound
-by its maximum with $F$. We store the midpoint or a center with
+In the leap window, we replace each bound by its maximum with $F$.
+We require $U-L\le10^{-6}$ and use the midpoint or a center with
 proved error at most $5\times10^{-7}$.
 
-\textbf{Accumulated bound.} The DTH progress score
-$\Phi=s_c+s_d+\rho_c+\rho_d$, with $\rho=t$ for $p>0$ and 301
-otherwise, increases on each live transition. The clock and the
-extra failure row preserve that property. A child-value error
-changes a stage value by at most the same amount. Using the same
-local bound in the DTH tail, induction gives
+\head{6. Error bounds}
+We retain the DTH progress score $\Phi$ and its bound of 1,201 steps
+[1, Sections 3 and 5]. The clock adds no cycles, and the extra
+failure row uses the same injection transition. Thus the DTH error
+proof also covers this extension:
 \[
 |\widehat V-V|\le(1201-\Phi)5\times10^{-7}.
 \]
 At the opening, the win-probability error is at most $0.000301$.
-We use floating-point saddle checks for the matrix and LP paths;
-the sampled audit measures Bellman residuals against stored children.
+We use floating-point saddle checks for the matrix and LP paths.
+We re-solve 4,621 sampled stages by linear programming. The largest
+difference from the stored values is $3.07\times10^{-9}$.
+
 \end{minipage}\hfill
 \begin{minipage}[t]{0.42\textwidth}
 \vspace{0pt}
 \centering
-\begin{tikzpicture}
-\begin{axis}[
- width=\linewidth,height=5.1cm,
- xmin=1,xmax=60,ymin=0.005,ymax=0.4,ymode=log,
- xlabel={second},ylabel={probability},
- xtick={1,20,40,60},ytick={0.01,0.1},
- yticklabels={$1\%$,$10\%$},
- legend style={at={(0.5,1.02)},anchor=south,legend columns=2},
- grid=major,grid style={figlightgray},
-]
-% Opening strategies from the completed leap-full-native audit.
-\addplot[figblue,line width=0.8pt] coordinates {
-(1,0.250145885226) (2,0.006267667398) (3,0.00636082083528) (4,0.00650511916409) (5,0.00663950957215) (6,0.00678809935894) (7,0.0069285046845) (8,0.00708623822118) (9,0.00722869959068) (10,0.00739986064803) (11,0.00755116318223) (12,0.00772586032062) (13,0.0078841464009) (14,0.00807248760081) (15,0.00824675544861) (16,0.00843096867675) (17,0.00860725123933) (18,0.00880926866015) (19,0.00899367343433) (20,0.00921398760099) (21,0.00940265505207) (22,0.00962623513938) (23,0.00982985780241) (24,0.0100612886282) (25,0.0102781828896) (26,0.0105239841205) (27,0.0107483438123) (28,0.0110037651921) (29,0.0112433289762) (30,0.0115518703397) (31,0.0117846244052) (32,0.0120252062896) (33,0.0122848103768) (34,0.0125728564136) (35,0.0128524692407) (36,0.0131520299408) (37,0.0134420853179) (38,0.0137595803803) (39,0.0140598667094) (40,0.0143982585178) (41,0.0147101427745) (42,0.0150533220395) (43,0.0153845939105) (44,0.0157486307149) (45,0.0161067542126) (46,0.0164717836754) (47,0.0168358289721) (48,0.0172313010452) (49,0.0176102204055) (50,0.0180325649007) (51,0.0184243676673) (52,0.0188577241387) (53,0.0192762826417) (54,0.0197270779691) (55,0.0201668277402) (56,0.0206387525321) (57,0.0210972097175) (58,0.0215918214655) (59,0.0220756387586) (60,0.0254718879103)
-};
-\addplot[figorange,dashed,line width=0.8pt] coordinates {
-(1,0.0254718879103) (2,0.0220756387586) (3,0.0215918214655) (4,0.0210972097175) (5,0.0206387525321) (6,0.0201668277402) (7,0.0197270779691) (8,0.0192762826417) (9,0.0188577241387) (10,0.0184243676673) (11,0.0180325649007) (12,0.0176102204055) (13,0.0172313010452) (14,0.0168358289721) (15,0.0164717836754) (16,0.0161067542126) (17,0.0157486307149) (18,0.0153845939105) (19,0.0150533220395) (20,0.0147101427745) (21,0.0143982585178) (22,0.0140598667094) (23,0.0137595803803) (24,0.0134420853179) (25,0.0131520299408) (26,0.0128524692407) (27,0.0125728564136) (28,0.0122848103768) (29,0.0120252062896) (30,0.0117846244052) (31,0.0115518703397) (32,0.0112433289762) (33,0.0110037651921) (34,0.0107483438123) (35,0.0105239841205) (36,0.0102781828896) (37,0.0100612886282) (38,0.00982985780241) (39,0.00962623513938) (40,0.00940265505207) (41,0.00921398760099) (42,0.00899367343433) (43,0.00880926866015) (44,0.00860725123933) (45,0.00843096867675) (46,0.00824675544862) (47,0.0080724876008) (48,0.0078841464009) (49,0.00772586032062) (50,0.00755116318223) (51,0.00739986064803) (52,0.00722869959069) (53,0.00708623822117) (54,0.0069285046845) (55,0.00678809935895) (56,0.00663950957215) (57,0.00650511916409) (58,0.00636082083528) (59,0.006267667398) (60,0.250145885226)
-};
-\legend{Hal drops,Baku checks}
-\end{axis}
-\end{tikzpicture}
-\figcap{At the opening, Hal puts 25.01\% on second 1 and Baku puts 25.01\% on second 60. We obtain both mixtures from an LP check of the opening matrix.}
-\vspace{10pt}
-\begin{tikzpicture}
-\begin{axis}[
- width=\linewidth,height=4.0cm,ybar,
- ymin=0,ymax=60,bar width=20pt,
- symbolic x coords={DTH,STL},xtick=data,
- ylabel={Baku wins (\%)},ytick={0,20,40,60},
- nodes near coords,nodes near coords style={font=\footnotesize},
- point meta=explicit symbolic,enlarge x limits=0.65,
-]
-\addplot[fill=figteal!70,draw=none] coordinates {
- (DTH,45.50749635929307) [45.51\%]
- (STL,48.14126772938128) [48.14\%]
-};
-\end{axis}
-\end{tikzpicture}
-\figcap{Baku gains 2.63 percentage points over the base game from the same zero-load opening, with Hal dropping first.}
+\includegraphics[width=\linewidth]{build/figures/stl/strategy_surface.pdf}
+\figcap{Hal's drop strategy at 16 reachable states, one per minute from
+8:44 to 8:59. Hal has $(s,t)=(0,180)$; Baku has $(60,120)$.
+We hold these profiles fixed and join adjacent clock slices.
+Each slice is a separate state. Hal puts $95.77\%$ on second 1
+at 8:50 and $41.31\%$ at 8:51.}
+\vspace{5pt}
 \raggedright
+\setlength{\parskip}{4pt}
 \head{7. Results}
-At the 8:12 opening, we obtain
+At the starting state, we obtain
 \[
 \begin{gathered}
-V_{\mathrm{Hal}}=0.03717\pm0.00061,\\
+V=0.03717\pm0.00061,\\
 P(\text{Hal wins})=0.51859\pm0.00031.
 \end{gathered}
 \]
-We accept 8,843,634,465 states in the fixed-action and recurrence
-kernel. We resolve the remaining 609,698,652 through 306,553,687
-native packing certificates, 221,618,372 HiGHS solves, and 81,526,593
-reuses of certified revival values.
+We solve 8,843,634,465 classes with fixed actions or the recurrence
+and gap check, and 609,698,652 with linear programming.
 
-We check packed membership and finite values for all 9,453,333,117
-reachable states. We re-solve 4,621 sampled stages with LP.
-The largest Bellman residual is $3.07\times10^{-9}$; the largest
-sampled saddle gap is $1.02\times10^{-9}$.
-At the opening, we measure a gap of $1.58\times10^{-15}$.
+Baku wins $48.14\%$ of games, a gain of $2.63$ percentage points
+over the base game. Hal's win probability falls from $54.49\%$ to
+$51.86\%$. A successful check and a survived injection lead to
+different clocks. The players must account for who will drop when
+the extra second arrives, so their strategies can change before
+the leap window even at fixed loads (Figure 3).
 
-We retain values in packed arrays with a reachability bitmap and
-hashes for the source and DTH tail. The completed run records
-12,820.8 seconds across resumed work and 13.14 GB peak resident
-memory. Some retained LP work predates the component timers;
-we report the saved run's elapsed total.
-
-{\footnotesize\textbf{Sources.} T. Sako, \emph{Usogui}, Shueisha,
-2006--2018. J. Cenawood, \emph{Solving Drop the Handkerchief}, 2026.
-Public-game clock and survival contracts; completed
-\texttt{leap-full-native} report and packed-coverage audit,
-September 2026.}
+{\footnotesize\textbf{References.} [1] J. Cenawood,
+\href{dth_exact_solution.pdf}{\emph{Solving Drop the Handkerchief}},
+September 11, 2026.
+[2] NICT, \href{https://www.nict.go.jp/en/sts/jst.html}{\emph{Japan Standard Time}};
+\href{https://www.nict.go.jp/publication/NICT-News/0810/09.html}{leap-second notice},
+October 2008.
+[3] T. Sako, \emph{Usogui}, Shueisha, 2006--2018.}
 \end{minipage}
 \end{document}

@@ -1,5 +1,0 @@
-(library
- (name dth_engine)
- (public_name dth.engine)
- (instrumentation
-  (backend bisect_ppx)))

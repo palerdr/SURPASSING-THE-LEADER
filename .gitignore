@@ -44,6 +44,10 @@ src/dth/artifacts/
 src/dth_compact/artifacts/
 src/dth/checkpoints/
 
+# Lean/Lake build products and the vendored Mathlib checkout
+src/formal/.lake/
+src/formal/build/
+
 # Imported OCaml/Dune build products
 src/dth_ocaml/_build/
 src/dth_ocaml/_opam/
@@ -55,16 +59,18 @@ src/dth_ocaml/bisect*.coverage
 # Character sprites are source art, not generated output: the browser front end
 # and the terminal scene both read them, and a fresh clone without them renders
 # labelled placeholders instead of a game.
-!art/sprites/**/*.png
+!src/arena/art/sprites/**/*.png
 # The chapter's rules spread is source art too: the browser's opening slide.
-!art/panels/stl_rules.png
-# The prepared-frame cache stays derived — its filenames carry a pipeline hash.
-art/.sprite-cache/
+!src/arena/art/panels/stl_rules.png
+# The prepared-frame cache stays derived. Its filenames carry a pipeline hash.
+src/arena/art/.sprite-cache/
 
-# Browser front end
-src/arena/webclient/node_modules/
-src/arena/webclient/dist/
-src/arena/web/build/
+# Browser app: client dependencies and build, and the Vercel bundle. The
+# unanchored outputs/ and .vercel patterns cover src/browser/outputs/ and the
+# project link in src/browser/.vercel/.
+src/browser/webclient/node_modules/
+src/browser/webclient/dist/
+src/browser/build/
 
 # OS/editor noise
 .DS_Store

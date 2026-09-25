@@ -1,4 +1,9 @@
 //! We solve the packing LP and certify the original stage matrix.
+//!
+//! You can start from the slack basis, from a warm basis, or from the
+//! recurrence basis in which every packing variable is basic. The basis
+//! matrix `A^T` of that last start is lower triangular Toeplitz, so we write
+//! its inverse from one series recurrence without a factorization.
 const N: usize = 60;
 const W: usize = 61;
 const EPS: f64 = 1e-10;
@@ -8,6 +13,9 @@ pub struct Solver {
     basic: [usize; N],
     nonbasic: [usize; N],
     pub ready: bool,
+    /// We record the basic Dropper actions and the nonbasic Checker slacks of
+    /// the last certified basis. The two masks have equal bit counts.
+    pub support: (u64, u64),
 }
 
 impl Solver {
@@ -17,6 +25,7 @@ impl Solver {
             basic: [0; N],
             nonbasic: [0; N],
             ready: false,
+            support: (0, 0),
         }
     }
     fn coefficient(a: &[f64; N], row: usize, variable: usize) -> f64 {
@@ -77,6 +86,13 @@ impl Solver {
         for i in 0..N {
             self.t[i].copy_from_slice(&work[i][N..]);
         }
+        self.objective();
+        self.t.iter().flatten().all(|x| x.is_finite())
+    }
+    /// We rebuild the objective row for the true costs: one per packing
+    /// variable and zero per slack.
+    fn objective(&mut self) {
+        self.t[N] = [0.; W];
         for j in 0..N {
             self.t[N][j] = f64::from(self.nonbasic[j] < N);
         }
@@ -87,6 +103,40 @@ impl Solver {
                 }
             }
         }
+    }
+    /// We make every packing variable basic. The basis matrix is `A^T`, lower
+    /// triangular Toeplitz with first column `a`. Its inverse is lower
+    /// triangular Toeplitz with first column `c`, where `c[0] = 1` and
+    /// `c[k] = -sum_{m=1..k} a[m] c[k-m]`. Basic value `i` is
+    /// `c[0] + ... + c[i]`, and the reduced cost of slack `j` is
+    /// `-(c[0] + ... + c[59-j])`, the negated sum of column `j` of the inverse.
+    /// This start costs one recurrence instead of a 60-by-60 factorization.
+    fn crash(&mut self, a: &[f64; N]) -> bool {
+        let mut c = [0.; N];
+        c[0] = 1.;
+        for k in 1..N {
+            let mut x = 0.;
+            for m in 1..=k {
+                x = (-a[m]).mul_add(c[k - m], x);
+            }
+            c[k] = x;
+        }
+        let mut prefix = [0.; N];
+        let mut total = 0.;
+        for k in 0..N {
+            total += c[k];
+            prefix[k] = total;
+        }
+        self.t = [[0.; W]; W];
+        for i in 0..N {
+            self.basic[i] = i;
+            self.nonbasic[i] = N + i;
+            for j in 0..=i {
+                self.t[i][j] = c[i - j];
+            }
+            self.t[i][N] = prefix[i];
+        }
+        self.objective();
         self.t.iter().flatten().all(|x| x.is_finite())
     }
     fn pivot(&mut self, row: usize, col: usize) {
@@ -190,14 +240,86 @@ impl Solver {
             Some(((upper + lower) * 0.5, gap))
         }
     }
-    pub fn solve(&mut self, stage: &[f64], warm: bool) -> [f64; 5] {
+    fn basis_support(&self) -> (u64, u64) {
+        let mut p = 0;
+        let mut q = 0;
+        for i in 0..N {
+            if self.basic[i] < N {
+                p |= 1 << self.basic[i];
+            }
+            if self.nonbasic[i] >= N {
+                q |= 1 << (self.nonbasic[i] - N);
+            }
+        }
+        (p, q)
+    }
+    /// We start from the recurrence basis. Its basic values and reduced costs
+    /// can both have the wrong sign. We therefore zero each positive reduced
+    /// cost, run the dual simplex to primal feasibility, restore the true
+    /// costs, and finish with the primal simplex. If this path fails, we
+    /// restart from the slack basis. The full-matrix certificate controls
+    /// acceptance on both paths. Slot 3 of the result is 1 for this start;
+    /// slot 4 is 1 after a slack restart.
+    pub fn solve_crash(&mut self, stage: &[f64]) -> [f64; 5] {
+        let Some(a) = Self::coefficients(stage) else {
+            self.ready = false;
+            return [f64::NAN, f64::NAN, 0., 0., 0.];
+        };
+        let f = stage[N];
+        let mut pivots = None;
+        let mut certificate = None;
+        if self.crash(&a) {
+            for j in 0..N {
+                if self.t[N][j] > 0. {
+                    self.t[N][j] = 0.;
+                }
+            }
+            if let Some(first) = self.optimize() {
+                self.objective();
+                if let Some(second) = self.optimize() {
+                    pivots = Some(first + second);
+                    certificate = self.certificate(stage, f);
+                }
+            }
+        }
+        let restart = certificate.is_none();
+        if restart {
+            self.cold(&a);
+            pivots = self.optimize();
+            certificate = pivots.and_then(|_| self.certificate(stage, f));
+        }
+        self.finish(certificate, pivots, 1., f64::from(restart))
+    }
+    fn coefficients(stage: &[f64]) -> Option<[f64; N]> {
         let f = stage[N];
         let d = f - stage[0];
         if d <= 1e-12 || stage[..W].iter().any(|x| !x.is_finite()) {
+            return None;
+        }
+        Some(std::array::from_fn(|i| (f - stage[i]) / d))
+    }
+    fn finish(
+        &mut self,
+        certificate: Option<(f64, f64)>,
+        pivots: Option<usize>,
+        start: f64,
+        restart: f64,
+    ) -> [f64; 5] {
+        self.ready = certificate.is_some();
+        match certificate {
+            Some((value, gap)) => {
+                self.support = self.basis_support();
+                [value, gap, pivots.unwrap() as f64, start, restart]
+            }
+            None => [f64::NAN, f64::NAN, 512., start, restart],
+        }
+    }
+    pub fn solve(&mut self, stage: &[f64], warm: bool) -> [f64; 5] {
+        let f = stage[N];
+        let Some(a) = Self::coefficients(stage) else {
             self.ready = false;
             return [f64::NAN, f64::NAN, 0., 0., 0.];
-        }
-        let a = std::array::from_fn(|i| (f - stage[i]) / d);
+        };
         let reused = warm && self.ready && self.refactor(&a);
         if !reused {
             self.cold(&a);
@@ -211,23 +333,43 @@ impl Solver {
             pivots = self.optimize();
             certificate = pivots.and_then(|_| self.certificate(stage, f));
         }
-        self.ready = certificate.is_some();
-        if let Some((value, gap)) = certificate {
-            [
-                value,
-                gap,
-                pivots.unwrap() as f64,
-                f64::from(reused),
-                f64::from(restart),
-            ]
-        } else {
-            [
-                f64::NAN,
-                f64::NAN,
-                512.,
-                f64::from(reused),
-                f64::from(restart),
-            ]
+        self.finish(certificate, pivots, f64::from(reused), f64::from(restart))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crash_restarts_from_slack_when_the_series_overflows() {
+        // With d = 2e-12, each a[k] is near 2.5e11, so c overflows and the
+        // recurrence basis is rejected before any pivot.
+        let mut stage = [-0.5; W];
+        stage[0] = 0.;
+        stage[N] = 2e-12;
+        let crash = Solver::new().solve_crash(&stage);
+        let cold = Solver::new().solve(&stage, false);
+        assert_eq!((crash[3], crash[4]), (1., 1.));
+        assert!(crash[0].is_finite() && crash[1] <= 1e-6);
+        assert_eq!(crash[0].to_bits(), cold[0].to_bits());
+    }
+
+    #[test]
+    fn crash_certifies_a_kinked_stage_without_restart() {
+        let mut stage = [0.; W];
+        for k in 0..N {
+            stage[k] = -0.35 + 0.006 * k as f64 - if k >= 30 { 0.04 } else { 0. };
         }
+        stage[N] = 0.55;
+        let mut solver = Solver::new();
+        let crash = solver.solve_crash(&stage);
+        let cold = Solver::new().solve(&stage, false);
+        assert_eq!((crash[3], crash[4]), (1., 0.));
+        assert!(crash[1] <= 1e-6 && cold[1] <= 1e-6);
+        assert!((crash[0] - cold[0]).abs() <= 1e-6);
+        let (p, q) = solver.support;
+        assert!(p != 0 && p.count_ones() == q.count_ones());
+        assert!(crash[2] < cold[2]);
     }
 }

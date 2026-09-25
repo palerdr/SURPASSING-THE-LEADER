@@ -1,7 +1,7 @@
 # DTH workflows
 
-Run commands from the repository root. Generated artifacts, reports, datasets,
-and checkpoints remain under ignored paths owned by `src/dth/`.
+Run commands from the repository root. Generated artifacts, reports, and
+checkpoints remain under ignored paths owned by `src/dth/`.
 
 ## Build or verify the complete solution
 
@@ -24,33 +24,16 @@ partial-solve artifacts are not accepted by production play.
 
 ```powershell
 # DTH is the default Hal policy.
-uv run python -m arena play
+uv run python -m terminal play
 
 # Equivalent explicit spelling and the terminal renderer.
-uv run python -m arena play --hal-agent dth --tui
+uv run python -m terminal play --hal-agent dth --tui
 ```
 
 Arena always resolves the canonical leap-aware STL game. DTH supplies an exact
 mixed strategy on its shared 1..60 action/state model; arena and the STL engine
 own legal action masking, the possible Baku action 61, clocks, transitions, and
 the frozen revival roll.
-
-## Optional research workflows
-
-```powershell
-uv run python -m dth dataset --help
-uv run python -m dth train --help
-uv run python -m dth self-play --help
-uv run python -m dth mcts-audit --help
-```
-
-These commands remain useful for policy compression, learned evaluation,
-search comparisons, and empirical analysis. Configured outputs must state
-whether a target is finite-horizon exact or an approximate play estimate. No
-research output is a fallback for `CompleteDTHAgent` or a substitute for the
-complete artifact. [`RESEARCH_CONFIGS.md`](RESEARCH_CONFIGS.md) classifies the
-tracked presets and separates current entry configurations from reproducible
-research lineages.
 
 ## Cross-backend validation
 

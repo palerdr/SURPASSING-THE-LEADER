@@ -13,6 +13,7 @@ depends: [
   "ocamlformat"
   "lp"
   "lp-glpk"
+  "dth_play" {with-test}
   "odoc" {with-doc}
 ]
 build: [

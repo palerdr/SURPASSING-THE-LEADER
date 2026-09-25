@@ -10,10 +10,10 @@ production discretizations implement the same rules:
 
 | Ruleset | Bucket | Actions | Load cap | Failed-check dose | TTD half-life |
 |---|---:|---:|---:|---:|---:|
-| `bucket6_frozen95` | 10 seconds | `1..6` | 30 units | 6 units | 14.43 units |
-| `bucket12_frozen95` | 5 seconds | `1..12` | 60 units | 12 units | 28.86 units |
+| `bucket6_frozen95` | 10 seconds | `1..6` | 30 units | 6 units | 14.46 units |
+| `bucket12_frozen95` | 5 seconds | `1..12` | 60 units | 12 units | 28.91 units |
 
-The half-life is the frozen 144.3 seconds expressed in bucket units; it is a
+The half-life is the frozen 144.6 seconds expressed in bucket units; it is a
 derived quantity, not a free parameter.
 
 These are the only addressable rulesets. Pre-freeze probability variants and
@@ -59,7 +59,7 @@ Thus \(P_{\mathrm{rev}}(0,0)=0.95\). Current ST acts linearly on the potency of
 the impending dose, reaching zero exactly at the documentary lethal dose
 \(q=300\) and nowhere else: the largest survivable injection is \(s=239\), where
 the probability is \(0.95/240=0.003958\). Prior TTD decays geometrically at a
-quarter per accrued death-minute, a 144.3-second half-life, keeping the state
+quarter per accrued death-minute, a 144.6-second half-life, keeping the state
 role-relative and a function of exactly two variables.
 
 `0.75` is a rounding of \(0.85\times0.88\), the product of the pre-freeze STL

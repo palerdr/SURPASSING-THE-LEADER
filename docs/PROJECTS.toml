@@ -1,5 +1,21 @@
 schema_version = 1
 
+# Import rules, which tests/meta/test_layer_boundaries.py enforces:
+# - may_import lists the modules of other projects that this project can
+#   import. Each entry must sit under a public interface of its owner. An
+#   import inside the same project passes.
+# - forbid_imports lists third-party packages that this project must not
+#   import. forbid_imports_exempt lists the files, by repository path, that
+#   can import them today. Each exempt file must exist and must still import
+#   one of the packages, so the list shrinks as files move out.
+# - core_modules can import each other and the modules in core_may_import,
+#   and no other first-party module.
+#
+# A [[consumer]] entry names a tracked directory outside src/ whose scripts
+# import projects but own no importable module, such as paper/. It lists
+# may_import alone, and the same test checks each of its scripts. An entry
+# may name a flat module by its file, as main.py.
+
 [[project]]
 id = "stl"
 path = "src/stl"
@@ -8,7 +24,9 @@ kind = "peer"
 languages = ["python"]
 rung = "L2"
 status = "implemented-unsolved"
-public_interfaces = ["stl.engine", "stl.solver.canonical"]
+public_interfaces = ["stl.engine", "stl.solver.canonical", "stl.reader"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run python -m pytest src/stl/tests -q"]
 
@@ -21,6 +39,8 @@ languages = ["python"]
 rung = "L1"
 status = "solved"
 public_interfaces = ["dth.solver", "dth.agent"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run python -m pytest src/dth/tests -q"]
 
@@ -33,6 +53,8 @@ languages = ["python"]
 rung = "L1"
 status = "solved"
 public_interfaces = ["main.py"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run --project src/dth_compact pytest src/dth_compact/tests -q"]
 
@@ -45,6 +67,8 @@ languages = ["python"]
 rung = "L0"
 status = "solved"
 public_interfaces = ["abstract"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run python -m pytest src/abstract/tests -q"]
 
@@ -57,6 +81,7 @@ languages = ["ocaml"]
 rung = "L1"
 status = "reference"
 public_interfaces = ["dth_solver"]
+may_import = []
 root_validation = true
 validation = [
   "opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml",
@@ -72,6 +97,7 @@ languages = ["c++"]
 rung = "L1"
 status = "in-progress"
 public_interfaces = []
+may_import = []
 root_validation = false
 validation = []
 validation_deferred_reason = "The native implementation and build order are still under active development."
@@ -85,6 +111,7 @@ languages = ["rust", "python-ffi"]
 rung = "L0-L1"
 status = "opt-in"
 public_interfaces = ["abstract_solver_rs", "dth_complete_rs"]
+may_import = []
 root_validation = true
 validation = [
   "cargo fmt --all -- --check",
@@ -94,19 +121,125 @@ validation = [
   "$env:STL_REQUIRE_RUST_PARITY='1'; uv run python -m pytest src/abstract/tests/test_rust_parity.py src/dth/tests/test_complete_rust_parity.py -q",
 ]
 
+# The game library: the session, the provider adapters, the runtime Hal
+# providers, and the presentation that the terminal and browser apps share.
+# tests/meta/test_layer_boundaries.py also fails any import of terminal,
+# browser, or hal_lab from it.
 [[project]]
 id = "arena"
 path = "src/arena"
 instruction_readme = "src/arena/README.md"
-kind = "neutral-surface"
+kind = "library"
+languages = ["python"]
+rung = "L2"
+status = "play-surface"
+public_interfaces = ["arena"]
+may_import = [
+  "stl.engine",
+  "stl.solver.canonical",
+  "stl.reader",
+  "dth.agent",
+  "dth.solver",
+  "abstract",
+]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+forbid_imports_exempt = [
+  "src/arena/policies/aggro_hal.py",
+  "src/arena/policies/exploit_hal.py",
+  "src/arena/policies/pm_hal.py",
+  "src/arena/tests/test_aggro_hal_model.py",
+  "src/arena/tests/test_exploit_hal.py",
+  "src/arena/tests/test_pm_hal.py",
+]
+core_modules = ["arena.contracts", "arena.agent", "arena.session", "arena.match", "arena.variants"]
+core_may_import = ["stl.engine"]
+root_validation = true
+validation = ["uv run python -m pytest src/arena/tests -q"]
+
+# The terminal game, `python -m terminal play`. It is an app: it may import
+# arena and stl.engine, and no project imports it.
+# tests/meta/test_layer_boundaries.py also fails any import of browser or
+# hal_lab from it.
+[[project]]
+id = "terminal"
+path = "src/terminal"
+instruction_readme = "src/terminal/README.md"
+kind = "app"
+languages = ["python"]
+rung = "L2"
+status = "play-surface"
+public_interfaces = []
+may_import = ["arena", "stl.engine"]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+root_validation = true
+validation = ["uv run python -m pytest src/terminal/tests -q"]
+
+# The hosted browser game, `python -m browser`: the FastAPI server, the Vite
+# TypeScript client in webclient/, and the Vercel deploy pipeline in deploy/.
+# It is an app: it may import arena, stl.engine, and dth.agent, and no project
+# imports it. The terminal-versus-browser parity tests live in the root
+# tests/parity, outside every project, because neither app imports the other.
+[[project]]
+id = "browser"
+path = "src/browser"
+instruction_readme = "src/browser/README.md"
+kind = "app"
 languages = ["python", "typescript"]
 rung = "L2"
 status = "play-surface"
-public_interfaces = ["arena", "arena.web"]
+public_interfaces = []
+may_import = ["arena", "stl.engine", "dth.agent"]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = [
-  "uv run python -m pytest src/arena/tests -q",
-  "npm --prefix src/arena/webclient test",
-  "npm --prefix src/arena/webclient run typecheck",
-  "npm --prefix src/arena/webclient run build",
+  "uv run --project src/browser python -m pytest src/browser/tests tests/parity -q",
+  "npm --prefix src/browser/webclient test",
+  "npm --prefix src/browser/webclient run typecheck",
+  "npm --prefix src/browser/webclient run build",
 ]
+
+# The Hal research lab. It may import torch and the training stack, so it
+# lists no forbid_imports. Its public_interfaces stay empty: no project
+# imports it.
+[[project]]
+id = "hal_lab"
+path = "src/hal_lab"
+instruction_readme = "src/hal_lab/README.md"
+kind = "lab"
+languages = ["python"]
+rung = "L1-L2"
+status = "research"
+public_interfaces = []
+may_import = [
+  "arena",
+  "stl.engine",
+  "stl.solver.canonical",
+  "stl.reader",
+  "dth.agent",
+  "dth.solver",
+]
+root_validation = true
+validation = [
+  "uv run python -m pytest src/hal_lab/tests -q",
+  "uv run python -m hal_lab.provenance --check",
+]
+
+[[project]]
+id = "formal"
+path = "src/formal"
+instruction_readme = "src/formal/README.md"
+kind = "verification"
+languages = ["lean"]
+rung = "L1-L2"
+status = "reference"
+public_interfaces = []
+may_import = []
+root_validation = true
+validation = ["lake -d src/formal build"]
+
+# The paper's figure scripts. They read the STL leap artifact through
+# stl.reader and the compact DTH solver through its one-file main.py.
+[[consumer]]
+id = "paper"
+path = "paper"
+may_import = ["stl.reader", "main.py"]

@@ -1,0 +1,422 @@
+{
+  "schema": "arena-perfect-hal-bayes-results-freeze-v2",
+  "report_path": "outputs/perfect-hal-bayes-v2/test-v2.json",
+  "report_sha256": "d3ea99d19aa8cdb8d80a8ff72f0c3ce3176102fd4e390fd4ef9a3d7ddf2df16a",
+  "input_sha256": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+  "config_sha256": "2ea0c51a664356f7ed516bb390650a65e09e40e68131892c5e0c3760b20bce90",
+  "source_sha256": {
+    "evaluate_bayesian_hal.py": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+    "bayesian_hal.py": "569c41619f09ab769b526a6ba1f1f561153f7e359c309eb0a67f1c773376e0e8",
+    "perfect_hal.py": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13"
+  },
+  "table_manifest_sha256": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+  "decision": "Keep v1 as the terminal and local-browser default; expose Bayesian v2 for research.",
+  "reason": "Bayesian v2 beats equilibrium in these simulations but has no established synthetic gain over v1 and loses to v1 on human-fitted emulators.",
+  "simulation": {
+    "synthetic": {
+      "exact": {
+        "games": 768,
+        "wins": 393,
+        "losses": 375,
+        "stopped": 0,
+        "win_rate": 0.51171875,
+        "mean_score": 0.51171875,
+        "paired_vs_exact": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 96
+        },
+        "paired_vs_legacy": {
+          "mean": -0.3671875,
+          "interval_95": [
+            -0.4153971354166666,
+            -0.3177083333333333
+          ],
+          "identities": 96
+        },
+        "paired_vs_reset": {
+          "mean": -0.3697916666666667,
+          "interval_95": [
+            -0.41796875,
+            -0.3209635416666667
+          ],
+          "identities": 96
+        }
+      },
+      "legacy": {
+        "games": 768,
+        "wins": 675,
+        "losses": 93,
+        "stopped": 0,
+        "win_rate": 0.87890625,
+        "mean_score": 0.87890625,
+        "paired_vs_exact": {
+          "mean": 0.3671875,
+          "interval_95": [
+            0.3177083333333333,
+            0.4153971354166662
+          ],
+          "identities": 96
+        },
+        "paired_vs_legacy": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 96
+        },
+        "paired_vs_reset": {
+          "mean": -0.0026041666666666665,
+          "interval_95": [
+            -0.021484375,
+            0.016276041666666668
+          ],
+          "identities": 96
+        }
+      },
+      "bayes": {
+        "games": 768,
+        "wins": 677,
+        "losses": 91,
+        "stopped": 0,
+        "win_rate": 0.8815104166666666,
+        "mean_score": 0.8815104166666666,
+        "paired_vs_exact": {
+          "mean": 0.3697916666666667,
+          "interval_95": [
+            0.3190104166666667,
+            0.4192708333333333
+          ],
+          "identities": 96
+        },
+        "paired_vs_legacy": {
+          "mean": 0.0026041666666666665,
+          "interval_95": [
+            -0.015625,
+            0.020833333333333332
+          ],
+          "identities": 96
+        },
+        "paired_vs_reset": {
+          "mean": 0.0,
+          "interval_95": [
+            -0.020182291666666668,
+            0.020833333333333332
+          ],
+          "identities": 96
+        }
+      },
+      "bayes_population": {
+        "games": 768,
+        "wins": 636,
+        "losses": 132,
+        "stopped": 0,
+        "win_rate": 0.828125,
+        "mean_score": 0.828125,
+        "paired_vs_exact": {
+          "mean": 0.31640625,
+          "interval_95": [
+            0.2643229166666667,
+            0.3671875
+          ],
+          "identities": 96
+        },
+        "paired_vs_legacy": {
+          "mean": -0.05078125,
+          "interval_95": [
+            -0.078125,
+            -0.022135416666666668
+          ],
+          "identities": 96
+        },
+        "paired_vs_reset": {
+          "mean": -0.053385416666666664,
+          "interval_95": [
+            -0.083984375,
+            -0.022786458333333332
+          ],
+          "identities": 96
+        }
+      },
+      "bayes_reset": {
+        "games": 768,
+        "wins": 657,
+        "losses": 71,
+        "stopped": 40,
+        "win_rate": 0.85546875,
+        "mean_score": 0.8815104166666666,
+        "paired_vs_exact": {
+          "mean": 0.3697916666666667,
+          "interval_95": [
+            0.3209635416666667,
+            0.41796875
+          ],
+          "identities": 96
+        },
+        "paired_vs_legacy": {
+          "mean": 0.0026041666666666665,
+          "interval_95": [
+            -0.016276041666666668,
+            0.021484375
+          ],
+          "identities": 96
+        },
+        "paired_vs_reset": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 96
+        }
+      }
+    },
+    "human_fitted": {
+      "exact": {
+        "games": 128,
+        "wins": 63,
+        "losses": 65,
+        "stopped": 0,
+        "win_rate": 0.4921875,
+        "mean_score": 0.4921875,
+        "paired_vs_exact": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 8
+        },
+        "paired_vs_legacy": {
+          "mean": -0.4453125,
+          "interval_95": [
+            -0.53125,
+            -0.359375
+          ],
+          "identities": 8
+        },
+        "paired_vs_reset": {
+          "mean": -0.1953125,
+          "interval_95": [
+            -0.4296875,
+            0.046875
+          ],
+          "identities": 8
+        }
+      },
+      "legacy": {
+        "games": 128,
+        "wins": 120,
+        "losses": 8,
+        "stopped": 0,
+        "win_rate": 0.9375,
+        "mean_score": 0.9375,
+        "paired_vs_exact": {
+          "mean": 0.4453125,
+          "interval_95": [
+            0.359375,
+            0.53125
+          ],
+          "identities": 8
+        },
+        "paired_vs_legacy": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 8
+        },
+        "paired_vs_reset": {
+          "mean": 0.25,
+          "interval_95": [
+            0.0390625,
+            0.53125
+          ],
+          "identities": 8
+        }
+      },
+      "bayes": {
+        "games": 128,
+        "wins": 114,
+        "losses": 14,
+        "stopped": 0,
+        "win_rate": 0.890625,
+        "mean_score": 0.890625,
+        "paired_vs_exact": {
+          "mean": 0.3984375,
+          "interval_95": [
+            0.2890625,
+            0.515625
+          ],
+          "identities": 8
+        },
+        "paired_vs_legacy": {
+          "mean": -0.046875,
+          "interval_95": [
+            -0.09375,
+            -0.015625
+          ],
+          "identities": 8
+        },
+        "paired_vs_reset": {
+          "mean": 0.203125,
+          "interval_95": [
+            -0.0390625,
+            0.5
+          ],
+          "identities": 8
+        }
+      },
+      "bayes_population": {
+        "games": 128,
+        "wins": 107,
+        "losses": 21,
+        "stopped": 0,
+        "win_rate": 0.8359375,
+        "mean_score": 0.8359375,
+        "paired_vs_exact": {
+          "mean": 0.34375,
+          "interval_95": [
+            0.2578125,
+            0.4375
+          ],
+          "identities": 8
+        },
+        "paired_vs_legacy": {
+          "mean": -0.1015625,
+          "interval_95": [
+            -0.1484375,
+            -0.0625
+          ],
+          "identities": 8
+        },
+        "paired_vs_reset": {
+          "mean": 0.1484375,
+          "interval_95": [
+            -0.09375,
+            0.421875
+          ],
+          "identities": 8
+        }
+      },
+      "bayes_reset": {
+        "games": 128,
+        "wins": 88,
+        "losses": 40,
+        "stopped": 0,
+        "win_rate": 0.6875,
+        "mean_score": 0.6875,
+        "paired_vs_exact": {
+          "mean": 0.1953125,
+          "interval_95": [
+            -0.046875,
+            0.4296875
+          ],
+          "identities": 8
+        },
+        "paired_vs_legacy": {
+          "mean": -0.25,
+          "interval_95": [
+            -0.53125,
+            -0.0390625
+          ],
+          "identities": 8
+        },
+        "paired_vs_reset": {
+          "mean": 0.0,
+          "interval_95": [
+            0.0,
+            0.0
+          ],
+          "identities": 8
+        }
+      }
+    }
+  },
+  "human_logged_state_gains": {
+    "legacy": {
+      "mean": 0.11146073663474179,
+      "interval_95": [
+        0.06256111458619901,
+        0.16899993954235332
+      ],
+      "identities": 8
+    },
+    "bayes": {
+      "mean": 0.11350306303602019,
+      "interval_95": [
+        0.06674598203142616,
+        0.16942722239475227
+      ],
+      "identities": 8
+    },
+    "bayes_population": {
+      "mean": 0.11267785659039609,
+      "interval_95": [
+        0.06470631650758923,
+        0.16964550985365598
+      ],
+      "identities": 8
+    },
+    "bayes_reset": {
+      "mean": 0.05769467887942725,
+      "interval_95": [
+        -0.009900148308722106,
+        0.1310120308287361
+      ],
+      "identities": 8
+    }
+  },
+  "named_sample": [
+    {
+      "player": 1,
+      "named_sample": true,
+      "scored_moves": 11,
+      "excluded_leap_moves_in_prefix": 2,
+      "controllers": {
+        "exact": {
+          "nll": 3.455228000768048,
+          "brier": 0.9732856200297006,
+          "one_step_win_probability": 0.5661312017258975,
+          "gain_over_exact": 0.0
+        },
+        "legacy": {
+          "nll": 4.305783826457745,
+          "brier": 1.0450204360269575,
+          "one_step_win_probability": 0.5882448805352801,
+          "gain_over_exact": 0.022113678809382687
+        },
+        "bayes": {
+          "nll": 3.4781568184222125,
+          "brier": 0.9061354661158212,
+          "one_step_win_probability": 0.6025143135188495,
+          "gain_over_exact": 0.03638311179295216
+        },
+        "bayes_population": {
+          "nll": 3.6283723010835005,
+          "brier": 0.9681789678688819,
+          "one_step_win_probability": 0.5941343097645446,
+          "gain_over_exact": 0.028003108038647348
+        },
+        "bayes_reset": {
+          "nll": 4.0943445622220995,
+          "brier": 0.9833333333333332,
+          "one_step_win_probability": 0.6016113369785813,
+          "gain_over_exact": 0.03548013525268377
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Logged-state gains project into pure DTH and assume equilibrium after one deviation.",
+    "Simulator win rates do not establish human treatment effects.",
+    "Human-fitted opponents omit unobserved human responses.",
+    "Browser identities may belong to the same person; identity intervals assume independence.",
+    "No whole-game optimality or safety claim for the exploit policy."
+  ]
+}
