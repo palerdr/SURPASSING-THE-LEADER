@@ -1,4 +1,10 @@
-"""Interactive canonical STL referee with pluggable Hal policy providers."""
+"""Terminal play: ``python -m terminal play``.
+
+A human plays canonical STL, or pure DTH with ``--pure-dth``, against one Hal
+policy provider. ``arena.policies.registry`` builds Hal and holds the agent
+flags, and ``arena.session.PlaySession`` sequences the referee calls. This
+module owns the terminal input and output and the public transcript.
+"""
 
 from __future__ import annotations
 
@@ -27,17 +33,12 @@ from stl.engine.game import (
 )
 
 # The provider registry lives in arena.policies.registry. These aliases keep the
-# names that tests and older callers use; command_play and command_match look
-# them up here at call time, so a monkeypatch of this module still intercepts.
+# names that the tests use; command_play looks up _make_hal here at call time,
+# so a monkeypatch of this module still intercepts it.
 DEFAULT_DTH_COMPLETE_TABLEBASE = registry.DEFAULT_DTH_COMPLETE_TABLEBASE
 _abstract_artifact = registry.abstract_artifact
-_dth_artifact_dir = registry.dth_artifact_dir
-_make_dth_provider = registry.make_dth_provider
 _make_adaptive_dth_provider = registry.make_adaptive_dth_provider
-_make_exploit_hal_provider = registry.make_exploit_hal_provider
-_make_aggro_hal_provider = registry.make_aggro_hal_provider
 _make_perfect_hal_provider = registry.make_perfect_hal_provider
-_make_pm_hal_provider = registry.make_pm_hal_provider
 _make_provider = registry.make_provider
 _make_hal = registry.make_hal
 
@@ -81,7 +82,7 @@ def _show_rules(args: argparse.Namespace) -> None:
 
     hal_label = args.public_hal_label or args.hal_agent
     if args.tui:
-        from arena.tui import Layout, draw, enable_ansi, render_rules
+        from terminal.tui import Layout, draw, enable_ansi, render_rules
 
         enable_ansi()
         layout = Layout.detect(args.frame_width, args.frame_height)
@@ -155,7 +156,7 @@ def _play_one_game(
     show_victory = None
     if args.tui:
         from arena.presentation.scene_art import SceneArt
-        from arena.tui import (
+        from terminal.tui import (
             Layout,
             draw,
             enable_ansi,
@@ -322,57 +323,14 @@ def command_play(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
-    registry.add_play_arguments(parser)
-    registry.add_research_arguments(parser)
-
-
-def command_match(args: argparse.Namespace) -> int:
-    from arena.match import run_paired_series, write_report
-
-    if (
-        any(
-            registry.requires_pure_dth(kind, args)
-            for kind in (args.candidate, args.opponent)
-        )
-        and not args.pure_dth
-    ):
-        raise ValueError(
-            "aggro-hal, perfect-hal, and pm-hal are pure-DTH policies; pass "
-            "--pure-dth so action 61 is impossible"
-        )
-    report = run_paired_series(
-        args.candidate,
-        args.opponent,
-        make_candidate=lambda: _make_provider(args.candidate, args),
-        make_opponent=lambda: _make_provider(args.opponent, args),
-        base_seeds=args.games,
-        seed_start=args.seed,
-        start_clock=args.start_clock,
-        max_half_rounds=args.max_half_rounds,
-        pure_dth=args.pure_dth,
-    )
-    destination = write_report(report, args.output)
-    sprt = report["sprt"]
-    print(
-        f"{args.candidate} vs {args.opponent}: "
-        f"{sprt['wins']}-{sprt['losses']} decisive "
-        f"({report['stopped_games']} stopped), SPRT {sprt['decision']}; "
-        f"report {destination}"
-    )
-    for line in report["candidate_summaries"]:
-        print(line)
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m arena")
+    parser = argparse.ArgumentParser(prog="python -m terminal")
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser(
         "play", help="play STL or explicit pure DTH against a pluggable Hal policy"
     )
     play.add_argument("--hal-agent", choices=registry.PLAY_AGENTS, default="dth")
-    _add_agent_arguments(play)
+    registry.add_play_arguments(play)
     play.add_argument("--human-name", default="Baku")
     play.add_argument(
         "--public-hal-label",
@@ -465,37 +423,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="start immediately without the opening rules screen",
     )
     play.set_defaults(function=command_play)
-
-    match = commands.add_parser(
-        "match",
-        help="paired-seat agent-versus-agent series with a predeclared SPRT",
-    )
-    match.add_argument("--candidate", choices=registry.MATCH_AGENTS, required=True)
-    match.add_argument("--opponent", choices=registry.MATCH_AGENTS, required=True)
-    _add_agent_arguments(match)
-    match.add_argument(
-        "--games",
-        type=int,
-        default=50,
-        help="maximum base seeds; each is played in both seatings",
-    )
-    match.add_argument("--seed", type=int, default=0)
-    match.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
-    match.add_argument("--max-half-rounds", type=int, default=200)
-    match.add_argument(
-        "--pure-dth",
-        action="store_true",
-        help=(
-            "run the pure 1..60 DTH action contract "
-            "(required for aggro-hal, perfect-hal, and pm-hal)"
-        ),
-    )
-    match.add_argument(
-        "--output",
-        required=True,
-        help="JSON report path; keep it under the candidate project's artifacts",
-    )
-    match.set_defaults(function=command_match)
     return parser
 
 

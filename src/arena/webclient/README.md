@@ -1,9 +1,9 @@
 # Browser Client
 
 `src/arena/webclient/` is the TypeScript client for canonical STL play, and one
-of arena's play surfaces alongside `cli.py` and `tui.py`. It is a rendering and
-input surface only. Its server is `src/arena/web/`, which holds every piece of
-game state, and the STL engine remains the only referee.
+of arena's play surfaces alongside the terminal app in `src/terminal/`. It is a
+rendering and input surface only. Its server is `src/arena/web/`, which holds
+every piece of game state, and the STL engine remains the only referee.
 
 This file is documentation nested inside the arena subtree, not an instruction
 file; arena's binding guidance is `src/arena/README.md`.
@@ -49,8 +49,8 @@ file; arena's binding guidance is `src/arena/README.md`.
 [`GAMEPLAY_FLOW.md`](GAMEPLAY_FLOW.md) is the design brief for the stage, in
 the author's terms; this section is the implemented summary.
 
-The browser surface covers the whole of `arena play`, staged as one
-full-screen stage rather than a scrolling page:
+The browser surface covers the whole of `python -m terminal play`, staged as
+one full-screen stage rather than a scrolling page:
 
 - The title page shows DROP THE HANDKERCHIEF and Start. Start opens the
   chapter's rules PNG with Begin and one footer about same-second checks and
@@ -127,7 +127,7 @@ full-screen stage rather than a scrolling page:
   change.
 
 The scene is staged after `art/panels/stl1.jpg` and uses the same constants as
-`src/arena/tui.py`, so both front ends frame it identically.
+`src/terminal/tui.py`, so both front ends frame it identically.
 One difference is deliberate: the terminal cycles Yakou's four-frame idle
 sheet, while the browser holds his first frame. The sheet's frames are separate
 drawings, each re-centred on a shared canvas, and on a screen the cycle read
@@ -143,9 +143,9 @@ uv run python -m arena.web                        # game on 127.0.0.1:8000
 ```
 
 `python -m arena.web` takes the same agent, seed, start-clock, label,
-transcript, and `--pure-dth` options as `arena play`. For client development
-run the Vite server instead, which proxies `/api` and `/art` to the Python
-server:
+transcript, and `--pure-dth` options as `python -m terminal play`. For client
+development run the Vite server instead, which proxies `/api` and `/art` to the
+Python server:
 
 ```bash
 uv run python -m arena.web                        # server on 127.0.0.1:8000

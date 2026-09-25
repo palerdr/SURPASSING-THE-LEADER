@@ -22,7 +22,9 @@ absolute_roots = ["/Users/palerider/Desktop/projects/usogui/stl/"]
 # record or an ignored output at its current path. A path that this table
 # omits has not moved; the ignored outputs/ store stays in place.
 [path]
-"src/arena/cli.py" = "src/arena/cli.py"
+# The play command of cli.py moved to src/terminal/cli.py, and its match
+# command moved to src/hal_lab/cli.py.
+"src/arena/cli.py" = "src/terminal/cli.py"
 "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json" = "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json"
 "src/arena/config/aggro_hal_adaptive_memory_v1.yaml" = "src/arena/config/aggro_hal_adaptive_memory_v1.yaml"
 "src/arena/config/aggro_hal_tactical_baseline_v1.json" = "src/arena/config/aggro_hal_tactical_baseline_v1.json"

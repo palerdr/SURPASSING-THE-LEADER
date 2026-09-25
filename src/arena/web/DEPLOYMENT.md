@@ -259,7 +259,7 @@ You can repeat the local operational check with a new output path:
 
 ```sh
 uv run python -m arena.web.check_translated_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --output outputs/translated-hal-v1/runtime-review.json
-uv run python -m pytest src/arena/tests tests/meta -q
+uv run python -m pytest src/arena/tests src/terminal/tests tests/meta -q
 npm --prefix src/arena/webclient run typecheck
 ```
 

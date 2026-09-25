@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stl", "src/dth", "src/abstract", "src/arena", "src/hal_lab"]
+packages = ["src/stl", "src/dth", "src/abstract", "src/arena", "src/terminal", "src/hal_lab"]
 
 [dependency-groups]
 dev = [
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "src/hal_lab/tests", "tests/meta"]
+testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "src/terminal/tests", "src/hal_lab/tests", "tests/meta"]
 pythonpath = ["src", "."]
 # The suite is overwhelmingly independent and every artifact-building test
 # already writes under its own tmp_path, so it distributes cleanly. Use "-n 0"

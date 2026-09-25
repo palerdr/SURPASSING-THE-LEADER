@@ -6,7 +6,7 @@ import torch
 
 from arena.policies.neural_pilots import ExpertSelector, PublicMemory, SequencePredictor, SessionActor, TOKEN_DIM, WINDOW
 from arena.policies.translated_hal import TranslatedHalConfig
-from arena.tests.test_perfect_hal import _decision
+from arena.testing import make_decision as _decision
 
 
 def decision(role="dropper", game=0, index=0):
@@ -120,7 +120,7 @@ def test_actor_initial_policy_uses_tactical_values_and_hidden_state_can_change_l
 
 def test_shuffle_randomness_cannot_change_actions_if_predictions_match(monkeypatch, tmp_path):
     from arena.policies.run_neural_pilots import Experiment
-    from arena.tests.test_perfect_hal import _StageAgent
+    from arena.testing import StageAgent as _StageAgent
 
     experiment = Experiment.__new__(Experiment)
     experiment.agent = _StageAgent()

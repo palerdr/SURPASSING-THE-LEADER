@@ -440,8 +440,8 @@ canonical resolution, revival, load, and clock mechanics while permanently
 fixing the turn to actions `1..60`. It therefore never inherits STL's
 leap-window action 61, even if a long game crosses that wall-clock interval.
 The provider fails closed before tablebase or model inference outside that
-contract. Aggro is not exposed by canonical `arena play`; agent matches must
-opt in with `arena match --pure-dth`.
+contract. Aggro is not exposed by canonical `terminal play`; agent matches must
+opt in with `hal_lab match --pure-dth`.
 
 ## Training, checkpoints, and evaluation
 
@@ -485,7 +485,7 @@ from the candidate certificates and cumulative epsilon budget.
 
 Every update writes `maskable-ppo.zip`, `trainer-state.json`, and
 `rng-state.pt` for exact recovery, and exports `checkpoint.pt` in the strict v1
-live schema used by evaluation and arena play. A resumed run treats `updates`
+live schema used by evaluation and terminal play. A resumed run treats `updates`
 as the total target, restores Python/NumPy/PyTorch random state, preserves its
 update history, and runs only the unfinished updates. Training resumes should
 use the SB3 archive; the live checkpoint path is a warm start rather than the
@@ -535,7 +535,7 @@ uv run python -m arena.policies.train_exploit_hal benchmark --config src/arena/c
 uv run python -m arena.policies.train_exploit_hal inspect --checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
 
 # 7. Interactive deterministic Exploit Hal play.
-uv run python -m arena play --hal-agent exploit-hal --exploit-hal-config src/arena/config/exploit_hal_v2.yaml --exploit-hal-checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
+uv run python -m terminal play --hal-agent exploit-hal --exploit-hal-config src/arena/config/exploit_hal_v2.yaml --exploit-hal-checkpoint outputs/exploit-hal-v2/v2/checkpoint.pt
 ```
 
 For a fresh run, omit `--resume` from command 2. The supported outcome-only
@@ -584,10 +584,10 @@ uv run python -m arena.policies.evaluate_aggro_hal --checkpoint outputs/aggro-ha
 uv run python -m arena.policies.evaluate_aggro_hal_memory --checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/memory-latent-twin-report.json --protocol-output outputs/aggro-hal-v1/v1/memory-latent-twin-protocol.json --twin-seeds 32 --cover-games 1 8 --bootstrap-replicates 5000
 
 # Pure-DTH agent match. Canonical STL play intentionally does not offer Aggro.
-uv run python -m arena match --candidate aggro-hal --opponent dth --pure-dth --games 50 --aggro-hal-checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/vs-exact.json
+uv run python -m hal_lab match --candidate aggro-hal --opponent dth --pure-dth --games 50 --aggro-hal-checkpoint outputs/aggro-hal-v1/v1/checkpoint.pt --output outputs/aggro-hal-v1/v1/vs-exact.json
 
 # Checkpoint-free hard-best-response match. Canonical STL play omits Perfect Hal.
-uv run python -m arena match --candidate perfect-hal --opponent dth --pure-dth --games 50 --output outputs/perfect-hal-v1/vs-exact.json
+uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth --games 50 --output outputs/perfect-hal-v1/vs-exact.json
 
 # Build the current schema-v2 exact artifact at the Arena default path.
 uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 report_path=outputs/pm-hal/dth-complete-v2-report.json backend=rust lp_workers=4 progress_every=50
@@ -596,10 +596,10 @@ uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 repo
 uv run python -m arena.policies.train_aggro_hal train --config src/arena/config/pm_hal_aggro_component_v1.yaml --output-dir outputs/pm-hal/aggro-component-v1
 
 # Full PM Hal match with the compatible recurrent component.
-uv run python -m arena match --candidate pm-hal --opponent dth --pure-dth --games 50 --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/vs-exact.json
+uv run python -m hal_lab match --candidate pm-hal --opponent dth --pure-dth --games 50 --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt --output outputs/pm-hal/v3/vs-exact.json
 
 # Human play on the permanent 1..60 pure-DTH surface.
-uv run python -m arena play --hal-agent pm-hal --pure-dth --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt
+uv run python -m terminal play --hal-agent pm-hal --pure-dth --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --pm-hal-aggro-checkpoint outputs/pm-hal/aggro-component-v1/checkpoint.pt
 
 # Git-registered v3 confirmation: 56 identities, every family, common sessions,
 # no-Aggro ablation, and independent matrix-based risk audit.

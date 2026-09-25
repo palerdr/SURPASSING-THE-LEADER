@@ -1,69 +1,21 @@
-"""Phase-machine invariants and CLI parity for :mod:`arena.session`."""
+"""Phase-machine invariants for :mod:`arena.session`.
+
+``python -m terminal play`` parity lives in ``src/terminal/tests/test_cli.py``.
+"""
 
 from __future__ import annotations
 
-import json
-import random
-from pathlib import Path
-
 import pytest
 
-from arena import cli
 from arena.session import Phase, PlaySession, SessionPhaseError
+from arena.testing import RecordingHal as _RecordingHal, make_session as _session
 from arena.web.schema import snapshot_from_session
 from stl.engine.game import (
     LS_WINDOW_START,
-    OPENING_START_CLOCK,
     PHYSICALITY_BAKU,
-    PHYSICALITY_HAL,
     TOTAL_TTD_MAX,
-    Game,
     Player,
-    Referee,
 )
-
-
-class _RecordingHal:
-    """Hal stand-in that records exactly when it is consulted."""
-
-    def __init__(self, second: int = 30) -> None:
-        self.second = second
-        self.calls: list[str] = []
-        self.provider = object()
-
-    def choose_action(self, game, role, turn_duration):
-        del game
-        self.calls.append(role)
-        return min(self.second, turn_duration)
-
-
-def _session(
-    *,
-    hal_agent=None,
-    seed: int | None = 41,
-    start_clock: int = OPENING_START_CLOCK,
-    max_half_rounds: int | None = None,
-    human_display_name: str = "Baku",
-) -> PlaySession:
-    hal = Player(name="Hal", physicality=PHYSICALITY_HAL)
-    human = Player(name="Baku", physicality=PHYSICALITY_BAKU)
-    game = Game(
-        player1=hal,
-        player2=human,
-        referee=Referee(),
-        rng=random.Random(seed),
-    )
-    game.game_clock = start_clock
-    return PlaySession(
-        game=game,
-        hal_agent=hal_agent if hal_agent is not None else _RecordingHal(),
-        hal=hal,
-        human=human,
-        human_display_name=human_display_name,
-        game_seed=seed,
-        start_clock=start_clock,
-        max_half_rounds=max_half_rounds,
-    )
 
 
 def test_session_starts_on_the_rules_phase_and_begins_into_action() -> None:
@@ -269,38 +221,3 @@ def test_only_a_human_dropper_may_use_the_leap_second() -> None:
             assert legal[-1] == 61
         else:
             assert legal[-1] == 60
-
-
-def test_session_reproduces_the_cli_public_history(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """The refactor guard: driving the session by hand matches the CLI."""
-
-    def _fresh_hal(*_args, **_kwargs):
-        return _RecordingHal()
-
-    monkeypatch.setattr(cli, "_make_hal", _fresh_hal)
-    monkeypatch.setattr(cli, "_human_action", lambda *, actor, role, legal: legal[-1])
-    transcript = tmp_path / "session.json"
-    args = cli.build_parser().parse_args(
-        [
-            "play",
-            "--seed",
-            "41",
-            "--max-half-rounds",
-            "4",
-            "--transcript",
-            str(transcript),
-        ]
-    )
-    assert cli.command_play(args) == 0
-    from_cli = json.loads(transcript.read_text(encoding="utf-8"))["games"][0]
-
-    session = _session(max_half_rounds=4)
-    session.begin()
-    while session.phase is Phase.AWAITING_ACTION:
-        session.submit(session.legal_actions()[-1])
-        session.acknowledge()
-
-    assert session.finish()["public_history"] == from_cli["public_history"]

@@ -176,6 +176,24 @@ validation = [
   "npm --prefix src/arena/webclient run build",
 ]
 
+# The terminal game, `python -m terminal play`. It is an app: it may import
+# arena and stl.engine, and no project imports it.
+# tests/meta/test_layer_boundaries.py also fails any import of browser or
+# hal_lab from it.
+[[project]]
+id = "terminal"
+path = "src/terminal"
+instruction_readme = "src/terminal/README.md"
+kind = "app"
+languages = ["python"]
+rung = "L2"
+status = "play-surface"
+public_interfaces = []
+may_import = ["arena", "stl.engine"]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+root_validation = true
+validation = ["uv run python -m pytest src/terminal/tests -q"]
+
 # The Hal research lab. It may import torch and the training stack, so it
 # lists no forbid_imports. Its public_interfaces stay empty: no project
 # imports it.

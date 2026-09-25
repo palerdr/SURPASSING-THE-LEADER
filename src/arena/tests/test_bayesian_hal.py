@@ -160,16 +160,3 @@ def test_human_emulator_variants_share_one_bootstrap_identity():
     assert result["paired_vs_exact"]["identities"] == 1
     assert result["paired_vs_exact"]["interval_95"] is None
     assert result["paired_vs_exact"]["mean"] == 1
-
-
-@pytest.mark.parametrize("choice,expected", [("v1", "PerfectHalOpponentModel"), ("bayesian-v2", "BayesianHalOpponentModel")])
-def test_cli_and_browser_select_the_declared_model(monkeypatch, choice, expected):
-    from arena import cli
-    from arena.web.__main__ import build_parser as web_parser
-    from arena.policies import perfect_hal
-    monkeypatch.setattr(perfect_hal, "CompleteDTHAgent", lambda *args, **kwargs: object())
-    arguments = ["--hal-agent", "perfect-hal", "--pure-dth", "--perfect-hal-model", choice]
-    for args in (cli.build_parser().parse_args(["play", *arguments]), web_parser().parse_args(arguments)):
-        provider = cli._make_perfect_hal_provider(args)
-        assert type(provider.opponent_model).__name__ == expected
-    assert web_parser().parse_args([]).perfect_hal_model == "v1"

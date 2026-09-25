@@ -24,22 +24,7 @@ import sys
 from dataclasses import dataclass
 
 from arena.presentation.rules_text import rules_body
-# Scene art preparation moved to arena.presentation.scene_art. Its names stay
-# importable from this module for existing callers.
-from arena.presentation.scene_art import (  # noqa: F401
-    IDLE_FRAMES,
-    SceneArt,
-    _ART_ROOT,
-    _CACHE_DIR,
-    _PIPELINE_VERSION,
-    _PLAYER_POSES,
-    _WORK_EDGE,
-    _YAKOU_POSES,
-    _components,
-    _load_prepared,
-    _prepare_sheet,
-    _sheet_frames,
-)
+from arena.presentation.scene_art import SceneArt
 from arena.presentation.sprites import GLYPH_GRIDS, Sprite, render_cells
 from stl.engine.game import (
     CYLINDER_MAX,

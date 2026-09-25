@@ -1,9 +1,10 @@
 """Run the local browser server: ``uv run python -m arena.web``.
 
 Hal is built once here, at startup, through ``arena.policies.registry``: the
-same provider construction and the same agent options the terminal CLI uses.
-The ``abstract`` provider is refused because it can build a tablebase from
-scratch, which must never happen behind an HTTP request.
+same provider construction and the same agent options that
+``python -m terminal play`` uses. The ``abstract`` provider is refused because
+it can build a tablebase from scratch, which must never happen behind an HTTP
+request.
 """
 
 from __future__ import annotations
@@ -29,10 +30,9 @@ def build_parser() -> argparse.ArgumentParser:
         default="dth",
         help="'abstract' is unavailable here: it may build a tablebase on first use",
     )
-    # The browser accepts every agent option of `arena play`, and each option
-    # means the same thing here.
+    # The browser accepts every agent option of `python -m terminal play`, and
+    # each option means the same thing here.
     registry.add_play_arguments(parser)
-    registry.add_research_arguments(parser)
     parser.add_argument("--human-name", default="Baku")
     parser.add_argument(
         "--public-hal-label",
@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--seed",
         type=int,
         default=None,
-        help="base RNG seed; game N of the series uses seed + N, as arena play does",
+        help="base RNG seed; game N of the series uses seed + N, as terminal play does",
     )
     parser.add_argument("--start-clock", type=int, default=OPENING_START_CLOCK)
     parser.add_argument("--max-half-rounds", type=int, default=None)

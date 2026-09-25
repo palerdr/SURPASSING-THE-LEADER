@@ -74,7 +74,7 @@ Owner: `src/dth/`. Identical to L0 with `B = 1`: literal seconds `1..60`,
 
 The per-player dead-TTD quotient has 289,374,121 classes. Artifact
 `complete_full_v1` solves all of them by certified backward induction and is
-the default policy provider for `arena play`. `src/dth_compact/` rebuilds the
+the default policy provider for `terminal play`. `src/dth_compact/` rebuilds the
 same table from one file in about 49 s and is the solver the paper describes.
 
 L1 is the fidelity ceiling for the *mechanics*: no rung above it changes how ST,

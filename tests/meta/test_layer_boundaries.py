@@ -17,6 +17,11 @@ lazy import is still a dependency. The torch firewall skips imports under
 A ``[[consumer]]`` entry, such as ``paper``, names a directory outside src/
 whose scripts import projects. The check holds each of its scripts to the
 entry's ``may_import`` and to the owners' ``public_interfaces``.
+
+``FORBIDDEN_EDGES`` names imports that no ``may_import`` entry can allow: the
+library imports no app and not the lab, and the terminal app imports neither
+the browser app nor the lab. The rule matches the top-level package name, so
+it holds before the target project exists.
 """
 
 from __future__ import annotations
@@ -56,6 +61,12 @@ IGNORED_PARTS = frozenset(
 # The package marker of arena.policies must stay empty: a runtime that loads
 # one provider must not load torch through a sibling module.
 IMPORT_FREE = ("src/arena/policies/__init__.py",)
+# Imports that no registry entry can allow, by importer and then by the
+# top-level package of the target.
+FORBIDDEN_EDGES = {
+    "arena": ("terminal", "browser", "hal_lab"),
+    "terminal": ("browser", "hal_lab"),
+}
 
 DOCUMENT = tomllib.loads(REGISTRY.read_text(encoding="utf-8"))
 PROJECTS = {str(entry["id"]): entry for entry in DOCUMENT["project"]}
@@ -250,6 +261,15 @@ def core_violations(project_id: str, module: str, imports: list[Import]) -> list
     return problems
 
 
+def forbidden_edge_hits(project_id: str, imports: list[Import]) -> list[str]:
+    forbidden = FORBIDDEN_EDGES.get(project_id, ())
+    return [
+        f"line {statement.line} imports {statement.candidates[-1]}; {project_id} never imports {list(forbidden)}"
+        for statement in imports
+        if statement.candidates[0].split(".", 1)[0] in forbidden
+    ]
+
+
 def firewall_hits(imports: list[Import], forbidden: list[str]) -> list[str]:
     return [
         f"line {statement.line} imports {statement.candidates[0]}"
@@ -302,6 +322,16 @@ def test_every_consumer_lies_outside_src_and_imports_public_interfaces():
                 problems.append(f"{consumer_id}: may_import {prefix!r} names no Python project")
             elif not any(_under(name, face) for face in interfaces):
                 problems.append(f"{consumer_id}: may_import {prefix!r} is outside {owner}'s public interfaces")
+    assert not problems, "\n".join(problems)
+
+
+def test_no_may_import_entry_opens_a_forbidden_edge():
+    problems = []
+    for project_id, forbidden in FORBIDDEN_EDGES.items():
+        assert project_id in PROJECTS, f"FORBIDDEN_EDGES names the unregistered project {project_id}"
+        for prefix in PROJECTS[project_id].get("may_import", []):
+            if str(prefix).split(".", 1)[0] in forbidden:
+                problems.append(f"{project_id}: may_import {prefix!r} opens a forbidden edge")
     assert not problems, "\n".join(problems)
 
 
@@ -358,6 +388,11 @@ def test_core_modules_import_their_allowed_modules_alone():
     assert not any(problems.values()), _report(problems)
 
 
+def test_forbidden_edges_stay_closed():
+    problems = {path: forbidden_edge_hits(owner, found) for owner, _, path, found in python_files()}
+    assert not any(problems.values()), _report(problems)
+
+
 def test_torch_firewall():
     problems = {}
     for owner, _, path, found in python_files():
@@ -379,6 +414,19 @@ def test_import_free_package_markers_import_nothing():
 def test_checker_flags_a_peer_that_imports_arena():
     found = imports_of("import arena\n", "dth.solver")
     assert layer_violations("dth", found) == ["line 1 imports arena (arena); may_import = []"]
+
+
+def test_checker_flags_forbidden_edges_before_the_target_exists():
+    found = imports_of("import browser.app\nfrom hal_lab import cli\nfrom arena import session\n", "terminal.cli")
+    assert forbidden_edge_hits("terminal", found) == [
+        "line 1 imports browser.app; terminal never imports ['browser', 'hal_lab']",
+        "line 2 imports hal_lab.cli; terminal never imports ['browser', 'hal_lab']",
+    ]
+    found = imports_of("from terminal.cli import main\nimport hal_lab.cli\nimport stl.engine.game\n", "arena.x")
+    assert forbidden_edge_hits("arena", found) == [
+        "line 1 imports terminal.cli.main; arena never imports ['terminal', 'browser', 'hal_lab']",
+        "line 2 imports hal_lab.cli; arena never imports ['terminal', 'browser', 'hal_lab']",
+    ]
 
 
 def test_checker_accepts_public_interfaces_and_rejects_internals():

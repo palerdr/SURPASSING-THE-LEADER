@@ -5,7 +5,11 @@ import numpy as np
 import pytest
 
 from arena.policies.ensemble_hal import EnsembleHalConfig, EnsembleHalPolicyProvider, update_weights
-from arena.tests.test_perfect_hal import _StageAgent, _decision, _reveal
+from arena.testing import (
+    StageAgent as _StageAgent,
+    make_decision as _decision,
+    make_reveal as _reveal,
+)
 
 
 def make_provider(matrix=None, config=EnsembleHalConfig()):
@@ -80,16 +84,6 @@ def test_fixed_share_recovers_after_reversal_and_fixed_mix_stays_equal():
         weights = update_weights(weights, np.array([0, 1]), config)
     assert weights[1] > 0.97
     assert update_weights(np.full(2, 0.5), np.array([1, 0]), EnsembleHalConfig(learning_rate=0)) == pytest.approx([0.5, 0.5])
-
-
-def test_cli_and_browser_can_select_ensemble(monkeypatch):
-    from arena import cli
-    from arena.web.__main__ import build_parser
-    from arena.policies import ensemble_hal
-    monkeypatch.setattr(ensemble_hal, "CompleteDTHAgent", lambda *a: _StageAgent())
-    args = ["--hal-agent", "perfect-hal", "--perfect-hal-model", "ensemble", "--pure-dth"]
-    for parsed in (cli.build_parser().parse_args(["play", *args]), build_parser().parse_args(args)):
-        assert isinstance(cli._make_perfect_hal_provider(parsed), EnsembleHalPolicyProvider)
 
 
 def test_rewards_do_not_depend_on_the_action_sampled_for_hal():

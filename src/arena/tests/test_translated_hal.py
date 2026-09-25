@@ -3,7 +3,7 @@ import pytest
 
 from arena.policies.perfect_hal import PerfectHalOpponentModel
 from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
-from arena.tests.test_perfect_hal import _forecast
+from arena.testing import make_forecast as _forecast
 
 
 @pytest.mark.parametrize("role", ["dropper", "checker"])

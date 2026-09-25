@@ -22,7 +22,7 @@ RUNTIME_MODULES = (
     "arena.web.production",
 )
 TRAINING_MODULES = ("torch", "gymnasium", "stable_baselines3", "sb3_contrib")
-TERMINAL_MODULES = ("arena.cli", "arena.tui", "arena.sprites")
+TERMINAL_MODULES = ("terminal", "terminal.cli", "terminal.tui")
 
 # The rules and art routes imported the terminal renderer inside the request
 # handler, so an import-time check alone would not see that edge.

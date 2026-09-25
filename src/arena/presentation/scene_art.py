@@ -156,7 +156,7 @@ def _prepare_sheet(sheet: Sprite, count: int, *, mirror: bool = True) -> tuple[S
     The rim light is deliberately not applied here. At source resolution a
     one-pixel rim is roughly a fifth of a terminal cell and scaling would
     dissolve it, so it is drawn after scaling instead — see
-    :func:`arena.tui._scaled`.
+    :func:`terminal.tui._scaled`.
     """
     keyed = sheet.keyed()
     frames = _sheet_frames(keyed, count)

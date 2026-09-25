@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from arena.sprites import (
+from arena.presentation.scene_art import IDLE_FRAMES, SceneArt
+from arena.presentation.sprites import (
     Sprite,
     SpriteError,
     _sextant_glyph,
@@ -21,21 +22,6 @@ from arena.sprites import (
     luma,
     render_cells,
     write_png,
-)
-from arena.tui import (
-    IDLE_FRAMES,
-    POSE_SCALE,
-    Layout,
-    SceneArt,
-    _SCALE_MEMO,
-    _figure_columns,
-    _scaled,
-    _sprite_block,
-    format_result,
-    render_frame,
-    render_outcome,
-    render_rules,
-    render_victory,
 )
 from stl.engine.game import (
     LS_WINDOW_START,
@@ -46,6 +32,19 @@ from stl.engine.game import (
     Game,
     Player,
     Referee,
+)
+from terminal.tui import (
+    POSE_SCALE,
+    Layout,
+    _SCALE_MEMO,
+    _figure_columns,
+    _scaled,
+    _sprite_block,
+    format_result,
+    render_frame,
+    render_outcome,
+    render_rules,
+    render_victory,
 )
 
 

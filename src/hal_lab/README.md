@@ -2,9 +2,10 @@
 
 `src/hal_lab/` owns Hal research: the code that trains and evaluates Hal
 policies, and the frozen evidence of each finished study. No project imports
-it. Today the package holds the evidence verifier and its path map. The
-training and study modules stay in `src/arena/policies/` until they move here,
-and their tests stay with arena until then.
+it. Today the package holds the match command with its series harness, and
+the evidence verifier with its path map. The training and study modules stay in
+`src/arena/policies/` until they move here, and their tests stay with arena
+until then.
 
 [`docs/HAL_RESEARCH.md`](docs/HAL_RESEARCH.md) holds the research narrative,
 with the commands and results of each study.
@@ -23,6 +24,27 @@ plan.
   directory.
 - Put new research code under `src/hal_lab/`. `src/arena/` keeps the Hal
   providers that the terminal and the browser play.
+
+## Match command
+
+`uv run python -m hal_lab match` plays a paired-seat agent-versus-agent series
+and writes a JSON report:
+
+```powershell
+uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth --games 50 --output src/hal_lab/outputs/perfect-hal-v1/vs-exact.json
+```
+
+- `cli.py` owns the match choices: every play agent and the research-only
+  `aggro-hal`, with its three `--aggro-hal-*` flags. `cli.py` builds Aggro Hal
+  through the public `arena.policies.aggro_hal.make_live_provider`, and
+  `arena.policies.registry` builds every play agent. The registry's one
+  pure-DTH gate also covers `aggro-hal`.
+- `harness/series.py` plays each base seed in both seatings and stops when the
+  predeclared SPRT decides. `arena.match` plays each game and gives the SPRT
+  verdict. The verdict stays in arena while `arena.policies.train_exploit_hal`
+  reads it, because arena imports no hal_lab module.
+- The report keeps the `arena-match-report-v1` schema of the earlier
+  `python -m arena match` command.
 
 ## Frozen evidence
 
@@ -89,5 +111,6 @@ string verbatim when `opponent_league.py` moves.
 ## Working in this subtree
 
 Run `uv run python -m pytest src/hal_lab/tests -q` and
-`uv run python -m hal_lab.provenance --check`. The provenance checks that
-read the tag skip in a checkout without it, such as the CI clone.
+`uv run python -m hal_lab.provenance --check`. `tests/test_match.py` covers the
+match command and the series harness. The provenance checks that read the tag
+skip in a checkout without it, such as the CI clone.

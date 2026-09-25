@@ -1,9 +1,11 @@
-"""One registry of Hal policy providers for every arena surface.
+"""One registry of Hal policy providers for every play surface.
 
-The terminal CLI and the local browser server build Hal through this module:
-the agent choices, the agent flags, the provider factories, and the one
-pure-DTH gate. Each factory imports its provider when it runs, so importing the
-registry loads no solver peer, torch, or training code.
+The terminal app and the local browser server build Hal through this module:
+the play choices, the play flags, the provider factories, and the one pure-DTH
+gate. ``hal_lab``'s match command builds every play agent here too. It owns the
+research-only Aggro Hal choice, its flags, and its factory.
+Each factory imports its provider when it runs, so importing the registry loads
+no solver peer, torch, or training code.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from arena.agent import PolicyDrivenAgent
 
 DEFAULT_DTH_COMPLETE_TABLEBASE = "src/dth/artifacts/complete_full_v1"
 
-# Providers a human can face in `arena play`.
+# Providers a human can face in `python -m terminal play`.
 PLAY_AGENTS = (
     "abstract",
     "dth",
@@ -27,19 +29,10 @@ PLAY_AGENTS = (
 # The browser refuses `abstract`, because its provider can build a tablebase on
 # first use, and that must never happen behind an HTTP request.
 BROWSER_AGENTS = tuple(kind for kind in PLAY_AGENTS if kind != "abstract")
-# Agent-versus-agent series also offer the research-only Aggro Hal.
-MATCH_AGENTS = (
-    "abstract",
-    "dth",
-    "adaptive-dth",
-    "exploit-hal",
-    "aggro-hal",
-    "perfect-hal",
-    "pm-hal",
-)
 
 # Policies that assume the permanent 1..60 action set. They need --pure-dth so
-# action 61 cannot occur.
+# action 61 cannot occur. aggro-hal is the research-only Aggro Hal that
+# hal_lab builds; the one gate lists it too.
 PURE_DTH_ONLY = frozenset({"aggro-hal", "perfect-hal", "pm-hal"})
 
 
@@ -137,19 +130,6 @@ def make_exploit_hal_provider(args: argparse.Namespace):
         config=config,
         seed=args.seed,
         stochastic=args.exploit_hal_stochastic,
-    )
-
-
-def make_aggro_hal_provider(args: argparse.Namespace):
-    if not args.aggro_hal_checkpoint:
-        raise ValueError("--aggro-hal-checkpoint is required for --hal-agent aggro-hal")
-    from arena.policies.aggro_hal import make_live_provider
-
-    return make_live_provider(
-        artifact_dir=dth_artifact_dir(args),
-        checkpoint=args.aggro_hal_checkpoint,
-        device=args.aggro_hal_device,
-        fast_adaptation=args.aggro_hal_fast_adaptation,
     )
 
 
@@ -277,8 +257,6 @@ def make_provider(kind: str, args: argparse.Namespace):
         return make_adaptive_dth_provider(args)
     if kind == "exploit-hal":
         return make_exploit_hal_provider(args)
-    if kind == "aggro-hal":
-        return make_aggro_hal_provider(args)
     if kind == "perfect-hal":
         return make_perfect_hal_provider(args)
     if kind == "pm-hal":
@@ -453,25 +431,4 @@ def add_play_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         help="forecast-ensemble posterior draws per PM Hal frontier candidate",
-    )
-
-
-def add_research_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add the options of Aggro Hal, which only agent-versus-agent series offer."""
-
-    parser.add_argument(
-        "--aggro-hal-checkpoint",
-        default=None,
-        help="required direct recurrent Aggro Hal checkpoint",
-    )
-    parser.add_argument(
-        "--aggro-hal-device",
-        choices=("cpu", "cuda"),
-        default="cpu",
-        help="explicit Aggro Hal inference device; defaults to CPU",
-    )
-    parser.add_argument(
-        "--aggro-hal-fast-adaptation",
-        action="store_true",
-        help="blend concentrated public action evidence into Aggro Hal's forecast",
     )

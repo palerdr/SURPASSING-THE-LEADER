@@ -491,33 +491,6 @@ def test_a_series_keeps_hal_and_seeds_each_game_like_the_cli(tmp_path) -> None:
     assert len(json.loads(transcript_path.read_text(encoding="utf-8"))["games"]) == 2
 
 
-def test_transcript_matches_the_cli_public_history_for_the_same_seed(tmp_path) -> None:
-    from arena import cli
-
-    client = _client(max_half_rounds=3)
-    snapshot = _play_out(client, client.get("/api/session").json())
-    from_browser = client.get("/api/transcript").json()
-    assert from_browser["current_game"]["phase"] == "game_over"
-
-    fresh = _StubHal()
-    original_make_hal = cli._make_hal
-    original_human = cli._human_action
-    cli._make_hal = lambda *_a, **_k: fresh
-    cli._human_action = lambda *, actor, role, legal: legal[0]
-    try:
-        transcript = tmp_path / "cli.json"
-        args = cli.build_parser().parse_args(
-            ["play", "--seed", "41", "--max-half-rounds", "3", "--transcript", str(transcript)]
-        )
-        assert cli.command_play(args) == 0
-    finally:
-        cli._make_hal = original_make_hal
-        cli._human_action = original_human
-    from_cli = json.loads(transcript.read_text(encoding="utf-8"))["games"][0]
-    assert from_browser["current_game"]["public_history"] == from_cli["public_history"]
-    assert snapshot["half_rounds"] == from_cli["half_rounds"]
-
-
 def test_transcript_never_carries_an_unrevealed_action() -> None:
     client = _client()
     snapshot = client.get("/api/session").json()

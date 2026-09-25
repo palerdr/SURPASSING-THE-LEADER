@@ -12,6 +12,7 @@ This repository contains deliberately separate game-solving projects:
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
 | `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
 | `src/arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
+| `src/terminal/` | Terminal game app: `python -m terminal play` | Canonical STL, or pure DTH with `--pure-dth`, through `src/arena/` |
 | `src/hal_lab/` | Hal research lab: training, evaluation, and the frozen study evidence with its git-history verifier | Pure DTH and canonical STL through `src/arena/`; no project imports it |
 
 Repository-wide game contracts live in [`docs/`](docs/). The mathematical
@@ -56,15 +57,18 @@ uv run python -m dth complete-audit
 uv run --project src/dth_compact src/dth_compact/main.py
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 
-# Exact abstract example (optional: `arena play` builds this automatically when absent)
+# Exact abstract example (optional: `terminal play` builds this automatically when absent)
 uv run python -m abstract --help
 uv run python -m abstract exact
 
 # Canonical STL referee; complete DTH is the default Hal policy
-uv run python -m arena play
-uv run python -m arena play --hal-agent abstract
-uv run python -m arena play --hal-agent abstract --buckets 5
-uv run python -m arena play --tui
+uv run python -m terminal play
+uv run python -m terminal play --hal-agent abstract
+uv run python -m terminal play --hal-agent abstract --buckets 5
+uv run python -m terminal play --tui
+
+# Paired-seat agent-versus-agent series with one predeclared SPRT
+uv run python -m hal_lab match --help
 
 # Frozen Hal evidence, checked against git history at the pre-restructure tag
 uv run python -m hal_lab.provenance --check

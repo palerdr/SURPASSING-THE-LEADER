@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import torch
 
-from arena.cli import build_parser, command_match, command_play
 from arena.contracts import (
     CanonicalDecision,
     PublicDecisionState,
@@ -490,49 +489,3 @@ def test_diagnostics_are_json_serializable_and_scope_the_claim(tmp_path: Path) -
     assert diagnostics["fixed_share"] is True
     assert diagnostics["aggro_enabled"] is False
     json.dumps(diagnostics)
-
-
-def test_match_cli_exposes_pm_hal_only_with_explicit_pure_dth() -> None:
-    parser = build_parser()
-    args = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "pm-hal",
-            "--opponent",
-            "dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    with pytest.raises(ValueError, match="pure-DTH"):
-        command_match(args)
-
-    pure = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "pm-hal",
-            "--opponent",
-            "dth",
-            "--pure-dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    assert pure.candidate == "pm-hal"
-    assert pure.pure_dth is True
-    assert pure.pm_hal_aggro_checkpoint is None
-    assert pure.pm_hal_config.endswith("pm_hal_controller_v3.json")
-    assert pure.pm_hal_game_epsilon_budget is None
-
-
-def test_human_play_requires_pm_hal_pure_dth_surface() -> None:
-    args = build_parser().parse_args(["play", "--hal-agent", "pm-hal", "--skip-rules"])
-    with pytest.raises(ValueError, match="pure-DTH"):
-        command_play(args)
-
-    pure = build_parser().parse_args(
-        ["play", "--hal-agent", "pm-hal", "--pure-dth", "--skip-rules"]
-    )
-    assert pure.pure_dth is True

@@ -6,137 +6,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from arena.cli import build_parser, command_match
-from arena.contracts import (
-    CanonicalDecision,
-    PublicDecisionState,
-    PublicGameOutcome,
-    PublicHalfRound,
-    PublicPlayerState,
-)
+from arena.contracts import PublicGameOutcome
 from arena.policies.perfect_hal import (
     ACTION_COUNT,
     PerfectHalConfig,
     PerfectHalOpponentModel,
     PerfectHalPolicyProvider,
 )
-from dth.agent import CertifiedStageGame
-
-
-def _stage(matrix: np.ndarray | None = None) -> CertifiedStageGame:
-    resolved = (
-        np.eye(ACTION_COUNT, dtype=np.float64)
-        if matrix is None
-        else np.asarray(matrix, dtype=np.float64)
-    )
-    uniform = np.full(ACTION_COUNT, 1.0 / ACTION_COUNT, dtype=np.float64)
-    return CertifiedStageGame(
-        state=(0, 60, 0, 60),
-        value=1.0 / ACTION_COUNT,
-        matrix=resolved,
-        drop_policy=uniform.copy(),
-        check_policy=uniform.copy(),
-        saddle_gap=0.0,
-    )
-
-
-class _StageAgent:
-    def __init__(self, matrix: np.ndarray | None = None) -> None:
-        self.matrix = matrix
-        self.states: list[tuple[int, int, int, int]] = []
-
-    def stage_game(self, state) -> CertifiedStageGame:
-        normalized = tuple(int(value) for value in state)
-        self.states.append(normalized)
-        stage = _stage(self.matrix)
-        return CertifiedStageGame(
-            state=normalized,
-            value=stage.value,
-            matrix=stage.matrix,
-            drop_policy=stage.drop_policy,
-            check_policy=stage.check_policy,
-            saddle_gap=stage.saddle_gap,
-        )
-
-
-def _decision(
-    *,
-    role: str = "dropper",
-    actor_name: str = "Hal",
-    legal_seconds: tuple[int, ...] = tuple(range(1, 61)),
-    checker_cylinder: float = 12.0,
-    checker_ttd: float = 60.0,
-    dropper_cylinder: float = 24.0,
-    dropper_ttd: float = 120.0,
-) -> CanonicalDecision:
-    return CanonicalDecision(
-        role=role,
-        actor_name=actor_name,
-        turn_duration=60,
-        legal_seconds=legal_seconds,
-        checker_cylinder_seconds=checker_cylinder,
-        checker_ttd_seconds=checker_ttd,
-        dropper_cylinder_seconds=dropper_cylinder,
-        dropper_ttd_seconds=dropper_ttd,
-        native_state=object(),
-    )
-
-
-def _reveal(
-    *,
-    self_role: str = "dropper",
-    self_name: str = "Hal",
-    opponent_name: str = "Baku",
-    self_action: int = 3,
-    opponent_action: int = 7,
-    game_index: int = 0,
-    half_round_index: int = 0,
-    game_over: bool = False,
-) -> PublicHalfRound:
-    if self_role == "dropper":
-        dropper_name, checker_name = self_name, opponent_name
-        drop_time, check_time = self_action, opponent_action
-    elif self_role == "checker":
-        dropper_name, checker_name = opponent_name, self_name
-        drop_time, check_time = opponent_action, self_action
-    else:
-        raise ValueError("self_role must be dropper or checker")
-    return PublicHalfRound(
-        game_index=game_index,
-        half_round_index=half_round_index,
-        pre_decision_state=PublicDecisionState(
-            game_clock_seconds=720.0,
-            round_index=1,
-            half_index=1,
-            turn_duration=60,
-            players=(
-                PublicPlayerState(self_name, 24.0, 120.0),
-                PublicPlayerState(opponent_name, 12.0, 60.0),
-            ),
-        ),
-        dropper_name=dropper_name,
-        checker_name=checker_name,
-        drop_time=drop_time,
-        check_time=check_time,
-        outcome="check_success",
-        game_over=game_over,
-        winner_name=self_name if game_over else None,
-    )
-
-
-def _forecast(
-    model: PerfectHalOpponentModel,
-    role: str,
-    *,
-    game_index: int = 0,
-    decision_index: int = 0,
-):
-    return model.predict(
-        role,
-        state_regime=(0, 1, 0, 2),
-        game_index=game_index,
-        game_decision_index=decision_index,
-    )
+from arena.testing import (
+    StageAgent as _StageAgent,
+    make_decision as _decision,
+    make_forecast as _forecast,
+    make_reveal as _reveal,
+)
 
 
 def test_config_fixes_pure_dth_and_hard_response_defaults() -> None:
@@ -326,36 +208,3 @@ def test_diagnostics_are_json_serializable_and_explicitly_unrestricted(
     assert diagnostics["equilibrium_safety_blend"] is False
     assert "Perfect Hal" in provider.match_summary()
     json.dumps(diagnostics)
-
-
-def test_match_cli_exposes_perfect_hal_only_with_explicit_pure_dth() -> None:
-    parser = build_parser()
-    args = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "perfect-hal",
-            "--opponent",
-            "dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    with pytest.raises(ValueError, match="pure-DTH"):
-        command_match(args)
-
-    pure = parser.parse_args(
-        [
-            "match",
-            "--candidate",
-            "perfect-hal",
-            "--opponent",
-            "dth",
-            "--pure-dth",
-            "--output",
-            "unused.json",
-        ]
-    )
-    assert pure.candidate == "perfect-hal"
-    assert pure.pure_dth is True
-    assert pure.perfect_hal_response_temperature == 0.0

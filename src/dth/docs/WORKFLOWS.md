@@ -24,10 +24,10 @@ partial-solve artifacts are not accepted by production play.
 
 ```powershell
 # DTH is the default Hal policy.
-uv run python -m arena play
+uv run python -m terminal play
 
 # Equivalent explicit spelling and the terminal renderer.
-uv run python -m arena play --hal-agent dth --tui
+uv run python -m terminal play --hal-agent dth --tui
 ```
 
 Arena always resolves the canonical leap-aware STL game. DTH supplies an exact

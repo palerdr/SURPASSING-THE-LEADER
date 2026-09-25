@@ -1,7 +1,7 @@
 """Local HTTP surface for browser play.
 
-A third front end onto the same session, alongside ``arena.cli`` and
-``arena.tui``. It imports only ``stl`` and ``arena``, so it introduces no new
+A front end onto the same session as the terminal app (``terminal.cli`` and
+``terminal.tui``). It imports only ``stl`` and ``arena``, so it introduces no new
 peer project and no new import edge that ``AGENTS.md`` forbids. It shares the
 rules text and the prepared art with the terminal through
 ``arena.presentation``, and it never imports the terminal renderer. The STL
@@ -10,7 +10,7 @@ state.
 
 The server holds exactly one live session, because it is a local single-player
 surface, but that session sits inside one repeated-opponent series exactly as
-``arena play --games N`` does: Hal is built once and keeps its opponent model
+``terminal play --games N`` does: Hal is built once and keeps its opponent model
 across games, each finished game is appended to a public transcript in the
 CLI's ``arena-public-play-session-v1`` shape, and each new game receives a
 fresh canonical referee whose seed is the base seed plus the game index.
@@ -122,7 +122,7 @@ class SessionConfig:
 
 @dataclass
 class SeriesConfig:
-    """Session-wide presentation and record-keeping, as ``arena play`` takes it."""
+    """Session-wide presentation and record-keeping, as ``terminal play`` takes it."""
 
     hal_agent: str = "dth"
     public_hal_label: str | None = None

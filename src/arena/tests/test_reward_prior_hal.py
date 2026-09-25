@@ -3,7 +3,7 @@ import pytest
 
 from arena.policies.evaluate_reward_prior import external_scores, participant_split, transitions
 from arena.policies.reward_prior_hal import RewardPriorConfig, RewardPriorHal, transfer_prior
-from arena.tests.test_perfect_hal import _forecast
+from arena.testing import make_forecast as _forecast
 
 
 def make_model():

@@ -2,7 +2,7 @@
 // Yakou standing at the centre, the Dropper on the right. Roles swap between
 // halves, so the two players trade places while Yakou never moves.
 //
-// Constants are taken from src/arena/tui.py so both front ends stage the scene
+// Constants are taken from src/terminal/tui.py so both front ends stage the scene
 // identically.
 
 import type { Snapshot } from "../types";

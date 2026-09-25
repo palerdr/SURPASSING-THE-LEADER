@@ -6,7 +6,7 @@
 import type { Leaderboard, OutcomeResult, OutcomeView, Tally } from "../types";
 
 /**
- * The terminal's `_RESULT_TEXT` in src/arena/tui.py, with a comma where the
+ * The terminal's `_RESULT_TEXT` in src/terminal/tui.py, with a comma where the
  * terminal sets a dash: "CHECK FAILED, died, revived" reads cleaner.
  */
 export const RESULT_TEXT: Record<OutcomeResult, string> = {

@@ -16,7 +16,12 @@ from arena.translated_hal_adapter import TranslatedHalPolicyProvider
 from arena.web.app import SessionConfig, SeriesConfig, create_app
 from arena.web.hosted import create_hosted_app
 from arena.web.opponent_memory import OpponentMemory
-from arena.tests.test_perfect_hal import _StageAgent, _decision, _forecast, _reveal
+from arena.testing import (
+    StageAgent as _StageAgent,
+    make_decision as _decision,
+    make_forecast as _forecast,
+    make_reveal as _reveal,
+)
 from arena.tests.test_web_hosted import MemoryStore, begin
 from stl.engine.game import LS_WINDOW_START
 

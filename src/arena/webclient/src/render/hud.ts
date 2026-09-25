@@ -2,7 +2,7 @@
 //
 // Rendered as DOM rather than into the canvas so the text stays crisp at any
 // device pixel ratio. Mirrors the columns `_player_column` builds in
-// src/arena/tui.py, folded into one corner so the stage stays clear.
+// src/terminal/tui.py, folded into one corner so the stage stays clear.
 
 import type { PlayerView, Snapshot, Transcript } from "../types";
 import { escapeHtml } from "./escape";

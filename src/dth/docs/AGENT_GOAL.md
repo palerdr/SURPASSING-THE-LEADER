@@ -24,7 +24,7 @@ fail closed.
 
 ## Arena behavior
 
-`python -m arena play` selects DTH by default. Arena projects the canonical
+`python -m terminal play` selects DTH by default. Arena projects the canonical
 STL role-relative state directly onto the literal-second DTH coordinates and
 uses the tablebase policy for actions 1..60. STL remains the referee and owns
 all state transitions, revival rolls, clocks, and leap legality. The only
@@ -34,7 +34,7 @@ inside the public leap window.
 There is no play-time compatibility artifact, checkpoint leaf evaluator, or
 finite-horizon fallback. Research code may train
 or evaluate approximators, but it cannot replace or silently stand in for the
-completed artifact in arena play.
+completed artifact in terminal play.
 
 ## Research status
 
