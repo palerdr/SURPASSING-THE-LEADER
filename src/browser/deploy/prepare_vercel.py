@@ -20,8 +20,10 @@ from dth.agent import CompleteDTHAgent
 BUNDLE = "src/browser/build/vercel"
 WEBCLIENT = "src/browser/webclient"
 VERCEL_LINK = "src/browser/.vercel/project.json"
-# The packages the function installs. Their versions come from the root
-# uv.lock, which also pins the environment that built the artifact.
+# The packages the function installs. Their versions come from the browser
+# project's lock, which pins the environment that the browser tests run in.
+# The root uv.lock still enters the bundle, because the DTH digest labels it.
+BROWSER_LOCK = "src/browser/uv.lock"
 BUNDLE_PACKAGES = ("fastapi", "numpy", "scipy", "httpx", "uvicorn")
 
 
@@ -139,7 +141,7 @@ def main():
         "from browser.deploy.production import create_production_app\n"
         'app = create_production_app(root / "runtime/src/dth/artifacts/complete_fast_v1")\n'
     )
-    pins = locked_versions(root / "uv.lock")
+    pins = locked_versions(root / BROWSER_LOCK)
     dependencies = ", ".join(f'"{name}=={version}"' for name, version in pins.items())
     (target / "pyproject.toml").write_text(
         '[project]\nname = "stl-browser"\nversion = "0.1.0"\n'

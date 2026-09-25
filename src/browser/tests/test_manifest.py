@@ -92,8 +92,13 @@ source = (root / "src").resolve()
 files = set()
 for module in list(sys.modules.values()):
     location = getattr(module, "__file__", None)
-    if location and Path(location).resolve().is_relative_to(source):
-        files.add(Path(location).resolve().relative_to(root.resolve()).as_posix())
+    if not location:
+        continue
+    path = Path(location).resolve()
+    # The browser project's environment lives at src/browser/.venv, so an
+    # installed package can sit under src/ without being first-party code.
+    if path.is_relative_to(source) and "site-packages" not in path.parts:
+        files.add(path.relative_to(root.resolve()).as_posix())
 print(json.dumps({"files": sorted(files), "modules": sorted(sys.modules)}))
 """
 

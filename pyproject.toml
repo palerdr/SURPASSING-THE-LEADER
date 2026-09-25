@@ -5,16 +5,11 @@ description = "Independent exact-game implementations, accelerators, and neutral
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "fastapi>=0.141.1",
-    "gymnasium>=1.0,<2",
     "highspy>=1.12,<2",
     "hydra-core>=1.3,<2",
     "numpy>=2.0,<3",
-    "sb3-contrib>=2.9,<3",
+    "pyyaml>=6.0,<7",
     "scipy>=1.14,<2",
-    "stable-baselines3>=2.9,<3",
-    "torch>=2.5",
-    "uvicorn>=0.52.1",
 ]
 
 [build-system]
@@ -26,14 +21,24 @@ packages = ["src/stl", "src/dth", "src/abstract", "src/arena", "src/terminal", "
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "maturin>=1.14.1",
     "pytest>=8.0",
     "pytest-xdist>=3.6",
 ]
+# The torch Hal providers in src/arena/policies and the Hal lab's training
+# stack. [tool.uv] default-groups installs this group with dev.
+research = [
+    "gymnasium>=1.0,<2",
+    "sb3-contrib>=2.9,<3",
+    "stable-baselines3>=2.9,<3",
+    "torch>=2.5",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "src/terminal/tests", "src/browser/tests", "src/hal_lab/tests", "tests/meta", "tests/parity"]
+# The browser app's tests and the root tests/parity import FastAPI, which the
+# browser project in src/browser/pyproject.toml installs. Run them with
+# `uv run --project src/browser python -m pytest src/browser/tests tests/parity -q`.
+testpaths = ["src/stl/tests", "src/dth/tests", "src/abstract/tests", "src/arena/tests", "src/terminal/tests", "src/hal_lab/tests", "tests/meta"]
 pythonpath = ["src", "."]
 # The suite is overwhelmingly independent and every artifact-building test
 # already writes under its own tmp_path, so it distributes cleanly. Use "-n 0"
@@ -50,6 +55,10 @@ markers = ["slow: builds a real complete-tablebase artifact end to end"]
 
 [tool.uv]
 package = true
+# `uv run` and `uv sync` install both groups, so the root environment keeps
+# torch and the training stack. The browser project's own lock holds FastAPI,
+# so a browser dependency change leaves this project's uv.lock alone.
+default-groups = ["dev", "research"]
 
 [tool.uv.sources]
 torch = [

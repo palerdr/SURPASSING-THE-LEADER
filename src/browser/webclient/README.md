@@ -141,7 +141,7 @@ One process, once the client is built:
 
 ```bash
 npm --prefix src/browser/webclient run build       # writes dist/, gitignored
-uv run python -m browser                          # game on 127.0.0.1:8000
+uv run --project src/browser python -m browser    # game on 127.0.0.1:8000
 ```
 
 `python -m browser` takes the same agent, seed, start-clock, label,
@@ -150,7 +150,7 @@ development run the Vite server instead, which proxies `/api` and `/art` to the
 Python server:
 
 ```bash
-uv run python -m browser                          # server on 127.0.0.1:8000
+uv run --project src/browser python -m browser    # server on 127.0.0.1:8000
 npm --prefix src/browser/webclient run dev         # client on 127.0.0.1:5173
 ```
 

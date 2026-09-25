@@ -4,7 +4,7 @@ You can build the arena's complete pure-DTH policy artifact with:
 
 ```sh
 uv run python -m dth complete --config-name complete_fast_v1
-uv run python -m browser --dth-complete-tablebase src/dth/artifacts/complete_fast_v1
+uv run --project src/browser python -m browser --dth-complete-tablebase src/dth/artifacts/complete_fast_v1
 ```
 
 Use `output_dir=src/dth/artifacts/complete_full_v1` on the build command

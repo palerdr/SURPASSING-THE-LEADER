@@ -1,4 +1,4 @@
-"""Run the local browser server: ``uv run python -m browser``.
+"""Run the local browser server: ``uv run --project src/browser python -m browser``.
 
 Hal is built once here, at startup, through ``arena.policies.registry``: the
 same provider construction and the same agent options that

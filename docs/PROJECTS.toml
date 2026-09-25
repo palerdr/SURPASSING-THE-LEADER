@@ -192,8 +192,7 @@ may_import = ["arena", "stl.engine", "dth.agent"]
 forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = [
-  "uv run python -m pytest src/browser/tests -q",
-  "uv run python -m pytest tests/parity -q",
+  "uv run --project src/browser python -m pytest src/browser/tests tests/parity -q",
   "npm --prefix src/browser/webclient test",
   "npm --prefix src/browser/webclient run typecheck",
   "npm --prefix src/browser/webclient run build",

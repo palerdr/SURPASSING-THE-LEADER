@@ -1,0 +1,41 @@
+[project]
+name = "stl-browser"
+version = "0.1.0"
+description = "The browser STL game: the FastAPI server, the hosted wrapper, and the Vercel deploy pipeline."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "stl-solver",
+    "uvicorn>=0.52.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-xdist>=3.6",
+]
+# Local play against exploit-hal or pm-hal loads a torch Hal provider:
+# `uv run --project src/browser --group learned python -m browser`.
+# The hosted runtime never loads torch.
+learned = [
+    "pyyaml>=6.0,<7",
+    "torch>=2.5",
+]
+
+[tool.uv]
+# The browser code ships in the root stl-solver package, which the editable
+# path source below installs, so this project builds no package of its own.
+package = false
+
+[tool.uv.sources]
+stl-solver = { path = "../..", editable = true }
+torch = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

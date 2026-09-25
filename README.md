@@ -29,13 +29,15 @@ language-neutral project envelope.
 
 ## Setup
 
-Use Python 3.12+ and `uv`:
+Use Python 3.13 and `uv`. The leap builder calls `math.fma`, which Python
+3.13 added. The browser app is its own uv project in `src/browser/`:
 
 ```powershell
 uv sync --dev
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
+uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
 cargo test --workspace
 npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
@@ -71,7 +73,7 @@ uv run python -m terminal play --tui
 
 # Browser game on 127.0.0.1:8000, once the client is built
 npm --prefix src/browser/webclient run build
-uv run python -m browser
+uv run --project src/browser python -m browser
 
 # Paired-seat agent-versus-agent series with one predeclared SPRT
 uv run python -m hal_lab match --help

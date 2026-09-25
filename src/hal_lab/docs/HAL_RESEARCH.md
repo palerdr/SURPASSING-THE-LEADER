@@ -322,7 +322,7 @@ uv run python -m hal_lab.experiments.perfect_hal_bayes_v2.evaluate_bayesian_hal 
 You can play the Bayesian candidate with:
 
 ```sh
-uv run python -m browser --hal-agent perfect-hal --perfect-hal-model bayesian-v2 --pure-dth --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase
+uv run --project src/browser python -m browser --hal-agent perfect-hal --perfect-hal-model bayesian-v2 --pure-dth --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase
 ```
 
 You must choose a fresh output path. The test command checks source and input

@@ -119,6 +119,16 @@ such as `paper/*.py`.
   outside `src/stl/solver/`.
 - `uv sync` at the root removes the three maturin extensions. Run commands
   with `uv run`, and rebuild the extensions after a sync.
+- The browser app is its own uv project, `src/browser/pyproject.toml`, with
+  its own `src/browser/uv.lock`. FastAPI, uvicorn, and httpx live there, and
+  the project installs the root package as an editable path dependency. A
+  browser dependency change edits `src/browser/uv.lock` alone and leaves the
+  root lock, the DTH digest, and the leap builder hash unchanged. Run browser
+  commands with `uv run --project src/browser`.
+- The root `[tool.uv] default-groups` installs `dev` and `research`, so the
+  root environment keeps torch and the Hal training stack for `arena` and
+  `hal_lab`. `research` is a dependency group, so the browser project does
+  not inherit it.
 
 ## Frozen global rules
 
@@ -158,6 +168,7 @@ validation to make a change pass.
 uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
+uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
 cargo test --workspace
 npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
