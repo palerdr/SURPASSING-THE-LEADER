@@ -28,7 +28,7 @@ from arena.contracts import (
     observe_provider,
     reset_provider_game,
 )
-from arena.dth_adapter import PureDTHGame
+from arena.variants import PureDTHGame
 from stl.engine.actions import validate_action
 from stl.engine.game import PHYSICALITY_BAKU, PHYSICALITY_HAL, Game, Player, Referee
 

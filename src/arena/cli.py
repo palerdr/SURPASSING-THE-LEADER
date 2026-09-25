@@ -7,9 +7,9 @@ import json
 import sys
 from pathlib import Path
 
-from arena.abstract_adapter import AbstractTablebasePolicyProvider
 from arena.agent import PolicyDrivenAgent
 from arena.contracts import reset_provider_game
+from arena.policies import registry
 from arena.session import (
     CANONICAL_HAL_NAME,
     CANONICAL_HUMAN_NAME,
@@ -26,20 +26,20 @@ from stl.engine.game import (
     Referee,
 )
 
-DEFAULT_DTH_COMPLETE_TABLEBASE = "src/dth/artifacts/complete_full_v1"
-
-
-def _abstract_artifact(args: argparse.Namespace) -> tuple[Path, str]:
-    if args.buckets == 5:
-        ruleset_id = "bucket12_frozen95"
-        default = Path("src/abstract/outputs") / ruleset_id
-    else:
-        ruleset_id = "bucket6_frozen95"
-        default = Path("src/abstract/outputs") / ruleset_id
-    return (
-        Path(args.abstract_tablebase) if args.abstract_tablebase else default,
-        ruleset_id,
-    )
+# The provider registry lives in arena.policies.registry. These aliases keep the
+# names that tests and older callers use; command_play and command_match look
+# them up here at call time, so a monkeypatch of this module still intercepts.
+DEFAULT_DTH_COMPLETE_TABLEBASE = registry.DEFAULT_DTH_COMPLETE_TABLEBASE
+_abstract_artifact = registry.abstract_artifact
+_dth_artifact_dir = registry.dth_artifact_dir
+_make_dth_provider = registry.make_dth_provider
+_make_adaptive_dth_provider = registry.make_adaptive_dth_provider
+_make_exploit_hal_provider = registry.make_exploit_hal_provider
+_make_aggro_hal_provider = registry.make_aggro_hal_provider
+_make_perfect_hal_provider = registry.make_perfect_hal_provider
+_make_pm_hal_provider = registry.make_pm_hal_provider
+_make_provider = registry.make_provider
+_make_hal = registry.make_hal
 
 
 def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
@@ -61,233 +61,6 @@ def _human_action(*, actor: str, role: str, legal: tuple[int, ...]) -> int:
         print(f"Legal seconds: {allowed}")
 
 
-def _make_dth_provider(args: argparse.Namespace):
-    from arena.dth_adapter import DTHCompletePolicyProvider
-
-    return DTHCompletePolicyProvider(artifact_dir=_dth_artifact_dir(args))
-
-
-def _dth_artifact_dir(args: argparse.Namespace) -> Path:
-    artifact_dir = Path(args.dth_complete_tablebase)
-    manifest = artifact_dir / "tablebase.json"
-    if not manifest.is_file():
-        raise FileNotFoundError(
-            f"complete DTH tablebase is required at {artifact_dir}; "
-            "build it with: uv run python -m dth complete"
-        )
-    return artifact_dir
-
-
-def _make_adaptive_dth_provider(args: argparse.Namespace):
-    from arena.adaptive_dth import (
-        AdaptiveDTHPolicyProvider,
-        ExploitationConfig,
-        load_opponent_model,
-    )
-
-    opponent = load_opponent_model(
-        args.adaptive_prior_json,
-        default_strength=args.adaptive_prior_strength,
-        decay=args.adaptive_decay,
-    )
-
-    return AdaptiveDTHPolicyProvider(
-        artifact_dir=_dth_artifact_dir(args),
-        opponent=opponent,
-        config=ExploitationConfig(
-            epsilon_grid=tuple(args.adaptive_epsilon_grid),
-            match_epsilon_budget=args.adaptive_match_epsilon_budget,
-            confidence=args.adaptive_confidence,
-            posterior_samples=args.adaptive_posterior_samples,
-        ),
-        seed=args.seed,
-    )
-
-
-def _make_exploit_hal_provider(args: argparse.Namespace):
-    if not args.exploit_hal_checkpoint:
-        raise ValueError(
-            "--exploit-hal-checkpoint is required for --hal-agent exploit-hal"
-        )
-    from arena.policies.adaptive import load_opponent_model
-    from arena.policies.exploit_hal import make_live_provider
-    from arena.policies.train_exploit_hal import (
-        load_training_config,
-        exploit_config_from_mapping,
-    )
-
-    tracked = load_training_config(args.exploit_hal_config)
-    config = exploit_config_from_mapping(tracked)
-    opponent = load_opponent_model(
-        args.adaptive_prior_json,
-        default_strength=args.adaptive_prior_strength,
-        decay=args.adaptive_decay,
-    )
-    return make_live_provider(
-        artifact_dir=_dth_artifact_dir(args),
-        checkpoint=args.exploit_hal_checkpoint,
-        opponent=opponent,
-        config=config,
-        seed=args.seed,
-        stochastic=args.exploit_hal_stochastic,
-    )
-
-
-def _make_aggro_hal_provider(args: argparse.Namespace):
-    if not args.aggro_hal_checkpoint:
-        raise ValueError("--aggro-hal-checkpoint is required for --hal-agent aggro-hal")
-    from arena.policies.aggro_hal import make_live_provider
-
-    return make_live_provider(
-        artifact_dir=_dth_artifact_dir(args),
-        checkpoint=args.aggro_hal_checkpoint,
-        device=args.aggro_hal_device,
-        fast_adaptation=args.aggro_hal_fast_adaptation,
-    )
-
-
-def _make_perfect_hal_provider(args: argparse.Namespace):
-    if args.perfect_hal_model == "translated-v1":
-        from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-
-        return TranslatedHalPolicyProvider(_dth_artifact_dir(args))
-    from arena.policies.perfect_hal import (
-        PerfectHalConfig,
-        PerfectHalOpponentModel,
-        PerfectHalPolicyProvider,
-    )
-
-    config = PerfectHalConfig(
-        prior_strength=args.perfect_hal_prior_strength,
-        expert_learning_rate=args.perfect_hal_expert_learning_rate,
-        expert_weight_retention=args.perfect_hal_expert_weight_retention,
-        response_temperature=args.perfect_hal_response_temperature,
-    )
-    if args.perfect_hal_model == "ensemble":
-        from arena.policies.ensemble_hal import EnsembleHalPolicyProvider
-
-        return EnsembleHalPolicyProvider(_dth_artifact_dir(args), config)
-    # Keep the v1 play default after the v2 human-emulator promotion failure.
-    model = PerfectHalOpponentModel(config) if args.perfect_hal_model == "v1" else None
-    return PerfectHalPolicyProvider(
-        artifact_dir=_dth_artifact_dir(args),
-        config=config,
-        opponent_model=model,
-    )
-
-
-def _make_pm_hal_provider(args: argparse.Namespace):
-    from dataclasses import replace
-
-    from arena.policies.pm_hal import load_pm_hal_config, make_live_provider
-
-    base = load_pm_hal_config(args.pm_hal_config)
-    game_budget = (
-        base.game_epsilon_budget
-        if args.pm_hal_game_epsilon_budget is None
-        else args.pm_hal_game_epsilon_budget
-    )
-    press_cap = (
-        min(base.press_epsilon_cap, game_budget)
-        if args.pm_hal_press_epsilon_cap is None
-        else args.pm_hal_press_epsilon_cap
-    )
-    dominate_cap = (
-        min(base.dominate_epsilon_cap, game_budget)
-        if args.pm_hal_dominate_epsilon_cap is None
-        else args.pm_hal_dominate_epsilon_cap
-    )
-
-    return make_live_provider(
-        artifact_dir=_dth_artifact_dir(args),
-        config=replace(
-            base,
-            game_epsilon_budget=game_budget,
-            probe_epsilon_cap=min(base.probe_epsilon_cap, press_cap),
-            press_epsilon_cap=press_cap,
-            dominate_epsilon_cap=dominate_cap,
-            posterior_samples=(
-                base.posterior_samples
-                if args.pm_hal_posterior_samples is None
-                else args.pm_hal_posterior_samples
-            ),
-        ),
-        aggro_checkpoint=args.pm_hal_aggro_checkpoint,
-        device=args.pm_hal_device,
-        seed=args.seed,
-    )
-
-
-def _make_provider(kind: str, args: argparse.Namespace):
-    if kind == "abstract":
-        tablebase_path, ruleset_id = _abstract_artifact(args)
-        packed_artifact = tablebase_path.is_dir() or tablebase_path.suffix != ".npz"
-        if packed_artifact:
-            artifact_dir = (
-                tablebase_path.parent
-                if tablebase_path.name == "tablebase.json"
-                else tablebase_path
-            )
-            artifact_ready = (artifact_dir / "tablebase.json").is_file()
-            output_dir = artifact_dir
-            manifest_path = None
-        else:
-            manifest_path = tablebase_path.with_suffix(".json")
-            artifact_ready = tablebase_path.is_file() and manifest_path.is_file()
-            output_dir = tablebase_path.parent
-        if not artifact_ready:
-            print(
-                f"{args.buckets}-second abstract tablebase is missing; building or resuming it now. "
-                "Press Control-C to cancel.",
-                flush=True,
-            )
-            from abstract.cli import main as abstract_main
-
-            command = [
-                "exact",
-                "--ruleset",
-                ruleset_id,
-                "--output-dir",
-                str(output_dir),
-            ]
-            if packed_artifact:
-                command.extend(("--backend", args.abstract_backend))
-            result = abstract_main(command)
-            if result != 0:
-                raise RuntimeError(
-                    f"abstract tablebase build exited with status {result}"
-                )
-        return AbstractTablebasePolicyProvider(
-            tablebase_path,
-            bucket_seconds=args.buckets,
-            tablebase_manifest=manifest_path,
-        )
-    if kind == "dth":
-        return _make_dth_provider(args)
-    if kind == "adaptive-dth":
-        return _make_adaptive_dth_provider(args)
-    if kind == "exploit-hal":
-        return _make_exploit_hal_provider(args)
-    if kind == "aggro-hal":
-        return _make_aggro_hal_provider(args)
-    if kind == "perfect-hal":
-        return _make_perfect_hal_provider(args)
-    if kind == "pm-hal":
-        return _make_pm_hal_provider(args)
-    if kind == "stl-mcts":
-        raise ValueError(
-            "stl-mcts is retired: the STL play/solver stack it depended on no "
-            "longer exists"
-        )
-    raise ValueError(f"unknown agent kind {kind!r}")
-
-
-def _make_hal(args: argparse.Namespace) -> PolicyDrivenAgent:
-    return PolicyDrivenAgent(
-        _make_provider(args.hal_agent, args), player_name="Hal", seed=args.seed
-    )
-
-
 def _print_state(game: Game, *, human_display_name: str = CANONICAL_HUMAN_NAME) -> None:
     print(f"\nClock {game.format_game_clock()} | round {game.round_num + 1}")
     for player in (game.player1, game.player2):
@@ -304,10 +77,12 @@ def _show_rules(args: argparse.Namespace) -> None:
     if args.skip_rules:
         return
 
-    from arena.tui import Layout, draw, enable_ansi, render_rules, rules_body
+    from arena.presentation.rules_text import rules_body
 
     hal_label = args.public_hal_label or args.hal_agent
     if args.tui:
+        from arena.tui import Layout, draw, enable_ansi, render_rules
+
         enable_ansi()
         layout = Layout.detect(args.frame_width, args.frame_height)
         draw(
@@ -363,7 +138,7 @@ def _play_one_game(
     human = Player(name=CANONICAL_HUMAN_NAME, physicality=PHYSICALITY_BAKU)
     game_type = Game
     if args.pure_dth:
-        from arena.dth_adapter import PureDTHGame
+        from arena.variants import PureDTHGame
 
         game_type = PureDTHGame
     game = game_type(
@@ -379,9 +154,9 @@ def _play_one_game(
     show_outcome = None
     show_victory = None
     if args.tui:
+        from arena.presentation.scene_art import SceneArt
         from arena.tui import (
             Layout,
-            SceneArt,
             draw,
             enable_ansi,
             render_frame,
@@ -498,10 +273,7 @@ def _play_one_game(
 
 def command_play(args: argparse.Namespace) -> int:
     args.human_name = validate_human_display_name(args.human_name)
-    pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
-    if args.perfect_hal_model == "translated-v1":
-        pure_dth_only.remove("perfect-hal")
-    if args.hal_agent in pure_dth_only and not args.pure_dth:
+    if registry.requires_pure_dth(args.hal_agent, args) and not args.pure_dth:
         raise ValueError(
             f"{args.hal_agent} is a pure-DTH policy; pass --pure-dth so action "
             "61 is impossible"
@@ -551,186 +323,18 @@ def command_play(args: argparse.Namespace) -> int:
 
 
 def _add_agent_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--buckets",
-        type=int,
-        choices=(5, 10),
-        default=10,
-        help="abstract tablebase bucket width in seconds",
-    )
-    parser.add_argument(
-        "--abstract-tablebase",
-        default=None,
-        help="override the bucket-specific abstract artifact path",
-    )
-    parser.add_argument(
-        "--abstract-backend",
-        choices=("auto", "python", "rust"),
-        default="auto",
-        help="backend used when a missing abstract tablebase must be built",
-    )
-    parser.add_argument(
-        "--dth-complete-tablebase",
-        default=DEFAULT_DTH_COMPLETE_TABLEBASE,
-        metavar="DTH_COMPLETE_TABLEBASE",
-        help="completed exact DTH quotient tablebase directory",
-    )
-    parser.add_argument(
-        "--adaptive-prior-json",
-        default=None,
-        help="optional versioned role or role-mixture population prior",
-    )
-    parser.add_argument(
-        "--adaptive-prior-strength",
-        type=float,
-        default=1.0,
-        help="uniform role-prior pseudo-observation count for adaptive DTH",
-    )
-    parser.add_argument(
-        "--adaptive-decay",
-        type=float,
-        default=0.9,
-        help="adaptive DTH evidence retention after each same-role observation",
-    )
-    parser.add_argument(
-        "--adaptive-epsilon-grid",
-        type=float,
-        nargs="+",
-        default=(0.0, 0.0025, 0.005, 0.01, 0.02),
-        help="candidate one-step safety losses for adaptive DTH",
-    )
-    parser.add_argument(
-        "--adaptive-match-epsilon-budget",
-        type=float,
-        default=0.05,
-        help="maximum cumulative one-step safety loss per game",
-    )
-    parser.add_argument(
-        "--adaptive-confidence",
-        type=float,
-        default=0.95,
-        help="posterior improvement-probability gate for adaptive DTH",
-    )
-    parser.add_argument(
-        "--adaptive-posterior-samples",
-        type=int,
-        default=512,
-        help="Dirichlet draws per adaptive DTH epsilon candidate",
-    )
-    parser.add_argument(
-        "--exploit-hal-checkpoint",
-        default=None,
-        help="required versioned actor-critic checkpoint for Exploit Hal",
-    )
-    parser.add_argument(
-        "--exploit-hal-config",
-        default="src/arena/config/exploit_hal_v2.yaml",
-        help="tracked Exploit Hal configuration used for checkpoint validation",
-    )
-    parser.add_argument(
-        "--exploit-hal-stochastic",
-        action="store_true",
-        help="sample candidates during evaluation instead of deterministic argmax",
-    )
-    parser.add_argument(
-        "--aggro-hal-checkpoint",
-        default=None,
-        help="required direct recurrent Aggro Hal checkpoint",
-    )
-    parser.add_argument(
-        "--aggro-hal-device",
-        choices=("cpu", "cuda"),
-        default="cpu",
-        help="explicit Aggro Hal inference device; defaults to CPU",
-    )
-    parser.add_argument(
-        "--aggro-hal-fast-adaptation",
-        action="store_true",
-        help="blend concentrated public action evidence into Aggro Hal's forecast",
-    )
-    parser.add_argument(
-        "--perfect-hal-model",
-        choices=("v1", "bayesian-v2", "ensemble", "translated-v1"),
-        default="v1",
-        help="v1 remains the default; translated-v1 uses frozen parameters and a leap fallback",
-    )
-    parser.add_argument(
-        "--perfect-hal-prior-strength",
-        type=float,
-        default=0.02,
-        help="v1 public pseudo-observation mass before Perfect Hal sees an action",
-    )
-    parser.add_argument(
-        "--perfect-hal-expert-learning-rate",
-        type=float,
-        default=1.25,
-        help="v1 Perfect Hal prequential expert-score learning rate",
-    )
-    parser.add_argument(
-        "--perfect-hal-expert-weight-retention",
-        type=float,
-        default=0.92,
-        help="v1 Perfect Hal expert-score retention across public reveals",
-    )
-    parser.add_argument(
-        "--perfect-hal-response-temperature",
-        type=float,
-        default=0.0,
-        help="Perfect Hal best-response temperature; zero is a hard response",
-    )
-    parser.add_argument(
-        "--pm-hal-config",
-        default="src/arena/config/pm_hal_controller_v3.json",
-        help="frozen PM Hal controller configuration",
-    )
-    parser.add_argument(
-        "--pm-hal-aggro-checkpoint",
-        default=None,
-        help=(
-            "optional compatible Aggro checkpoint; PM Hal remains checkpoint-free "
-            "when omitted"
-        ),
-    )
-    parser.add_argument(
-        "--pm-hal-device",
-        choices=("cpu", "cuda"),
-        default="cpu",
-        help="explicit device for the optional PM Hal recurrent expert",
-    )
-    parser.add_argument(
-        "--pm-hal-game-epsilon-budget",
-        type=float,
-        default=None,
-        help="maximum cumulative PM Hal local worst-case-loss charge per game",
-    )
-    parser.add_argument(
-        "--pm-hal-press-epsilon-cap",
-        type=float,
-        default=None,
-        help="maximum local loss admitted in PM Hal press mode",
-    )
-    parser.add_argument(
-        "--pm-hal-dominate-epsilon-cap",
-        type=float,
-        default=None,
-        help="maximum local loss admitted in PM Hal dominate mode",
-    )
-    parser.add_argument(
-        "--pm-hal-posterior-samples",
-        type=int,
-        default=None,
-        help="forecast-ensemble posterior draws per PM Hal frontier candidate",
-    )
+    registry.add_play_arguments(parser)
+    registry.add_research_arguments(parser)
 
 
 def command_match(args: argparse.Namespace) -> int:
     from arena.match import run_paired_series, write_report
 
-    pure_dth_only = {"aggro-hal", "perfect-hal", "pm-hal"}
-    if args.perfect_hal_model == "translated-v1":
-        pure_dth_only.remove("perfect-hal")
     if (
-        pure_dth_only.intersection({args.candidate, args.opponent})
+        any(
+            registry.requires_pure_dth(kind, args)
+            for kind in (args.candidate, args.opponent)
+        )
         and not args.pure_dth
     ):
         raise ValueError(
@@ -767,18 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     play = commands.add_parser(
         "play", help="play STL or explicit pure DTH against a pluggable Hal policy"
     )
-    play.add_argument(
-        "--hal-agent",
-        choices=(
-            "abstract",
-            "dth",
-            "adaptive-dth",
-            "exploit-hal",
-            "perfect-hal",
-            "pm-hal",
-        ),
-        default="dth",
-    )
+    play.add_argument("--hal-agent", choices=registry.PLAY_AGENTS, default="dth")
     _add_agent_arguments(play)
     play.add_argument("--human-name", default="Baku")
     play.add_argument(
@@ -877,32 +470,8 @@ def build_parser() -> argparse.ArgumentParser:
         "match",
         help="paired-seat agent-versus-agent series with a predeclared SPRT",
     )
-    match.add_argument(
-        "--candidate",
-        choices=(
-            "abstract",
-            "dth",
-            "adaptive-dth",
-            "exploit-hal",
-            "aggro-hal",
-            "perfect-hal",
-            "pm-hal",
-        ),
-        required=True,
-    )
-    match.add_argument(
-        "--opponent",
-        choices=(
-            "abstract",
-            "dth",
-            "adaptive-dth",
-            "exploit-hal",
-            "aggro-hal",
-            "perfect-hal",
-            "pm-hal",
-        ),
-        required=True,
-    )
+    match.add_argument("--candidate", choices=registry.MATCH_AGENTS, required=True)
+    match.add_argument("--opponent", choices=registry.MATCH_AGENTS, required=True)
     _add_agent_arguments(match)
     match.add_argument(
         "--games",

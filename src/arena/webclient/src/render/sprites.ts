@@ -1,8 +1,9 @@
 // Frames come from the Python server already keyed, mirrored, and split.
 //
-// That is deliberate. `Sprite.keyed` (src/arena/sprites.py) clears the paper by
-// flood-filling inward from the border, not by thresholding brightness — a
-// threshold would punch holes through Baku's white coat and the handkerchief.
+// That is deliberate. `Sprite.keyed` (src/arena/presentation/sprites.py) clears
+// the paper by flood-filling inward from the border, not by thresholding
+// brightness — a threshold would punch holes through Baku's white coat and the
+// handkerchief.
 // The sheet splitter also repairs figures that straddle a quarter boundary.
 // Reimplementing either here would be a second, divergent implementation of
 // art the terminal front end has already validated, so we do not.

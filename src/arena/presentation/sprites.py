@@ -1,7 +1,9 @@
-"""Terminal sprite rendering for the arena play surface.
+"""Sprite codec and cell rendering shared by the arena front ends.
 
 Display only. Nothing in this module reads, derives, or mutates canonical game
-state; it turns PNG files into character cells and nothing else.
+state; it turns PNG files into character cells and nothing else. The terminal
+draws the cells, and the browser server encodes the same prepared sprites as
+PNG frames.
 
 PNG decoding is stdlib-only (``zlib``) because the project carries no image
 dependency and the arena must not add one. Only the subset the art pipeline

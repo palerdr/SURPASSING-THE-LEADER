@@ -16,15 +16,9 @@ from typing import Mapping
 import numpy as np
 
 from arena.contracts import CanonicalDecision
+# PureDTHGame moved to arena.variants; existing importers still find it here.
+from arena.variants import PureDTHGame  # noqa: F401
 from dth.agent import CompleteDTHAgent, MoveDecision
-from stl.engine.game import Game
-
-
-class PureDTHGame(Game):
-    """Shared canonical mechanics with pure DTH's permanent 60-action turn."""
-
-    def get_turn_duration(self) -> int:
-        return 60
 
 
 def project_to_dth_state(decision: CanonicalDecision) -> tuple[int, int, int, int]:

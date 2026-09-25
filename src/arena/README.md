@@ -38,6 +38,21 @@ must not import one another in return.
   window; arena keeps that canonical action even though DTH has no 61 policy.
 - Projection adapters may not alter canonical game state or transitions.
 - Keep generated artifacts in the owning project, never under `src/arena/`.
+- `policies/registry.py` is the one Hal provider registry. It holds the agent
+  choices, the agent flags, the provider factories, and the pure-DTH gate.
+  `cli.py` and `web/__main__.py` build Hal through it, and `cli.py` keeps its
+  old private names as aliases of the registry functions.
+- `policies/__init__.py` imports nothing. Import each provider from its own
+  module, so the hosted runtime never loads torch or the stable-baselines3
+  training stack. `tests/test_runtime_imports.py` checks this in a fresh
+  interpreter.
+- `presentation/` holds the sprite pipeline (`sprites.py`, `scene_art.py`) and
+  the player-facing rules text (`rules_text.py`). The terminal and the browser
+  both read it, and the browser never imports `tui.py` or `cli.py`. Art paths
+  resolve from the package, so the art loads from any working directory.
+- `variants.py` holds `PureDTHGame`. `contracts.py`, `agent.py`, `session.py`,
+  `match.py`, and `variants.py` import no project except `stl.engine`; `dth`
+  and `abstract` enter through the adapters and `policies/`.
 
 ## Play surfaces and the session
 

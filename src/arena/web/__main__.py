@@ -1,9 +1,9 @@
 """Run the local browser server: ``uv run python -m arena.web``.
 
-Hal is built once here, at startup, using the same provider construction and
-the same agent options the terminal CLI uses. The ``abstract`` provider is
-refused because it can build a tablebase from scratch, which must never happen
-behind an HTTP request.
+Hal is built once here, at startup, through ``arena.policies.registry``: the
+same provider construction and the same agent options the terminal CLI uses.
+The ``abstract`` provider is refused because it can build a tablebase from
+scratch, which must never happen behind an HTTP request.
 """
 
 from __future__ import annotations
@@ -13,13 +13,10 @@ from pathlib import Path
 
 import uvicorn
 
-from arena import cli
+from arena.policies import registry
 from arena.session import validate_human_display_name
 from arena.web.app import DEFAULT_WEBCLIENT_DIST, SeriesConfig, SessionConfig, create_app
 from stl.engine.game import OPENING_START_CLOCK
-
-# The translated Perfect variant adds a canonical leap fallback.
-PURE_DTH_ONLY = frozenset({"perfect-hal", "pm-hal"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,11 +25,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
         "--hal-agent",
-        choices=("dth", "adaptive-dth", "exploit-hal", "perfect-hal", "pm-hal"),
+        choices=registry.BROWSER_AGENTS,
         default="dth",
         help="'abstract' is unavailable here: it may build a tablebase on first use",
     )
-    cli._add_agent_arguments(parser)
+    # The browser accepts every agent option of `arena play`, and each option
+    # means the same thing here.
+    registry.add_play_arguments(parser)
+    registry.add_research_arguments(parser)
     parser.add_argument("--human-name", default="Baku")
     parser.add_argument(
         "--public-hal-label",
@@ -73,15 +73,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.human_name = validate_human_display_name(args.human_name)
-    translated = args.hal_agent == "perfect-hal" and args.perfect_hal_model == "translated-v1"
-    if args.hal_agent in PURE_DTH_ONLY and not args.pure_dth and not translated:
+    if registry.requires_pure_dth(args.hal_agent, args) and not args.pure_dth:
         raise SystemExit(
             f"{args.hal_agent} is a pure-DTH policy; pass --pure-dth so action "
             "61 is impossible"
         )
 
     app = create_app(
-        hal_factory=lambda: cli._make_hal(args),
+        hal_factory=lambda: registry.make_hal(args),
         config=SessionConfig(
             human_name=args.human_name,
             seed=args.seed,

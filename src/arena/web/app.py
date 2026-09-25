@@ -2,8 +2,11 @@
 
 A third front end onto the same session, alongside ``arena.cli`` and
 ``arena.tui``. It imports only ``stl`` and ``arena``, so it introduces no new
-peer project and no new import edge that ``AGENTS.md`` forbids. The STL engine
-remains the only referee; this module sequences requests and serializes state.
+peer project and no new import edge that ``AGENTS.md`` forbids. It shares the
+rules text and the prepared art with the terminal through
+``arena.presentation``, and it never imports the terminal renderer. The STL
+engine remains the only referee; this module sequences requests and serializes
+state.
 
 The server holds exactly one live session, because it is a local single-player
 surface, but that session sits inside one repeated-opponent series exactly as
@@ -30,6 +33,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from arena.presentation.rules_text import rules_body
+from arena.presentation.scene_art import PANEL_ROOT, SceneArt
+from arena.presentation.sprites import encode_png
 from arena.session import (
     CANONICAL_HAL_NAME,
     CANONICAL_HUMAN_NAME,
@@ -38,6 +44,7 @@ from arena.session import (
     SessionPhaseError,
     validate_human_display_name,
 )
+from arena.variants import PureDTHGame
 from arena.web.schema import (
     ActionRequest,
     NewSessionRequest,
@@ -56,9 +63,8 @@ from stl.engine.game import (
 
 HalFactory = Callable[[], object]
 
-# Manga panels the client may request by name. The rules spread opens the
-# game; it is the page the chapter states its rules on.
-PANEL_ROOT = Path("art/panels")
+# Manga panels the client may request by name, under PANEL_ROOT. The rules
+# spread opens the game; it is the page the chapter states its rules on.
 PANELS = {"stl_rules": ("stl_rules.png", "image/png")}
 
 TRANSCRIPT_SCHEMA = "arena-public-play-session-v1"
@@ -145,8 +151,6 @@ def _new_session(
     human = Player(name=CANONICAL_HUMAN_NAME, physicality=PHYSICALITY_BAKU)
     game_type: type[Game] = Game
     if config.pure_dth:
-        from arena.dth_adapter import PureDTHGame
-
         game_type = PureDTHGame
     game = game_type(
         player1=hal,
@@ -308,8 +312,6 @@ def create_app(
 
     @app.get("/api/rules")
     def rules() -> dict[str, object]:
-        from arena.tui import rules_body
-
         return {
             "human_name": _session().human_display_name,
             "hal_label": series_config.hal_label,
@@ -482,9 +484,6 @@ def create_app(
 
     @app.get("/art/{character}/{pose}/{index}.png")
     def frame(character: str, pose: str, index: int) -> Response:
-        from arena.sprites import encode_png
-        from arena.tui import SceneArt
-
         if "art" not in art_cache:
             art_cache["art"] = (art_loader or SceneArt.load)()
         sprite = art_cache["art"].frame(character, pose, index)

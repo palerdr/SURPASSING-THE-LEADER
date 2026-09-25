@@ -10,8 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from arena.sprites import encode_png
-from arena.tui import SceneArt
+from arena.presentation.scene_art import SceneArt
+from arena.presentation.sprites import encode_png
 from dth.agent import CompleteDTHAgent
 
 
@@ -62,8 +62,11 @@ def copy_runtime_sources(root: Path, target: Path) -> None:
         "arena/contracts.py",
         "arena/dth_adapter.py",
         "arena/session.py",
-        "arena/tui.py",
-        "arena/sprites.py",
+        "arena/variants.py",
+        "arena/presentation/__init__.py",
+        "arena/presentation/rules_text.py",
+        "arena/presentation/scene_art.py",
+        "arena/presentation/sprites.py",
         "arena/web/__init__.py",
         "arena/web/app.py",
         "arena/web/schema.py",
@@ -73,6 +76,7 @@ def copy_runtime_sources(root: Path, target: Path) -> None:
         "arena/web/production.py",
         "arena/web/opponent_memory.py",
         "arena/translated_hal_adapter.py",
+        "arena/policies/__init__.py",
         "arena/policies/perfect_hal.py",
         "arena/policies/translated_hal.py",
         "arena/config/translated_hal_v1_selection.json",
@@ -93,7 +97,6 @@ def copy_runtime_sources(root: Path, target: Path) -> None:
         destination = target / "runtime/src" / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / "src" / name, destination)
-    (target / "runtime/src/arena/policies/__init__.py").write_text('"""Direct policy imports for the hosted runtime."""\n')
 
 
 def main():

@@ -21,7 +21,7 @@ file; arena's binding guidance is `src/arena/README.md`.
 - **Sprites are prepared server-side.** `/art/{character}/{pose}/{index}.png`
   returns frames that are already keyed, mirrored, and split. Do not re-implement
   `Sprite.keyed` or the sheet splitter in TypeScript; both are subtle
-  (`src/arena/sprites.py`) and already validated by the terminal front end.
+  (`src/arena/presentation/`) and already validated by the terminal front end.
   Frames are reduced once to a coarse pixel grid by a smooth downsample and
   then blown up with hard edges (`pixelated` in `scene.ts`). Sampling the
   full-size frame with nearest neighbour instead picked different source
