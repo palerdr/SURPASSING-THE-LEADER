@@ -62,6 +62,7 @@ RUNTIME_FILES: tuple[RuntimeFile, ...] = (
     RuntimeFile("src/browser/hosted.py", in_version=True),
     RuntimeFile("src/browser/ledger.py", in_version=True),
     RuntimeFile("src/browser/names.py"),
+    RuntimeFile("src/browser/redis_store.py", in_version=True),
     RuntimeFile("src/browser/schema.py", in_version=True),
     RuntimeFile("src/browser/deploy/__init__.py"),
     RuntimeFile("src/browser/deploy/manifest.py", in_version=True),

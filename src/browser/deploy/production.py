@@ -11,8 +11,9 @@ from arena.agent import PolicyDrivenAgent
 from arena.dth_adapter import project_to_dth_state
 from browser.app import SessionConfig, SeriesConfig, create_app
 from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
-from browser.hosted import RedisSessionStore, create_hosted_app
+from browser.hosted import create_hosted_app
 from browser.ledger import SupabaseLedger
+from browser.redis_store import RedisSessionStore
 from dth.agent import CompleteDTHAgent
 
 

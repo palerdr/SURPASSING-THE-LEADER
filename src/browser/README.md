@@ -74,7 +74,8 @@ session reads still recover state for stale-request handling and worker replay.
 ## Hosted sessions
 
 The Vercel entrypoint uses `hosted.py` and `deploy/production.py` to isolate
-players with secure cookies and Redis command logs. It replays accepted commands
+players with secure cookies and Redis command logs. `redis_store.py` holds the
+Upstash store and its atomic compare-and-set. The entrypoint replays accepted commands
 through the same local HTTP adapter and commits each mutation before returning
 a reveal. A process keeps the game it last served and rebuilds it from the
 command log only when Redis shows that the game moved on elsewhere.
