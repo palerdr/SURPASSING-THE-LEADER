@@ -134,7 +134,7 @@ def test_adaptive_dth_cli_loads_a_role_population_prior(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     class _Agent:
         def __init__(self, artifact_dir) -> None:

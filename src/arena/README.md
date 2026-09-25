@@ -8,7 +8,7 @@ projects must not import it.
 - The completed DTH tablebase is the default Hal policy provider.
 - Providers return policy distributions; `PolicyDrivenAgent` alone masks and
   samples literal legal seconds.
-- `adaptive_dth.py` is the one-step exploit layer: callers supply population
+- `policies/adaptive.py` is the one-step exploit layer: callers supply population
   Dirichlet priors, revealed actions update separate role posteriors, and the
   complete DTH matrix constrains every selected policy under a per-game
   epsilon budget. It falls back to equilibrium when evidence is weak or an

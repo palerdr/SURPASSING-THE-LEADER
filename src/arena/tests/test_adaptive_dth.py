@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from arena.adaptive_dth import (
+from arena.policies.adaptive import (
     AdaptiveDecision,
     AdaptiveDTHPolicyProvider,
     DirichletPrior,
@@ -211,7 +211,7 @@ class _FakeAgent:
 def test_provider_learns_revealed_opponent_actions_once(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     monkeypatch.setattr(adaptive, "CompleteDTHAgent", _FakeAgent)
     monkeypatch.setattr(
@@ -245,7 +245,7 @@ def test_provider_learns_revealed_opponent_actions_once(
 def test_provider_retreats_when_opponent_can_play_leap_action_61(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     matrix, _, _ = _checker_opportunity()
     monkeypatch.setattr(adaptive, "CompleteDTHAgent", _FakeAgent)
@@ -275,7 +275,7 @@ def test_provider_retreats_when_opponent_can_play_leap_action_61(
 def test_provider_returns_to_equilibrium_after_budget_is_exhausted(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     matrix, _, _ = _dropper_opportunity()
     monkeypatch.setattr(adaptive, "CompleteDTHAgent", _FakeAgent)
@@ -318,7 +318,7 @@ def test_provider_returns_to_equilibrium_after_budget_is_exhausted(
 def test_experiment_diagnostics_groups_decisions_by_match(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     monkeypatch.setattr(adaptive, "CompleteDTHAgent", _FakeAgent)
     provider = AdaptiveDTHPolicyProvider(
@@ -381,7 +381,7 @@ def test_prior_requires_positive_support_for_every_dth_action() -> None:
 def test_public_action_61_is_counted_without_corrupting_posterior(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import arena.adaptive_dth as adaptive
+    import arena.policies.adaptive as adaptive
 
     monkeypatch.setattr(adaptive, "CompleteDTHAgent", _FakeAgent)
     monkeypatch.setattr(
