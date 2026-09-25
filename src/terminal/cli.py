@@ -9,9 +9,7 @@ module owns the terminal input and output and the public transcript.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from pathlib import Path
 
 from arena.agent import PolicyDrivenAgent
 from arena.contracts import reset_provider_game
@@ -23,6 +21,7 @@ from arena.session import (
     PlaySession,
     validate_human_display_name,
 )
+from arena.transcript import write_play_transcript
 from stl.engine.game import (
     OPENING_START_CLOCK,
     PHYSICALITY_BAKU,
@@ -107,20 +106,6 @@ def _show_rules(args: argparse.Namespace) -> None:
         input(prompt)
     except EOFError:
         return
-
-
-def _write_play_transcript(
-    destination: str | Path, transcript: dict[str, object]
-) -> Path:
-    path = Path(destination)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(transcript, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-    return path
 
 
 def _play_one_game(
@@ -307,7 +292,7 @@ def command_play(args: argparse.Namespace) -> int:
     for game_index in range(args.games):
         games.append(_play_one_game(args, hal_agent, game_index=game_index))
         if args.transcript:
-            _write_play_transcript(args.transcript, transcript)
+            write_play_transcript(args.transcript, transcript)
     match_summary = getattr(hal_agent.provider, "match_summary", None)
     if callable(match_summary):
         summary = match_summary()
@@ -318,7 +303,7 @@ def command_play(args: argparse.Namespace) -> int:
     if callable(experiment_diagnostics):
         transcript["hal_diagnostics"] = experiment_diagnostics()
     if args.transcript:
-        destination = _write_play_transcript(args.transcript, transcript)
+        destination = write_play_transcript(args.transcript, transcript)
         print(f"Public session transcript: {destination}")
     return 0
 

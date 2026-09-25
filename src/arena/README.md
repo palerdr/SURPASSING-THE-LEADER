@@ -66,6 +66,9 @@ projects must not import it.
 - `match.py` plays one agent-versus-agent game. `python -m hal_lab match`
   runs the paired-seat series and its SPRT in
   `src/hal_lab/harness/series.py`.
+- `transcript.py` writes the public play transcript file. The terminal's
+  `--transcript` and the browser's `--transcript` both call it, so the two
+  files keep one format. `session.py` stays free of I/O.
 - `testing.py` holds the fakes that the tests of more than one project share,
   such as `StageAgent` and `make_session`. No runtime module imports it.
 - No arena module imports `terminal`, `browser`, or `hal_lab`.

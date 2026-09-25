@@ -22,7 +22,6 @@ replayed.
 
 from __future__ import annotations
 
-import json
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +43,7 @@ from arena.session import (
     SessionPhaseError,
     validate_human_display_name,
 )
+from arena.transcript import write_play_transcript
 from arena.variants import PureDTHGame
 from browser.schema import (
     ActionRequest,
@@ -180,20 +180,6 @@ def _game_seed(base_seed: int | None, game_index: int) -> int | None:
     """The CLI's per-game seed rule: base seed plus game index."""
 
     return None if base_seed is None else base_seed + game_index
-
-
-def write_play_transcript(destination: str | Path, transcript: dict[str, object]) -> Path:
-    """Atomically write a public transcript, exactly as the CLI does."""
-
-    path = Path(destination)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(transcript, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-    return path
 
 
 def create_app(

@@ -47,6 +47,7 @@ RUNTIME_FILES: tuple[RuntimeFile, ...] = (
     RuntimeFile("src/arena/contracts.py", in_version=True),
     RuntimeFile("src/arena/dth_adapter.py", in_version=True),
     RuntimeFile("src/arena/session.py", in_version=True),
+    RuntimeFile("src/arena/transcript.py", in_version=True),
     RuntimeFile("src/arena/variants.py"),
     RuntimeFile("src/arena/presentation/__init__.py"),
     RuntimeFile("src/arena/presentation/rules_text.py"),
