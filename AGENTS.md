@@ -24,6 +24,10 @@
   is its server. Both are arena play surfaces, like `cli.py` and `tui.py`. The
   client renders state and collects input; it never derives game rules and
   never receives an unrevealed action.
+- `src/hal_lab/` is the Hal research lab. It owns Hal training and the frozen
+  evidence of the finished studies, with the ignored root `outputs/` store.
+  It may import `arena`, `stl.engine`, `stl.solver.canonical`, `dth.agent`,
+  and `dth.solver`, and no project imports it.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.
 - Generated data must remain gitignored. Character sprites under `art/sprites/`
   are source art, not generated data, and are tracked.
@@ -48,10 +52,12 @@ functions too.
 | Shared accelerators | `crates` | No other project |
 | Proofs | `formal` | Nothing |
 | Play surface | `arena` | `stl.engine`, `stl.solver.canonical`, `dth.agent`, `dth.solver`, `abstract` |
+| Lab | `hal_lab` | `arena`, `stl.engine`, `stl.solver.canonical`, `dth.agent`, `dth.solver` |
 
 - A cross-project import must sit under a `may_import` entry of the importer
   and under a `public_interfaces` entry of the owner. The compiled `*_rs`
   extension modules are outside this check.
+- `hal_lab` declares no public interface, so no project can import it.
 - Inside `arena`, `contracts.py`, `agent.py`, `session.py`, `match.py`, and
   `variants.py` import `stl.engine` and each other alone. `dth` and
   `abstract` enter through the adapters and `arena/policies/`.
@@ -59,7 +65,7 @@ functions too.
   `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The files in
   `forbid_imports_exempt` are today's exceptions: arena's Hal training and
   evaluation code. Add no file to that list. `arena/policies/__init__.py`
-  imports nothing.
+  imports nothing. `hal_lab` may import these packages.
 - `tests/meta/test_root_layout.py` limits the root to the governance files,
   `docs/`, `paper/`, `src/`, `tests/`, and the ignored `outputs/` store. Its
   legacy list names the tracked root entries that a planned move removes.

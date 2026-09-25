@@ -170,6 +170,31 @@ validation = [
   "npm --prefix src/arena/webclient run build",
 ]
 
+# The Hal research lab. It may import torch and the training stack, so it
+# lists no forbid_imports. Its public_interfaces stay empty: no project
+# imports it.
+[[project]]
+id = "hal_lab"
+path = "src/hal_lab"
+instruction_readme = "src/hal_lab/README.md"
+kind = "lab"
+languages = ["python"]
+rung = "L1-L2"
+status = "research"
+public_interfaces = []
+may_import = [
+  "arena",
+  "stl.engine",
+  "stl.solver.canonical",
+  "dth.agent",
+  "dth.solver",
+]
+root_validation = true
+validation = [
+  "uv run python -m pytest src/hal_lab/tests -q",
+  "uv run python -m hal_lab.provenance --check",
+]
+
 [[project]]
 id = "formal"
 path = "src/formal"

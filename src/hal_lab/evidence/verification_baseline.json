@@ -1,0 +1,1797 @@
+{
+  "schema": "hal-lab-evidence-verification-v1",
+  "tag": "pre-restructure",
+  "tag_commit": "4944c91cae48440f2de5eca61809f17f9c2ad38a",
+  "summary": {
+    "verified": 160,
+    "mismatch": 3,
+    "missing": 5,
+    "unverifiable": 21
+  },
+  "records": {
+    "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json": {
+      "sha256": "078739b11fcdbc551516da7b80031dfe432cd8949d2c43cda630664e7f44ebed",
+      "bindings": []
+    },
+    "src/arena/config/aggro_hal_adaptive_memory_v1.yaml": {
+      "sha256": "3b3ca4403a24a74a113a2d85d12b4b92b29e12439ea106bfa4ea04f6eba11430",
+      "bindings": [
+        {
+          "pointer": "/experiment/goal_manifest_canonical_json_sha256",
+          "expected": "44d09c9cd4e1bc765a5a095ab2f7fdf62ce9f89061f51a4a18b2c59cc80b66ec",
+          "path": "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json",
+          "source": "git",
+          "method": "canonical-json",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/aggro_hal_tactical_baseline_v1.json": {
+      "sha256": "59cb64f376175e33e832a6e3a10152dc880831d48499efc0a6ddd055bc5bbb20",
+      "bindings": [
+        {
+          "pointer": "/artifact/sha256",
+          "expected": "925cb9b63e88911e711e911ab5faa3918c27bf13c2731de1233c4ffe762f49d4",
+          "path": "outputs/aggro-hal-v1/corrected-v1/checkpoint.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "missing",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/training_config/sha256",
+          "expected": "6f5ab3f206e24f2e22dad828c17bf9f851473bb19aa38ad8ded9dabbd83497bc",
+          "path": "src/arena/config/aggro_hal_v1.yaml",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/training_config/canonical_yaml_sha256",
+          "expected": "d023c07eedf10fce91f37f6f41aba68a2b70f3d14dd23892fedd8be4b83712d8",
+          "path": "src/arena/config/aggro_hal_v1.yaml",
+          "source": "git",
+          "method": "canonical-json",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/training_report/sha256",
+          "expected": "5ecf9c43719972584f5f2e9068e2bfd3857d2758f7b542ca9fceb525294e8e13",
+          "path": "outputs/aggro-hal-v1/corrected-v1/training-report.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "missing",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/selection_and_audit_summary/sha256",
+          "expected": "e9d63f96e903ac7ce8b04b76ad83e987bd2806a602268a3fefaa813563115545",
+          "path": "outputs/aggro-hal-v1/corrected-v1/selection-and-audit-summary.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "missing",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/latent_twin_protocol/sha256",
+          "expected": "386c0c774748348dae4cfd24afda5bfd090c7653a98e62b6b5e9640090936f61",
+          "path": "outputs/aggro-hal-v1/corrected-v1/memory-latent-twin-protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "missing",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/latent_twin_report/sha256",
+          "expected": "bcbede1c9d2fe92988d41ade0eafa503c2c459984324b812de289951819a6e9e",
+          "path": "outputs/aggro-hal-v1/corrected-v1/memory-latent-twin-report.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "missing",
+          "reason": null
+        },
+        {
+          "pointer": "/dth_compatibility/solver_schema_hash",
+          "expected": "5f6dd98d239ea8006a087668155cd1964bcd16966ee383ad2e607373d8dea934",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "artifact digest, not the hash of one file"
+        },
+        {
+          "pointer": "/dth_compatibility/manifest_sha256",
+          "expected": "89a2f56aa624748bd75a25291406e46867d4eddd1c3acd06e42b1dc6ea2d3e47",
+          "path": "src/dth/artifacts/complete_full_v1/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "mismatch",
+          "reason": null
+        },
+        {
+          "pointer": "/dth_compatibility/table_digest",
+          "expected": "73c7c2a2cac2fb5f5e8a51a6281a8c33e3022e2b5bf119c0566a153f37e2d85e",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "artifact digest, not the hash of one file"
+        },
+        {
+          "pointer": "/dth_compatibility/arrays/solver_kind.npy",
+          "expected": "f9efa51f124d89b78095fcd83bf664d7d0f9916abaf0e7ab034092bc410e1e57",
+          "path": null,
+          "source": null,
+          "method": "bytes",
+          "status": "unverifiable",
+          "reason": "bare file name with no entry in PATH_MAP.toml"
+        },
+        {
+          "pointer": "/dth_compatibility/arrays/value.npy",
+          "expected": "6afe4d03ab513646e2dc8ad41e9c38bfbe86e7296f56ca4fcfdda42af540e77e",
+          "path": null,
+          "source": null,
+          "method": "bytes",
+          "status": "unverifiable",
+          "reason": "bare file name with no entry in PATH_MAP.toml"
+        },
+        {
+          "pointer": "/selection/validation_manifest_sha256",
+          "expected": "7fd6d0d724939b727e51314fdf550399a90890b054e1794a32f46409ad69a929",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/selection/audit_manifest_sha256",
+          "expected": "ecaa9bb8ec8ca94702cd44779999e524fd1760fa16ae5c4f5b9b070c1f298305",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        }
+      ]
+    },
+    "src/arena/config/aggro_hal_v1.yaml": {
+      "sha256": "6f5ab3f206e24f2e22dad828c17bf9f851473bb19aa38ad8ded9dabbd83497bc",
+      "bindings": []
+    },
+    "src/arena/config/pm_hal_confirmation_v3.json": {
+      "sha256": "ea7894ecb85e9bf728fd89f2c605a6e49ada45b57643a3535347dfccc6f58ebc",
+      "bindings": [
+        {
+          "pointer": "/bindings/evaluation_config/sha256",
+          "expected": "7d44e2480fa65197a36554ae3c6f5a3a21eaface1c3f72a76b2bc438a2fe0c95",
+          "path": "src/arena/config/pm_hal_evaluation_v3.json",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/controller_config/sha256",
+          "expected": "67400560d7677c242eb5069e3ec71acf63472bee7388bdbc0b8a2402953b20f0",
+          "path": "src/arena/config/pm_hal_controller_v3.json",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/aggro_checkpoint/sha256",
+          "expected": "401df584ab52d5881fd96f7018546e4101d8617097acc32e0f077e76a707d153",
+          "path": "outputs/pm-hal/aggro-component-v1/checkpoint.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/dth_tablebase/manifest_sha256",
+          "expected": "a63ed6666605a2d033d51b507cba5b1fc935a74d8669928a9f1ea8e6e436bb4e",
+          "path": "src/dth/artifacts/complete_full_v1/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "mismatch",
+          "reason": null
+        },
+        {
+          "pointer": "/bindings/dth_tablebase/table_digest",
+          "expected": "40561447539bde3f1db83f61303b618ca062bc529c6c23a7fe27cffa917ac392",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "artifact digest, not the hash of one file"
+        },
+        {
+          "pointer": "/bindings/dth_tablebase/solver_schema_hash",
+          "expected": "cd7a015f515c46d6d15dbcd7231fc3ccb33647da548f0da0306089b01655189f",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "artifact digest, not the hash of one file"
+        },
+        {
+          "pointer": "/bindings/evaluation_report/sha256",
+          "expected": "441c9dc7594b7ada715b260c9a8ed03279b7a4e6c2c3b78b75dd28b7a853b672",
+          "path": "outputs/pm-hal/v3/evaluation-report.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/pm_hal_evaluation_v3.json": {
+      "sha256": "7d44e2480fa65197a36554ae3c6f5a3a21eaface1c3f72a76b2bc438a2fe0c95",
+      "bindings": [
+        {
+          "pointer": "/bindings/pm_config_sha256",
+          "expected": "67400560d7677c242eb5069e3ec71acf63472bee7388bdbc0b8a2402953b20f0",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/bindings/aggro_checkpoint_sha256",
+          "expected": "401df584ab52d5881fd96f7018546e4101d8617097acc32e0f077e76a707d153",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/bindings/dth_table_digest",
+          "expected": "40561447539bde3f1db83f61303b618ca062bc529c6c23a7fe27cffa917ac392",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "artifact digest, not the hash of one file"
+        }
+      ]
+    },
+    "src/arena/config/external_hal_prior_v1_results.json": {
+      "sha256": "2fa19a6f38f4c6df15f1e0774b0cb752f26b09167541bd81578858ab81553025",
+      "bindings": [
+        {
+          "pointer": "/source/sha256",
+          "expected": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "the hash binds a download URL"
+        },
+        {
+          "pointer": "/protocol/source_sha256",
+          "expected": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "the hash binds a download URL"
+        },
+        {
+          "pointer": "/artifacts/outputs~1external-hal-prior-v1~1protocol.json",
+          "expected": "51e49b80c92a89e59be04ce5b0d649002df969285aedad22353b1ba19c76e163",
+          "path": "outputs/external-hal-prior-v1/protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1external-hal-prior-v1~1freeze.json",
+          "expected": "86731ea48347a7fa4b773155acf29a777ea9616fa523154a213d7807fa239411",
+          "path": "outputs/external-hal-prior-v1/freeze.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1external-hal-prior-v1~1results.json",
+          "expected": "9bfdffc4d675a9c206f82053a6bf02a02dac832042e04fb5d6abd69a59115e47",
+          "path": "outputs/external-hal-prior-v1/results.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1external-hal-prior-v1~1human.csv",
+          "expected": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+          "path": "outputs/external-hal-prior-v1/human.csv",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1external-hal-prior-v1~1source-LICENSE.md",
+          "expected": "efffba77db6fd2e7810213fcff131d7346b329e820bc091e58b92305d652d6c4",
+          "path": "outputs/external-hal-prior-v1/source-LICENSE.md",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1evaluate_reward_prior.py",
+          "expected": "8837d45e6fcfc76e5827dad9e5e6c69aebf20da9d89a0e05904e408b5aecffae",
+          "path": "src/arena/policies/evaluate_reward_prior.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1reward_prior_hal.py",
+          "expected": "fd244f3b62d7dc21e2a9d6b6b5d9ec2eb25415898e82505443e2773d5196274a",
+          "path": "src/arena/policies/reward_prior_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1translated_hal.py",
+          "expected": "5cb1126937d5605fddc03fb8c29b0e223431364d7031d89677f2179e03555b9b",
+          "path": "src/arena/policies/translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1evaluate_bayesian_hal.py",
+          "expected": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+          "path": "src/arena/policies/evaluate_bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1evaluate_translated_hal.py",
+          "expected": "95e92749911960391bc95c85d1ec8ac0b2bc674bb1053bb36d46255ee3a1ebf7",
+          "path": "src/arena/policies/evaluate_translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1opponent_league.py",
+          "expected": "b0d86f36be3a3528a6633e5a711f24324a4bbceb9363b6448b77b4da0764f71c",
+          "path": "src/arena/policies/opponent_league.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1match.py",
+          "expected": "41f51469303818c514a8c16d5d7b61e32b700f7bd5ccf0fadf92696cfe74dd40",
+          "path": "src/arena/match.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1contracts.py",
+          "expected": "18c5904dd5a4afff1aee72d49541efa0e62849b7fa89a322863944bb4c9363e5",
+          "path": "src/arena/contracts.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1config~1translated_hal_v1_selection.json",
+          "expected": "8e3aa265c7765b4896d4fecbdfbcb43bb2896a61a4cf166ca3402620c3b170f8",
+          "path": "src/arena/config/translated_hal_v1_selection.json",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1outputs~1perfect-hal-bayes-v2~1human-games.json",
+          "expected": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+          "path": "outputs/perfect-hal-bayes-v2/human-games.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1outputs~1perfect-hal-bayes-v2~1tablebase~1tablebase.json",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": "outputs/perfect-hal-bayes-v2/tablebase/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1outputs~1external-hal-prior-v1~1human.csv",
+          "expected": "f3c3d46a2e34f85f950bfdffd0d04d6c6fc748268c14e5700646e44b2d42d11a",
+          "path": "outputs/external-hal-prior-v1/human.csv",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/neural_pilots_v1_results.json": {
+      "sha256": "f09aad7838b2a900659859069c71b70f19abf5d0b1d349d81cba698675080d4f",
+      "bindings": [
+        {
+          "pointer": "/measurement_repair/archived_runner_sha256",
+          "expected": "8cb78395093fd74ad3611294a428a2c5f85c4b4efd5779309dcf7919cb55c08f",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1protocol.json",
+          "expected": "b634c830dace561bcb8234d2aa950be52d53ea0a5b447b22a0599f640ef3db83",
+          "path": "outputs/neural-pilots-v1/protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1freeze.json",
+          "expected": "f8aec2e557fbafa532151950f7d57f40e0dc5b4dd8020304385484f4289fca8f",
+          "path": "outputs/neural-pilots-v1/freeze.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1training.json",
+          "expected": "74b974e30994057df3d6326fdcd635bc494ed630046647b3df259fa176557446",
+          "path": "outputs/neural-pilots-v1/training.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1results.json",
+          "expected": "60b833a5e4646ec227b193143e2c97373140031e0b48c509a6b3ad2d82c71fc2",
+          "path": "outputs/neural-pilots-v1/results.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1run_neural_pilots-original.py",
+          "expected": "8cb78395093fd74ad3611294a428a2c5f85c4b4efd5779309dcf7919cb55c08f",
+          "path": "outputs/neural-pilots-v1/run_neural_pilots-original.py",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1tests-final.log",
+          "expected": "02ae0d28ba7e60d4d899bd50c09d316f6db4719f8e3b6143df1d74bce2329cf6",
+          "path": "outputs/neural-pilots-v1/tests-final.log",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1graphify-final.log",
+          "expected": "4b41cbb171f0651db198cfb785afe014d1d025cb83f1121a44ff252bf57a1824",
+          "path": "outputs/neural-pilots-v1/graphify-final.log",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1memory-audit~1protocol.json",
+          "expected": "a0a41cc8c2be34b957f811b12bbc379fc09412952b602ab61dd244ff496d7118",
+          "path": "outputs/neural-pilots-v1/memory-audit/protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1memory-audit~1results.json",
+          "expected": "c345b5f3f19f165054457c4091d25a1124544e960504f9f2136b97ce599da734",
+          "path": "outputs/neural-pilots-v1/memory-audit/results.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1probe.pt",
+          "expected": "6d95f80ae8d68a548fabfa7b5376cd8968dcacd22c7afad90c03402415cf93a2",
+          "path": "outputs/neural-pilots-v1/probe.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1transformer.pt",
+          "expected": "daabab23e3bafdc69b38eafa41a34785f6f64dad507a3a8942b593eb784c3bcc",
+          "path": "outputs/neural-pilots-v1/transformer.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1gru.pt",
+          "expected": "bc47af94b5d26c17db9c621993893cfea79e0b42ac23b5deca8bb1b6ff9113c0",
+          "path": "outputs/neural-pilots-v1/gru.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1myopic.pt",
+          "expected": "55839d5693f507e91105fef11487704ddf75a987722dc49c3b3d46d3f1267283",
+          "path": "outputs/neural-pilots-v1/myopic.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1selector.pt",
+          "expected": "b599a8d1798f416c5c1d080e41dc8d03b0e2ac3ea54424561c615f85c6d0ec84",
+          "path": "outputs/neural-pilots-v1/selector.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1neural-pilots-v1~1adversary.pt",
+          "expected": "2ab4b6dc3f18616358399ced935be79fda592990da2aad278ae5faa2fc8605db",
+          "path": "outputs/neural-pilots-v1/adversary.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1run_neural_pilots.py",
+          "expected": "8cb78395093fd74ad3611294a428a2c5f85c4b4efd5779309dcf7919cb55c08f",
+          "path": "src/arena/policies/run_neural_pilots.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "mismatch",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1neural_pilots.py",
+          "expected": "b69eb21da10570bd3ea445d88ecbfa78d962eb7d301d35c1efe48fd5aff2811f",
+          "path": "src/arena/policies/neural_pilots.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1config~1translated_hal_v1_selection.json",
+          "expected": "8e3aa265c7765b4896d4fecbdfbcb43bb2896a61a4cf166ca3402620c3b170f8",
+          "path": "src/arena/config/translated_hal_v1_selection.json",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1outputs~1perfect-hal-bayes-v2~1tablebase~1tablebase.json",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": "outputs/perfect-hal-bayes-v2/tablebase/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1dth_adapter.py",
+          "expected": "fc81a9cd2bfe559d47ad8da778ea3d9ae7acb524a092fe48f8200cf009af0a79",
+          "path": "src/arena/dth_adapter.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1contracts.py",
+          "expected": "18c5904dd5a4afff1aee72d49541efa0e62849b7fa89a322863944bb4c9363e5",
+          "path": "src/arena/contracts.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1aggro_env.py",
+          "expected": "34c375a4e63dfea9c9f6e5aebd20001d05e93077e26b0a170ebb2868843fcd3a",
+          "path": "src/arena/policies/aggro_env.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1aggro_hal.py",
+          "expected": "9ec0cb3043570637d128c4fd8b21200473e5bd5dd6c359f10e87412aae43aa07",
+          "path": "src/arena/policies/aggro_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1opponent_league.py",
+          "expected": "b0d86f36be3a3528a6633e5a711f24324a4bbceb9363b6448b77b4da0764f71c",
+          "path": "src/arena/policies/opponent_league.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1translated_hal.py",
+          "expected": "5cb1126937d5605fddc03fb8c29b0e223431364d7031d89677f2179e03555b9b",
+          "path": "src/arena/policies/translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1evaluate_bayesian_hal.py",
+          "expected": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+          "path": "src/arena/policies/evaluate_bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/original_input_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1policies~1evaluate_translated_hal.py",
+          "expected": "95e92749911960391bc95c85d1ec8ac0b2bc674bb1053bb36d46255ee3a1ebf7",
+          "path": "src/arena/policies/evaluate_translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/current_source_sha256/src~1arena~1policies~1neural_pilots.py",
+          "expected": "b69eb21da10570bd3ea445d88ecbfa78d962eb7d301d35c1efe48fd5aff2811f",
+          "path": "src/arena/policies/neural_pilots.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/current_source_sha256/src~1arena~1policies~1run_neural_pilots.py",
+          "expected": "5ed7f89936d86703cbf135eff88fa8386061cf50e615535b78078390972d8003",
+          "path": "src/arena/policies/run_neural_pilots.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/current_source_sha256/src~1arena~1policies~1audit_neural_pilot_memory.py",
+          "expected": "4c8d06e501d864a1f8b336e79d4c0c8388553471923ecc39a6182154524bb983",
+          "path": "src/arena/policies/audit_neural_pilot_memory.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/perfect_hal_bayes_v2.json": {
+      "sha256": "2ea0c51a664356f7ed516bb390650a65e09e40e68131892c5e0c3760b20bce90",
+      "bindings": []
+    },
+    "src/arena/config/perfect_hal_bayes_v2_results.json": {
+      "sha256": "1fe1e31cf3777b896cc3f235a6dc8ab0e7ebc2e57272a18245701f2f0565ca38",
+      "bindings": [
+        {
+          "pointer": "/report_sha256",
+          "expected": "d3ea99d19aa8cdb8d80a8ff72f0c3ce3176102fd4e390fd4ef9a3d7ddf2df16a",
+          "path": "outputs/perfect-hal-bayes-v2/test-v2.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256",
+          "expected": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/config_sha256",
+          "expected": "2ea0c51a664356f7ed516bb390650a65e09e40e68131892c5e0c3760b20bce90",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/source_sha256/evaluate_bayesian_hal.py",
+          "expected": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+          "path": "src/arena/policies/evaluate_bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/bayesian_hal.py",
+          "expected": "569c41619f09ab769b526a6ba1f1f561153f7e359c309eb0a67f1c773376e0e8",
+          "path": "src/arena/policies/bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/table_manifest_sha256",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        }
+      ]
+    },
+    "src/arena/config/perfect_hal_bayes_v2_selection.json": {
+      "sha256": "041cb9bd7dacb91cb351f5cf549417f6753eba7e5ba8e7008502560d5e1201f0",
+      "bindings": [
+        {
+          "pointer": "/config_sha256",
+          "expected": "2ea0c51a664356f7ed516bb390650a65e09e40e68131892c5e0c3760b20bce90",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/input_sha256",
+          "expected": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/source_sha256/evaluate_bayesian_hal.py",
+          "expected": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+          "path": "src/arena/policies/evaluate_bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/bayesian_hal.py",
+          "expected": "569c41619f09ab769b526a6ba1f1f561153f7e359c309eb0a67f1c773376e0e8",
+          "path": "src/arena/policies/bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/validation_report_sha256",
+          "expected": "bb06c82b9071b094026e5e13839315000f9b5851696cd5ce755e0a41878befb9",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        }
+      ]
+    },
+    "src/arena/config/perfect_hal_ensemble_v1.json": {
+      "sha256": "1e1ee84b41667452747615865a3f01f6da7b627805238eba0f84be984eac342c",
+      "bindings": []
+    },
+    "src/arena/config/pm_hal_controller_v2.json": {
+      "sha256": "4b8abcff56676a25b2b41291e96c805b2fabbf6af49124db0da020006eea57d5",
+      "bindings": []
+    },
+    "src/arena/config/pm_hal_evaluation_v1.json": {
+      "sha256": "d6214fd046162550444118cabd3444a624848c6dfd1acf335dc6cb3306008f9e",
+      "bindings": []
+    },
+    "src/arena/config/pm_hal_evaluation_v2.json": {
+      "sha256": "251d883e00771b818a528315725cd3051caa47bfb71cfd00847f63341e28cb24",
+      "bindings": []
+    },
+    "src/arena/config/selector_study_v1_results.json": {
+      "sha256": "0a558e2eceb7aa581215e8a04de2a17acb01016570920d708c8dbe88b0be917a",
+      "bindings": [
+        {
+          "pointer": "/source_sha256/src~1arena~1policies~1selector_study.py",
+          "expected": "537206b80c7028f4a38b1e0a4236997f9de99c543d6df70bce31beb2e42a93c8",
+          "path": "src/arena/policies/selector_study.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/src~1arena~1policies~1run_selector_study.py",
+          "expected": "c95a894e5d90ee7314acb5565282981f6e290058a32965ea3a9e3b8e4f7e286b",
+          "path": "src/arena/policies/run_selector_study.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/src~1arena~1policies~1plot_selector_study.py",
+          "expected": "e356a2158748eca7052e332d9d0bd98ed4b8e003eb448419afc3ceb9070d0f63",
+          "path": "src/arena/policies/plot_selector_study.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/source_sha256/src~1arena~1tests~1test_selector_study.py",
+          "expected": "853d0c30599dd1fb008f5210631de1a83912714b731ada82d6c3ce6233749a0d",
+          "path": "src/arena/tests/test_selector_study.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1ablation.png",
+          "expected": "65de0465c0f1ef4736abb87ace52b31f88487b9317f369259b75bc52681b3eb1",
+          "path": "outputs/selector-study-v1/ablation.png",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1ablation.svg",
+          "expected": "ebec1ea27d99899d79abc57970a050768d065e8f7c8a4894d2b56fa54cce2af7",
+          "path": "outputs/selector-study-v1/ablation.svg",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1architecture-selection.json",
+          "expected": "ce26e5bda8ff1a58e1a7cc0818322f74357d3028524e49f729d6686a12d8abe2",
+          "path": "outputs/selector-study-v1/architecture-selection.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_context-210.pt",
+          "expected": "b1fc3a2e6ea7585a3bc78fa3c883174ee4da160648b437f14ea94f9ca4429d3b",
+          "path": "outputs/selector-study-v1/attention-no_context-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_context-211.pt",
+          "expected": "de9824e13b80968fe76e0efe41f322dff280dac9a890b6e863f0396ff26d3de1",
+          "path": "outputs/selector-study-v1/attention-no_context-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_context-212.pt",
+          "expected": "4da5856d786daaea22bb65c8f45be04749a494fba527af924a4f94a0d0ca40a9",
+          "path": "outputs/selector-study-v1/attention-no_context-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_errors-210.pt",
+          "expected": "08924a083be343058a14e70d8ae9b06e479c714c2e85ec2f0fe33ddb40495be5",
+          "path": "outputs/selector-study-v1/attention-no_errors-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_errors-211.pt",
+          "expected": "f50f7e9964e0e4227a64f661cadcf0be5b3162e01194bc788bcdc183ff8ac05a",
+          "path": "outputs/selector-study-v1/attention-no_errors-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_errors-212.pt",
+          "expected": "7e6c387b6015d016ac3ac00440444ab2fc8395ad5c6a0725fc038e4d315e83d5",
+          "path": "outputs/selector-study-v1/attention-no_errors-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_prior-210.pt",
+          "expected": "2f47d6abffec6f334761a2c1998448304c5974745bde34b2dfc5c6c57e0f157f",
+          "path": "outputs/selector-study-v1/attention-no_prior-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_prior-211.pt",
+          "expected": "d6484446d3dd92c7dfde2f04f7592261ae2fc423ca25a8cbf3c02c659fcba11c",
+          "path": "outputs/selector-study-v1/attention-no_prior-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_prior-212.pt",
+          "expected": "ea4da0ff5150ddc6f76b12aedc18e0287c20547c8f4a682027fee403941b12d7",
+          "path": "outputs/selector-study-v1/attention-no_prior-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_shapes-210.pt",
+          "expected": "54bb8525c2864ecf51524f31fd22719283be796e6f0d8d26a5ba55e99f3cc0ba",
+          "path": "outputs/selector-study-v1/attention-no_shapes-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_shapes-211.pt",
+          "expected": "4a4143e58464186acd875123888bf00c752ee05e734913b3c0f26e7b69362542",
+          "path": "outputs/selector-study-v1/attention-no_shapes-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-no_shapes-212.pt",
+          "expected": "7353338815faf78fc648e527abf813f1166c04803f5ac4d553a5d458d9635d3b",
+          "path": "outputs/selector-study-v1/attention-no_shapes-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-none-210.pt",
+          "expected": "c7db777ed705fc1ad58b87030d64a43686a6cd9d56aaee3a5778780ba9159d21",
+          "path": "outputs/selector-study-v1/attention-none-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-none-211.pt",
+          "expected": "f0ecf7e506b2df333bc702bf459a138d4791ff261fab60bbefbab210c505a8f4",
+          "path": "outputs/selector-study-v1/attention-none-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1attention-none-212.pt",
+          "expected": "a6047a63c28d7f9f57f826e3febe6a59a39df722704118dce70275cee9405ba2",
+          "path": "outputs/selector-study-v1/attention-none-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1evaluate.log",
+          "expected": "476f359be52604d7ebdc5f38950f48ee6565bfefbc95593bf1682980840b8156",
+          "path": "outputs/selector-study-v1/evaluate.log",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1evaluation-start.json",
+          "expected": "0ee384e112326aafc19ac1a4ed03b31a95ed49cfea6be3bb0fb5f1c78c9d2e77",
+          "path": "outputs/selector-study-v1/evaluation-start.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1expert-weights.png",
+          "expected": "b16f01c79d9b5b1c1a0d3cfc177d4968264bb4e09305e9e1807d2339eb118b62",
+          "path": "outputs/selector-study-v1/expert-weights.png",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1expert-weights.svg",
+          "expected": "64d192c5a0c4892e2ec34c33bd9749d4db9d8e5aead1b32e6e3dc2c3f029a3a6",
+          "path": "outputs/selector-study-v1/expert-weights.svg",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1freeze.json",
+          "expected": "1123195bcbdb272c23b50067255da7aa1c6362ec0e840de347504b5d1dd9cafb",
+          "path": "outputs/selector-study-v1/freeze.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1learning-curves.png",
+          "expected": "c9528b27d2a4c2bbeb27073c65e5b8de4c2e343edf7735998d0fba0dd4d42f0c",
+          "path": "outputs/selector-study-v1/learning-curves.png",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1learning-curves.svg",
+          "expected": "7a0c6a8f3a3afbb7742899cbfe1a3a448cb3340ea33fe2f3c8d124a76444cf12",
+          "path": "outputs/selector-study-v1/learning-curves.svg",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1protocol.json",
+          "expected": "286a0567f20255073bbcca27cb3df829a68e47c3e3492dc0add603caf9e63039",
+          "path": "outputs/selector-study-v1/protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1results.json",
+          "expected": "c6553f770c64367b2d3f065fc29e5865572268681641362e26886cb68b2311ed",
+          "path": "outputs/selector-study-v1/results.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1small-none-210.pt",
+          "expected": "731394209804c989e0e6168391d7f8df9376838879f8040b0a9d4ed7183044c9",
+          "path": "outputs/selector-study-v1/small-none-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1small-none-211.pt",
+          "expected": "95c1e906cc10d1cbddf5d2cf2289791a8b4b5f361874e06eaeb6cbd49aae6818",
+          "path": "outputs/selector-study-v1/small-none-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1small-none-212.pt",
+          "expected": "d338d5cdbdc253876a494ede4c0ecd24d34cfd209705ae0f2bb236e298d4799f",
+          "path": "outputs/selector-study-v1/small-none-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1static-none-210.pt",
+          "expected": "a61eaf31197768c670c6218b29c760a7d07a4cd7a24198cf5d62d83cfec601c7",
+          "path": "outputs/selector-study-v1/static-none-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1static-none-211.pt",
+          "expected": "b35be4af5ade7be6df48de6a08701064b390441a03d08f8891d2c066c926ddd2",
+          "path": "outputs/selector-study-v1/static-none-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1static-none-212.pt",
+          "expected": "95366b6669463b2e96379230af28d24c0c2a287583c8f954768eb00244f34dbc",
+          "path": "outputs/selector-study-v1/static-none-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1supplementary-contrasts.json",
+          "expected": "5d94a925bda6a96705da3b1c840712a26b6ba67ef44f1c935591682054bae552",
+          "path": "outputs/selector-study-v1/supplementary-contrasts.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1test.npz",
+          "expected": "649520da78b9a24193d95f2f3c7b34082a621c304a9c2f675f1df2de3c8b8e93",
+          "path": "outputs/selector-study-v1/test.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1train.log",
+          "expected": "296e203c885d8c5a141e95a2bf35c714595837f6dea537ba1b3ced4c3c30a6eb",
+          "path": "outputs/selector-study-v1/train.log",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1train.npz",
+          "expected": "658724d645556aa42a9b3e490b7f896116d4afd2bd26610b162ea1a68776f2a4",
+          "path": "outputs/selector-study-v1/train.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1training.json",
+          "expected": "abbe9550893f3e9a1329703aab0a4b40dc4dba9c21295a3d313e076322766d14",
+          "path": "outputs/selector-study-v1/training.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1validation.npz",
+          "expected": "2666071644c89e8fbda4cf20609f591cb91a6843df6df44e232959a28348620e",
+          "path": "outputs/selector-study-v1/validation.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1wide-none-210.pt",
+          "expected": "e4fc237eeb93fffc844aeafe59823b6c8ccca633360840cd5f78539ed83836dd",
+          "path": "outputs/selector-study-v1/wide-none-210.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1wide-none-211.pt",
+          "expected": "06206539589492b45c74dfa776cd24ac971c54fceae2ed44352ac6fb142344cf",
+          "path": "outputs/selector-study-v1/wide-none-211.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/artifacts/outputs~1selector-study-v1~1wide-none-212.pt",
+          "expected": "90c0e65c79e970bbf3469542ff09faa082cee9807db64b72b5fab289e311bf0a",
+          "path": "outputs/selector-study-v1/wide-none-212.pt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/translated_hal_v1_results.json": {
+      "sha256": "94a7e301c36b5569bc8b41dfc057df814149609a549a804d5d07f7f1dafada4c",
+      "bindings": [
+        {
+          "pointer": "/artifact_manifest_sha256",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/runtime/source_sha256/~1Users~1palerider~1Desktop~1projects~1usogui~1stl~1src~1arena~1web~1check_translated_hal.py",
+          "expected": "ed68828318e5329faf2a2b0068fa853eaaf39448f7d8f4e2583fb0591929bcff",
+          "path": "src/arena/web/check_translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/runtime/source_sha256/src~1arena~1translated_hal_adapter.py",
+          "expected": "da1b7ce2ab013c044e439fde5be545c7851ef34851bb9ac6684da4925936008a",
+          "path": "src/arena/translated_hal_adapter.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/runtime/source_sha256/src~1arena~1web~1opponent_memory.py",
+          "expected": "60d7f36f9ea8ff09ebf7b88e910d518edd8fc12f8701e437c6ec4cc8827ec739",
+          "path": "src/arena/web/opponent_memory.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/runtime/source_sha256/src~1arena~1web~1hosted.py",
+          "expected": "ea1bb4b4b37fea659256534dea173185609ee98d039d5d82bb319eb6b67ddaa5",
+          "path": "src/arena/web/hosted.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/runtime/source_sha256/src~1arena~1web~1app.py",
+          "expected": "031e2efe9f7a393b088f1a92dcec38eab82c9af802bee7c722992c2a0f77435b",
+          "path": "src/arena/web/app.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/runtime/source_sha256/outputs~1perfect-hal-bayes-v2~1tablebase~1tablebase.json",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": "outputs/perfect-hal-bayes-v2/tablebase/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1validation.json",
+          "expected": "ff89781389a0389df4e4af9f0776118dcb8a99392ce54d217b29a8a45447ad6a",
+          "path": "outputs/translated-hal-v1/validation.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1test.json",
+          "expected": "2b22577863fdf51efae9c3759ff0125d822076e9156fdf0c986a265fcce63303",
+          "path": "outputs/translated-hal-v1/test.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1confirmation-protocol.json",
+          "expected": "07f5bfa21efc5d14eb1650ed45a263c85046e1c14ca52c8c8c8a1570266dd18a",
+          "path": "outputs/translated-hal-v1/confirmation-protocol.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1confirmation.json",
+          "expected": "a7e1b804d3eb8e140242c4c44f7dbc33d4c8c1a5685916ff56dd47fb17fb9e47",
+          "path": "outputs/translated-hal-v1/confirmation.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1runtime-final.json",
+          "expected": "07e8c2283dbeb6b15e92eced3bbabd940e25200c82d84c02d29b2e183360ce82",
+          "path": "outputs/translated-hal-v1/runtime-final.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1arena-tests.txt",
+          "expected": "d79d82e629ad138f20327b27867c18dd4653a3b18c546baa0c300b38dea04a1c",
+          "path": "outputs/translated-hal-v1/arena-tests.txt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1full-suite-tests.txt",
+          "expected": "30654afc4d9d0be5272a580131e3353496b729d5298a7153e89cac52aca406b5",
+          "path": "outputs/translated-hal-v1/full-suite-tests.txt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/reports/outputs~1translated-hal-v1~1graphify-update.txt",
+          "expected": "00a27d53ae406d09962b81c7398f1037dc7a8441a3cc5ed5bf7d7feeadb23de7",
+          "path": "outputs/translated-hal-v1/graphify-update.txt",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1translated_hal_adapter.py",
+          "expected": "da1b7ce2ab013c044e439fde5be545c7851ef34851bb9ac6684da4925936008a",
+          "path": "src/arena/translated_hal_adapter.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1policies~1translated_hal.py",
+          "expected": "5cb1126937d5605fddc03fb8c29b0e223431364d7031d89677f2179e03555b9b",
+          "path": "src/arena/policies/translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1policies~1perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1opponent_memory.py",
+          "expected": "60d7f36f9ea8ff09ebf7b88e910d518edd8fc12f8701e437c6ec4cc8827ec739",
+          "path": "src/arena/web/opponent_memory.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1app.py",
+          "expected": "031e2efe9f7a393b088f1a92dcec38eab82c9af802bee7c722992c2a0f77435b",
+          "path": "src/arena/web/app.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1hosted.py",
+          "expected": "ea1bb4b4b37fea659256534dea173185609ee98d039d5d82bb319eb6b67ddaa5",
+          "path": "src/arena/web/hosted.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1production.py",
+          "expected": "52a0b1b2ef169b347c6913462645b652aba4da8f9db9631dd6acb4e876a4ef21",
+          "path": "src/arena/web/production.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1prepare_vercel.py",
+          "expected": "1d65daa2648ec84731fe1a9c81d5050778f95fb6b0cb1996c0649cb5405b0809",
+          "path": "src/arena/web/prepare_vercel.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1cli.py",
+          "expected": "9edcd3667ffb85181737f1430e93e310d45e968d86177574aebf97b891bf8a32",
+          "path": "src/arena/cli.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1web~1__main__.py",
+          "expected": "24a58d811745c0ff758423c8f80cd4c755cb157dfec3c68c8421a9c55358ec05",
+          "path": "src/arena/web/__main__.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/release_source_sha256/src~1arena~1config~1translated_hal_v1_selection.json",
+          "expected": "8e3aa265c7765b4896d4fecbdfbcb43bb2896a61a4cf166ca3402620c3b170f8",
+          "path": "src/arena/config/translated_hal_v1_selection.json",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/translated_hal_v1_selection.json": {
+      "sha256": "8e3aa265c7765b4896d4fecbdfbcb43bb2896a61a4cf166ca3402620c3b170f8",
+      "bindings": [
+        {
+          "pointer": "/input_sha256/outputs~1perfect-hal-bayes-v2~1human-games.json",
+          "expected": "aea534e5ad4c9341f3a54a46d7b1e84dbff16dd7af82e75d3c410d8ef047aab3",
+          "path": "outputs/perfect-hal-bayes-v2/human-games.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/outputs~1perfect-hal-bayes-v2~1tablebase~1tablebase.json",
+          "expected": "2d45e91e3c6785724a2fe45f68334b34767587b2c2a9735e887824c48c9122af",
+          "path": "outputs/perfect-hal-bayes-v2/tablebase/tablebase.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1contracts.py",
+          "expected": "18c5904dd5a4afff1aee72d49541efa0e62849b7fa89a322863944bb4c9363e5",
+          "path": "src/arena/contracts.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1match.py",
+          "expected": "41f51469303818c514a8c16d5d7b61e32b700f7bd5ccf0fadf92696cfe74dd40",
+          "path": "src/arena/match.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1__init__.py",
+          "expected": "6dc652cdb0548cd774fd68660c726554342c964c5363f6f4f92ffc0bc32abbec",
+          "path": "src/arena/policies/__init__.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1adaptive.py",
+          "expected": "2dfd127792778e8dd0f858385eb6d2874833f11c9263f54eae9247dce3498b89",
+          "path": "src/arena/policies/adaptive.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1aggro_env.py",
+          "expected": "34c375a4e63dfea9c9f6e5aebd20001d05e93077e26b0a170ebb2868843fcd3a",
+          "path": "src/arena/policies/aggro_env.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1aggro_hal.py",
+          "expected": "9ec0cb3043570637d128c4fd8b21200473e5bd5dd6c359f10e87412aae43aa07",
+          "path": "src/arena/policies/aggro_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1aggro_memory_curriculum.py",
+          "expected": "a62466db45d0874bcd5cd90078a4849ff873d387315c090342200efb3529dd0e",
+          "path": "src/arena/policies/aggro_memory_curriculum.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1bayesian_hal.py",
+          "expected": "569c41619f09ab769b526a6ba1f1f561153f7e359c309eb0a67f1c773376e0e8",
+          "path": "src/arena/policies/bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1ensemble_hal.py",
+          "expected": "c013cf1d5d5dc76069ef59e2c180925230c670159f34289f6e165cfbc0e2d236",
+          "path": "src/arena/policies/ensemble_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_aggro_hal.py",
+          "expected": "68516c4cd36f210a7cd5c1ea50fce6f7af3eaf7d97886bca627163f34d7eaa64",
+          "path": "src/arena/policies/evaluate_aggro_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_aggro_hal_adaptive.py",
+          "expected": "ec305f32cc8fbd0a57a320d2f29fa4c1e20b788c24fb05501af0a868ee97d675",
+          "path": "src/arena/policies/evaluate_aggro_hal_adaptive.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_aggro_hal_memory.py",
+          "expected": "ea17224e2cc7fef3a8cf5f6fb21a7d14330c78f207f6a0e7902d4934215dddde",
+          "path": "src/arena/policies/evaluate_aggro_hal_memory.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_bayesian_hal.py",
+          "expected": "59a31401785e829e24cb98def0c6d2f208534a7bf54fab267ca05f15db162f21",
+          "path": "src/arena/policies/evaluate_bayesian_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_ensemble_hal.py",
+          "expected": "970ce60fa1e2d197d32e5cbdd4471bc1c5bc5aa602d1acb4feac176fdf278838",
+          "path": "src/arena/policies/evaluate_ensemble_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_pm_hal.py",
+          "expected": "6de4f819d13138a7a5161f5f67b1db1cc96eb9f09463bf8f40a50bf0fc89f134",
+          "path": "src/arena/policies/evaluate_pm_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1evaluate_translated_hal.py",
+          "expected": "95e92749911960391bc95c85d1ec8ac0b2bc674bb1053bb36d46255ee3a1ebf7",
+          "path": "src/arena/policies/evaluate_translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1exploit_hal.py",
+          "expected": "a6f262ddbd640c62a01077f59857b0ac20e2b4855a5be2e17fff7b39fe716ec4",
+          "path": "src/arena/policies/exploit_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1exploit_hal_gym.py",
+          "expected": "279a6091d98511ecc9c1ba81f79ff2a38f5663b24c028264feea8ffc3e5fb3f6",
+          "path": "src/arena/policies/exploit_hal_gym.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1opponent_league.py",
+          "expected": "b0d86f36be3a3528a6633e5a711f24324a4bbceb9363b6448b77b4da0764f71c",
+          "path": "src/arena/policies/opponent_league.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1perfect_hal.py",
+          "expected": "5aef2d041d31034ccdf1c0807c8de795d20fd08b63ace7b7c083bf5c3aba4a13",
+          "path": "src/arena/policies/perfect_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1pm_hal.py",
+          "expected": "b6b2de18e6d87603d37ec20ca627cfb740467b0cb4c22b8b1bb14614f5b34768",
+          "path": "src/arena/policies/pm_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1train_aggro_hal.py",
+          "expected": "d00486fe3366e0eb77da65293d7c19582f3e063bf86e7aa7b157d7df6368a5eb",
+          "path": "src/arena/policies/train_aggro_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1train_exploit_hal.py",
+          "expected": "19c40e819546172cbe98a8f26cbb2f08171e1fead414d97b6c5326933043f7a7",
+          "path": "src/arena/policies/train_exploit_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/input_sha256/src~1arena~1policies~1translated_hal.py",
+          "expected": "5cb1126937d5605fddc03fb8c29b0e223431364d7031d89677f2179e03555b9b",
+          "path": "src/arena/policies/translated_hal.py",
+          "source": "git",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/validation_sha256",
+          "expected": "ff89781389a0389df4e4af9f0776118dcb8a99392ce54d217b29a8a45447ad6a",
+          "path": "outputs/translated-hal-v1/validation.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    }
+  }
+}

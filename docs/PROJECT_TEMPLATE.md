@@ -12,7 +12,7 @@ entry and its project-level `README.md` together:
 
 1. formulation rung and supported claim;
 2. maturity (`solved`, `implemented-unsolved`, `reference`, `in-progress`,
-   `opt-in`, or `play-surface`);
+   `opt-in`, `play-surface`, or `research`);
 3. behavioral authority and explicit non-goals;
 4. public library and CLI interfaces;
 5. allowed dependency direction;

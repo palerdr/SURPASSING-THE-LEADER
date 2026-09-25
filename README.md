@@ -12,6 +12,7 @@ This repository contains deliberately separate game-solving projects:
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
 | `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
 | `src/arena/` | Neutral live-play surface | Canonical STL referee with pluggable policy-provider adapters |
+| `src/hal_lab/` | Hal research lab: training, evaluation, and the frozen study evidence with its git-history verifier | Pure DTH and canonical STL through `src/arena/`; no project imports it |
 
 Repository-wide game contracts live in [`docs/`](docs/). The mathematical
 paper — a certified exact solution of the complete DTH game — lives at
@@ -64,6 +65,9 @@ uv run python -m arena play
 uv run python -m arena play --hal-agent abstract
 uv run python -m arena play --hal-agent abstract --buckets 5
 uv run python -m arena play --tui
+
+# Frozen Hal evidence, checked against git history at the pre-restructure tag
+uv run python -m hal_lab.provenance --check
 ```
 
 Each project owns its `config/`, `docs/`, tests, checkpoints, and outputs.
