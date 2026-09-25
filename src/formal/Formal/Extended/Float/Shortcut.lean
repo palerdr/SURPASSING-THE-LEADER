@@ -1025,7 +1025,7 @@ example : MatrixGame.value (toeplitz 60 (fun _ => (1:ℝ)) 0) =
 def leapCell (s : ℕ → ℝ) (f : ℝ) (i j : ℕ) : ℝ := if i ≤ j then s (j - i) else f
 
 /-- The `abstract_solver` cell with one-based actions `d, c`: failure if `c < d`,
-else `success[c - d]` (`abstract_solver/src/lib.rs:387-402`). -/
+else `success[c - d]` (`src/crates/abstract_solver/src/lib.rs:387-402`). -/
 def abstractCell (succ : ℕ → ℝ) (fail : ℝ) (d c : ℕ) : ℝ := if c < d then fail else succ (c - d)
 
 /-- The legacy `payoff.rs` cell with one-based `drop, check`: `success_values[st]`
@@ -1132,7 +1132,7 @@ theorem ExtRun.all_finite {α : Type*} (E : ExtRun α) (h : E.fin (E.wacc 60)) :
     rw [E.acc_step]; exact E.fma_absorb _ _ _ (Or.inr (Or.inr ht))) hk' t htk
 
 /-- **Min and max do not round** (claims CPP-DOC-FP-1 and CANONICAL-FP-1(a),
-`complete_tablebase.py:386-412`, `BUILD.md:101-104`): over any linear order, a
+`complete_tablebase.py:386-412`, `src/dth_cpp/BUILD.md:101-104`): over any linear order, a
 left fold of `min` returns one of its inputs. The model has no NaN and treats
 `-0` and `+0` as one value; IEEE `min(-0, +0)` may return either zero, so bit
 equality across backends also needs a common tie rule for signed zeros. -/

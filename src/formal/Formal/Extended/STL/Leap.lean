@@ -155,7 +155,7 @@ def LeapDropAvailable (h τ : ℕ) : Prop := h = 2 ∧ IsLeapWindow τ
 
 instance (h τ : ℕ) : Decidable (LeapDropAvailable h τ) := inferInstanceAs (Decidable (_ ∧ _))
 
-/-- STL-RULE-2 (`AGENTS.md`, `GAME_AND_SOLVER.md:218-220`, `actions.py:35-52`,
+/-- STL-RULE-2 (`AGENTS.md`, `src/stl/docs/GAME_AND_SOLVER.md:218-220`, `actions.py:35-52`,
 `canonical.py:72-75`): the current Dropper may choose second `61` exactly when
 `leap_drop_available` holds. -/
 theorem sixtyOne_legal_iff_leapDropAvailable (h τ : ℕ) (hh : h = 1 ∨ h = 2) :
@@ -460,7 +460,7 @@ def clockLabel (gc : ℕ) : ℕ × ℕ × ℕ :=
   else if gc = 3600 then (8, 59, 60)
   else (8 + (gc - 1) / 3600, (gc - 1) % 3600 / 60, (gc - 1) % 60)
 
-/-- STL-CLOCK-5 (`GAME_AND_SOLVER.md:117-119`, `game.py:346-372`): the clock
+/-- STL-CLOCK-5 (`src/stl/docs/GAME_AND_SOLVER.md:117-119`, `game.py:346-372`): the clock
 label map is injective. -/
 theorem clockLabel_injective : Function.Injective clockLabel := by
   intro a b h
@@ -496,7 +496,7 @@ theorem lsrVariation_mem (m : ℤ) : 1 ≤ lsrVariation m ∧ lsrVariation m ≤
 theorem lsrVariation_eq (m : ℕ) : lsrVariation m = 1 + ((m : ℤ) % 4) := by
   unfold lsrVariation; omega
 
-/-- STL-LSR-1 (`GAME_AND_SOLVER.md:237-261`): a no-death round from `H1` at
+/-- STL-LSR-1 (`src/stl/docs/GAME_AND_SOLVER.md:237-261`): a no-death round from `H1` at
 minute `m ≤ 55` reaches `H2` at `60 m + 120` and returns to `H1` at minute
 `m + 4`, so it preserves the route class. -/
 theorem noDeath_round (m : ℕ) (hm : m ≤ 55) :
@@ -542,7 +542,7 @@ noncomputable def engineSurvival (ttd dd : ℕ) : ℝ :=
   if 300 ≤ dd ∨ 300 < ttd + dd then 0
   else max 0 (min 1 (0.95 * (1 - max 0 ((dd : ℝ) - 60) / 240) * (0.75 : ℝ) ^ ((ttd : ℝ) / 60)))
 
-/-- STL-RULE-4 (`GAME_AND_SOLVER.md:208-231`, `game.py:439-470`): a failed
+/-- STL-RULE-4 (`src/stl/docs/GAME_AND_SOLVER.md:208-231`, `game.py:439-470`): a failed
 check injects `min (s + 60) 300`, and the engine's revival probability for
 that dose is the frozen surface `revival s t`. -/
 theorem engineSurvival_fail (s t : ℕ) :
@@ -1322,7 +1322,7 @@ theorem VL_eq_of_qequiv (x y : State) (hq : QEquiv x y) (h τ : ℕ) : VL x h τ
 
 /-! ## The exact DTH boundary after 3600 (STL-CLOCK-4) -/
 
-/-- STL-CLOCK-4 (`GAME_AND_SOLVER.md:330-348`, `paper/stl.tex:110-112`,
+/-- STL-CLOCK-4 (`src/stl/docs/GAME_AND_SOLVER.md:330-348`, `paper/stl.tex:110-112`,
 `leap_build.py:45-52,282-304`): after 8:59:60 every descendant clock exceeds
 `3600`, so no stage is a window and the L2 value is the pure DTH value of the
 role-relative state. The builder reads the DTH table whenever `child_key`
@@ -1447,7 +1447,7 @@ structure GameState where
   world : WorldState
   history : List (ℕ × ℕ × Option Bool)
 
-/-- The role-relative projection of `GAME_AND_SOLVER.md:310-328`: half `1` is
+/-- The role-relative projection of `src/stl/docs/GAME_AND_SOLVER.md:310-328`: half `1` is
 `(baku, hal)` (Baku checks, Hal drops), half `2` is `(hal, baku)`. -/
 def project (w : WorldState) : State := if w.half = 1 then ⟨w.baku, w.hal⟩ else ⟨w.hal, w.baku⟩
 
@@ -1457,7 +1457,7 @@ noncomputable def halUtility (g : GameState) : ℝ :=
   if g.world.half = 1 then VL (project g.world) 1 g.world.clock
   else -VL (project g.world) 2 g.world.clock
 
-/-- STL-MARKOV-1 (`GAME_AND_SOLVER.md:13-16,191-206,381-393`): the L2 value
+/-- STL-MARKOV-1 (`src/stl/docs/GAME_AND_SOLVER.md:13-16,191-206,381-393`): the L2 value
 depends only on `(baku_load, baku_ttd, hal_load, hal_ttd, half, clock)`; Hal's
 leap memory and the public history do not enter it. This holds by construction:
 the rules (`turnDuration`, `legalSeconds`, `childClock`, `revival`) and `VL`
@@ -1467,7 +1467,7 @@ theorem halUtility_physical (g g' : GameState) (hb : g.world.baku = g'.world.bak
     (hc : g.world.clock = g'.world.clock) : halUtility g = halUtility g' := by
   simp only [halUtility, project, hb, hh, hhalf, hc]
 
-/-- STL-PROJ-1 (`GAME_AND_SOLVER.md:310-328`): half `1` projects Baku to the
+/-- STL-PROJ-1 (`src/stl/docs/GAME_AND_SOLVER.md:310-328`): half `1` projects Baku to the
 Checker slot and Hal to the Dropper slot, half `2` the reverse; after the leap
 second Hal's utility is `+V_DTH` in half `1` and `-V_DTH` in half `2`. -/
 theorem halUtility_after_leap (g : GameState) (hh : g.world.half = 1 ∨ g.world.half = 2)
@@ -1503,7 +1503,7 @@ theorem stage_no_pure_saddle :
 `1`, all loads and TTDs `0`, no leap memory. -/
 def rootWorld : WorldState := ⟨⟨0, 0, by norm_num⟩, ⟨0, 0, by norm_num⟩, 1, 720, false⟩
 
-/-- STL-OPEN-1 (`GAME_AND_SOLVER.md:80-99`, `paper/stl.tex:63-64,87-89`,
+/-- STL-OPEN-1 (`src/stl/docs/GAME_AND_SOLVER.md:80-99`, `paper/stl.tex:63-64,87-89`,
 `leap_build.py:116`): the opening is cell `[0, 0]` of key `H1_12`, Hal drops,
 and the opening stage is not a window. -/
 theorem root_node :
@@ -1681,7 +1681,7 @@ def Key.isRev : Key → Bool
   | .rev _ => true
   | _ => false
 
-/-- The support of one L2 half-round from `(k, x)` (`GAME_AND_SOLVER.md:208-231`):
+/-- The support of one L2 half-round from `(k, x)` (`src/stl/docs/GAME_AND_SOLVER.md:208-231`):
 a live success of lag `ℓ ∈ 1..60` goes to the success key, and a revived failed
 check of a revivable Checker goes to the failure key of dose `s + 60`. A child
 whose key is `none` (the DTH table) or whose clock exceeds `limit` is not
@@ -2568,7 +2568,7 @@ def canonicalStates : List TraceState :=
    ⟨(115, 153), (94, 84), 2, 3060⟩, ⟨(115, 153), (0, 238), 1, 3420⟩,
    ⟨(175, 153), (0, 238), 2, 3540⟩, ⟨(175, 153), (0, 298), 1, 3841⟩]
 
-/-- STL-TRACE-1 (`GAME_AND_SOLVER.md:257-261,276-289,377-379,458-460`): the
+/-- STL-TRACE-1 (`src/stl/docs/GAME_AND_SOLVER.md:257-261,276-289,377-379,458-460`): the
 canonical trace replays under the frozen rules and the exact clock. It has
 eighteen half-rounds and five revivals; its round starts are minutes
 `12, 19, 26, 30, 34, 38, 45, 49, 57` with route classes

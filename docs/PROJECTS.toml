@@ -1,5 +1,16 @@
 schema_version = 1
 
+# Import rules, which tests/meta/test_layer_boundaries.py enforces:
+# - may_import lists the modules of other projects that this project can
+#   import. Each entry must sit under a public interface of its owner. An
+#   import inside the same project passes.
+# - forbid_imports lists third-party packages that this project must not
+#   import. forbid_imports_exempt lists the files, by repository path, that
+#   can import them today. Each exempt file must exist and must still import
+#   one of the packages, so the list shrinks as files move out.
+# - core_modules can import each other and the modules in core_may_import,
+#   and no other first-party module.
+
 [[project]]
 id = "stl"
 path = "src/stl"
@@ -9,6 +20,8 @@ languages = ["python"]
 rung = "L2"
 status = "implemented-unsolved"
 public_interfaces = ["stl.engine", "stl.solver.canonical"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run python -m pytest src/stl/tests -q"]
 
@@ -21,6 +34,20 @@ languages = ["python"]
 rung = "L1"
 status = "solved"
 public_interfaces = ["dth.solver", "dth.agent"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+# The closed DTH research modules and their tests import torch today.
+forbid_imports_exempt = [
+  "src/dth/mcts.py",
+  "src/dth/network.py",
+  "src/dth/readiness.py",
+  "src/dth/research_agent.py",
+  "src/dth/torch_cfr.py",
+  "src/dth/train.py",
+  "src/dth/tests/test_network.py",
+  "src/dth/tests/test_torch_cfr.py",
+  "src/dth/tests/test_train.py",
+]
 root_validation = true
 validation = ["uv run python -m pytest src/dth/tests -q"]
 
@@ -33,6 +60,8 @@ languages = ["python"]
 rung = "L1"
 status = "solved"
 public_interfaces = ["main.py"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run --project src/dth_compact pytest src/dth_compact/tests -q"]
 
@@ -45,6 +74,8 @@ languages = ["python"]
 rung = "L0"
 status = "solved"
 public_interfaces = ["abstract"]
+may_import = []
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
 root_validation = true
 validation = ["uv run python -m pytest src/abstract/tests -q"]
 
@@ -57,6 +88,7 @@ languages = ["ocaml"]
 rung = "L1"
 status = "reference"
 public_interfaces = ["dth_solver"]
+may_import = []
 root_validation = true
 validation = [
   "opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml",
@@ -72,6 +104,7 @@ languages = ["c++"]
 rung = "L1"
 status = "in-progress"
 public_interfaces = []
+may_import = []
 root_validation = false
 validation = []
 validation_deferred_reason = "The native implementation and build order are still under active development."
@@ -85,6 +118,7 @@ languages = ["rust", "python-ffi"]
 rung = "L0-L1"
 status = "opt-in"
 public_interfaces = ["abstract_solver_rs", "dth_complete_rs"]
+may_import = []
 root_validation = true
 validation = [
   "cargo fmt --all -- --check",
@@ -103,6 +137,43 @@ languages = ["python", "typescript"]
 rung = "L2"
 status = "play-surface"
 public_interfaces = ["arena", "arena.web"]
+may_import = [
+  "stl.engine",
+  "stl.solver.canonical",
+  "dth.agent",
+  "dth.solver",
+  "abstract",
+]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+forbid_imports_exempt = [
+  "src/arena/policies/aggro_hal.py",
+  "src/arena/policies/aggro_memory_curriculum.py",
+  "src/arena/policies/audit_neural_pilot_memory.py",
+  "src/arena/policies/evaluate_aggro_hal.py",
+  "src/arena/policies/evaluate_aggro_hal_adaptive.py",
+  "src/arena/policies/evaluate_aggro_hal_memory.py",
+  "src/arena/policies/exploit_hal.py",
+  "src/arena/policies/exploit_hal_gym.py",
+  "src/arena/policies/neural_pilots.py",
+  "src/arena/policies/pm_hal.py",
+  "src/arena/policies/run_neural_pilots.py",
+  "src/arena/policies/run_selector_study.py",
+  "src/arena/policies/selector_study.py",
+  "src/arena/policies/train_aggro_hal.py",
+  "src/arena/policies/train_exploit_hal.py",
+  "src/arena/tests/test_aggro_hal_model.py",
+  "src/arena/tests/test_aggro_memory_curriculum.py",
+  "src/arena/tests/test_evaluate_aggro_hal.py",
+  "src/arena/tests/test_evaluate_aggro_hal_adaptive.py",
+  "src/arena/tests/test_evaluate_aggro_hal_memory.py",
+  "src/arena/tests/test_exploit_hal.py",
+  "src/arena/tests/test_neural_pilots.py",
+  "src/arena/tests/test_pm_hal.py",
+  "src/arena/tests/test_selector_study.py",
+  "src/arena/tests/test_train_aggro_hal.py",
+]
+core_modules = ["arena.contracts", "arena.agent", "arena.session", "arena.match", "arena.variants"]
+core_may_import = ["stl.engine"]
 root_validation = true
 validation = [
   "uv run python -m pytest src/arena/tests -q",
@@ -120,5 +191,6 @@ languages = ["lean"]
 rung = "L1-L2"
 status = "reference"
 public_interfaces = []
+may_import = []
 root_validation = true
 validation = ["lake -d src/formal build"]

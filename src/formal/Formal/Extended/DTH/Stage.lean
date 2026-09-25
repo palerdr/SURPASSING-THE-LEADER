@@ -354,7 +354,7 @@ theorem transition_live_phi (x : State) (d c : Fin 60) {pr : ℝ} {y : State}
 /-- **Claims CANONICAL-RULE-4, DTH-MAT-1, DTH-MAT-2, PAPERS-OCAML-SIGN-1,
 CPP-DOC-RULE-4.** The branch expectation of every cell, with `+1` for a
 Dropper win and `-W(y)` for a live child, equals the stage matrix built from
-the 61 classes (`src/dth/solver.py:244-273, 361-389, 530-545`;
+the 61 classes (`src/dth/solver.py:244-273,361-389,530-545`;
 `src/dth_ocaml/lib/solver/exact.ml:105-117`). -/
 theorem jointPayoff_eq_stage (W : State → ℝ) (x : State) (d c : Fin 60) :
     jointPayoff W x d c = stage W x d c := by

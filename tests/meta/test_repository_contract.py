@@ -29,6 +29,7 @@ PYTHON_PEERS = tuple(
 )
 IGNORED_PARTS = {
     ".git",
+    ".lake",
     ".venv",
     ".tools",
     ".pytest_cache",

@@ -225,7 +225,7 @@ theorem eqCol_eq_rev_eqRow (j : Fin n) : eqCol n s f j = eqRow n s f j.rev := by
   simp only [eqRow, Fin.rev_rev]
 
 /-- **Nonnegative weights give an exact saddle point** (COMPACT-RUNG2-3,
-CPP-CODE-REC-2, CANONICAL-MG-7; `architecture.md:73-77`, `BUILD.md:1-22`,
+CPP-CODE-REC-2, CANONICAL-MG-7; `architecture.md:73-77`, `src/dth_cpp/BUILD.md:1-22`,
 `dth_exact_solution.tex:182-192`; code `main.py:240-267`,
 `matrix_game.cpp:376-392`, `fast_kernel.py:37-47`). With `d0 = s[0] - f ≠ 0`
 and every `r[k] ≥ 0`: `W = ∑ r ≥ 1`; the Dropper mixture `p = r / W` and the
@@ -341,7 +341,7 @@ theorem succLo_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) : succL
 
 /-- **Pure saddle when `f ≤ s[0]`** (CRATES-KINK-2, implicit lemma): for a
 nondecreasing `s` with `f ≤ s[0]`, both pure bounds equal `s[0]`, so the pure
-rung's gap is `0`, in or out of a window (`leap.rs:383-384, 441-447`). -/
+rung's gap is `0`, in or out of a window (`leap.rs:383-384,441-447`). -/
 theorem pureGap_eq_zero_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) (hf : f ≤ s 0)
     (window : Bool) : pureGap n s f window = 0 := by
   have hL : pureLower n s f = s 0 := by
@@ -794,7 +794,7 @@ theorem toeplitz_eq_pack (hd : f - s 0 ≠ 0) (n : ℕ) (i j : Fin n) :
   · ring
 
 /-- **The crash basis is optimal when the weights are nonnegative**
-(CRATES-CRASH-4(a); `LEAP_CERTIFICATE.md:199-205, 231-235`). With `d ≠ 0`
+(CRATES-CRASH-4(a); `LEAP_CERTIFICATE.md:199-205,231-235`). With `d ≠ 0`
 and every `r[k] ≥ 0`: `y = r` is packing feasible, `x = reverse(r)` is
 covering feasible, both objectives equal `W = ∑ r`, every packing-feasible
 point has objective at most `W`, and every covering-feasible point has

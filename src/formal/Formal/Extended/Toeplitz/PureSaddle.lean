@@ -820,7 +820,8 @@ def Close (τ a b : ℝ) : Prop := |a - b| ≤ τ
 
 /-- The three tests of the inner loop at cell `(r, c)`: the row minimum is
 close to `lower`, the column maximum is close to `upper`, and the cell is
-close to `lower` (`lib.rs:179-190`, `src/abstract/matrix.py:139-141`). -/
+close to `lower` (`src/crates/abstract_solver/src/lib.rs:179-190`,
+`src/abstract/matrix.py:139-141`). -/
 def NearCell (M : Matrix (Fin m) (Fin n) ℝ) (τ : ℝ) (rc : Fin m × Fin n) : Prop :=
   Close τ (rowMin M rc.1) (pureMaximin M) ∧ Close τ (colMax M rc.2) (pureMinimax M) ∧
     Close τ (M rc.1 rc.2) (pureMaximin M)
@@ -833,11 +834,11 @@ theorem mem_cells (rc : Fin m × Fin n) : rc ∈ cells m n := by
   simp [cells, List.mem_flatMap, List.mem_map, List.mem_finRange]
 
 open Classical in
-/-- Rust `pure_saddle` (`lib.rs:168-195`): reject unless `lower` and `upper`
-are close, then return the first cell in row-major order that passes the
-three tests. The Rust row-minimum and column-maximum loops and the folds that
-form `lower` and `upper` compute `rowMin`, `colMax`, `pureMaximin`, and
-`pureMinimax` (min and max select entries; `foldl_max_perm`). -/
+/-- Rust `pure_saddle` (`src/crates/abstract_solver/src/lib.rs:168-195`): reject
+unless `lower` and `upper` are close, then return the first cell in row-major
+order that passes the three tests. The Rust row-minimum and column-maximum
+loops and the folds that form `lower` and `upper` compute `rowMin`, `colMax`,
+`pureMaximin`, and `pureMinimax` (min and max select entries; `foldl_max_perm`). -/
 noncomputable def rustPureSaddle (M : Matrix (Fin m) (Fin n) ℝ) (τ : ℝ) :
     Option (Fin m × Fin n) :=
   if Close τ (pureMaximin M) (pureMinimax M) then
@@ -980,9 +981,9 @@ theorem no_pureSaddle_of_rust_none (M : Matrix (Fin m) (Fin n) ℝ) {τ : ℝ} (
   rw [he, sub_self] at h
   linarith
 
-/-- **CRATES-ABS-5, ABSTRACT-MAT-2** (`lib.rs:168-194`, `lib.rs:404-417`): the
-value the Rust search returns, `M[r, c]`, lies within `2 τ` of the matrix value.
-With `τ = 1e-12` the error is at most `2e-12`. -/
+/-- **CRATES-ABS-5, ABSTRACT-MAT-2** (`src/crates/abstract_solver/src/lib.rs:168-194,404-417`):
+the value the Rust search returns, `M[r, c]`, lies within `2 τ` of the matrix
+value. With `τ = 1e-12` the error is at most `2e-12`. -/
 theorem rustPureSaddle_error {M : Matrix (Fin m) (Fin n) ℝ} {τ : ℝ} {rc : Fin m × Fin n}
     (h : rustPureSaddle M τ = some rc) : |M rc.1 rc.2 - value M| ≤ 2 * τ := by
   obtain ⟨hc, -, -, h3⟩ := rustPureSaddle_spec h

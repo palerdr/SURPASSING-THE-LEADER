@@ -35,6 +35,56 @@ place subsystem status, plans, or invariants in the repository root.
 Code loads them all as instruction files. Adding a subtree means adding its
 `README.md` and an import line there.
 
+## Layers
+
+`docs/PROJECTS.toml` declares the import rules of each project.
+`tests/meta/test_layer_boundaries.py` enforces them on every
+`src/<id>/**/*.py` file, tests included, and it reads imports inside
+functions too.
+
+| Layer | Projects | May import |
+| --- | --- | --- |
+| Peers | `stl`, `dth`, `dth_compact`, `abstract`, `dth_ocaml`, `dth_cpp` | No other project |
+| Shared accelerators | `crates` | No other project |
+| Proofs | `formal` | Nothing |
+| Play surface | `arena` | `stl.engine`, `stl.solver.canonical`, `dth.agent`, `dth.solver`, `abstract` |
+
+- A cross-project import must sit under a `may_import` entry of the importer
+  and under a `public_interfaces` entry of the owner. The compiled `*_rs`
+  extension modules are outside this check.
+- Inside `arena`, `contracts.py`, `agent.py`, `session.py`, `match.py`, and
+  `variants.py` import `stl.engine` and each other alone. `dth` and
+  `abstract` enter through the adapters and `arena/policies/`.
+- `stl`, `dth`, `abstract`, `dth_compact`, and `arena` do not import `torch`,
+  `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The files in
+  `forbid_imports_exempt` are today's exceptions: arena's Hal training and
+  evaluation code and the closed DTH research modules. Add no file to that
+  list. `arena/policies/__init__.py` imports nothing.
+- `tests/meta/test_root_layout.py` limits the root to the governance files,
+  `docs/`, `paper/`, `src/`, `tests/`, and the ignored `outputs/` store. Its
+  legacy list names the tracked root entries that a planned move removes.
+- `tests/meta/test_formal_citations.py` compares every `file:line` citation in
+  `src/formal` with `src/formal/citations.lock`. After an edit moves cited
+  text, run `uv run python tests/meta/formal_citations.py --refresh`. After an
+  edit changes cited text, review the proof, then run the same script with
+  `--accept <path>`.
+
+## Fingerprints and locks
+
+- `src/dth/complete_tablebase.py` hashes the root `uv.lock` into the DTH
+  artifact digest. A root `uv.lock` change ships with rebuilt
+  `src/dth/artifacts/complete_full_v1` and `complete_fast_v1` in the same
+  commit series.
+- `stl.solver.leap_build.builder_hash()` hashes the builder sources with the
+  root `pyproject.toml`, `uv.lock`, and `Cargo.lock`, and a resume refuses a
+  changed hash. Do not start or resume a leap build across an edit to the root
+  `pyproject.toml` or `uv.lock`.
+- The builder hash reads `src/stl/solver/leap_*.py` by glob. Name a new STL
+  builder module `src/stl/solver/leap_*.py`, and put new non-builder STL code
+  outside `src/stl/solver/`.
+- `uv sync` at the root removes the three maturin extensions. Run commands
+  with `uv run`, and rebuild the extensions after a sync.
+
 ## Frozen global rules
 
 - Actions are literal seconds beginning at 1; action 0 is illegal.

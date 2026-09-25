@@ -21,7 +21,11 @@ entry and its project-level `README.md` together:
 
 The machine-readable catalog is the required common envelope and owns the
 path, rung, maturity, public interfaces, languages, and root validation
-commands. A README may link to that catalog rather than repeat those fields;
+commands. It also owns the import rules: `may_import`, `forbid_imports`,
+`forbid_imports_exempt`, and an optional core sub-boundary
+(`core_modules`, `core_may_import`), which
+`tests/meta/test_layer_boundaries.py` enforces. A README may link to that
+catalog rather than repeat those fields;
 it owns project-specific authority, non-goals, dependency details, artifact
 paths, and operational guidance. Repository meta-tests own catalog
 completeness; game mechanics remain authoritative only in the other canonical
