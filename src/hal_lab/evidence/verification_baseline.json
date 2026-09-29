@@ -3,10 +3,10 @@
   "tag": "pre-restructure",
   "tag_commit": "4944c91cae48440f2de5eca61809f17f9c2ad38a",
   "summary": {
-    "verified": 160,
+    "verified": 164,
     "mismatch": 3,
     "missing": 5,
-    "unverifiable": 21
+    "unverifiable": 22
   },
   "records": {
     "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json": {
@@ -1786,6 +1786,61 @@
           "pointer": "/validation_sha256",
           "expected": "ff89781389a0389df4e4af9f0776118dcb8a99392ce54d217b29a8a45447ad6a",
           "path": "outputs/translated-hal-v1/validation.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/arena/config/exploit_continuation_v1_selection.json": {
+      "sha256": "ca4be51d2bab9eb7bf87928a4afaf30849258c9ca4f810b81e4aa821934773b0",
+      "bindings": [
+        {
+          "pointer": "/selection_sha256",
+          "expected": "94d77ac9e7ca640c9a3168e35d6d9bf30ee9092e7e9426618ba142688801987b",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        }
+      ]
+    },
+    "src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json": {
+      "sha256": "1bf32cee6f4336b23f8a0eeca11ccc523ba030a12e3329078c4bd998bf827b1d",
+      "bindings": [
+        {
+          "pointer": "/report_sha256/src~1hal_lab~1outputs~1exploit_continuation_v1~1canonical.json",
+          "expected": "e0a955fd2c884caee02b125c848c2cb94b5b40eb3719a4e6d17b82c9e7a03e99",
+          "path": "src/hal_lab/outputs/exploit_continuation_v1/canonical.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/report_sha256/src~1hal_lab~1outputs~1exploit_continuation_v1~1selection.json",
+          "expected": "94d77ac9e7ca640c9a3168e35d6d9bf30ee9092e7e9426618ba142688801987b",
+          "path": "src/hal_lab/outputs/exploit_continuation_v1/selection.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/report_sha256/src~1hal_lab~1outputs~1exploit_continuation_v1~1confirmation.json",
+          "expected": "1cdb46c91ccbc181b8317166089f08fe2a06482556bcec382ad5de00a698e07e",
+          "path": "src/hal_lab/outputs/exploit_continuation_v1/confirmation.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/report_sha256/src~1hal_lab~1outputs~1exploit_continuation_v1~1runtime-check.json",
+          "expected": "1ce3bc3279d53f42c31010fbf744f87881c7b01881cacea5a420c4b74f3ec2f2",
+          "path": "src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json",
           "source": "disk",
           "method": "bytes",
           "status": "verified",
