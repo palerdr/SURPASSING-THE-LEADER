@@ -34,16 +34,18 @@ BROWSER_AGENTS = tuple(kind for kind in PLAY_AGENTS if kind != "abstract")
 # action 61 cannot occur. aggro-hal is the research-only Aggro Hal that
 # hal_lab builds; the one gate lists it too.
 PURE_DTH_ONLY = frozenset({"aggro-hal", "perfect-hal", "pm-hal"})
+# Perfect Hal models with a canonical leap fallback.
+CANONICAL_PERFECT_MODELS = frozenset({"translated-v1", "exploit-continuation-v1"})
 
 
 def requires_pure_dth(kind: str, args: argparse.Namespace) -> bool:
     """Return whether ``kind`` may play only the pure-DTH surface.
 
-    The translated Perfect variant adds a canonical leap fallback, so it may
-    also play canonical STL.
+    The translated Perfect variant and the exploit-continuation variant add a
+    canonical leap fallback, so they may also play canonical STL.
     """
 
-    if kind == "perfect-hal" and args.perfect_hal_model == "translated-v1":
+    if kind == "perfect-hal" and args.perfect_hal_model in CANONICAL_PERFECT_MODELS:
         return False
     return kind in PURE_DTH_ONLY
 
@@ -138,6 +140,12 @@ def make_perfect_hal_provider(args: argparse.Namespace):
         from arena.translated_hal_adapter import TranslatedHalPolicyProvider
 
         return TranslatedHalPolicyProvider(dth_artifact_dir(args))
+    if args.perfect_hal_model == "exploit-continuation-v1":
+        from arena.policies.exploit_continuation import (
+            ExploitContinuationHalPolicyProvider,
+        )
+
+        return ExploitContinuationHalPolicyProvider(dth_artifact_dir(args))
     from arena.policies.perfect_hal import (
         PerfectHalConfig,
         PerfectHalOpponentModel,
@@ -361,9 +369,18 @@ def add_play_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--perfect-hal-model",
-        choices=("v1", "bayesian-v2", "ensemble", "translated-v1"),
+        choices=(
+            "v1",
+            "bayesian-v2",
+            "ensemble",
+            "translated-v1",
+            "exploit-continuation-v1",
+        ),
         default="v1",
-        help="v1 remains the default; translated-v1 uses frozen parameters and a leap fallback",
+        help=(
+            "v1 remains the default; translated-v1 and exploit-continuation-v1 "
+            "use frozen parameters and a leap fallback"
+        ),
     )
     parser.add_argument(
         "--perfect-hal-prior-strength",

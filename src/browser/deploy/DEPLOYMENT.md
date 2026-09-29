@@ -284,3 +284,30 @@ passes 837, skips one, and fails eight checks against existing stale Rust
 extensions and `src/dth/artifacts/complete_fast_v1`. We preserved those
 artifacts and the solver validation gates. Package the evaluated artifact
 named above; its source and array checks pass.
+
+## Exploit continuation candidate
+
+The `exploit_continuation_v1` study in `src/hal_lab/` decides whether the
+exploit continuation replaces translated Hal. Its `select` phase writes the
+chosen arm to `src/arena/config/exploit_continuation_v1_selection.json`, and
+`deploy/manifest.py` adds `exploit-continuation-v1` to `POLICIES` only when
+that file exists. Its `record` phase reads promotion gate P6 from this runtime
+check:
+
+```sh
+uv run --project src/browser python -m browser.deploy.check_exploit_continuation --artifact src/dth/artifacts/complete_full_v1 --output src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json
+```
+
+Pass the report to `record` with `--runtime-check`. The gate refuses a report
+of another provider, another arm, or other source bytes than the confirmed
+phases hashed.
+
+Deploy the candidate only when the study's results file names
+`exploit-continuation-v1` as its decision. Set
+`STL_HAL_POLICY=exploit-continuation-v1` in the target environment and use the
+preparation and preview commands above. Check that `/api/health` reports
+`policy: "exploit-continuation-v1"`. The candidate keeps translated Hal's
+opponent memory, its cookie boundary, and its leap-turn equilibrium, which the
+translated section describes.
+A change to `manifest.py` or `production.py` changes the code version of every
+policy, so the deploy that ships it ends every live hosted session.

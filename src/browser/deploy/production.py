@@ -10,7 +10,13 @@ from pathlib import Path
 from arena.agent import PolicyDrivenAgent
 from arena.dth_adapter import DTHCompletePolicyProvider
 from browser.app import SessionConfig, SeriesConfig, create_app
-from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
+from browser.deploy.manifest import (
+    CONTINUATION,
+    CONTINUATION_SELECTION,
+    POLICIES,
+    REPOSITORY_ROOT,
+    version_entries,
+)
 from browser.hosted import create_hosted_app
 from browser.ledger import SupabaseLedger
 from browser.redis_store import RedisSessionStore
@@ -26,19 +32,47 @@ def create_production_app(artifact: Path):
     # every cold start cost about ten seconds before the first answer.
     agent = CompleteDTHAgent(artifact, verify_hashes=False)
     policy_name = os.environ.get("STL_HAL_POLICY", "exact")
-    if policy_name not in ("exact", "translated-v1"):
-        raise ValueError("STL_HAL_POLICY must be exact or translated-v1")
+    if policy_name == CONTINUATION and policy_name not in POLICIES:
+        raise ValueError(
+            f"STL_HAL_POLICY={CONTINUATION} needs {CONTINUATION_SELECTION}, "
+            "which the exploit_continuation_v1 study writes"
+        )
+    if policy_name not in POLICIES:
+        raise ValueError(f"STL_HAL_POLICY must be one of {', '.join(POLICIES)}")
     memory = None
+    policy_label = "certified-dth"
     if policy_name == "translated-v1":
         from arena.translated_hal_adapter import TranslatedHalPolicyProvider
         from browser.opponent_memory import OpponentMemory
 
         memory = OpponentMemory()
+        policy_label = "translated-hal-v1"
+
+        def make_policy():
+            return TranslatedHalPolicyProvider(artifact, agent=agent)
+    elif policy_name == CONTINUATION:
+        from arena.policies.exploit_continuation import (
+            ExploitContinuationHalPolicyProvider,
+            selected_continuation,
+        )
+        from browser.opponent_memory import OpponentMemory
+
+        memory = OpponentMemory()
+        policy_label = CONTINUATION
+        # Read the selected arm once, so a bad selection fails at cold start.
+        continuation = selected_continuation()
+
+        def make_policy():
+            return ExploitContinuationHalPolicyProvider(
+                artifact, agent=agent, continuation=continuation
+            )
+    else:
+
+        def make_policy():
+            return DTHCompletePolicyProvider(artifact, agent=agent, record_decisions=False)
 
     def factory(game_seed, policy_seed, sequence_start=0):
-        policy = (TranslatedHalPolicyProvider(artifact, agent=agent)
-                  if policy_name == "translated-v1"
-                  else DTHCompletePolicyProvider(artifact, agent=agent, record_decisions=False))
+        policy = make_policy()
         return create_app(
             hal_factory=lambda: PolicyDrivenAgent(policy, seed=policy_seed),
             config=SessionConfig(seed=game_seed),
@@ -79,5 +113,5 @@ def create_production_app(artifact: Path):
         version=digest.hexdigest(),
         ledger=ledger,
         memory=memory,
-        policy_label="translated-hal-v1" if memory is not None else "certified-dth",
+        policy_label=policy_label,
     )

@@ -36,6 +36,9 @@ projects must not import it.
   `exploit_hal.py`, `aggro_hal.py`, and `pm_hal.py`, with `registry.py` and
   `exploit_hal_config.py`. Hal training, evaluation, and study code lives in
   [`src/hal_lab/`](../hal_lab/README.md).
+- `policies/exploit_continuation.py` holds `--perfect-hal-model
+  exploit-continuation-v1`: translated Hal with a one-step look-ahead into the
+  child stages and an optional per-game guard budget.
 - `config/` holds the runtime configs that the providers read, the two
   Exploit v2 smoke configs that the training contract tests load beside
   `exploit_hal_v2.yaml`, and the six sealed Hal records that hal_lab owns.
