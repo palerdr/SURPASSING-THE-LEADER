@@ -9,14 +9,27 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{3pt}
 \setlength{\emergencystretch}{2em}
+\raggedbottom
 \setlist{nosep,leftmargin=*}
 \newcommand{\D}{\Delta_{60}}
 \newcommand{\BR}{\operatorname{BR}}
+\newcommand{\sh}{\hat s}
+\urlstyle{tt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\makeatletter
+\renewcommand\paragraph{\@startsection{paragraph}{4}{\z@}%
+  {1.0ex \@plus .4ex \@minus .2ex}{-1em}{\normalfont\normalsize\bfseries}}
+\makeatother
 
 \title{\vspace{-1.2em}\textbf{Perfect Mode Hal: Aggressive, Change-Aware\\
-Opponent Exploitation in Exact DTH}}
+Opponent Exploitation in Exact DTH}\\[0.3em]
+\parbox{\textwidth}{\centering\normalsize\normalfont\itshape We revised the
+August 20, 2026 note to add the later studies and the hosting decision.
+The PM v3 result is unchanged.}}
 \author{James Cenawood}
-\date{August 20, 2026}
+\date{September 29, 2026}
 
 \begin{document}
 \maketitle
@@ -26,7 +39,7 @@ Opponent Exploitation in Exact DTH}}
 Perfect Mode (PM) Hal is a causal meta-policy for repeated, pure Drop the
 Handkerchief (DTH). One certified tablebase remains the sole authority for each
 continuation-adjusted $60\times60$ matrix. Around it, PM combines Adaptive
-Hal's Bayesian counts, Perfect Hal's pattern experts, online change-point and
+Hal's Bayesian counts, Perfect Hal v1's pattern experts, online change-point and
 outcome models, and a compatible Aggro Hal recurrent network. Fixed Share
 learns role-specific source and controller weights. Four modes move from an
 exact shield to hard forecast responses, while every selected policy receives
@@ -36,10 +49,14 @@ and its evaluator trusted self-reported risk. It has no promotion authority.
 This note instead registers a 56-identity confirmation protocol with independent
 matrix recomputation, a no-Aggro ablation, and family and seat gates. At the
 protocol commit that confirmation had not been executed. The one-shot run
-scored PM at $.8705$ (97--14--1), behind Perfect at $.9554$; the promotion gate
-failed despite zero independent local-risk audit violations. PM is an
+scored PM at $.8705$ (97--14--1), behind Perfect v1 at $.9554$; the promotion
+gate failed despite zero independent local-risk audit violations. PM is an
 aggressive candidate, not human mind reading, dominance, or a whole-game safety
-theorem.
+theorem. We registered a successor study of a one-step exploit continuation
+for translated Hal with a per-game guard on realized gifts; its selected arm
+failed three of six promotion gates. Under its decision rule we chose
+translated Hal v1, which a preview deployment serves, and we have not promoted
+that preview to production.
 \end{abstract}
 
 \section{Scope and design philosophy}
@@ -50,7 +67,8 @@ All actions are literal seconds $1,\ldots,60$. PM never estimates continuation
 values and never sees an unrevealed simultaneous action.
 
 The intended character is ``overbearing after evidence, composed after
-surprise.'' Perfect contributes hard exploitation; Adaptive contributes
+surprise.'' Perfect Hal v1, which later records call Old, contributes hard
+exploitation; Adaptive contributes
 uncertainty and a constrained response frontier; Aggro contributes recurrent
 features and a learned residual policy. The story evidence ledger motivates
 competing personae, opponent mental models, and abrupt memory discontinuities.
@@ -64,7 +82,7 @@ and recovery after changed play.
 
 For each opponent role separately, PM maintains six mandatory forecast
 sources: uniform recovery, the opponent's exact equilibrium policy, a decayed
-Dirichlet model, Perfect's online expert mixture, categorical Bayesian online
+Dirichlet model, Perfect v1's online expert mixture, categorical Bayesian online
 change-point detection (BOCPD), and an outcome-conditioned model. A seventh
 source is Aggro's GRU forecast when a strict compatible checkpoint is present.
 After action $a_t$ is revealed, source $k$ receives prequential log score and
@@ -91,6 +109,7 @@ fraction has a data-biased-response interpretation; the product is a project
 controller, not a published theorem.
 
 \section{Aggression with measured risk}
+\label{sec:risk}
 
 For Dropper, the certified $\epsilon$ candidate solves
 \[
@@ -100,7 +119,7 @@ For Dropper, the certified $\epsilon$ candidate solves
 \]
 where $L=\min_j(M^{\mathsf T}x^\star)_j$ is freshly recomputed. Checker uses
 the symmetric upper constraint. The bank also contains exact equilibrium,
-hard responses to fused and Perfect forecasts, and Aggro's direct policy. For
+hard responses to fused and Perfect v1 forecasts, and Aggro's direct policy. For
 a direct Dropper policy $x$, actual local loss is
 $\max(0,L-\min_j(M^{\mathsf T}x)_j)$; every direct and frontier candidate is
 independently checked against the current matrix.
@@ -133,7 +152,7 @@ identity-clustered bootstrap replicates. Stopped games scored $.5$.
 Controller & V2 score & V3 score & V3 W--L--S\\
 \midrule
 PM Hal     & .9167 & .8705 & 97--14--1\\
-Perfect    & .8958 & .9554 & 107--5--0\\
+Perfect v1 & .8958 & .9554 & 107--5--0\\
 PM no Aggro& ---   & .8259 & 92--19--1\\
 Aggro      & .6458 & .7232 & 81--31--0\\
 Adaptive   & .6563 & .7188 & 80--31--1\\
@@ -149,7 +168,7 @@ These mixed results motivated the registered repair.
 
 Clean-Git v3 hash-binds the controller, recurrent checkpoint, and tablebase,
 records its commit, and uses 56 fresh identities over all 14 families (112 games
-per controller). It compares PM with Exact, Perfect, Adaptive, Aggro, and PM
+per controller). It compares PM with Exact, Perfect v1, Adaptive, Aggro, and PM
 without Aggro. Promotion requires zero independent risk violations and
 nonnegative aggregate, both-seat, and every-family comparisons. Every selected
 policy's loss, charge contract, mode cap, cumulative charge, and game budget is
@@ -157,19 +176,267 @@ recomputed from its continuation-adjusted matrix.
 
 The registered protocol ran once from commit \texttt{b76147f}.
 PM-minus-baseline paired
-score differences were $-.0848$ $[-.1518,-.0223]$ against Perfect,
+score differences were $-.0848$ $[-.1518,-.0223]$ against Perfect v1,
 $+.0446$ $[.0089,.0893]$ against PM without Aggro, and $+.3750$
 $[.2723,.4777]$ against Exact. The gate failed the every-component, both-seat,
-and every-family conditions; Perfect was the strongest component. The
+and every-family conditions; Perfect v1 was the strongest component. The
 independent audit found zero violations over 788 decisions and 112 games, with
 maximum measured local loss $1.5373$. Fused expected NLL was $3.5524$ versus
 uniform $4.0943$, but the change detector found only 35 of 168 truth shifts and
 produced 23 false-alarm onsets. The result supports aggregate value from enabling
 the Aggro component in this protocol; it does not isolate recurrent memory as
 the cause. The hash-bound compact record is
-\texttt{pm\_hal\_confirmation\_v3.json}.
+\path{src/arena/config/pm_hal_confirmation_v3.json}, and the evaluator is
+\path{src/hal_lab/experiments/pm_hal_v3/evaluate_pm_hal.py}.
 
-\section{Human-play interpretation and limits}
+We rebuilt the tablebase after v3, and the later builds replaced the manifest
+\path{src/dth/artifacts/complete_full_v1/tablebase.json} that v3 binds by
+SHA-256. The provenance check \texttt{python -m hal\_lab.provenance -{}-check}
+reports that binding as a recorded mismatch. The v3 record sets
+\texttt{v3\_must\_not\_be\_rerun\_or\_rebound}, so we do not rerun or rebind
+v3. A new question requires a new protocol version.
+
+PM runs in local pure-DTH play, and the hosted game does not offer it. The
+hosted runtime loads no torch, and \texttt{STL\_HAL\_POLICY} accepts
+\texttt{exact} and two exploit policies, \texttt{translated-v1} and
+\texttt{exploit-continuation-v1}.
+
+\section{Successors to Perfect v1}
+\label{sec:successors}
+
+Two development studies built on Perfect v1. Translated Hal v1 adds offset
+experts to Old's expert mixture. Each offset expert copies or mirrors one of
+Hal's own revealed actions. The selector study trains an attention network
+that corrects translated Hal's 24 expert weights. Table~\ref{tab:successors}
+gives their headline paired comparisons from
+\path{translated_hal_v1_results.json} and \path{selector_study_v1_results.json}
+in \path{src/hal_lab/experiments/}. The emulator comparison uses eight browser
+identities, and its interval includes zero.
+
+\begin{table}[!h]
+\centering
+\caption{Development evidence after Perfect v1. Scores are win fractions.
+Diff.\ gives paired differences with identity-clustered 95\% intervals.}
+\label{tab:successors}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrl@{}}
+\toprule
+Comparison & Games & Cand. & Base & Diff.\ [95\%]\\
+\midrule
+Transl.\ vs.\ Old, league    & 8,192 & .915 & .894 & $+.021$ $[.016,.027]$\\
+Transl.\ vs.\ Old, emulators & 5,120 & .903 & .902 & $+.001$ $[-.003,.006]$\\
+Attention vs.\ transl.       & 2,432 & .919 & .904 & $+.015$ $[.005,.026]$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These leagues and emulators differ from the v3 league, so no number in
+Table~\ref{tab:successors} transfers to Table~1. The translated record's
+\texttt{worktree} field holds a disclaimer of Git preregistration. Git first
+holds both records and their runners in commit \texttt{4944c91} of September
+24, 2026, after the runs. Neither study has Git preregistration, and we treat
+both as development evidence.
+
+\section{One-step exploit continuation}
+\label{sec:continuation}
+
+\paragraph{Method.} Translated Hal answers its forecast $q$ in the exact stage
+matrix, and that matrix values each child state at equilibrium. The provider
+\path{src/arena/policies/exploit_continuation.py} replaces each live child's
+equilibrium value with the value of Hal's best response to a child forecast
+$q'$ at that child. The \emph{same} forecast reuses $q$. The \emph{role}
+forecast asks the opponent model for the role that the opponent takes at the
+child. Hal then plays a hard best response to $q$ in the look-ahead matrix $L$.
+
+Let $H$ be the Hal-view exact matrix: $M$ for Dropper, $-M^{\mathsf T}$ for
+Checker. At a child, Hal can guarantee the maximin value of the child's stored
+matrix against every opponent policy, so Hal's best response to the one policy
+$q'$ earns at least that value. By the certificate, that maximin value lies at
+most $10^{-6}$ below the stored child value that $H$ uses. Each entry of $L$
+weights child values with the same revival odds as $H$, and terminal children
+keep their values. Thus $L\ge H$ entry by entry, up to the $10^{-6}$
+certificate tolerance.
+
+\paragraph{Guard.} The matrix $L$ assumes that the opponent plays $q'$ at every
+child. The guard limits the cost of that assumption in each game. Let $W_H(s)$
+be the stored Hal-view value, with $W_H=\pm1$ at a terminal win or loss, and let
+$H_t[a,b]=\mathbb E[W_H(s_{t+1})\mid s_t,a,b]$. Hal carries a budget $k_t$ with
+$k_0=\epsilon_0$ and the floor $f_t=W_H(s_t)-\max(k_t,0)$. If the best response
+$\pi_t$ gives $\min_b(\pi_t^{\mathsf T}H_t)_b<f_t$, a HiGHS LP maximizes
+$\pi^{\mathsf T}Lq$ subject to $\pi^{\mathsf T}H_t\ge f_t$. If the LP fails,
+Hal plays its stored equilibrium policy. After the reveal of $b_t$, the budget
+absorbs the realized gift:
+\[
+ g_t=\pi_t^{\mathsf T}H_te_{b_t}-W_H(s_t),\qquad k_{t+1}=k_t+g_t.
+\]
+The certificate lets the maximin value of $H_t$ lie up to $10^{-6}$ below
+$W_H(s_t)$, so at some states no policy reaches $f_t$. The turn's miss
+$m_t=\max\bigl(0,f_t-\min_b(\pi_t^{\mathsf T}H_t)_b\bigr)$ adds to the game's
+slack $S=\sum_tm_t$.
+
+\paragraph{Bound.} \emph{In pure DTH, against any opponent, a guarded Hal has
+$\sum_tg_t\ge-\epsilon_0-S$ on every path and
+$\mathbb E[G]\ge W_H(s_0)-\epsilon_0-\mathbb E[S]$, where $G=\pm1$ is the
+outcome.}
+
+\emph{Proof.} Each live DTH transition raises a bounded potential $\Phi$
+(\path{src/formal/CLAIMS.md}), so each path ends at a terminal state $s_T$ with
+$W_H(s_T)=G$. The outcome telescopes:
+\[
+ G-W_H(s_0)=\sum_{t<T}\bigl(W_H(s_{t+1})-W_H(s_t)\bigr).
+\]
+The opponent commits $b_t$ without sight of $a_t$, and Hal draws $a_t$ from
+$\pi_t$. Given the history and $b_t$, term $t$ thus has the conditional mean
+$\pi_t^{\mathsf T}H_te_{b_t}-W_H(s_t)=g_t$. The floor gives
+$g_t\ge-\max(k_t,0)-m_t$, so $k_{t+1}\ge\min(k_t,0)-m_t$. Induction from
+$k_0=\epsilon_0\ge0$ gives $k_t\ge-\sum_{u<t}m_u$. At the end,
+$\sum_tg_t=k_T-\epsilon_0\ge-\epsilon_0-S$. Each term minus $g_t$ has
+conditional mean zero, and the horizon is bounded, so
+$\mathbb E[G]-W_H(s_0)=\mathbb E[\sum_tg_t]\ge-\epsilon_0-\mathbb E[S]$.
+\hfill$\square$
+
+In confirmation, the largest game slack was $9.8\times10^{-10}$. The score is
+$(1+G)/2$, and the two seats' stored scores at clock 720 are $.5449$ and
+$.4551$. A paired-seat session thus has the bound $.5-\epsilon_0/2$. The
+Counter column of Table~\ref{tab:selection} shows it for each guard. The caveat
+of Section~\ref{sec:risk} concerns PM's sum of local worst-case charges, whose
+continuation values overlap. That caveat does not cover this budget, because
+realized gifts telescope through the stored values. Canonical leap turns use
+the equilibrium fallback and leave $k$ unchanged, so the bound covers pure DTH.
+
+\paragraph{Primary metric.} The study harness reads each simulated opponent's
+mixed policy $\mu_t$. It scores a finished pure-DTH game by
+\[
+ \sh=\tfrac12\Bigl(1+W_H(s_0)+\textstyle\sum_t\bigl(\pi_t^{\mathsf T}H_t\mu_t-W_H(s_t)\bigr)\Bigr)
+\]
+(\path{src/hal_lab/harness/telescope.py}). The same telescoping argument gives
+$\sh$ the mean of the raw score. It removes the per-step noise of both players'
+draws and of revival chance, and it can leave $[0,1]$. Canonical games report
+the raw score, because leap turns change the transition.
+
+\paragraph{Registered protocol.} We pushed the runner
+\path{run_exploit_continuation.py} with its frozen \texttt{PROTOCOL} in commit
+\texttt{b8f87b4} before any run. The \texttt{record} phase checked that a
+remote branch holds those runner bytes. Commit \texttt{b218219} holds the
+results record \path{exploit_continuation_v1_results.json}. Both files live in
+\path{src/hal_lab/experiments/exploit_continuation_v1/}. Eight arms cross
+the two child forecasts with four guard settings: open, and $\epsilon_0=.10$,
+$.25$, and $.50$. Pure-DTH sessions play four games from clock 720 in paired
+seats, with a cap of 240 half-rounds.
+
+Pure-DTH play uses four opponent blocks. The league holds 19 families. The
+league mean covers the 18 non-equilibrium families, and we report the
+equilibrium family apart. The human block fits three emulator styles to the
+train games of each of 8 players. The Hal-model block plays the selected
+translated Hal as the opponent. The counter block runs a private copy of the
+controller on the public history and best-responds to its exact mixed policy.
+Canonical sessions play eight STL games against the emulators, with the
+candidate in the Hal seat. Bootstraps use 10,000 replicates, clustered by
+player in human blocks and by identity elsewhere.
+
+The canonical phase (seed base 118,300,000) compared exact and translated Hal
+with 64 emulator replicates. Selection (118,600,000) played every arm beside
+both baselines, with 24 league identities per family and 8 emulator
+replicates. Each Hal block in selection had 64 identities. Confirmation
+(119,100,000) doubled the league and Hal blocks and used 24 emulator
+replicates. It also added 16 canonical replicates. To select, we keep the arms
+whose league mean $\sh$ reaches translated Hal's and whose Hal-model mean $\sh$
+is at most $.025$ below translated Hal's. From those, we pick the highest human
+mean $\sh$.
+Table~\ref{tab:gates} lists gates P1 to P6. If every gate passes, we deploy the
+arm. If a gate fails, we follow the canonical gate: we deploy translated Hal
+when its canonical human score beats exact Hal's with a player-clustered 95\%
+lower bound above 0, and exact Hal otherwise.
+
+\paragraph{Results.} Translated Hal scored $.9394$ (11,543--745) and exact Hal
+$.5467$ (6,718--5,570) over 12,288 canonical games each. The player-clustered
+difference was $+.3927$ $[.3704,.4073]$, so the canonical gate passed.
+
+\begin{table}[t]
+\centering
+\caption{Selection mean $\sh$ by block. Rule floors: $.9605$ (league) and
+$.4736$ (Hal model). One arm passed: role, $\epsilon_0=.25$.}
+\label{tab:selection}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Controller & League & Human & Hal model & Counter\\
+\midrule
+Exact              & .500 & .500 & .500 & .500\\
+Translated         & .961 & .910 & .499 & $-.007$\\
+Same, open         & .993 & .948 & .339 & $-.025$\\
+Same, $\epsilon_0{=}.10$ & .906 & .819 & .511 & .450\\
+Same, $\epsilon_0{=}.25$ & .984 & .907 & .471 & .375\\
+Same, $\epsilon_0{=}.50$ & .992 & .934 & .426 & .253\\
+Role, open         & .993 & .940 & .401 & $-.018$\\
+Role, $\epsilon_0{=}.10$ & .904 & .815 & .517 & .450\\
+Role, $\epsilon_0{=}.25$ & .984 & .905 & .489 & .376\\
+Role, $\epsilon_0{=}.50$ & .992 & .930 & .440 & .255\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Confirmation gates: role, $\epsilon_0=.25$, minus translated Hal.
+P1--P3 and P5 pass when the 95\% lower bound exceeds the limit.}
+\label{tab:gates}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrl@{}}
+\toprule
+Gate & Block, metric & Mean & Lower & Limit & Result\\
+\midrule
+P1 & Human, $\sh$        & $+.0001$ & $-.0166$ & $0$     & fail\\
+P2 & League, $\sh$       & $+.0346$ & $+.0260$ & $-.005$ & pass\\
+P3 & Hal model, $\sh$    & $-.0044$ & $-.0293$ & $-.025$ & fail\\
+P5 & Canonical, raw      & $-.0029$ & $-.0218$ & $-.010$ & fail\\
+\midrule
+P4 & Guard, $\sum_tg_t$  & ---      & ---      & ---     & pass\\
+P6 & Runtime, p95        & ---      & ---      & ---     & pass\\
+\bottomrule
+\end{tabular}
+
+\smallskip
+\begin{minipage}{\columnwidth}
+\footnotesize
+P4: $\min\sum_tg_t=-.2500000001$ over 6,976 games, with a largest turn miss
+of $9.8\times10^{-10}\le10^{-6}$. P6: p95 decision and request times of 24.9
+and 25.0\,ms (limits 100 and 300); p95 worker recovery 243.3\,ms (limit
+2,000).
+\end{minipage}
+\end{table}
+
+Table~\ref{tab:selection} gives the selection. In confirmation, the chosen
+arm scored $.990$ on the league against translated Hal's $.955$. It tied
+translated Hal on the emulators at $.911$, and it scored $.486$ against $.490$
+on the Hal model. It failed P1 and P3 on
+pure-DTH blocks and P5 in canonical play (Table~\ref{tab:gates}).
+The runtime check \path{src/browser/deploy/check_exploit_continuation.py}
+passed P6 in a local run of the hosted app with the real tablebase. That run
+excludes Redis latency and cold starts.
+
+Against its full-knowledge counter, translated Hal lost every game: 0--256 in
+selection and 0--512 in confirmation. The counter reads the public history and
+runs the provider source, so any player who runs the public code can predict
+and answer each mixed policy of translated Hal. Against its own counter, exact
+Hal scored $\sh=.500$ (raw $.465$, 238--274).
+
+\paragraph{Interpretation.} The guarded arms reached the bound
+$.5-\epsilon_0/2$ against the counter (Table~\ref{tab:selection}). The open
+arms gained on the league and the human emulators and fell against the
+Hal-modelling opponent, with Hal-model scores of $.339$ and $.401$ against
+translated Hal's $.499$. The $\epsilon_0=.10$ arms held against the Hal model
+and lost on the league and the human emulators. No guard setting gained on the
+human emulators and held against the Hal model. Under the decision rule, we
+chose \texttt{translated-v1} for deployment.
+
+\section{Deployment status and human-play limits}
+
+As of September 29, 2026, a preview deployment serves translated Hal v1, and
+we have not promoted that preview to production.
 
 The psychology is operational: reinforcement, belief learning, response to
 one's own revealed action, recency, periodicity, and change are competing
@@ -183,9 +450,18 @@ distributions, and cluster outcomes by participant. Change delay and false
 alarms, role slices, calibration, and game score are co-primary diagnostics.
 Bounded recursive reasoning is one possible population archetype, not a label
 the controller may assign permanently to a participant.
-The present measured evidence comprises development evidence from 24 identities
-and one registered synthetic confirmation over 56 fresh identities and known
-families. The recurrent checkpoint saw 2,653 training decisions. Its enabled
+
+Every emulator result in this note comes from 8 players with nonempty test
+partitions. Each emulator fits one player's train games, and those games all
+faced exact Hal. The data thus hold no human reaction to exploitation. We
+need a live randomized comparison, clustered by participant, before we claim a
+human win rate for any policy in this note.
+
+The measured evidence comprises the PM development run over 24 identities, the
+registered PM v3 confirmation over 56 fresh synthetic identities, the
+development studies of Section~\ref{sec:successors}, and the registered
+exploit-continuation study of Section~\ref{sec:continuation}. The recurrent
+checkpoint saw 2,653 training decisions. Its enabled
 component improved aggregate score over the no-Aggro ablation, while a causal
 recurrent-memory advantage remains open. PM is feature-complete for human play
 as an aggressive candidate. Synthetic promotion failed; any future protocol
@@ -195,7 +471,9 @@ evidence.
 \begingroup
 \scriptsize
 \setlength{\parskip}{0pt}
+\renewcommand{\section}[2]{\par\vspace{6pt}\noindent{\normalsize\bfseries #2}\par\vspace{2pt}}
 \begin{thebibliography}{9}
+\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}
 \bibitem{rnr} M. Johanson, M. Zinkevich, and M. Bowling.
 \href{https://papers.nips.cc/paper_files/paper/2007/file/6e7b33fdea3adc80ebd648fffb665bb8-Paper.pdf}{Computing Robust Counter-Strategies}. NeurIPS, 2007.
 \bibitem{dbr} M. Johanson and M. Bowling.
