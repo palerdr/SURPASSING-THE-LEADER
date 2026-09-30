@@ -457,9 +457,9 @@ scored `score_hat` `.5000` (raw `.4648`, 238-274).
 #### Decision
 
 The results record names `translated-v1`: a promotion gate failed, and the
-canonical gate passed. As of September 29, 2026, a preview deployment serves
-translated Hal v1, and we have not promoted that preview to production.
-`src/browser/deploy/DEPLOYMENT.md` records the preview.
+canonical gate passed. Since September 29, 2026, the hosted game serves
+translated Hal v1. `src/browser/deploy/DEPLOYMENT.md` records the preview
+check and the production deployment.
 `STL_HAL_POLICY=exploit-continuation-v1` selects the continuation,
 and we do not deploy it. Every emulator fits games that 8
 players played against exact Hal, so the data hold no human reaction to

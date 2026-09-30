@@ -43,7 +43,10 @@ from dth.agent import CertifiedStageGame
 
 
 class Agent:
-    tablebase = types.SimpleNamespace(metadata={"code_config_digest": "closure"})
+    # The exploit continuation reads child values through lookup.
+    tablebase = types.SimpleNamespace(
+        metadata={"code_config_digest": "closure"}, lookup=lambda state: {"value": 0.0}
+    )
 
     def decide(self, state):
         uniform = np.full(60, 1.0 / 60)

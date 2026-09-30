@@ -248,8 +248,11 @@ translated scored .939 and exact .547, a player-clustered gain of 39.3 points
 [37.0, 40.7]. The study's decision is to deploy translated-v1. The preview
 deployment `dpl_3C3jR52Cw9pNCVFCUNjXhYddSmFj` reported
 `policy: "translated-hal-v1"` and passed a scripted game, a reload, a next
-game, and two-player isolation. Production promotion of that preview awaits
-the owner.
+game, and two-player isolation. We set `STL_HAL_POLICY=translated-v1` for
+Production and promoted that preview on the same day. The production
+deployment `dpl_Eabb5CnY7ZBuLuEt897PiscMbUvY` reports
+`policy: "translated-hal-v1"`. To roll back, set the variable to `exact`
+and promote the earlier exact deployment `dpl_7nY4TagiKXs1tiiLTvDuVWZDA4KS`.
 
 Check that `/api/health` reports `policy: "translated-hal-v1"` on your preview.
 Play through a reload and a next game, then use another browser to check
