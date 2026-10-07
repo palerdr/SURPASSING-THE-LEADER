@@ -190,7 +190,7 @@ function renderOpening(): void {
     renderTitle(screen, () => {
       titleOpen = false;
       renderOpening();
-      screen.querySelector("button")?.focus();
+      screen.querySelector("button")?.focus({ preventScroll: true });
     });
   } else {
     renderRules(screen, requestBegin);
