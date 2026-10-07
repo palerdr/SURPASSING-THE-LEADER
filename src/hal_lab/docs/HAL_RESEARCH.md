@@ -303,6 +303,188 @@ canonical leap handling into a hosted provider.
 hashes. The output directory contains the ablation plot, learning curves,
 and expert-weight heatmap in PNG and SVG formats.
 
+### Exploit continuation study
+
+The `exploit_continuation_v1` study tested whether a one-step exploit
+continuation should replace translated Hal as the hosted candidate. Translated
+Hal answers its forecast in the exact stage matrix, and that matrix values each
+child state at equilibrium. The provider in
+`src/arena/policies/exploit_continuation.py` replaces each live child value
+with the value of Hal's best response to a forecast of the opponent at that
+child. The Hal-view look-ahead matrix then dominates the exact matrix entry by
+entry, up to the 1e-6 certificate tolerance of the stored child values. The
+`same` forecast reuses the current forecast at the child. The
+`role` forecast asks the opponent model for the role that the opponent takes
+there.
+
+The optional guard gives each game a budget `eps0`. Hal keeps its worst
+Hal-view stage value at or above `W_H - max(k, 0)`. The budget `k` starts at
+`eps0` and absorbs the realized gift `pi @ H[:, b] - W_H` after each reveal.
+The outcome telescopes through the stored values, so in pure DTH the guard
+gives `E[outcome] >= W_H(s0) - eps0 - E[S]` against any opponent. `S` sums the
+certificate misses of the guarded turns. Section 6 of `paper/pm_hal.tex` holds
+the proof. Canonical leap turns use the equilibrium fallback and leave `k`
+unchanged. `src/hal_lab/harness/telescope.py` scores each finished pure-DTH
+game by `score_hat`, the telescoped value on the score scale. It has the mean
+of the raw score and averages each step's action and revival outcomes.
+Sampled state paths contribute variance, so this estimator need not have
+less variance than the raw score. Canonical games report the raw score.
+
+You run the phases from the repository root in this order:
+
+```bash
+uv run python -m hal_lab.experiments.exploit_continuation_v1.run_exploit_continuation canonical
+uv run python -m hal_lab.experiments.exploit_continuation_v1.run_exploit_continuation select
+uv run python -m hal_lab.experiments.exploit_continuation_v1.run_exploit_continuation confirm
+uv run --project src/browser python -m browser.deploy.check_exploit_continuation --artifact src/dth/artifacts/complete_full_v1 --output src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json
+uv run python -m hal_lab.experiments.exploit_continuation_v1.run_exploit_continuation record --protocol-commit b8f87b4 --runtime-check src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json
+```
+
+Each phase writes its report once under
+`src/hal_lab/outputs/exploit_continuation_v1/` and refuses an existing file.
+`select` also writes `src/arena/config/exploit_continuation_v1_selection.json`, and
+`record` writes the tracked
+`src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json`.
+Both files exist, so the study cannot run again in this tree. A new question
+needs a new protocol version and fresh seeds. `record` refuses a protocol
+commit that no remote branch holds, or whose runner bytes differ from the
+runner that played the phases. The runtime check runs the hosted app in a
+local process with the real tablebase and an in-memory store. It measures
+serving and worker recovery, and it excludes Redis latency and cold starts.
+`record` reads its report as gate P6.
+
+#### Protocol
+
+We pushed the runner and its frozen `PROTOCOL` in commit `b8f87b4` before any
+run. Commit `b218219` holds the results. Eight arms cross the two forecasts
+with four guard settings: open, and `eps0` of 0.10, 0.25, and 0.50.
+Pure-DTH sessions play four games from clock 720 in paired seats, with a cap of
+240 half-rounds. Pure-DTH play uses four opponent blocks:
+
+- `league`: 19 synthetic families. The league mean covers the 18 families
+  other than `equilibrium`, and we report that family apart as
+  `league_equilibrium`.
+- `human`: three emulator styles fit to the train games of each of 8 players
+  with a nonempty test partition.
+- `hal_model`: the selected translated Hal as the opponent.
+- `counter`: a full-knowledge counter. It runs a private copy of the
+  controller on the public history and best-responds to its exact mixed
+  policy.
+
+Canonical sessions play eight STL games against the emulators, with the
+candidate in the Hal seat. Bootstraps use 10,000 replicates. Human blocks
+cluster by player, and the other blocks cluster by identity.
+
+The canonical phase (seed base 118,300,000) compared exact and translated Hal
+with 64 emulator replicates. Selection (118,600,000) played every arm beside
+both baselines, with 24 league identities per family and 8 emulator
+replicates. Each Hal block in selection had 64 identities. Confirmation
+(119,100,000) doubled the league and Hal blocks and used 24 emulator
+replicates. It also added 16 canonical replicates. To select, we keep the arms
+whose league mean `score_hat` reaches translated Hal's and whose `hal_model`
+mean is at most 0.025 below translated Hal's. From those, we pick the highest human mean `score_hat`.
+
+The promotion gates compare the selected arm with translated Hal on paired
+confirmation sessions:
+
+| Gate | Test |
+| --- | --- |
+| P1 | Human `score_hat`, player clusters: 95% lower bound above 0 |
+| P2 | League `score_hat`, identity clusters: lower bound above -0.005 |
+| P3 | `hal_model` `score_hat`, identity clusters: lower bound above -0.025 |
+| P4 | Every guarded pure-DTH game: realized gift sum at least `-eps0 - S - 1e-6`; largest turn miss at most 1e-6 |
+| P5 | Canonical human raw score, player clusters: lower bound above -0.01 |
+| P6 | Local run of the hosted app on the confirmed source and arm, within its p95 time limits |
+
+If every gate passes, we deploy `exploit-continuation-v1`. If a gate fails, we
+follow the canonical gate: we deploy `translated-v1` when translated Hal's
+canonical human score beats exact Hal's with a player-clustered 95% lower bound
+above 0, and exact Hal otherwise.
+
+#### Results
+
+Translated Hal scored `.9394` (11,543-745) and exact Hal `.5467` (6,718-5,570)
+over 12,288 canonical games each. The player-clustered difference was
+`+.3927 [.3704, .4073]`, so the canonical gate passed.
+
+Selection mean `score_hat`, with the rule floors `.9605` for the league and
+`.4736` for `hal_model`:
+
+| Controller | League | Human | Hal model | Counter |
+| --- | ---: | ---: | ---: | ---: |
+| Exact | .5001 | .5001 | .5000 | .5000 |
+| Translated | .9605 | .9101 | .4986 | -.0075 |
+| `la_same_open` | .9932 | .9483 | .3395 | -.0248 |
+| `la_same_g010` | .9060 | .8192 | .5108 | .4502 |
+| `la_same_g025` | .9841 | .9069 | .4706 | .3754 |
+| `la_same_g050` | .9925 | .9343 | .4256 | .2528 |
+| `la_role_open` | .9927 | .9401 | .4007 | -.0175 |
+| `la_role_g010` | .9042 | .8146 | .5170 | .4502 |
+| `la_role_g025` | .9839 | .9048 | .4890 | .3758 |
+| `la_role_g050` | .9920 | .9302 | .4399 | .2545 |
+
+One arm passed the rule: `la_role_g025`, the role forecast with `eps0` 0.25.
+Confirmation mean `score_hat`, with the raw score for canonical play:
+
+| Controller | League | Human | Hal model | Counter | Canonical raw |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact | .5000 | .5000 | .5000 | .5000 | .5433 |
+| Translated | .9549 | .9107 | .4903 | -.0062 | .9408 |
+| `la_role_g025` | .9895 | .9108 | .4858 | .3764 | .9378 |
+
+| Gate | Mean | 95% lower bound | Limit | Result |
+| --- | ---: | ---: | ---: | --- |
+| P1 | +.0001 | -.0166 | 0 | fail |
+| P2 | +.0346 | +.0260 | -.005 | pass |
+| P3 | -.0044 | -.0293 | -.025 | fail |
+| P5 | -.0029 | -.0218 | -.010 | fail |
+
+P4 passed. Over 6,976 guarded pure-DTH games, the lowest realized gift sum
+was -0.2500000001, and the largest game slack and the largest turn miss were
+each below 1e-9. P6 passed. The p95 decision time was 24.9 ms against a
+100 ms limit, and the p95 request time was 25.0 ms against 300 ms. The p95
+worker recovery took 243.3 ms against 2,000 ms.
+
+The guarded arms reached their bound `.5 - eps0 / 2` against the counter. The
+open arms gained on the league and the human emulators and fell against
+`hal_model`. The 0.10 arms held against `hal_model` and lost on the league and
+the human emulators. No guard setting gained on the human emulators and held
+against `hal_model`. Translated Hal lost every counter game: 0-256 in
+selection and 0-512 in confirmation. The counter needs the public history and
+the provider source, so any player who runs the public code can predict and
+answer each mixed policy of translated Hal. Against its own counter, exact Hal
+scored `score_hat` `.5000` (raw `.4648`, 238-274).
+
+#### Decision
+
+The results record names `translated-v1`: a promotion gate failed, and the
+canonical gate passed. Since September 29, 2026, the hosted game serves
+translated Hal v1. `src/browser/deploy/DEPLOYMENT.md` records the preview
+check and the production deployment.
+`STL_HAL_POLICY=exploit-continuation-v1` selects the continuation,
+and we do not deploy it. Every emulator fits games that 8
+players played against exact Hal, so the data hold no human reaction to
+exploitation. A human win-rate claim needs a live randomized comparison.
+
+#### Emulator correction
+
+The v1 self-repeat emulator used the observed repeat rate as its copy weight.
+A categorical draw can repeat the previous action, so the fit increased
+repetition above the observed rate. For player 1's Dropper training contexts,
+the fitted rate was .52 and the model's mean repeat probability was .69.
+The v1 tables above describe that historical emulator and keep their frozen
+records and source binding at commit `b8f87b4`.
+
+The current `self-repeat-human-v2` fit subtracts the categorical draw's mean
+repeat probability over the training pair contexts before fitting its copy
+weight. It fits within-game and cross-game weights apart. A role with no pair
+evidence uses the categorical. A target below the categorical repeat rate
+uses a zero copy weight, since this mixture cannot model negative dependence.
+The regression checks cover both boundaries and match the fitted rates over
+the training contexts. A new registered study must evaluate this version
+before you treat its results as a replacement for v1. The release retains
+translated-v1 and makes no new promotion claim for the continuation.
+
 ### Bayesian Perfect Hal evaluation
 
 We follow the separation of opponent inference and response in

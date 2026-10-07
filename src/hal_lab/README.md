@@ -34,6 +34,13 @@ plan.
   providers and the fitted human opponent. `human_data.py` splits recorded
   games by player and builds Hal-side observations and priors. `stats.py`
   holds the identity-clustered bootstrap interval and the hard best response.
+  `telescope.py` records one match game and telescopes the candidate's exact
+  DTH value into `score_hat` and the realized gift sum. `hal_opponents.py`
+  holds translated Hal as an opponent and the full-knowledge counter of a
+  candidate. `emulators.py` holds the v2 self-repeat human emulator. It fits
+  copy weights after accounting for categorical repeats. The frozen v1
+  results bind the earlier fit at commit `b8f87b4`; use a new registered
+  protocol to evaluate v2.
   Put new shared research code here, and import these modules directly.
 - `training/` holds the trainers: `train_exploit_hal.py` with its gym
   `exploit_hal_gym.py`, and `train_aggro_hal.py` with its environment
@@ -44,6 +51,15 @@ plan.
   `external_hal_prior_v1`, `neural_pilots_v1`, `selector_study_v1`,
   `pm_hal_v3`, and `aggro_hal_v1`. `exploit_hal_v2/config/` holds the three
   historical Exploit Hal v1 configs.
+- `experiments/exploit_continuation_v1/` holds the study of the exploit
+  continuation provider `arena.policies.exploit_continuation`. Its runner
+  freezes the protocol before any real run, and its phases write once under
+  `src/hal_lab/outputs/exploit_continuation_v1/`. The `select` phase writes
+  the tracked `src/arena/config/exploit_continuation_v1_selection.json`, and
+  the `record` phase writes the tracked
+  `exploit_continuation_v1_results.json` in the study folder. After `record`
+  runs, add both files to `RECORDS` in `provenance.py` and to the
+  `src/arena/config` section below.
 - A study can import the frozen module of an earlier study.
   `translated_hal_v1` imports `perfect_hal_bayes_v2` and
   `perfect_hal_ensemble_v1`, and `selector_study_v1` imports

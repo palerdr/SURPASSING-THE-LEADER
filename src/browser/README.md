@@ -90,6 +90,13 @@ replay. Reload and next-game requests retain that evidence. Separate cookies
 keep separate models; workers share the immutable tablebase. The local server
 keeps one repeated-opponent series.
 
+`STL_HAL_POLICY=exploit-continuation-v1` serves the arm that the
+`exploit_continuation_v1` study selects, with the same opponent memory and the
+health label `exploit-continuation-v1`. The policy reads its arm from
+`src/arena/config/exploit_continuation_v1_selection.json`. Until the study
+writes that file, the policy stays out of `deploy/manifest.py`'s `POLICIES`
+and `production.py` refuses it at startup.
+
 ## Deployment
 
 [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md) holds the certified recurrence
@@ -109,6 +116,12 @@ commit-before-sampling and reveal contracts.
 - A change to a file in the version ends every live hosted session at the
   next deploy. `names.py` stays out of the version, so a word-list change does
   not end games.
+- `deploy/check_exploit_continuation.py` measures decision, request, and
+  worker-recovery latency of the continuation on the hosted stack with the
+  real tablebase. The study's promotion gate P6 reads its report, which names
+  its schema, the policy, the continuation, and the SHA-256 of each measured
+  source. `deploy/check_translated_hal.py` did the same for translated-v1, and
+  a frozen hal_lab record binds its bytes.
 - `prepare_vercel` reads the pins of the bundle's packages from
   `src/browser/uv.lock`, writes the bundle to the ignored `build/vercel/`, and
   copies the ignored Vercel project link from `.vercel/project.json`. It still

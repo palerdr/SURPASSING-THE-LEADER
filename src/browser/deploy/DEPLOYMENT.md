@@ -224,7 +224,7 @@ Neither deployment mode changes the canonical referee or the leap rule.
 You can run the frozen candidate on the canonical local browser surface:
 
 ```sh
-uv run --project src/browser python -m browser --hal-agent perfect-hal --perfect-hal-model translated-v1 --dth-complete-tablebase outputs/perfect-hal-bayes-v2/tablebase --conceal-hal-details
+uv run --project src/browser python -m browser --hal-agent perfect-hal --perfect-hal-model translated-v1 --dth-complete-tablebase src/dth/artifacts/complete_full_v1 --conceal-hal-details
 ```
 
 Add `--pure-dth` to use the benchmark's permanent 1..60 game. Old remains
@@ -234,11 +234,25 @@ from `src/arena/config/translated_hal_v1_selection.json`.
 
 For hosted activation, set `STL_HAL_POLICY=translated-v1` in the target
 environment and use the existing preparation and preview commands above.
-Use `--artifact outputs/perfect-hal-bayes-v2/tablebase` with the preparation
-command to package the evaluated artifact. The package includes the candidate
-and its memory adapter. Its policy package uses direct imports so the serving
-process does not need Torch or training modules. This work did not publish a
-preview or change production settings.
+The preparation command packages `src/dth/artifacts/complete_full_v1` by
+default. The evaluated artifact `outputs/perfect-hal-bayes-v2/tablebase` holds
+the same `value.npy` and `solver_kind.npy` bytes, but the root `uv.lock` edit
+of the restructure makes its source digests stale, so the preparation command
+refuses it. The package includes the candidate and its memory adapter. Its
+policy package uses direct imports so the serving process does not need Torch
+or training modules.
+
+On 2026-09-29 the `exploit_continuation_v1` study's canonical gate compared
+translated and exact Hal in canonical STL against the human emulators:
+translated scored .939 and exact .547, a player-clustered gain of 39.3 points
+[37.0, 40.7]. The study's decision is to deploy translated-v1. The preview
+deployment `dpl_3C3jR52Cw9pNCVFCUNjXhYddSmFj` reported
+`policy: "translated-hal-v1"` and passed a scripted game, a reload, a next
+game, and two-player isolation. We set `STL_HAL_POLICY=translated-v1` for
+Production and promoted that preview on the same day. The production
+deployment `dpl_Eabb5CnY7ZBuLuEt897PiscMbUvY` reports
+`policy: "translated-hal-v1"`. To roll back, set the variable to `exact`
+and promote the earlier exact deployment `dpl_7nY4TagiKXs1tiiLTvDuVWZDA4KS`.
 
 Check that `/api/health` reports `policy: "translated-hal-v1"` on your preview.
 Play through a reload and a next game, then use another browser to check
@@ -265,7 +279,7 @@ reveals from its 60-action model and clears stale sequence references.
 You can repeat the local operational check with a new output path:
 
 ```sh
-uv run --project src/browser python -m browser.deploy.check_translated_hal --artifact outputs/perfect-hal-bayes-v2/tablebase --output outputs/translated-hal-v1/runtime-review.json
+uv run --project src/browser python -m browser.deploy.check_translated_hal --artifact src/dth/artifacts/complete_full_v1 --output src/hal_lab/outputs/translated-hal-v1/runtime-review.json
 uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
 uv run python -m pytest src/arena/tests tests/meta -q
 npm --prefix src/browser/webclient run typecheck
@@ -273,14 +287,43 @@ npm --prefix src/browser/webclient run typecheck
 
 The recorded local run covered 32 games and 16 action-61 reveals. It measured
 1.56 ms p95 policy latency, 13.2 ms p95 request latency, and 62.2 ms p95 worker
-recovery. The largest checkpoint was 6,788 bytes. These ASGI measurements use
+recovery. The 2026-09-29 rerun on `complete_full_v1` and the restructured
+serving code measured 1.01 ms, 2.04 ms, and 21.8 ms. The largest checkpoint was 6,788 bytes. These ASGI measurements use
 the real tablebase and an in-memory CAS store; they exclude Redis network
 latency and hosted cold starts. Keep the preview check before production
 promotion. The compact evidence record links the statistical and runtime
 reports, including the first holdout's failed uncertainty gate.
 
 The arena and architecture suite passes 395 tests. The full repository suite
-passes 837, skips one, and fails eight checks against existing stale Rust
-extensions and `src/dth/artifacts/complete_fast_v1`. We preserved those
-artifacts and the solver validation gates. Package the evaluated artifact
-named above; its source and array checks pass.
+passed 837, skipped one, and failed eight checks against the stale Rust
+extensions and `src/dth/artifacts/complete_fast_v1` of that time. We preserved
+those artifacts and the solver validation gates.
+
+## Exploit continuation candidate
+
+The `exploit_continuation_v1` study in `src/hal_lab/` decides whether the
+exploit continuation replaces translated Hal. Its `select` phase writes the
+chosen arm to `src/arena/config/exploit_continuation_v1_selection.json`, and
+`deploy/manifest.py` adds `exploit-continuation-v1` to `POLICIES` only when
+that file exists. Its `record` phase reads promotion gate P6 from this runtime
+check:
+
+```sh
+uv run --project src/browser python -m browser.deploy.check_exploit_continuation --artifact src/dth/artifacts/complete_full_v1 --output src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json
+```
+
+Pass the report to `record` with `--runtime-check`. The gate refuses a report
+of another provider, another arm, or other source bytes than the confirmed
+phases hashed.
+
+Deploy the candidate only when the study's results file names
+`exploit-continuation-v1` as its decision. The 2026-09-29 run selected
+`la_role_g025` and failed gates P1, P3, and P5, so its decision is
+translated-v1 (`src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json`). Set
+`STL_HAL_POLICY=exploit-continuation-v1` in the target environment and use the
+preparation and preview commands above. Check that `/api/health` reports
+`policy: "exploit-continuation-v1"`. The candidate keeps translated Hal's
+opponent memory, its cookie boundary, and its leap-turn equilibrium, which the
+translated section describes.
+A change to `manifest.py` or `production.py` changes the code version of every
+policy, so the deploy that ships it ends every live hosted session.
