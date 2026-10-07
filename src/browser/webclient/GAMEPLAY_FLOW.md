@@ -24,8 +24,9 @@ large so the state of the game reads at a glance.
 
 1. **Title, then rules.** The first screen shows DROP THE HANDKERCHIEF
    and one Start button on black. Start or Enter opens the rules page
-   without a server wait: five short rules in one list, which a player reads
-   in under half a minute. Beneath the list, Begin starts play. The page has
+   without a server wait. You read about the seated Checker and the
+   Dropper, then each player's drug vial before the turn and revival
+   rules. Beneath the list, Begin starts play. The page has
    no footer. These screens contain no name form or HUD.
    Opening or reloading returns to the title and resets the series, with the
    opening clock and empty score and history. Begin or Enter on the rules
@@ -91,10 +92,12 @@ Each line is something the author asked for. Keep them all.
 
 ### Rules and settings
 
-- Explain the game in plain terms, in one paragraph, with no solver jargon.
+- Explain the physical game and introduce each player's drug vial before
+  describing the choice of seconds, with no solver jargon.
 - The start clock is not malleable.
 - The rules page holds a few rules in a clear layout, which a player reads
-  in 20 to 30 seconds. It carries no "assumptions" footer and no caveats.
+  before play. Give the game and the vial enough context for a new player.
+  It carries no "assumptions" footer and no caveats.
   This replaces the earlier request for the chapter's rules PNG, which read
   as too verbose.
 - No half-round log and no rules fold on the stage.
