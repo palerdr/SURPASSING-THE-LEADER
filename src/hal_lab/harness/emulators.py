@@ -17,6 +17,18 @@ def _rate(repeats: int, pairs: int) -> float:
     return (repeats + 1) / (pairs + 2)
 
 
+def _copy_weight(rate: float, contexts: np.ndarray, categorical: np.ndarray) -> float:
+    """Fit the copy weight after accounting for repeats from the background draw."""
+
+    pairs = int(contexts.sum())
+    if pairs == 0:
+        return 0.0
+    background = float(contexts @ categorical) / pairs
+    if background >= 1.0:
+        return 0.0
+    return max(0.0, min(1.0, (rate - background) / (1.0 - background)))
+
+
 class SelfRepeatHumanOpponent:
     """Repeat the human's last second in a role, or draw from the human's counts.
 
@@ -33,11 +45,16 @@ class SelfRepeatHumanOpponent:
       action in that role in the next game of the list. The recorded humans
       repeat less often across a boundary than inside a game.
 
-    In play the policy is ``r * delta(previous) + (1 - r) * categorical`` when
-    the emulator has an own action in the role earlier in the session, and the
-    categorical otherwise. ``r`` is the cross-game rate for the first decision
-    in a role after ``reset_game`` and the within-game rate after that.
+    The v2 fit accounts for repeats from the categorical draw. If ``b`` is
+    that draw's mean repeat probability over the fitted pair contexts and
+    ``r`` is the smoothed repeat rate, the copy weight is
+    ``max(0, (r - b) / (1 - b))``. The policy then mixes a copy of the previous
+    action with the categorical. A target below ``b`` uses the categorical;
+    a role with no fitted pairs uses the categorical. The first decision
+    in a role after ``reset_game`` uses the cross-game copy weight.
     """
+
+    model_version = "self-repeat-human-v2"
 
     def __init__(self, games, *, pseudocount: float = 0.5) -> None:
         counts = {role: np.full(ACTION_COUNT, float(pseudocount)) for role in ROLES}
@@ -45,6 +62,8 @@ class SelfRepeatHumanOpponent:
         self.repeats = {role: 0 for role in ROLES}
         self.cross_pairs = {role: 0 for role in ROLES}
         self.cross_repeats = {role: 0 for role in ROLES}
+        contexts = {role: np.zeros(ACTION_COUNT, dtype=int) for role in ROLES}
+        cross_contexts = {role: np.zeros(ACTION_COUNT, dtype=int) for role in ROLES}
         last = {role: None for role in ROLES}
         for game in games:
             previous = {role: None for role in ROLES}
@@ -59,9 +78,11 @@ class SelfRepeatHumanOpponent:
                 if previous[role] is not None:
                     self.pairs[role] += 1
                     self.repeats[role] += int(action == previous[role])
+                    contexts[role][previous[role] - 1] += 1
                 elif first[role] and last[role] is not None:
                     self.cross_pairs[role] += 1
                     self.cross_repeats[role] += int(action == last[role])
+                    cross_contexts[role][last[role] - 1] += 1
                 first[role] = False
                 previous[role] = action
                 last[role] = action
@@ -71,6 +92,14 @@ class SelfRepeatHumanOpponent:
         }
         self.cross_game_rates = {
             role: _rate(self.cross_repeats[role], self.cross_pairs[role]) for role in ROLES
+        }
+        self.repeat_weights = {
+            role: _copy_weight(self.repeat_rates[role], contexts[role], self.categorical[role])
+            for role in ROLES
+        }
+        self.cross_game_weights = {
+            role: _copy_weight(self.cross_game_rates[role], cross_contexts[role], self.categorical[role])
+            for role in ROLES
         }
         self.name: str | None = None
         self.previous: dict[str, int | None] = {role: None for role in ROLES}
@@ -82,8 +111,8 @@ class SelfRepeatHumanOpponent:
         policy = self.categorical[role]
         previous = self.previous[role]
         if previous is not None:
-            rates = self.cross_game_rates if self.first_in_game[role] else self.repeat_rates
-            rate = rates[role]
+            weights = self.cross_game_weights if self.first_in_game[role] else self.repeat_weights
+            rate = weights[role]
             policy = (1.0 - rate) * policy
             policy[previous - 1] += rate
         return {second: float(p) for second, p in enumerate(policy, start=1)}

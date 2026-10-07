@@ -326,8 +326,9 @@ certificate misses of the guarded turns. Section 6 of `paper/pm_hal.tex` holds
 the proof. Canonical leap turns use the equilibrium fallback and leave `k`
 unchanged. `src/hal_lab/harness/telescope.py` scores each finished pure-DTH
 game by `score_hat`, the telescoped value on the score scale. It has the mean
-of the raw score and removes the noise of the sampled actions and of revival
-chance at each step. Canonical games report the raw score.
+of the raw score and averages each step's action and revival outcomes.
+Sampled state paths contribute variance, so this estimator need not have
+less variance than the raw score. Canonical games report the raw score.
 
 You run the phases from the repository root in this order:
 
@@ -464,6 +465,25 @@ check and the production deployment.
 and we do not deploy it. Every emulator fits games that 8
 players played against exact Hal, so the data hold no human reaction to
 exploitation. A human win-rate claim needs a live randomized comparison.
+
+#### Emulator correction
+
+The v1 self-repeat emulator used the observed repeat rate as its copy weight.
+A categorical draw can repeat the previous action, so the fit increased
+repetition above the observed rate. For player 1's Dropper training contexts,
+the fitted rate was .52 and the model's mean repeat probability was .69.
+The v1 tables above describe that historical emulator and keep their frozen
+records and source binding at commit `b8f87b4`.
+
+The current `self-repeat-human-v2` fit subtracts the categorical draw's mean
+repeat probability over the training pair contexts before fitting its copy
+weight. It fits within-game and cross-game weights apart. A role with no pair
+evidence uses the categorical. A target below the categorical repeat rate
+uses a zero copy weight, since this mixture cannot model negative dependence.
+The regression checks cover both boundaries and match the fitted rates over
+the training contexts. A new registered study must evaluate this version
+before you treat its results as a replacement for v1. The release retains
+translated-v1 and makes no new promotion claim for the continuation.
 
 ### Bayesian Perfect Hal evaluation
 

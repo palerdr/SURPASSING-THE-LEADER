@@ -37,7 +37,10 @@ plan.
   `telescope.py` records one match game and telescopes the candidate's exact
   DTH value into `score_hat` and the realized gift sum. `hal_opponents.py`
   holds translated Hal as an opponent and the full-knowledge counter of a
-  candidate. `emulators.py` holds the self-repeat human emulator.
+  candidate. `emulators.py` holds the v2 self-repeat human emulator. It fits
+  copy weights after accounting for categorical repeats. The frozen v1
+  results bind the earlier fit at commit `b8f87b4`; use a new registered
+  protocol to evaluate v2.
   Put new shared research code here, and import these modules directly.
 - `training/` holds the trainers: `train_exploit_hal.py` with its gym
   `exploit_hal_gym.py`, and `train_aggro_hal.py` with its environment

@@ -50,7 +50,7 @@
 James Cenawood \hfill September 29, 2026
 \vspace{4pt}
 
-Against emulators of recorded players, translated Hal wins \textbf{93.9\%} of games, where exact Hal wins 54.7\%.
+In the registered v1 study, translated Hal wins \textbf{93.9\%} against player emulators, where exact Hal wins 54.7\%.
 A guard caps Hal's expected loss against \textbf{any} opponent, but no guarded Hal beat translated Hal in a registered test.
 
 \begin{minipage}[t]{0.55\textwidth}
@@ -219,8 +219,8 @@ We score a finished pure-DTH game by
 \hat s=\tfrac12\Big(1+W_H(s_0)+\textstyle\sum_t\big(\pi_t^{\mathsf T}H_t\mu_t-W_H(s_t)\big)\Big),
 \]
 where $\mu_t$ is the simulated opponent's mixed policy. The same
-telescoping makes $\hat s$ an unbiased estimate of the score, and it
-removes the noise of both players' draws and of revival.
+telescoping makes $\hat s$ an unbiased estimate of the score. We average
+one-step action and revival outcomes; sampled paths contribute variance.
 
 We pushed the runner with a frozen protocol in commit \texttt{b8f87b4}
 before any game. Sessions play four games from 8:12 in paired seats
@@ -272,10 +272,11 @@ $-.2500000001$. The hosted runtime check passed (P6) with a decision
 p95 of 24.9\,ms.
 
 Against its counter, translated Hal lost all 512 confirmation games.
-Its code is public, so a player who runs it can predict each of Hal's
-mixed policies. The emulators come from 98 games against exact Hal and
-contain no reaction to exploitation. A claim about human win rates
-needs a live randomized comparison.
+Its public code lets a player compute Hal's mixed policies. The emulators
+fit 98 games against exact Hal and contain no reaction to exploitation.
+The v1 self-repeat fit used observed repeat rates as copy weights, which
+increased repetition. We retain these historical results; the corrected
+v2 fit needs a new study. A human win-rate claim needs a live randomized comparison.
 
 {\footnotesize\textbf{References.} [1] J. Cenawood,
 \href{dth_exact_solution.pdf}{\emph{Solving Drop the Handkerchief}},
