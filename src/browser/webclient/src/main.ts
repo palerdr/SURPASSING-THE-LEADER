@@ -25,6 +25,7 @@ import {
 import { keepServerWarm } from "./turn-warmup";
 import { drawHud } from "./render/hud";
 import { setHands } from "./render/dialplate";
+import { legalRange } from "./render/text";
 import { drawScene, drawVictory } from "./render/scene";
 import { cancelTurn, scheduleTurn, turnSeconds, unlockTicking } from "./audio/tick";
 import { preload } from "./render/sprites";
@@ -34,7 +35,7 @@ import { renderLive } from "./screens/live";
 import { renderOutcome } from "./screens/outcome";
 import { renderRules, renderTitle } from "./screens/rules";
 import { renderVictory } from "./screens/victory";
-import { secondOnClock } from "./second";
+import { committedSecond, secondOnClock } from "./second";
 import type { Leaderboard, PlayerView, Snapshot, Transcript } from "./types";
 
 /** How long the screen stays black after a commit before the result is shown. */
@@ -291,6 +292,21 @@ function secondNow(current: Snapshot): number {
   return secondOnClock(beats, current.legal_seconds);
 }
 
+/**
+ * Commit from the action screen: the typed second when the field holds one,
+ * the second on the clock when the field is empty.
+ */
+function commitSecond(current: Snapshot): void {
+  if (busy) return;
+  const typed = screen?.querySelector<HTMLInputElement>("[data-second]")?.value ?? "";
+  const second = committedSecond(typed, secondNow(current), current.legal_seconds);
+  if (second === null) {
+    showError(`Type a second from ${legalRange(current.legal_seconds)}.`);
+    return;
+  }
+  void commit(() => act(current.sequence, second));
+}
+
 /** End the establishing shot and open the action screen. */
 function cutToAction(): void {
   if (beatOver) return;
@@ -374,10 +390,8 @@ function render(): void {
       break;
     case "awaiting_action":
       if (beatOver) {
-        // The commit reads the clock at the moment of the gesture.
-        renderLive(screen, current, shownSecond, () =>
-          void commit(() => act(current.sequence, secondNow(current))),
-        );
+        // The commit reads the field and the clock at the moment of the gesture.
+        renderLive(screen, current, shownSecond, () => commitSecond(current));
       } else {
         renderBeat(screen, current);
       }
@@ -452,7 +466,8 @@ function loop(): void {
 
 // Enter advances every screen without reaching for the mouse, matching the
 // terminal's press-Enter-to-continue pauses. Enter opens the clock from the
-// scene, and on the clock it commits the second the count names.
+// scene. On the clock it commits the typed second, or the second the count
+// names when the field is empty.
 document.addEventListener("keydown", (event) => {
   unlockTicking();
   if (event.repeat && event.key === "Enter") {
@@ -479,15 +494,14 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (snapshot.phase === "awaiting_action" && event.key === "Enter") {
-    // Prevent the default here so a focused Commit button does not also
-    // click; `commit` is guarded by `busy` either way.
+    // Prevent the default here so the form does not also submit; `commit`
+    // is guarded by `busy` either way.
     event.preventDefault();
     if (!beatOver) {
       cutToAction();
       return;
     }
-    const current = snapshot;
-    void commit(() => act(current.sequence, secondNow(current)));
+    commitSecond(snapshot);
     return;
   }
   if (snapshot.phase === "awaiting_ack" && event.key === "Enter") {

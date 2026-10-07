@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { secondOnClock } from "../src/second.ts";
+import { committedSecond, secondOnClock } from "../src/second.ts";
 
 const NORMAL = Array.from({ length: 60 }, (_, i) => i + 1);
 const LEAP_DROPPER = Array.from({ length: 61 }, (_, i) => i + 1);
@@ -33,4 +33,23 @@ test("fractional beats are whole seconds heard, and the floor is the first legal
   assert.equal(secondOnClock(-3, NORMAL), 1);
   assert.equal(secondOnClock(0, [5, 6, 7]), 5);
   assert.equal(secondOnClock(0, []), 1);
+});
+
+test("an empty field commits the second on the clock", () => {
+  assert.equal(committedSecond("", 37, NORMAL), 37);
+  assert.equal(committedSecond("   ", 1, NORMAL), 1);
+});
+
+test("a typed legal second commits at once, whatever the clock reads", () => {
+  assert.equal(committedSecond("45", 3, NORMAL), 45);
+  assert.equal(committedSecond(" 7 ", 3, NORMAL), 7);
+  assert.equal(committedSecond("61", 3, LEAP_DROPPER), 61);
+});
+
+test("a typed second outside the server's legal list commits nothing", () => {
+  assert.equal(committedSecond("0", 3, NORMAL), null);
+  assert.equal(committedSecond("61", 3, NORMAL), null);
+  assert.equal(committedSecond("4.5", 3, NORMAL), null);
+  assert.equal(committedSecond("-4", 3, NORMAL), null);
+  assert.equal(committedSecond("ten", 3, NORMAL), null);
 });

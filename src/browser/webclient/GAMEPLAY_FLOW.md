@@ -23,10 +23,10 @@ large so the state of the game reads at a glance.
 ## The cuts, in order
 
 1. **Title, then rules.** The first screen shows DROP THE HANDKERCHIEF
-   and one Start button on black. Start or Enter opens the chapter's rules
-   PNG (`src/arena/art/panels/stl_rules.png`) without a server wait. Beneath
-   the panel, Begin starts play. One footer explains same-second checks and
-   the modeled revival odds. These screens contain no name form or HUD.
+   and one Start button on black. Start or Enter opens the rules page
+   without a server wait: five short rules in one list, which a player reads
+   in under half a minute. Beneath the list, Begin starts play. The page has
+   no footer. These screens contain no name form or HUD.
    Opening or reloading returns to the title and resets the series, with the
    opening clock and empty score and history. Begin or Enter on the rules
    during startup waits for preparation. The client resets and begins the
@@ -42,16 +42,18 @@ large so the state of the game reads at a glance.
    gesture, with the full turn remaining. One gesture advances one screen.
 
 3. **Cut to the action window.** The scene cuts to a full-screen prompt:
-   "You are the Checker" or "You are the Dropper", one Commit button, and to
-   the right, filling the black space, the dial plate from
+   "You are the Checker" or "You are the Dropper", one field with a Commit
+   button, and to the right, filling the black space, the dial plate from
    palerdr.github.io. Its hour and minute hands read the game clock; its red
    pointer steps one mark per second of the turn. Beneath the plate a large
    count names the second now passing: it reads 1 when the clock opens and
    rises on the same instant each beat sounds, so after beat k it reads
-   k + 1. There is no field. Commit or Enter plays the second the count
-   names at that gesture. The instruction states the server's legal range,
-   “1–60” in a normal turn. Hal's second does not exist until the commit
-   arrives at the server. The count holds at the last legal second for the
+   k + 1. A second typed in the field plays at once on Commit or Enter, so
+   you need not wait for the clock. With the field empty, Commit or Enter
+   plays the second the count names at that gesture. The instruction states
+   the server's legal range, “1–60” in a normal turn, and the client refuses
+   a typed second outside that range. Hal's second does not exist until the
+   commit arrives at the server. The count holds at the last legal second for the
    final beat; when the gong rings the minute is up, as the chapter's rules
    say: the turn ends, and that last legal second (60, or 61 for Baku
    dropping in the leap window) is committed for you.
@@ -91,8 +93,10 @@ Each line is something the author asked for. Keep them all.
 
 - Explain the game in plain terms, in one paragraph, with no solver jargon.
 - The start clock is not malleable.
-- The first screen uses the actual PNG of the rules, distilled into a
-  succinct paragraph.
+- The rules page holds a few rules in a clear layout, which a player reads
+  in 20 to 30 seconds. It carries no "assumptions" footer and no caveats.
+  This replaces the earlier request for the chapter's rules PNG, which read
+  as too verbose.
 - No half-round log and no rules fold on the stage.
 
 ### Screens
@@ -101,10 +105,14 @@ Each line is something the author asked for. Keep them all.
   and the clock, then a decision screen for the result, then repeat.
 - The two players' status is four bars in the top-left corner.
 - On a phone, the action card is one centred column: the heading and the
-  instructions, then the clock and its count, then Commit beneath the clock.
-  Wide screens keep the text and Commit together on the left of the clock.
-- No grid of sixty squares to pick a second from, and no field to type in:
-  one Commit, played on the second the count names.
+  instructions, then the clock and its count, then the field and Commit
+  beneath the clock. Wide screens keep the text, the field, and Commit
+  together on the left of the clock.
+- No grid of sixty squares to pick a second from.
+- The field to type a second is back, beside Commit, so a game of many
+  half-rounds does not cost a minute for each one. An empty field still
+  plays the second the count names. This replaces the earlier request for
+  no field.
 - The result screen is delayed behind a full black screen, for anticipation:
   1.5 seconds, then a 3.6-second fade in the style of the Dark Souls death screen.
 - The result screen does not repeat "revived yes/no"; the result line says

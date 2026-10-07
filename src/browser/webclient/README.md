@@ -54,21 +54,23 @@ The browser surface covers the whole of `python -m terminal play`, staged as
 one full-screen stage rather than a scrolling page:
 
 - The title page shows DROP THE HANDKERCHIEF and Start. Start opens the
-  chapter's rules PNG with Begin and one footer about same-second checks and
-  modeled revival odds. The opening screens omit the HUD and name form.
+  rules page: five short rules in one list, with Begin beneath them
+  (`src/screens/rules.ts`). The opening screens omit the HUD and name form.
   The server fixes the start clock and player identity. Later games skip
   these screens and start play.
 - Each decision is two cuts. The scene — the seated Checker, Yakou, the
   Dropper — waits under a caption naming who drops and who checks. A click
-  or Enter opens the action screen: one commit and the dial plate ported
+  or Enter opens the action screen: one field, one commit, and the dial
+  plate ported
   from palerdr.github.io (`src/render/dialplate.ts`), whose hour and minute
   hands read the game clock and whose red pointer steps one mark per second
   heard from the moment the cut lands. The count beneath the plate names the
   second now passing (`src/second.ts`): it reads 1 at the cut and rises on
   each beat, held at the last legal second for the final beat, with a gong in
   place of the final tick (`src/audio/tick.ts`; sample sources and rights in
-  `public/audio/ATTRIBUTION.md`). There is no field: Commit or Enter plays
-  the second the count names at that gesture. The plate is scenery, since
+  `public/audio/ATTRIBUTION.md`). A second typed in the field plays at once
+  on Commit or Enter. With the field empty, Commit or Enter plays the second
+  the count names at that gesture. The plate is scenery, since
   the referee has no time limit, but at the gong the client commits the last
   legal second for you, as the chapter's one-minute rule requires. The scene
   has no timer, and other keys do not advance it. The clock starts with a
@@ -121,8 +123,9 @@ one full-screen stage rather than a scrolling page:
   the duration: 61 seconds places the gong one second after a normal turn.
 - `tools/prepare_clock_audio.py` prepares the samples from the source WAV;
   `public/audio/ATTRIBUTION.md` records the cuts and separation limits.
-- `src/second.ts` — the one pure mapping from beats heard and the server's
-  legal seconds to the second the count names and Commit plays.
+- `src/second.ts` — the pure mapping from beats heard and the server's
+  legal seconds to the second the count names, and from the field and that
+  count to the second Commit plays.
 - `src/screens/` — one module per cut: rules, beat, live, outcome, victory.
 - `src/main.ts` — holds the latest snapshot and transcript and re-renders on
   change.
