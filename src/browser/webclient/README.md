@@ -54,7 +54,8 @@ The browser surface covers the whole of `python -m terminal play`, staged as
 one full-screen stage rather than a scrolling page:
 
 - The title page shows DROP THE HANDKERCHIEF and Start. Start opens the
-  rules page: five short rules in one list, with Begin beneath them
+  rules page. You read about the scene and each player's drug vial,
+  then the turn and revival rules, with Begin beneath them
   (`src/screens/rules.ts`). The opening screens omit the HUD and name form.
   The server fixes the start clock and player identity. Later games skip
   these screens and start play.
