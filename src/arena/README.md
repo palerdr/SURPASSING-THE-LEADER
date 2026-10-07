@@ -59,7 +59,7 @@ projects must not import it.
   paths resolve from the package, so the art loads from any working directory.
 - `art/` holds the runtime art that `presentation/scene_art.py` reads: the
   character sprites in `art/sprites/` and the rules spread
-  `art/panels/stl_rules.png`, which opens the browser game. Git tracks both.
+  `art/panels/stl_rules.png`, which the browser server serves. Git tracks both.
   `browser.deploy.prepare_vercel` pre-renders them into the Vercel bundle.
   The manga reference images live in
   [`docs/game-sources/reference-art/`](../../docs/game-sources/reference-art/).

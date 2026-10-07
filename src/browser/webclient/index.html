@@ -88,18 +88,25 @@
       .opening button:focus-visible { outline: 2px solid var(--ink); outline-offset: 5px; }
       .opening .error:empty { display: none; }
       .rules-slide {
-        width: 100%; height: 100%;
-        display: flex; flex-direction: column; gap: 12px; align-items: center;
+        width: min(760px, 100%); max-height: 100%; overflow-y: auto;
+        display: flex; flex-direction: column; gap: 28px; align-items: center;
       }
-      .rules-slide img {
-        flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain;
-        background: #000;
+      .rules-slide h1 {
+        margin: 0; font-weight: 400; font-size: 22px; letter-spacing: 0.3em;
       }
+      .rules-slide dl {
+        margin: 0; width: 100%; display: grid; grid-template-columns: 11em 1fr;
+        border-top: 1px solid var(--rule);
+      }
+      .rules-slide dt, .rules-slide dd {
+        margin: 0; padding: 14px 0; border-bottom: 1px solid var(--rule);
+      }
+      .rules-slide dt {
+        padding-right: 20px; color: var(--dim); font-size: 14px;
+        letter-spacing: 0.1em; line-height: 1.9; text-transform: uppercase;
+      }
+      .rules-slide dd { font-size: 19px; line-height: 1.45; }
       .rules-slide form { flex: 0 0 auto; justify-content: center; margin: 0; }
-      #screen .assumptions {
-        margin: 0; color: var(--dim); text-align: center;
-        font-size: 14px; line-height: 1.4; text-wrap: balance;
-      }
       .caption {
         position: absolute; left: 0; right: 0; bottom: 8vh; text-align: center;
         letter-spacing: 0.18em; color: var(--ink); font-size: 17px;
@@ -129,7 +136,8 @@
       }
       .action .ask > * { margin: 0; }
       .action .ask p { contain: inline-size; white-space: nowrap; }
-      .action .ask [data-commit] { justify-self: center; margin-top: var(--step); }
+      .action .ask .pick { justify-self: center; flex-wrap: nowrap; margin-top: var(--step); }
+      .action .ask [data-second] { width: 4.2em; text-align: center; font-variant-numeric: lining-nums tabular-nums; }
       .action .ask .error { min-height: 0; }
       .action .ask .error:empty { display: none; }
 
@@ -248,6 +256,11 @@
       @keyframes result-reveal { from { opacity: 0; } to { opacity: 1; } }
       @media (max-width: 640px) {
         .title-slide h1 { font-size: clamp(1.7rem, 9vw, 3rem); }
+        .rules-slide { gap: 16px; }
+        .rules-slide h1 { font-size: 18px; }
+        .rules-slide dl { grid-template-columns: 1fr; }
+        .rules-slide dt { padding: 10px 0 0; border-bottom: 0; line-height: 1.4; font-size: 12px; }
+        .rules-slide dd { padding: 2px 0 10px; font-size: 16px; line-height: 1.35; }
         #hud { width: 48vw; }
         #hud .player h2 { font-size: 12px; }
         #corner { font-size: 15px; }
@@ -270,7 +283,7 @@
         .action .ask h2 { order: 1; }
         .action .ask p { order: 2; contain: none; white-space: normal; }
         .action .plate-and-count { order: 3; margin-top: var(--step); }
-        .action .ask [data-commit] { order: 4; align-self: center; }
+        .action .ask .pick { order: 4; align-self: center; }
         .action .ask .error { order: 5; }
         .dialplate { width: min(48vw, 29vh); }
         .plate-and-count { gap: 12px; }
