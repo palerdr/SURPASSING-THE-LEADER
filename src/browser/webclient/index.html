@@ -303,6 +303,14 @@
         .dialplate { width: min(44vw, 23vh); }
         .plate-and-count { gap: 12px; }
       }
+      @media (max-width: 820px) and (max-height: 600px) {
+        #screen { inset-block-start: 156px; padding-block-end: 16px; }
+        #screen.opening { inset-block-start: 0; }
+        #hud { top: 12px; gap: 6px; }
+        #corner { top: 12px; }
+        .stat { line-height: 1.2; }
+        .dialplate { width: min(44vw, 20vh); }
+      }
     </style>
   </head>
   <body>
