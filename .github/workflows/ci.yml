@@ -54,6 +54,8 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          # numba supports Python below 3.15; without a pin uv takes the newest CPython.
+          python-version: "3.13"
       - run: uv sync --dev
       - run: uv run pytest -q
 
