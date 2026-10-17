@@ -1,0 +1,9 @@
+sources:
+  - name: bronze
+    description: The hosted ledger's game rows, as the bronze extract writes them to JSON Lines files.
+    tables:
+      - name: games
+        description: Each row holds one ledger write of one game, with its public history as a list of JSON moves.
+        config:
+          meta:
+            external_location: "read_json_auto('{{ var('bronze_dir') }}/games/*.jsonl', union_by_name = true, maximum_depth = 2)"

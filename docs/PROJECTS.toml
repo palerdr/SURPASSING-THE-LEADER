@@ -237,6 +237,23 @@ may_import = []
 root_validation = true
 validation = ["lake -d src/formal build"]
 
+# The live opponent-modelling loop: Dagster assets, a dbt project on DuckDB,
+# and an MLflow registry that fit the adaptive Hal's prior from the hosted
+# ledger. Its own uv project; no project imports it.
+[[project]]
+id = "hal_loop"
+path = "src/hal_loop"
+instruction_readme = "src/hal_loop/README.md"
+kind = "pipeline"
+languages = ["python", "sql"]
+rung = "L2"
+status = "research"
+public_interfaces = []
+may_import = ["arena", "dth.agent"]
+forbid_imports = ["torch", "gymnasium", "stable_baselines3", "sb3_contrib"]
+root_validation = true
+validation = ["uv run --project src/hal_loop python -m pytest src/hal_loop/tests -q"]
+
 # The paper's figure scripts. They read the STL leap artifact through
 # stl.reader and the compact DTH solver through its one-file main.py.
 [[consumer]]

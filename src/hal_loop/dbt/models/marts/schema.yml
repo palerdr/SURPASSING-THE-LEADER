@@ -1,0 +1,67 @@
+models:
+  - name: player_splits
+    description: This model assigns each finished, stopped, or abandoned game to the train, validation, or test split of its player.
+    columns:
+      - name: game_key
+        description: The game that the row assigns.
+        data_tests: [not_null, unique]
+      - name: player_id
+        description: The hashed identity of the human player.
+      - name: game_ordinal
+        description: The game's position among its player's games, by start time, from 0.
+      - name: player_games
+        description: The player's count of finished, stopped, or abandoned games.
+      - name: split
+        description: The split that holds the game.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [train, validation, test]
+
+  - name: move_context
+    description: This model holds each ordinary-turn move with its pre-decision public state and its game's split.
+    columns:
+      - name: game_key
+        description: The game that the move belongs to.
+      - name: player_id
+        description: The hashed identity of the human player.
+      - name: move_index
+        description: The move's position in the game's public history, from 0.
+      - name: human_role
+        description: The human's role in the move.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [dropper, checker]
+      - name: human_second
+        description: The second that the human revealed.
+      - name: hal_second
+        description: The second that Hal revealed.
+      - name: hal_cylinder_seconds
+        description: Hal's cylinder seconds before the move.
+      - name: hal_ttd_seconds
+        description: Hal's time dead before the move.
+      - name: baku_cylinder_seconds
+        description: The human's cylinder seconds before the move.
+      - name: baku_ttd_seconds
+        description: The human's time dead before the move.
+      - name: clock_seconds
+        description: The game clock in seconds before the move.
+      - name: split
+        description: The split of the move's game.
+      - name: started_at
+        description: The ledger's time of the game's first write.
+
+  - name: role_histograms
+    description: This model counts each player's revealed seconds 1 to 60 per role and split.
+    columns:
+      - name: player_id
+        description: The hashed identity of the human player.
+      - name: human_role
+        description: The human's role in the counted moves.
+      - name: split
+        description: The split of the counted moves.
+      - name: second
+        description: The revealed second that the row counts.
+      - name: count
+        description: The number of moves that revealed this second.

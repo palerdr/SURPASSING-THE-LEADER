@@ -1,0 +1,123 @@
+models:
+  - name: base_games
+    description: This ephemeral model keeps the latest ledger write of each game, with its public history.
+
+  - name: stg_games
+    description: This model holds one row per game, from the latest ledger write of that game.
+    columns:
+      - name: game_key
+        description: The series id and the game index, joined by a colon, identify the game.
+        data_tests: [not_null, unique]
+      - name: series_id
+        description: The hosted series that played the game.
+      - name: game_index
+        description: The game's position in its series, from 0.
+      - name: player_id
+        description: The hashed identity of the human player.
+      - name: status
+        description: The ledger marks the game finished, stopped, abandoned, or active. A restart marks a series' open game abandoned.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [finished, stopped, abandoned, active]
+      - name: human_won
+        description: The flag is true when the human won a finished game.
+      - name: score
+        description: The winner's seconds of life left in a finished game that the human won.
+      - name: half_rounds
+        description: The ledger's count of resolved half-rounds.
+      - name: human_cylinder_seconds
+        description: The human's accrued cylinder seconds at the last write.
+      - name: human_ttd_seconds
+        description: The human's accrued time dead at the last write.
+      - name: human_deaths
+        description: The human's death count at the last write.
+      - name: hal_cylinder_seconds
+        description: Hal's accrued cylinder seconds at the last write.
+      - name: hal_ttd_seconds
+        description: Hal's accrued time dead at the last write.
+      - name: hal_deaths
+        description: Hal's death count at the last write.
+      - name: start_clock
+        description: The game clock in seconds at the first half-round.
+      - name: pure_dth
+        description: The flag is true when the game ran pure DTH without the leap window.
+      - name: hal_agent
+        description: The Hal policy provider that played the game.
+      - name: code_version
+        description: The hosted code version that wrote the row.
+      - name: game_seed
+        description: The game seed as text, which keeps all 128 bits.
+      - name: policy_seed
+        description: The policy seed as text, which keeps all 128 bits.
+      - name: started_at
+        description: The ledger's time of the game's first write.
+      - name: updated_at
+        description: The ledger's time of the game's latest write.
+
+  - name: stg_moves
+    description: This model holds one row per revealed half-round of every finished, stopped, or abandoned game.
+    columns:
+      - name: game_key
+        description: The game that the move belongs to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: game_key
+      - name: player_id
+        description: The hashed identity of the human player.
+      - name: move_index
+        description: The move's position in the game's public history, from 0.
+      - name: half
+        description: The half of the round before the move.
+      - name: round
+        description: The round number before the move.
+      - name: dropper
+        description: The engine identity that dropped, Hal or Baku.
+      - name: checker
+        description: The engine identity that checked, Hal or Baku.
+      - name: human_role
+        description: The human's role, dropper when Baku dropped and checker otherwise.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [dropper, checker]
+      - name: human_second
+        description: The second that the human revealed.
+      - name: hal_second
+        description: The second that Hal revealed.
+      - name: drop_second
+        description: The dropper's revealed second.
+      - name: check_second
+        description: The checker's revealed second.
+      - name: result
+        description: The engine's outcome label for the half-round.
+      - name: survived
+        description: The flag records revival after a failed check and is null otherwise.
+      - name: squandered_seconds
+        description: The inclusive squandered time of a successful check, and 0 otherwise.
+      - name: turn_duration
+        description: The turn length, 60 for an ordinary turn and 61 for the leap window.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [60, 61]
+                quote: false
+      - name: clock_seconds
+        description: The game clock in seconds before the move.
+      - name: hal_cylinder_seconds
+        description: Hal's cylinder seconds before the move.
+      - name: hal_ttd_seconds
+        description: Hal's time dead before the move.
+      - name: hal_deaths
+        description: Hal's death count before the move.
+      - name: baku_cylinder_seconds
+        description: The human's cylinder seconds before the move.
+      - name: baku_ttd_seconds
+        description: The human's time dead before the move.
+      - name: baku_deaths
+        description: The human's death count before the move.
+      - name: started_at
+        description: The ledger's time of the game's first write.
