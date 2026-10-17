@@ -83,6 +83,7 @@ RECORDS = (
     # The records of studies registered after TAG. Each path is current.
     "src/arena/config/exploit_continuation_v1_selection.json",
     "src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json",
+    "src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json",
 )
 
 STATUSES = ("verified", "mismatch", "missing", "unverifiable")

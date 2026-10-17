@@ -49,7 +49,8 @@ plan.
   model, its configs, and its frozen records. The studies are
   `perfect_hal_bayes_v2`, `perfect_hal_ensemble_v1`, `translated_hal_v1`,
   `external_hal_prior_v1`, `neural_pilots_v1`, `selector_study_v1`,
-  `pm_hal_v3`, and `aggro_hal_v1`. `exploit_hal_v2/config/` holds the three
+  `pm_hal_v3`, `aggro_hal_v1`, and `leap_support_v1`.
+  `exploit_hal_v2/config/` holds the three
   historical Exploit Hal v1 configs.
 - `experiments/exploit_continuation_v1/` holds the study of the exploit
   continuation provider `arena.policies.exploit_continuation`. Its runner
@@ -122,6 +123,10 @@ uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth
   bind. The neural pilots record binds the first `run_neural_pilots.py`, and
   `outputs/neural-pilots-v1/run_neural_pilots-original.py` keeps those bytes.
   The five bindings under `outputs/aggro-hal-v1/` are missing on this disk.
+- `src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json` is
+  a frozen record, registered on 2026-10-16. Its bound outputs live under the
+  ignored `src/stl/outputs/leap-residue/` and
+  `src/hal_lab/outputs/leap_support_v1/`.
 
 ## Records and configs in `src/arena/config`
 

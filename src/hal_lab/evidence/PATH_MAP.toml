@@ -110,3 +110,4 @@ absolute_roots = ["/Users/palerider/Desktop/projects/usogui/stl/"]
 "src/arena/web/prepare_vercel.py" = "src/browser/deploy/prepare_vercel.py"
 "src/arena/web/production.py" = "src/browser/deploy/production.py"
 "src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json" = "src/hal_lab/experiments/exploit_continuation_v1/exploit_continuation_v1_results.json"
+"src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json" = "src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json"
