@@ -49,7 +49,7 @@ plan.
   model, its configs, and its frozen records. The studies are
   `perfect_hal_bayes_v2`, `perfect_hal_ensemble_v1`, `translated_hal_v1`,
   `external_hal_prior_v1`, `neural_pilots_v1`, `selector_study_v1`,
-  `pm_hal_v3`, `aggro_hal_v1`, and `leap_support_v1`.
+  `pm_hal_v3`, `aggro_hal_v1`, `leap_support_v1`, and `hal_predictability_v1`.
   `exploit_hal_v2/config/` holds the three
   historical Exploit Hal v1 configs.
 - `experiments/exploit_continuation_v1/` holds the study of the exploit
