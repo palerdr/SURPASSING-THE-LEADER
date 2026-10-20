@@ -108,12 +108,10 @@ def _import_root(entry: dict) -> Path:
 def module_owners() -> dict[str, str]:
     """Map each first-party top-level module name to the project that owns it.
 
-    A package project owns the package named after it. A self-contained uv
-    project, such as hal_loop, keeps its package one level down at
-    src/<id>/<id>/ and owns it too. A flat project, such as dth_compact, owns
-    its top-level modules. A package directory under src/ that the registry
-    omits owns its own name, so an import of it never passes as a third-party
-    import.
+    A package project owns the package named after it. A flat project, such as
+    dth_compact, owns its top-level modules. A package directory under src/
+    that the registry omits owns its own name, so an import of it never passes
+    as a third-party import.
     """
 
     owners: dict[str, str] = {}
@@ -121,7 +119,7 @@ def module_owners() -> dict[str, str]:
         if not _is_python(entry):
             continue
         base = ROOT / str(entry["path"])
-        if (base / "__init__.py").is_file() or (base / project_id / "__init__.py").is_file():
+        if (base / "__init__.py").is_file():
             owners[project_id] = project_id
         else:
             for path in base.glob("*.py"):

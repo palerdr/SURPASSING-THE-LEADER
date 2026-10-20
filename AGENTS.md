@@ -35,9 +35,6 @@
   studies, with the ignored root `outputs/` store.
   It may import `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`,
   `dth.agent`, and `dth.solver`, and no project imports it.
-- `src/hal_loop/` is the live opponent-modelling loop, a Dagster, dbt, and
-  MLflow pipeline that fits the adaptive Hal's prior from the hosted ledger.
-  It may import `arena` and `dth.agent`, and no project imports it.
 - Each project owns its configs, docs, tests, checkpoints, and outputs.
 - The root `tests/` holds the repository meta-tests in `tests/meta/` and the
   terminal-versus-browser parity tests in `tests/parity/`. A parity test runs
@@ -71,7 +68,6 @@ such as `paper/*.py`.
 | App | `terminal` | `arena`, `stl.engine` |
 | App | `browser` | `arena`, `stl.engine`, `dth.agent` |
 | Lab | `hal_lab` | `arena`, `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver` |
-| Pipeline | `hal_loop` | `arena`, `dth.agent` |
 | Consumer | `paper` | `stl.reader`, `main` (`src/dth_compact/main.py`) |
 
 - A cross-project import must sit under a `may_import` entry of the importer
@@ -92,8 +88,8 @@ such as `paper/*.py`.
 - Inside `arena`, `contracts.py`, `agent.py`, `session.py`, `match.py`, and
   `variants.py` import `stl.engine` and each other alone. `dth` and
   `abstract` enter through the adapters and `arena/policies/`.
-- `stl`, `dth`, `abstract`, `dth_compact`, `arena`, `terminal`, `browser`, and
-  `hal_loop` do not import `torch`, `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The
+- `stl`, `dth`, `abstract`, `dth_compact`, `arena`, `terminal`, and `browser`
+  do not import `torch`, `gymnasium`, `stable_baselines3`, or `sb3_contrib`. The
   files in `forbid_imports_exempt` are the exceptions: the three torch Hal
   providers `arena/policies/{exploit_hal,aggro_hal,pm_hal}.py` and the arena
   tests that exercise them. Add no file to that list. `arena/policies/__init__.py`
@@ -173,7 +169,6 @@ uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
-uv run --project src/hal_loop python -m pytest src/hal_loop/tests -q
 cargo test --workspace
 npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml

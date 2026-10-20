@@ -25,7 +25,6 @@ file's frozen global rules win.
 @src/terminal/README.md
 @src/browser/README.md
 @src/hal_lab/README.md
-@src/hal_loop/README.md
 @src/formal/README.md
 @docs/papers/README.md
 

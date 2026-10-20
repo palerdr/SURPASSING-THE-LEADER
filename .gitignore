@@ -38,7 +38,6 @@ src/abstract/outputs/
 
 # Training artifacts
 models/
-!src/hal_loop/dbt/models/
 checkpoints/
 src/stl/checkpoints/
 src/dth/artifacts/
@@ -82,8 +81,3 @@ Thumbs.db
 /.agents
 .vercel
 .env*
-# hal_loop: the warehouse, bronze extracts, MLflow runs, Dagster storage, dbt build output
-src/hal_loop/data/
-src/hal_loop/dbt/target/
-src/hal_loop/dbt/dbt_packages/
-src/hal_loop/dbt/logs/
