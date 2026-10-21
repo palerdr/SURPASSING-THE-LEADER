@@ -2,11 +2,13 @@
 
 Phases: ``generate`` records Hal's decisions per (policy, opponent) pair, ``fit``
 scores departure and three predictors and applies the control, ``exploit`` plays
-a counter-player against translated-v1, and ``report`` writes the tables.
+a counter-player against translated-v1, ``curves`` plays the mixed, online, and
+temperature curves, and ``report`` writes the tables.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import math
@@ -44,6 +46,8 @@ PROTOCOL = {
     # The counter-player reads the state-only table of this pair's fit games.
     "exploit": {"games": 500, "table": "translated-v1__exact"},
 }
+# The curve settings stay outside PROTOCOL, so the recorded moves keep their protocol hash.
+CURVES = {"games": 500, "mix": [0.0, 0.25, 0.5, 0.75, 1.0], "online": True, "block": 100, "least": 3, "temperatures": [0.0, 0.1, 0.3, 1.0], "departure_games": 200}
 
 
 def protocol_hash(protocol: dict) -> str:
@@ -262,27 +266,41 @@ def fit(protocol: dict, out: Path = OUTPUT) -> dict:
 
 
 class Counter:
-    """Best-respond to the state-only forecast of Hal's second in the exact stage game."""
+    """With probability ``mix``, best-respond to the state-only forecast of Hal's second in the exact stage game, else play
+    the exact equilibrium. ``learn`` adds each revealed Hal second to the table and plays the equilibrium below ``least``."""
 
-    def __init__(self, agent, table, laplace):
-        self.agent, self.table, self.laplace = agent, table, laplace
+    def __init__(self, agent, table, laplace, mix=1.0, learn=False, least=0):
+        self.agent, self.table, self.laplace, self.mix, self.learn, self.least = agent, table, laplace, mix, learn, least
 
     def policy(self, decision):
         state = project_to_dth_state(decision)
         stage = self.agent.stage_game(state)
         hal_checker = decision.role == "dropper"
-        counts = self.table.get(_bucket(state, hal_checker))
-        forecast = ((stage.check_policy if hal_checker else stage.drop_policy) if counts is None
+        self.key = _bucket(state, hal_checker)
+        counts = self.table.get(self.key)
+        cold = counts is None or counts.sum() < self.least
+        forecast = ((stage.check_policy if hal_checker else stage.drop_policy) if cold
                     else (counts + self.laplace) / (counts.sum() + 60 * self.laplace))
         # Dropper rows maximize the matrix; Checker columns minimize it.
         action = np.argmax(stage.matrix @ forecast) if hal_checker else np.argmin(forecast @ stage.matrix)
-        return {int(action) + 1: 1.0}
+        mix = 0.0 if self.learn and cold else self.mix
+        mixed = mix * np.eye(60)[action] + (1 - mix) * np.asarray(stage.drop_policy if hal_checker else stage.check_policy)
+        return {i + 1: float(q) for i, q in enumerate(mixed) if q > 0}
+
+    def observe(self, record):
+        if self.learn:  # The bucket's last field is 1 when Hal checks.
+            second = record.check_time if self.key[-1] else record.drop_time
+            self.table.setdefault(self.key, np.zeros(60))[second - 1] += 1
 
 
 def _wilson(wins: int, n: int, z: float = 1.959964) -> list[float]:
     p, scale = wins / n, 1 + z * z / n
     half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / scale
     return [(p + z * z / (2 * n)) / scale - half, (p + z * z / (2 * n)) / scale + half]
+
+
+def _rate(wins: list[bool]) -> dict:
+    return {"games": len(wins), "wins": sum(wins), "win_rate": sum(wins) / len(wins), "wilson_95": _wilson(sum(wins), len(wins))}
 
 
 def exploit(protocol: dict, out: Path = OUTPUT) -> dict:
@@ -293,10 +311,70 @@ def exploit(protocol: dict, out: Path = OUTPUT) -> dict:
     seeds, result = game_seeds(protocol, stream=1), {"table": pair, "rows": {}}
     for name, rival in (("counter", Counter(agent, table, protocol["laplace"])), ("exact", ExactProvider(agent))):
         wins = _play(_make_hal(protocol, protocol["policies"]["translated-v1"]), rival, seeds, protocol)
-        result["rows"][name] = {"games": len(wins), "wins": sum(wins), "win_rate": sum(wins) / len(wins),
-                                "wilson_95": _wilson(sum(wins), len(wins))}
+        result["rows"][name] = _rate(wins)
     (out / "exploit.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
     return result
+
+
+def curve_seeds(protocol: dict, spec: dict) -> dict[str, list[int]]:
+    """Give each curve series its own seeds, disjoint from streams 0 and 1 and from each other."""
+    names = [f"mix_{p}" for p in spec["mix"]] + ["online"] * spec["online"] + [f"{k}_{t}" for k in ("temperature", "departure") for t in spec["temperatures"]]
+    sizes = [spec["departure_games"] if n.startswith("departure") else spec["games"] for n in names]
+    pool = [int(s) for s in np.random.SeedSequence([protocol["seed"], 2]).generate_state(sum(sizes))]
+    if len(set(pool) | set(game_seeds(protocol)) | set(game_seeds(protocol, 1))) != sum(sizes) + protocol["games"] + protocol["exploit"]["games"]:
+        raise RuntimeError("curve seeds collide with each other or with streams 0 and 1")
+    return {n: pool[end - size:end] for n, size, end in zip(names, sizes, np.cumsum(sizes))}
+
+
+def translated(temperature: float, agent):
+    """Build translated-v1 through the provider constructors with another response temperature."""
+    config = dataclasses.replace(arena.translated_hal_adapter.selected_config(), response_temperature=temperature)
+    return arena.policies.perfect_hal.PerfectHalPolicyProvider(
+        ARTIFACT, config, agent=agent, opponent_model=arena.policies.translated_hal.TranslatedHalOpponentModel(config))
+
+
+def _departure(rows, protocol) -> dict:
+    """Score departure from the floor on every recorded move with the fit phase's bootstrap."""
+    logf, _, _, y = _features(rows, protocol)
+    nll, keys = -logf[np.arange(len(y)), y], ("floor", "state", "history")
+    s = _summary([{"nll": dict.fromkeys(keys, nll), "top1": dict.fromkeys(keys, logf.argmax(1) == y), "history_fit": None,
+                   "departure": nll + (np.exp(logf) * logf).sum(1), "games": np.array([r["game"] for r in rows]),
+                   "moves": len(rows), "off_support": int(sum(r["floor"][r["second"] - 1] == 0.0 for r in rows))}], protocol)
+    return {key: s[key] for key in ("moves", "off_support", "departure", "departure_ci")}
+
+
+def curves(protocol: dict, out: Path = OUTPUT, spec: dict = CURVES) -> dict:
+    """Play the mixed, online, and temperature curves against fresh translated-v1 series."""
+    agent, seeds, laplace = dth.agent.CompleteDTHAgent(ARTIFACT), curve_seeds(protocol, spec), protocol["laplace"]
+    rows, test = _load(out, protocol["exploit"]["table"])
+    table = _state_table(rows, _split(rows, protocol, test)[3])
+    hal = lambda: _make_hal(protocol, protocol["policies"]["translated-v1"])  # noqa: E731
+    result = {"spec": spec, "table": protocol["exploit"]["table"], "mixed": [], "online": None, "temperature": []}
+    for p in spec["mix"]:
+        result["mixed"].append({"p": p, **_rate(_play(hal(), Counter(agent, table, laplace, mix=p), seeds[f"mix_{p}"], protocol))})
+    if spec["online"]:
+        wins, block = _play(hal(), Counter(agent, {}, laplace, learn=True, least=spec["least"]), seeds["online"], protocol), spec["block"]
+        result["online"] = {**_rate(wins), "blocks": [{"block": f"{i + 1}-{min(i + block, len(wins))}", **_rate(wins[i:i + block])}
+                                                      for i in range(0, len(wins), block)]}
+    for t in spec["temperatures"]:
+        wins = _play(translated(t, agent), Counter(agent, table, laplace), seeds[f"temperature_{t}"], protocol)
+        recorder = Recorder(translated(t, agent), agent, protocol["k"], {"policy": f"translated-v1 T={t}", "opponent": "exact"})
+        _play(recorder, ExactProvider(agent), seeds[f"departure_{t}"], protocol)
+        result["temperature"].append({"temperature": t, **_rate(wins), "departure_vs_exact": _departure(recorder.rows, protocol)})
+    (out / "curves.json").write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
+    return result
+
+
+def _curve_tables(c: dict) -> list[str]:
+    rate = lambda r: f"{r['wins']} of {r['games']} | {r['win_rate']:.3f} [{r['wilson_95'][0]:.3f}, {r['wilson_95'][1]:.3f}]"  # noqa: E731
+    lines = ["", f"| Mixed counter p vs translated-v1 (table {c['table']}) | Wins | Win rate [Wilson 95%] |", "| ---: | ---: | --- |",
+             *[f"| {r['p']} | {rate(r)} |" for r in c["mixed"]]]
+    lines += ["", "| Online counter vs translated-v1, games | Wins | Win rate [Wilson 95%] |", "| --- | ---: | --- |",
+              *[f"| {r['block']} | {rate(r)} |" for r in c["online"]["blocks"]], f"| all | {rate(c['online'])} |"]
+    lines += ["", "| Hal response temperature | Counter wins | Counter win rate [Wilson 95%] | Moves | Departure vs exact [95% CI] |", "| ---: | ---: | --- | ---: | --- |"]
+    lines += [f"| {r['temperature']} | {rate(r)} | {d['moves']} | {d['departure']:+.4f} [{d['departure_ci'][0]:+.4f}, "
+              f"{d['departure_ci'][1]:+.4f}] |" for r in c["temperature"] for d in [r["departure_vs_exact"]]]
+    return lines
 
 
 def _sources() -> dict:
@@ -328,10 +406,12 @@ def report(protocol: dict, out: Path = OUTPUT) -> str:
     lines += ["", f"| Player vs translated-v1 (table {played['table']}) | Wins | Win rate [Wilson 95%] |", "| --- | ---: | --- |"]
     lines += [f"| {name} | {r['wins']} of {r['games']} | {r['win_rate']:.3f} [{r['wilson_95'][0]:.3f}, "
               f"{r['wilson_95'][1]:.3f}] |" for name, r in played["rows"].items()]
+    curve = json.loads((out / "curves.json").read_text()) if (out / "curves.json").is_file() else None
+    lines += _curve_tables(curve) if curve else []
     table = "\n".join(lines) + "\n"
     record = {"protocol": protocol, "protocol_hash": protocol_hash(protocol),
               "dth_manifest_sha256": hashlib.sha256((ARTIFACT / "tablebase.json").read_bytes()).hexdigest(),
-              "sources": _sources(), "control": "passed", "exploit": played, **results}
+              "sources": _sources(), "control": "passed", "exploit": played, "curves": curve, **results}
     (out / "results.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
     (out / "results.md").write_text(f"Losses and departure in nats per move on held-out games.\n\n{table}", encoding="utf-8")
     print(table, end="")
@@ -340,8 +420,8 @@ def report(protocol: dict, out: Path = OUTPUT) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m hal_lab.experiments.hal_predictability_v1.run")
-    parser.add_argument("phase", choices=("generate", "fit", "exploit", "report"))
-    {"generate": generate, "fit": fit, "exploit": exploit, "report": report}[parser.parse_args(argv).phase](PROTOCOL)
+    parser.add_argument("phase", choices=("generate", "fit", "exploit", "curves", "report"))
+    {"generate": generate, "fit": fit, "exploit": exploit, "curves": curves, "report": report}[parser.parse_args(argv).phase](PROTOCOL)
     return 0
 
 

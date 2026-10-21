@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import math
+import shutil
 
 import pytest
 
@@ -10,6 +12,11 @@ from hal_lab.experiments.hal_predictability_v1 import run
 
 SMOKE = {**run.PROTOCOL, "games": 6, "k": 2, "lbfgs_max_iter": 20, "resamples": 20,
          "exploit": {**run.PROTOCOL["exploit"], "games": 4}}
+# The curves read only the translated-v1 table, so their smoke generates that pair alone.
+TABLE_SMOKE = {**SMOKE, "policies": {"translated-v1": run.PROTOCOL["policies"]["translated-v1"]}, "opponents": ["exact"]}
+NO_CURVE = {**run.CURVES, "games": 4, "block": 2, "departure_games": 4, "mix": [], "online": False, "temperatures": []}
+REQUIRES_ARTIFACT = pytest.mark.skipif(not (run.ARTIFACT / "tablebase.json").is_file(),
+                                       reason="complete DTH artifact is absent")
 
 
 def test_seeds_and_split_are_deterministic():
@@ -71,3 +78,57 @@ def test_wilson_interval_brackets_the_rate():
     lo, hi = run._wilson(250, 500)
     assert lo < 0.5 < hi and abs((lo + hi) / 2 - 0.5) < 1e-12
     assert 0.0 <= run._wilson(0, 500)[0] and run._wilson(500, 500)[1] <= 1.0 + 1e-12
+
+
+@pytest.fixture(scope="module")
+def table_moves(tmp_path_factory):
+    out = tmp_path_factory.mktemp("table")
+    run.generate(TABLE_SMOKE, out)
+    return out
+
+
+def _curve(table_moves, tmp_path, **spec):
+    shutil.copytree(table_moves, tmp_path, dirs_exist_ok=True)
+    result = run.curves(TABLE_SMOKE, tmp_path, {**NO_CURVE, **spec})
+    assert json.loads((tmp_path / "curves.json").read_text()) == result
+    return result
+
+
+def _rate_ok(row, games):
+    return row["games"] == games and 0 <= row["wins"] <= games and 0.0 <= row["win_rate"] <= 1.0 \
+        and 0.0 <= row["wilson_95"][0] <= row["wilson_95"][1] <= 1.0 + 1e-12
+
+
+@REQUIRES_ARTIFACT
+def test_mixed_curve_smoke(table_moves, tmp_path):
+    result = _curve(table_moves, tmp_path, mix=run.CURVES["mix"])
+    assert [row["p"] for row in result["mixed"]] == run.CURVES["mix"]
+    assert all(_rate_ok(row, 4) for row in result["mixed"])
+    assert result["online"] is None and result["temperature"] == []
+
+
+@REQUIRES_ARTIFACT
+def test_online_curve_smoke(table_moves, tmp_path):
+    online = _curve(table_moves, tmp_path, online=True)["online"]
+    assert _rate_ok(online, 4)
+    assert [block["block"] for block in online["blocks"]] == ["1-2", "3-4"]
+    assert all(_rate_ok(block, 2) for block in online["blocks"])
+    assert sum(block["wins"] for block in online["blocks"]) == online["wins"]
+
+
+@REQUIRES_ARTIFACT
+def test_temperature_curve_smoke(table_moves, tmp_path):
+    rows = _curve(table_moves, tmp_path, temperatures=run.CURVES["temperatures"])["temperature"]
+    assert [row["temperature"] for row in rows] == run.CURVES["temperatures"]
+    for row in rows:
+        assert _rate_ok(row, 4)
+        departure = row["departure_vs_exact"]
+        assert departure["moves"] > 0 and math.isfinite(departure["departure"])
+        assert departure["departure_ci"][0] <= departure["departure_ci"][1]
+    # At the selected temperature the constructor path plays the registry's translated-v1 move for move.
+    agent, seeds, moves = run.dth.agent.CompleteDTHAgent(run.ARTIFACT), run.game_seeds(SMOKE, stream=1)[:2], []
+    for hal in (run._make_hal(SMOKE, SMOKE["policies"]["translated-v1"]), run.translated(0.0, agent)):
+        recorder = run.Recorder(hal, agent, SMOKE["k"], {})
+        run._play(recorder, run.ExactProvider(agent), seeds, SMOKE)
+        moves.append([(r["game"], r["move"], r["second"]) for r in recorder.rows])
+    assert moves[0] and moves[0] == moves[1]
