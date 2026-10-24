@@ -8,7 +8,6 @@ import os
 import highspy
 import numpy as np
 
-from stl.solver.leap_kernel import solve_packing, sweep_batch
 from stl.solver.leap_oracle import StageResult, policy_masks, solve_lp, stage_matrix
 from stl.solver.leap_profiles import N, profiles
 
@@ -209,6 +208,9 @@ class NativeFallback(Fallback):
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
         import time
+        # The spawn workers of FallbackPool import this module and run only
+        # HiGHS, so we import the numba kernel where we call it.
+        from stl.solver.leap_kernel import solve_packing
         output = self.cache.get(success, failure, window, pcs, pds)
         missing = np.flatnonzero(np.isnan(output)); cached = len(pcs)-len(missing)
         if not len(missing):
@@ -250,6 +252,7 @@ class SupportFallback(Fallback):
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
         import time
+        from stl.solver.leap_kernel import sweep_batch
         output = self.cache.get(success, failure, window, pcs, pds)
         pending = np.flatnonzero(np.isnan(output))
         cached = len(output)-len(pending); solved = 0

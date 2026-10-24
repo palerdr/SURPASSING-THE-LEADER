@@ -2367,7 +2367,7 @@ theorem readerGet_spec {b : ℕ → Bool} {v : ℕ → ℝ} {n cols r c : ℕ} :
 
 /-! ## Revival-cache exactness (STL-CACHE-1) -/
 
-/-- The stage inputs of `_solve_chunk` (`leap_lp.py:117-130`): success payoffs
+/-- The stage inputs of `_solve_chunk` (`leap_lp.py:116-129`): success payoffs
 `-T_succ[pd, succ[pc, k]]` and `F = rev · (-T_fail[pd, col(pc)]) + (1 - rev)`,
 where the tables and the failure-column map depend only on the child keys. -/
 def stageInputs (tables : Option Key → ℕ → ℕ → ℝ) (failCol : Option Key → ℕ → ℕ)
@@ -2376,7 +2376,7 @@ def stageInputs (tables : Option Key → ℕ → ℕ → ℝ) (failCol : Option 
   (fun k => -tables succKey pd (succ pc k),
     rev pc * -tables failKey pd (failCol failKey pc) + (1 - rev pc))
 
-/-- STL-CACHE-1 (`RevivalCache`, `leap_lp.py:70-104,173-180`): a cache hit
+/-- STL-CACHE-1 (`RevivalCache`, `leap_lp.py:69-103,172-179`): a cache hit
 returns a value certified for an identical stage. The cache groups by success
 key and window, tags each `(pc, idx0[pd])` cell with an injective token of the
 failure key, and caches only reset columns `0 ≤ idx0[pd] < 183`; `idx0`
