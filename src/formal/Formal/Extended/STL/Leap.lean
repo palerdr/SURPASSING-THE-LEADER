@@ -261,7 +261,7 @@ theorem lt_childClock (h τ q : ℕ) (hh : h = 1 ∨ h = 2) : τ < childClock h 
   · have := this.1 rfl; omega
   · have := this.2 rfl; omega
 
-/-- STL-CLOCK-3 (`leap_build.py:247-255,489-508`): a child clock at or below
+/-- STL-CLOCK-3 (`leap_build.py:249-257,490-509`): a child clock at or below
 `3600` is at most `540` seconds after its parent when the dose is at most
 `299`. The reader doubt that `q ≤ 299` needs live revival is settled by
 `dose_le_299`. -/
@@ -282,7 +282,7 @@ theorem dose_le_299 {s t : ℕ} (h : Survives s t) : ValidDose (s + 60) := by
 
 /-! ## Builder keys (STL-KEY-1, STL-RULE-2, STL-ORDER-1) -/
 
-/-- A builder key (`leap_build.py:26-56`): `('H1', m)` at clock `60 m`,
+/-- A builder key (`leap_build.py:28-58`): `('H1', m)` at clock `60 m`,
 `('H2', m)` at clock `60 m + 120`, and `('REV', c)` at clock `c`. -/
 inductive Key
   | h1 (m : ℕ)
@@ -298,24 +298,24 @@ def half : Key → ℕ
   | .h2 _ => 2
   | .rev _ => 2
 
-/-- `key_clock` (`leap_build.py:26-28`). -/
+/-- `key_clock` (`leap_build.py:28-30`). -/
 def clock : Key → ℕ
   | .h1 m => 60 * m
   | .h2 m => 60 * m + 120
   | .rev c => c
 
-/-- `key_columns` (`leap_build.py:35-36`). -/
+/-- `key_columns` (`leap_build.py:37-38`). -/
 def columns : Key → ℕ
   | .rev _ => 183
   | _ => 17011
 
-/-- The ranges of `all_keys` (`leap_build.py:39-42`). -/
+/-- The ranges of `all_keys` (`leap_build.py:41-44`). -/
 def Valid : Key → Prop
   | .h1 m => 12 ≤ m ∧ m ≤ 59
   | .h2 m => 12 ≤ m ∧ m ≤ 58
   | .rev c => 1020 ≤ c ∧ c ≤ 3600
 
-/-- `is_window` (`leap_build.py:55-56`): not an `H1` key, clock in `[3540, 3600]`. -/
+/-- `is_window` (`leap_build.py:57-58`): not an `H1` key, clock in `[3540, 3600]`. -/
 def IsWindow : Key → Prop
   | .h1 _ => False
   | k => 3540 ≤ k.clock ∧ k.clock ≤ 3600
@@ -325,13 +325,13 @@ instance (k : Key) : Decidable k.IsWindow := by
 
 end Key
 
-/-- STL-RULE-2 (`leap_build.py:55-56`, `canonical.py:72-75`): the builder's
+/-- STL-RULE-2 (`leap_build.py:57-58`, `canonical.py:72-75`): the builder's
 `is_window(key)` is `leap_drop_available` at the key's half and clock. `H1`
 keys are never windows. -/
 theorem Key.isWindow_iff (k : Key) : k.IsWindow ↔ LeapDropAvailable k.half k.clock := by
   cases k <;> simp [Key.IsWindow, LeapDropAvailable, IsLeapWindow, Key.half, Key.clock]
 
-/-- `child_key` (`leap_build.py:45-52`): the key of the child clock, or `none`
+/-- `child_key` (`leap_build.py:47-54`): the key of the child clock, or `none`
 (the DTH table) when the child clock exceeds `3600`. -/
 def childKey : Key → ℕ → Option Key
   | .h1 m, q =>
@@ -349,7 +349,7 @@ theorem childKey_eq_none_iff (k : Key) (q : ℕ) :
     childKey k q = none ↔ 3600 < childClock k.half k.clock q := by
   cases k <;> simp only [childKey, Key.half, Key.clock] <;> split_ifs <;> simp_all
 
-/-- STL-KEY-1 (a), (b), (c) (`paper/stl.tex:94-96`, `leap_build.py:26-56`):
+/-- STL-KEY-1 (a), (b), (c) (`paper/stl.tex:94-96`, `leap_build.py:28-58`):
 for a valid key and a valid dose, `child_key` returns a valid key of the
 other half whose clock is the child clock. In particular every half-1 clock at
 or below `3600` is a multiple of 60 and the least `REV` clock is `1020`. -/
@@ -1168,7 +1168,7 @@ theorem otherHalf_mem (h : ℕ) : otherHalf h = 1 ∨ otherHalf h = 2 := by
   unfold otherHalf; split_ifs <;> simp
 
 /-- The success payoff `S_ℓ` to the current Dropper (`evaluate_states`,
-`leap_build.py:162-175`): `+1` on overflow (the `WIN` column stores `-1`), and
+`leap_build.py:164-177`): `+1` on overflow (the `WIN` column stores `-1`), and
 otherwise minus the child value at the success clock. -/
 noncomputable def succPayL (W : State → ℕ → ℕ → ℝ) (x : State) (h τ ℓ : ℕ) : ℝ :=
   if hs : x.c.s + ℓ < 300 then -W (successChild x ℓ hs) (otherHalf h) (childClock h τ 0) else 1
@@ -1223,7 +1223,7 @@ theorem stageL_congr {W W' : State → ℕ → ℕ → ℝ} (x : State) (h τ : 
   unfold stageL
   rw [hs, failPayL_congr x h τ hW]
 
-/-- STL-STAGE-1 (`paper/stl.tex:155-162`, `leap_build.py:162-175`): the
+/-- STL-STAGE-1 (`paper/stl.tex:155-162`, `leap_build.py:164-177`): the
 Bellman equation. `VL x h τ` is the value of its stage, whose success entries
 are `-VL` of the success child at clock `childClock h τ 0` and whose failure
 entry is `1 - p - p VL` of the revived child at `childClock h τ (s + 60)`. -/
@@ -1264,7 +1264,7 @@ theorem failChild_index (x : State) (hs : Survives x.c.s x.c.t) :
   rfl
 
 
-/-- STL-STAGE-1 (`leap_build.py:314-330`, `leap_audit.py:152-163`): the
+/-- STL-STAGE-1 (`leap_build.py:315-331`, `leap_audit.py:152-163`): the
 builder's `REV` failure lookup `fail_table[pd, idx0[fail[pc]]]` reads the fail
 child. For a revivable Checker, `fail[pc]` is the class of the fail child's
 Dropper, `idx0` of its id is a reset column `j ∈ 1..182`, and reset column `j`
@@ -1323,7 +1323,7 @@ theorem VL_eq_of_qequiv (x y : State) (hq : QEquiv x y) (h τ : ℕ) : VL x h τ
 /-! ## The exact DTH boundary after 3600 (STL-CLOCK-4) -/
 
 /-- STL-CLOCK-4 (`src/stl/docs/GAME_AND_SOLVER.md:330-348`, `paper/stl.tex:110-112`,
-`leap_build.py:45-52,282-304`): after 8:59:60 every descendant clock exceeds
+`leap_build.py:47-54,283-305`): after 8:59:60 every descendant clock exceeds
 `3600`, so no stage is a window and the L2 value is the pure DTH value of the
 role-relative state. The builder reads the DTH table whenever `child_key`
 returns `None`. -/
@@ -1504,7 +1504,7 @@ theorem stage_no_pure_saddle :
 def rootWorld : WorldState := ⟨⟨0, 0, by norm_num⟩, ⟨0, 0, by norm_num⟩, 1, 720, false⟩
 
 /-- STL-OPEN-1 (`src/stl/docs/GAME_AND_SOLVER.md:80-99`, `paper/stl.tex:63-64,87-89`,
-`leap_build.py:116`): the opening is cell `[0, 0]` of key `H1_12`, Hal drops,
+`leap_build.py:118`): the opening is cell `[0, 0]` of key `H1_12`, Hal drops,
 and the opening stage is not a window. -/
 theorem root_node :
     project rootWorld = ⟨⟨0, 0, by norm_num⟩, ⟨0, 0, by norm_num⟩⟩ ∧
@@ -1522,7 +1522,7 @@ theorem root_node :
 (numpy evaluates an overlapping in-place ufunc as if on a copy). -/
 def orShift (n d : ℕ) (A : Set ℕ) : Set ℕ := A ∪ {x | d ≤ x ∧ x < n ∧ x - d ∈ A}
 
-/-- The six shifts `1, 2, 4, 8, 16, 28` of `leap_build.py:71-72`. -/
+/-- The six shifts `1, 2, 4, 8, 16, 28` of `leap_build.py:73-74`. -/
 def orShifts (n : ℕ) (A : Set ℕ) : Set ℕ := [1, 2, 4, 8, 16, 28].foldl (fun B d => orShift n d B) A
 
 /-- The set of indices below `n` reached from `A` by an offset `k ≤ w`. -/
@@ -1560,7 +1560,7 @@ theorem orShifts_eq {n : ℕ} {A : Set ℕ} (hA : ∀ a ∈ A, a < n) :
     orShift_window (by norm_num), orShift_window (by norm_num), orShift_window (by norm_num)]
   rw [shiftWindow_zero hA]
 
-/-- The seeded array of one block (`leap_build.py:69-70`): row `r` of the block
+/-- The seeded array of one block (`leap_build.py:71-72`): row `r` of the block
 is written at index `r + 1` for `r < min(length, 299)`. -/
 def seed (L : ℕ) (R : Set ℕ) : Set ℕ := {i | 1 ≤ i ∧ i - 1 ∈ R ∧ i - 1 < min L 299}
 
@@ -1586,11 +1586,11 @@ theorem mem_expandedSet {L : ℕ} {R : Set ℕ} (hL : L ≤ 300) (hR : ∀ r ∈
     rwa [show r + ℓ - (ℓ - 1) - 1 = r by omega]
 
 /-- Where `_success_bits` places index `i` of a block of TTD `t`
-(`leap_build.py:75-77`): inside the block if `i < length`, else at the fatal
+(`leap_build.py:77-79`): inside the block if `i < length`, else at the fatal
 marker `N_ALIVE + i`. -/
 def placeIndex (t i : ℕ) : ℕ := if i < blockLen t then blockStart t + i else 16711 + i
 
-/-- STL-REACH-1 (`leap_build.py:64-78`): for a revivable block of TTD `t` and a
+/-- STL-REACH-1 (`leap_build.py:66-80`): for a revivable block of TTD `t` and a
 set `R` of its rows, `_success_bits` sets exactly the class ids
 `succ[id(r, t), ℓ - 1]` for `r ∈ R` and `ℓ ∈ 1..60` that are not `WIN`. -/
 theorem success_bits_block {t : ℕ} (ht : ValidT t) {R : Set ℕ} (hR : ∀ r ∈ R, r < blockLen t)
@@ -1635,7 +1635,7 @@ section Worklist
 variable {α : Type*} (clk : α → ℕ) (step : α → α → Prop) (init : α)
 
 /-- The set a clock-ordered worklist holds for state `a` when it pops `a`'s key
-(`forward_reachability`, `leap_build.py:102-159`): the initial state, or the
+(`forward_reachability`, `leap_build.py:104-161`): the initial state, or the
 image of a processed state of strictly smaller clock. -/
 def Processed (a : α) : Prop :=
   a = init ∨ ∃ b, ∃ _ : clk b < clk a, Processed b ∧ step b a
@@ -1645,7 +1645,7 @@ theorem processed_iff_unfold (a : α) :
     Processed clk step init a ↔ a = init ∨ ∃ b, ∃ _ : clk b < clk a, Processed clk step init b ∧ step b a := by
   rw [Processed]
 
-/-- STL-REACH-2, abstract worklist lemma (`leap_build.py:102-159`): when every
+/-- STL-REACH-2, abstract worklist lemma (`leap_build.py:104-161`): when every
 transition strictly raises the clock, the clock-ordered closure is the
 reachable set. `creach_iff` instantiates it with the builder's class-level step
 `CStep` and the key clock. -/
@@ -1669,7 +1669,7 @@ end Worklist
 
 /-! ## Forward reachability on keys and classes (STL-REACH-2)
 
-`forward_reachability` (`leap_build.py:102-159`) keeps one bitmap per key. Row
+`forward_reachability` (`leap_build.py:104-161`) keeps one bitmap per key. Row
 `r` is the Checker's class id; column `c` is the Dropper's class id, or, for a
 `REV` key, the reset column `idx0` of the Dropper's class. This section models
 a bitmap as the set of its set `(row, column)` bits, mirrors the per-key
@@ -1725,7 +1725,7 @@ theorem vstep_bellman_child {limit : ℕ} {k k' : Key} {x y : State}
     exact ⟨hh.trans (hoh k), Or.inr ⟨hsv, rfl, hcl⟩⟩
 
 /-- The class-level step on `(key, checker class, dropper class)`
-(`leap_build.py:127-154`): a success moves the old Dropper to the Checker slot
+(`leap_build.py:129-156`): a success moves the old Dropper to the Checker slot
 and makes `succ[pc, ℓ - 1]` the new Dropper (a `WIN` successor is dropped); a
 revival of a revivable Checker class makes `fail[pc]` the new Dropper at the
 key of dose `st[pc] + 60`. -/
@@ -1807,7 +1807,7 @@ theorem reach_map_iff {A B : Type*} (π : A → B) {sA : A → A → Prop} {sB :
 /-- The opening state (`root_node`): both profiles `(0, 0)`. -/
 def rootState : State := ⟨⟨0, 0, by norm_num⟩, ⟨0, 0, by norm_num⟩⟩
 
-/-- The seed of `forward_reachability` (`leap_build.py:116`): key `H1_12`,
+/-- The seed of `forward_reachability` (`leap_build.py:118`): key `H1_12`,
 Checker class `0 = (0, 0)`, Dropper class `0 = (0, 0)`. -/
 def cRoot : Key × QProfile × QProfile := (.h1 12, .alive 0 0, .alive 0 0)
 
@@ -1882,7 +1882,7 @@ theorem creach_iff (limit : ℕ) (z : Key × QProfile × QProfile) :
 /-! ### The bitmap update -/
 
 /-- The bitmap column of a Dropper class: the full class id, or for a `REV` key
-the reset column `idx0` (`key_columns`, `leap_build.py:35-36`). -/
+the reset column `idx0` (`key_columns`, `leap_build.py:37-38`). -/
 def colIndex : Key → QProfile → ℕ
   | .rev _, b => (idx0 (classIndex b)).toNat
   | _, b => classIndex b
@@ -1890,13 +1890,13 @@ def colIndex : Key → QProfile → ℕ
 /-- The bit of a class pair at a key. -/
 def enc (k : Key) (z : QProfile × QProfile) : ℕ × ℕ := (classIndex z.1, colIndex k z.2)
 
-/-- `rows` (`leap_build.py:131`): a `REV` parent writes row `j` of its
+/-- `rows` (`leap_build.py:133`): a `REV` parent writes row `j` of its
 transposed array to full row `s0[j]`; other parents write row `j` to row `j`. -/
 def rowMap : Key → ℕ → ℕ
   | .rev _, j => s0 j
   | _, j => j
 
-/-- `_success_bits` (`leap_build.py:64-78`) on the set of set bits. Column by
+/-- `_success_bits` (`leap_build.py:66-80`) on the set of set bits. Column by
 column, each nonempty TTD block `t` expands its rows `R` to `expandedSet` and
 places index `i` at `placeIndex t i`; the fatal block (`N_ALIVE..N`) places
 index `i` at `N_ALIVE + i`. -/
@@ -1906,7 +1906,7 @@ def successBits (B : Set (ℕ × ℕ)) : Set (ℕ × ℕ) :=
        (∃ i ∈ expandedSet 300 {r | r < 300 ∧ (16711 + r, p.2) ∈ B}, p.1 = 16711 + i)}
 
 /-- The success merge `target(success)[rows] |= _transpose(_success_bits(bits))`
-(`leap_build.py:132-134`): bit `(id, col)` becomes bit `(rowMap col, id)`. -/
+(`leap_build.py:134-136`): bit `(id, col)` becomes bit `(rowMap col, id)`. -/
 def successUpdate (p : Key) (B : Set (ℕ × ℕ)) : Set (ℕ × ℕ) :=
   {q | ∃ id col, (id, col) ∈ successBits B ∧ q = (rowMap p col, id)}
 
@@ -1915,7 +1915,7 @@ def successUpdate (p : Key) (B : Set (ℕ × ℕ)) : Set (ℕ × ℕ) :=
 def failId (s t : ℕ) : ℕ :=
   if Survives 0 (s + t + 60) then classIndex (.alive 0 (s + t + 60)) else 16711
 
-/-- The revival merge into `dest` (`leap_build.py:136-154`). For each set row
+/-- The revival merge into `dest` (`leap_build.py:138-156`). For each set row
 `id(s, t) < N_ALIVE` whose dose `s + 60` leads to `dest`, row bit `col` is
 merged into row `j = idx0[fail[pc]]`, transposed, and written to
 `(rows[col], j)` for a `REV` destination or to the dense column
@@ -1929,7 +1929,7 @@ def revivalUpdate (p dest : Key) (B : Set (ℕ × ℕ)) : Set (ℕ × ℕ) :=
 def mergeUpdate (p k : Key) (B : Set (ℕ × ℕ)) : Set (ℕ × ℕ) :=
   {q | childKey p 0 = some k ∧ q ∈ successUpdate p B} ∪ revivalUpdate p k B
 
-/-- The bitmap `pending[k]` when the loop pops `k` (`leap_build.py:116-128`):
+/-- The bitmap `pending[k]` when the loop pops `k` (`leap_build.py:118-130`):
 the seed bit `(0, 0)` of `H1_12`, and the merges of every valid parent popped
 earlier. The loop pops keys by increasing clock and every child key has a
 larger clock (`clock_lt_of_childKey`), so the parents that write to `k` are
@@ -2124,7 +2124,7 @@ theorem mergeUpdate_enc {limit : ℕ} {p k : Key} (hp : p.Valid) (hl : k.clock �
       rw [revivalUpdate_enc hC]
       exact ⟨z, ⟨s, t, hz, hsv, hf, hcd⟩, rfl⟩
 
-/-- STL-REACH-2 (`leap_build.py:102-159`, `paper/stl.tex:94-96,152`): for every
+/-- STL-REACH-2 (`leap_build.py:104-161`, `paper/stl.tex:94-96,152`): for every
 valid key at or below `limit`, the bitmap that `forward_reachability` holds
 when it pops the key is the encoded set of class pairs reachable at that key
 from the seed `(H1_12, (0,0), (0,0))`. -/
@@ -2329,7 +2329,7 @@ theorem testBit_lowMask (x k j : ℕ) :
     Nat.testBit (x &&& (2 ^ k - 1)) j = (x.testBit j && decide (j < k)) := by
   rw [Nat.testBit_and, Nat.testBit_two_pow_sub_one]
 
-/-- STL-PACK-1 (`TableStore.pack`, `leap_build.py:229-235`): a 64-row chunk
+/-- STL-PACK-1 (`TableStore.pack`, `leap_build.py:231-237`): a 64-row chunk
 starts on a byte boundary, so bit `j` of the chunk is bit `j % 8` of byte
 `lo cols / 8 + j / 8`, and chunked packing equals global packing. -/
 theorem chunk_aligned (k cols j : ℕ) :
@@ -2367,7 +2367,7 @@ theorem readerGet_spec {b : ℕ → Bool} {v : ℕ → ℝ} {n cols r c : ℕ} :
 
 /-! ## Revival-cache exactness (STL-CACHE-1) -/
 
-/-- The stage inputs of `_solve_chunk` (`leap_lp.py:116-129`): success payoffs
+/-- The stage inputs of `_solve_chunk` (`leap_lp.py:117-130`): success payoffs
 `-T_succ[pd, succ[pc, k]]` and `F = rev · (-T_fail[pd, col(pc)]) + (1 - rev)`,
 where the tables and the failure-column map depend only on the child keys. -/
 def stageInputs (tables : Option Key → ℕ → ℕ → ℝ) (failCol : Option Key → ℕ → ℕ)
@@ -2376,7 +2376,7 @@ def stageInputs (tables : Option Key → ℕ → ℕ → ℝ) (failCol : Option 
   (fun k => -tables succKey pd (succ pc k),
     rev pc * -tables failKey pd (failCol failKey pc) + (1 - rev pc))
 
-/-- STL-CACHE-1 (`RevivalCache`, `leap_lp.py:69-103,172-179`): a cache hit
+/-- STL-CACHE-1 (`RevivalCache`, `leap_lp.py:70-104,173-180`): a cache hit
 returns a value certified for an identical stage. The cache groups by success
 key and window, tags each `(pc, idx0[pd])` cell with an injective token of the
 failure key, and caches only reset columns `0 ≤ idx0[pd] < 183`; `idx0`

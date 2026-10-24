@@ -19,8 +19,11 @@ version-suffixed names.
   by `docs/GAME_AND_SOLVER.md`; it is not a solved policy or planning system.
 - `solver/leap_profiles.py` owns the STL quotient and child clocks.
   `solver/leap_oracle.py` certifies scalar stages; `solver/leap_build.py` owns
-  reachability, calibration, and the full sweep checkpoint. Python remains the
-  behavioral authority for the opt-in Rust leap kernel.
+  reachability, calibration, and the full sweep checkpoint.
+  `solver/leap_kernel.py` is the numba leap kernel that the sweep calls.
+  `solver/leap_oracle.py` and `solver/leap_support.py` remain its scalar
+  authorities, and `tests/test_leap_golden.py` holds it to the outputs of the
+  retired Rust kernel.
 - `reader.py` is the public read path into a completed leap artifact
   (`stl.reader` in `docs/PROJECTS.toml`). Other projects and the paper's
   figure scripts read leap tables through it, not through `solver/`.
@@ -62,9 +65,12 @@ Run `uv run python -m pytest src/stl/tests -q` for the retained surface.
 
 ## Leap calibration
 
-Build the extension from `src/crates/stl_solver` with
-`uv run --project ../../.. maturin develop --release`. From the repository root,
-run `uv run python -m stl.cli command=leap`. The command checks the source and
+The leap kernel is `solver/leap_kernel.py`. numba compiles it on first use,
+in 15 to 35 seconds, and caches the machine code in the ignored
+`solver/__pycache__/`. A change to the kernel source or to the numba version
+in `uv.lock` invalidates that cache. Set `NUMBA_CACHE_DIR` to move it, for
+example to a disk that a container keeps. From the repository root, run
+`uv run python -m stl.cli command=leap`. The command checks the source and
 DTH hashes, sweeps clocks 3600 through 3420, and retains dense tables and packed
 copies under `outputs/leap/`. Resume uses the same command. Calibration rejects
 other sweep floors. Pointwise tests below that floor do not sweep keys.
@@ -78,8 +84,8 @@ You can read the opening value and LP-certified opening strategies in
 `report.json`. The audit checks packed membership and finite values for all
 reachable states, then checks sampled Bellman equations with HiGHS. It records
 the audit sample count and residuals in `audit.json` and the final manifest.
-For fallback stages, workers first solve the triangular packing LP in Rust
-and check both saddle bounds on the original matrix. Python sends rejected
+For fallback stages, workers first solve the triangular packing LP in the
+numba kernel and check both saddle bounds on the original matrix. Python sends rejected
 stages to `highspy`. Those workers reuse HiGHS bases and cache certified revival
 values only when the child tables, profiles, and window flag match. The report
 counts kernel failures, new LP solves, and cache hits as separate quantities.
@@ -130,8 +136,8 @@ system and paired edge moves, and checks the complete saddle gap at 1e-6.
 It sends misses and systems above its dimension limit to HiGHS. The full
 command leaves support reuse disabled; the measured H2 batches ran slower with support
 reuse. The full sweep uses `NativeFallback` with a fresh packing basis per
-stage. The Rust API accepts optional `supports` and `support_out` masks and
-preserves its original behavior when you omit them. See
+stage. `leap_kernel.sweep_batch` accepts optional `supports` and `support_out`
+masks and preserves its original behavior when you omit them. See
 [`LEAP_CERTIFICATE.md`](../crates/docs/LEAP_CERTIFICATE.md) for the equations
 and acceptance rule, and `solver/leap_support.py` for the Python authority.
 
@@ -146,9 +152,10 @@ held the runs. Uncommitted builders made `leap-full/`, `leap-full-ipm/`, and
 `outputs/leap-full-native/provenance/` keeps their sources. A new build from
 any commit finishes H2_42 under another builder, so it cannot recreate the
 stopped batch, and the benchmark cannot run again. The measurements of the
-last run remain under `outputs/leap-hypotheses/`. The native prototype lives in the
-Rust `leap_bench` example. It certifies the original 60-action matrix after
-each packing solve; the benchmark sends rejected stages to HiGHS. These
+last run remain under `outputs/leap-hypotheses/`. The native prototype is
+`leap_kernel.solve_packing_runs`, which the retired Rust `leap_bench` example
+first implemented. It certifies the original 60-action matrix after each
+packing solve; the benchmark sends rejected stages to HiGHS. These
 benchmarks do not enable a new full-sweep backend. Solve timings include
 process startup and fallback; the REV experiment includes writes of sampled
 table rows and their flushes.
@@ -183,7 +190,38 @@ bits in row-major order. Each dense table keeps NaN in unreachable cells and
 -1 in its last column. The manifest records file hashes and marks this segment
 as incomplete. A complete L2 claim still requires the full audit.
 
-The slow leap tests require `src/dth_compact/artifacts/V.npy`; kernel tests
-require the extension. Run `uv run python -m pytest src/stl/tests -q` after the
-build. The full reachability test checks the measured state totals without
-performing a value sweep.
+The slow leap tests require `src/dth_compact/artifacts/V.npy`. Run
+`uv run python -m pytest src/stl/tests -q`; its first run compiles the kernel
+in each worker. The full reachability test checks the measured state totals
+without performing a value sweep.
+
+## Numba kernel
+
+On 2026-10-23 we replaced the Rust `stl_solver_rs` leap kernel with the numba
+port in `solver/leap_kernel.py`. The port keeps the Rust operation order. It
+writes `f64::mul_add`, `f64::min`, and `f64::max` as `llvm.fma`,
+`llvm.minnum`, and `llvm.maxnum`, and it orders pivots by the IEEE total
+order, as `f64::total_cmp` did. It keeps the 1024-class chunks, the 16-lane
+batches, and the per-chunk packing tableau and kink seed.
+
+Before the retirement we compared this kernel with `stl_solver_rs` on
+113,175,708 rows in 725 cases: square and window stages under 13 option sets,
+all 10 residue samples under `outputs/leap-residue/` in Dropper-major and
+shuffled order, seeded stage families, random child tables, the support-seed
+API, the packing LP, and the kink helpers. Values, kinds, failure counts, and
+basis masks agreed bit for bit. Every sample value stayed within 4.97e-7 of
+its certified value, inside the 1e-6 gate. The engines differed only on
+malformed arguments: the kernel accepts an `int` for a `bool` and a `float`
+for an integer, it rejects Fortran-ordered `supports`, `support_out`, and `s`
+arrays, which Rust read in memory order, and its error messages differ. With
+15 threads on the production residue options, H1_44 took 1.09 s in numba
+against 1.24 s in Rust, and H2_42 took 3.74 s against 6.98 s, with equal
+output hashes. A cold cache adds a 15 to 35 second compile to the first call.
+
+`tests/data/leap_kernel_golden.npz` keeps 1,940 seeded stage classes and
+1,100 random-table classes with the Rust outputs: square and window stages,
+the rungs alone and the production options of `RESIDUE`, the packing LP from
+the slack and crash bases, and the warm and cold packing runs of the
+benchmarks. `tests/test_leap_golden.py` requires equal kinds, failure counts,
+masks, and values. The commit that added the fixture holds
+`tests/make_leap_golden.py`, which captured it.

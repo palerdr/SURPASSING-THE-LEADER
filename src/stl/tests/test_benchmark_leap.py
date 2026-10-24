@@ -30,13 +30,13 @@ def test_packing_rejects_invalid_sign_and_nonfinite_stage():
         solver.solve(np.full(60, np.nan), .5)
 
 
-def test_native_pivots_certify_asymmetric_and_random_stages(tmp_path):
+def test_native_pivots_certify_asymmetric_and_random_stages():
     from stl.experiments.benchmark_leap import native_batch
     rng = np.random.default_rng(231)
     successes = np.vstack([S, S+.001, *[rng.uniform(-.9, .9, 60) for _ in range(24)]])
     failures = np.r_[F, F+.001, np.full(24, .95)]
     for warm in (False, True):
-        result, timing = native_batch(successes, failures, np.zeros(len(failures)), tmp_path, warm=warm, threads=1)
+        result, timing = native_batch(successes, failures, np.zeros(len(failures)), warm=warm, threads=1)
         assert timing['failed'] == 0
         assert np.isfinite(result).all() and np.max(result[:, 1]) <= 1e-6
         assert abs(result[0, 0]-VALUE) < 1e-8
@@ -55,15 +55,14 @@ def test_rev_signatures_include_both_children_and_window():
     assert np.array_equal(p.succ[0, 1:], p.succ[1, :-1])
 
 
-def test_native_rejects_invalid_and_small_diagonals(tmp_path):
+def test_native_rejects_invalid_and_small_diagonals():
     from stl.experiments.benchmark_leap import native_batch
     s = np.zeros((3, 60)); s[0, 3] = np.nan
-    result, timing = native_batch(s, np.array([1., -1., 1e-13]), np.zeros(3),
-                                  tmp_path, warm=True, threads=1)
+    result, timing = native_batch(s, np.array([1., -1., 1e-13]), np.zeros(3), warm=True, threads=1)
     assert timing['failed'] == 3 and np.isnan(result[:, 0]).all()
 
 
-def test_native_certifies_plateau_after_support_change(tmp_path):
+def test_native_certifies_plateau_after_support_change():
     from stl.experiments.benchmark_leap import native_batch
     plateau = np.r_[.30501604147760514, .3054351558364657, .30585071224070093,
                     .3066373930873052, .3070028766823562, .3076328036693285,
@@ -72,7 +71,7 @@ def test_native_certifies_plateau_after_support_change(tmp_path):
                     .3106331298093312, .29784711454978263, np.full(46, .31127112835744686)]
     s = np.vstack([S, plateau, plateau+.0001, S])
     f = np.array([F, 1., 1.0001, F])
-    result, timing = native_batch(s, f, np.zeros(4), tmp_path, warm=True, threads=1)
+    result, timing = native_batch(s, f, np.zeros(4), warm=True, threads=1)
     assert timing['failed'] == 0 and np.max(result[:, 1]) <= 1e-6
     for row, success, failure in zip(result, s, f):
         assert abs(row[0]-solve_lp(success, failure, False).value) < 1e-8

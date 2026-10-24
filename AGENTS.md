@@ -110,10 +110,10 @@ such as `paper/*.py`.
   artifact digest. A root `uv.lock` change ships with rebuilt
   `src/dth/artifacts/complete_full_v1` and `complete_fast_v1` in the same
   commit series.
-- `stl.solver.leap_build.builder_hash()` hashes the builder sources with the
-  root `pyproject.toml`, `uv.lock`, and `Cargo.lock`, and a resume refuses a
-  changed hash. Do not start or resume a leap build across an edit to the root
-  `pyproject.toml` or `uv.lock`.
+- `stl.solver.leap_build.builder_hash()` hashes the builder sources, the
+  numba kernel `leap_kernel.py` among them, with the root `pyproject.toml` and
+  `uv.lock`, and a resume refuses a changed hash. Do not start or resume a
+  leap build across an edit to the root `pyproject.toml` or `uv.lock`.
 - The builder hash reads `src/stl/solver/leap_*.py` by glob. Name a new STL
   builder module `src/stl/solver/leap_*.py`, and put new non-builder STL code
   outside `src/stl/solver/`.
