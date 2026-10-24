@@ -114,7 +114,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: cmake --preset ${{ matrix.preset }}
-      - run: cmake --build --preset ${{ matrix.preset }} --parallel "$(nproc)"
+      - run: cmake --build --preset ${{ matrix.preset }} --parallel 2
       - run: ctest --preset ${{ matrix.preset }}
 
   ocaml:
