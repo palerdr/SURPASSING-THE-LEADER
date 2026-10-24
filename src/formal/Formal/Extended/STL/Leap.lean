@@ -1062,7 +1062,7 @@ theorem successChild_shift (x : State) (hs : x.c.s + 1 < 300) (ℓ : ℕ)
   simp only [successChild, State.mk.injEq, true_and]
   ext <;> (simp only; try omega)
 
-/-- The kink of `kink_index` (`leap_support.py:27-36`): the first index `k ∈ 1..59`
+/-- The kink of `kink_index` (`leap_support.py:28-37`): the first index `k ∈ 1..59`
 of the most negative step `S k - S (k - 1)`, required to be negative. -/
 def IsKink (S : ℕ → ℝ) (k : ℕ) : Prop :=
   1 ≤ k ∧ k ≤ 59 ∧ S k - S (k - 1) < 0 ∧
@@ -1124,12 +1124,12 @@ drop at second 61, which no check reaches. -/
 def stage61 (s : ℕ → ℝ) (f : ℝ) : Matrix (Fin 61) (Fin 60) ℝ :=
   fun d c => if d.val ≤ c.val then s (c.val - d.val) else f
 
-/-- The window stage as `stage_matrix` builds it (`leap_oracle.py:26-30`): fill
+/-- The window stage as `stage_matrix` builds it (`leap_oracle.py:27-31`): fill
 with `f`, then set `matrix[row, row:] = s[:60 - row]` for `row < 60`. -/
 def oracleStage61 (s : ℕ → ℝ) (f : ℝ) : Matrix (Fin 61) (Fin 60) ℝ :=
   fun d c => if d.val < 60 then (if d.val ≤ c.val then s (c.val - d.val) else f) else f
 
-/-- STL-STAGE-2 (`leap_oracle.py:26-30`, `leap_audit.py:143-149`): the two
+/-- STL-STAGE-2 (`leap_oracle.py:27-31`, `leap_audit.py:143-149`): the two
 constructions of the window stage agree. -/
 theorem oracleStage61_eq (s : ℕ → ℝ) (f : ℝ) : oracleStage61 s f = stage61 s f := by
   funext d c

@@ -50,7 +50,7 @@ theorem weights_succ (s : ℕ → ℝ) (f : ℝ) (k : ℕ) :
 
 /-- **Nondecreasing `s` with `f > s[0]` gives nonnegative weights**
 (CRATES-KINK-1, STL-REC-2; `LEAP_CERTIFICATE.md:246-248`,
-`leap_support.py:28-32`, `leap_kernel.py:853-857`), in exact arithmetic. Every
+`leap_support.py:29-33`, `leap_kernel.py:853-857`), in exact arithmetic. Every
 coefficient `b[m] = (s[m-1] - s[m]) / (s[0] - f)` is a nonpositive number
 over a negative one, and the recurrence sums nonnegative products. -/
 theorem weights_nonneg_of_monotone {n : ℕ} {s : ℕ → ℝ} {f : ℝ}
@@ -97,10 +97,10 @@ section Ladder
 
 variable (n : ℕ) [NeZero n]
 
-/-- The saddle-gap gate `GAP = 1e-6` (`leap_kernel.py:44`, `leap_oracle.py:8`). -/
+/-- The saddle-gap gate `GAP = 1e-6` (`leap_kernel.py:44`, `leap_oracle.py:10`). -/
 noncomputable def gapTol : ℝ := 1 / 10 ^ 6
 
-/-- The `d`-size guard `1e-12` of the recurrence rung (`leap_kernel.py:1073`, `leap_oracle.py:83`). -/
+/-- The `d`-size guard `1e-12` of the recurrence rung (`leap_kernel.py:1073`, `leap_oracle.py:84`). -/
 noncomputable def dTol : ℝ := 1 / 10 ^ 12
 
 /-- `lo = min_k s[k]` over the `n` success payoffs. -/
@@ -116,7 +116,7 @@ noncomputable def pureLower (s : ℕ → ℝ) (f : ℝ) : ℝ := max (succLo n s
 noncomputable def pureUpper (s : ℕ → ℝ) (f : ℝ) : ℝ := min (succHi n s) (max f (s 0))
 
 /-- The pure-rung gap `upper - lower`, with both bounds lifted through
-`max(·, f)` in a leap window (`leap_kernel.py:1061-1067`, `leap_oracle.py:73-77`). -/
+`max(·, f)` in a leap window (`leap_kernel.py:1061-1067`, `leap_oracle.py:74-78`). -/
 noncomputable def pureGap (s : ℕ → ℝ) (f : ℝ) (window : Bool) : ℝ :=
   if window then max (pureUpper n s f) f - max (pureLower n s f) f
   else pureUpper n s f - pureLower n s f
@@ -144,7 +144,7 @@ noncomputable def fullGap (s : ℕ → ℝ) (f : ℝ) (window : Bool) : ℝ :=
 /-- `cum = ∑ q[j]` of the clipped candidate (`leap_kernel.py:1108`). -/
 noncomputable def clipMass (s : ℕ → ℝ) (f : ℝ) : ℝ := ∑ j, clipCol n s f j
 
-/-- The hypotheses of the weight-sum shortcut (`leap_kernel.py:1079`, `leap_oracle.py:99`):
+/-- The hypotheses of the weight-sum shortcut (`leap_kernel.py:1079`, `leap_oracle.py:100`):
 all weights nonnegative, bounded payoffs, and `|d| ≥ GAP`. -/
 def ShortcutOk (s : ℕ → ℝ) (f : ℝ) : Prop :=
   (∀ k < n, 0 ≤ weights s f k) ∧ -2 ≤ succLo n s ∧ succHi n s ≤ 2 ∧ |f| ≤ 2 ∧
@@ -375,7 +375,7 @@ theorem pureGap_le_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) (hf
   linarith
 
 /-- **The implemented ladder accepts every nondecreasing stage**
-(STL-REC-2; `leap_support.py:28-32`, `leap_kernel.py:1061-1079`), in exact
+(STL-REC-2; `leap_support.py:29-33`, `leap_kernel.py:1061-1079`), in exact
 arithmetic. Either the pure gap is at most `1e-6` (always when `f ≤ s[0]`,
 and when `0 < f - s[0] ≤ 1e-6` because the gap is at most `f - s[0]`), or the
 weights are nonnegative, `|d| > 1e-6`, and `W ≥ 1`, which are the weight
@@ -470,7 +470,7 @@ theorem kinkScan_inv (s : ℕ → ℝ) (m : ℕ) :
         exact ⟨a, by omega, c, d, e⟩
 
 /-- **`kink_index` returns `None` exactly when no step is negative** (CRATES-KINK-2,
-`leap_kernel.py:852-866`, `leap_support.py:27-36`). The kernel's `_kink_index`
+`leap_kernel.py:852-866`, `leap_support.py:28-37`). The kernel's `_kink_index`
 writes `None` as `-1`. -/
 theorem kinkIndex_eq_none_iff (n : ℕ) (s : ℕ → ℝ) :
     kinkIndex n s = none ↔ ∀ j, 1 ≤ j → j < n → s (j - 1) ≤ s j := by
@@ -494,7 +494,7 @@ theorem kinkIndex_eq_none_iff (n : ℕ) (s : ℕ → ℝ) :
 `s[k] - s[k-1]` is negative and minimal, and every earlier step is strictly
 larger. These properties determine `k`, so the NumPy version
 (`np.argmin` over the steps, first index on a tie, then `None` unless the
-minimum is negative, `leap_support.py:27-36`) returns the same index. -/
+minimum is negative, `leap_support.py:28-37`) returns the same index. -/
 theorem kinkIndex_eq_some {n : ℕ} {s : ℕ → ℝ} {k : ℕ} (h : kinkIndex n s = some k) :
     1 ≤ k ∧ k < n ∧ s k < s (k - 1) ∧
       (∀ j, 1 ≤ j → j < n → s k - s (k - 1) ≤ s j - s (j - 1)) ∧
@@ -510,7 +510,7 @@ example : kinkIndex 3 (fun k => if k = 2 then (-1 : ℝ) else 0) = some 2 := by
   simp [kinkIndex, kinkScan]
 
 /-- **A residue stage needs a negative step** (CRATES-KINK-2, STL-REC-2;
-`LEAP_CERTIFICATE.md:246`, `leap_kernel.py:853-857`, `leap_support.py:28-32`), in
+`LEAP_CERTIFICATE.md:246`, `leap_kernel.py:853-857`, `leap_support.py:29-33`), in
 exact real arithmetic: if the kernel route of `ReachesResidue` sends a stage
 to the residue, in or out of a leap window, then `kink_index` returns an
 index. The binary64 version is false; see `overflow_counterexample`. -/

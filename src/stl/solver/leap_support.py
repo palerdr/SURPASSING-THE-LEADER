@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from stl.solver.leap_fma import fma
 from stl.solver.leap_oracle import GAP, StageResult, stage_matrix
 
 ALL_ACTIONS = (1 << 60)-1
@@ -87,7 +88,7 @@ def recurrence(s, f):
     for k in range(1, 60):
         acc = 0.
         for j in range(k):
-            acc = math.fma(float(b[k-j]), float(r[j]), acc)
+            acc = fma(float(b[k-j]), float(r[j]), acc)
         r[k] = acc
     return r if np.isfinite(r).all() else None
 

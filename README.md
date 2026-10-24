@@ -28,8 +28,8 @@ language-neutral project envelope.
 
 ## Setup
 
-Use Python 3.13 and `uv`. The leap builder calls `math.fma`, which Python
-3.13 added. The browser app is its own uv project in `src/browser/`:
+Use Python 3.12 or 3.13 and `uv`. The browser app is its own uv project in
+`src/browser/`:
 
 ```powershell
 uv sync --dev

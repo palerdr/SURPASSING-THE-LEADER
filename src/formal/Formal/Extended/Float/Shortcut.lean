@@ -5,7 +5,7 @@ import Formal.Toeplitz.Equalizer
 # The nonnegative-weight shortcut certificate
 
 This file proves the certificate of `src/stl/docs/LEAP_CERTIFICATE.md:1-118`
-for the rung-1 shortcut of `leap_kernel.py:1079-1082` and `leap_oracle.py:99-101`: when
+for the rung-1 shortcut of `leap_kernel.py:1079-1082` and `leap_oracle.py:100-102`: when
 the computed recurrence weights are finite and nonnegative, the kernel stores
 `v = fl(F + fl(d̂ / Ŵ))` with radius `CERT_RADIUS = 1e-10` and never forms `M q`.
 
@@ -389,7 +389,7 @@ theorem spread_const : (59 : ℝ) * (6 / 10 ^ 14) = 354 / 10 ^ 14 := by norm_num
 /-! ## The computed run of the shortcut branch -/
 
 /-- Every computed quantity of the shortcut branch, as a real number
-(`leap_oracle.py:92-100`, `leap_kernel.py:1009-1045,1082`). `acc k t` is the recurrence
+(`leap_oracle.py:93-101`, `leap_kernel.py:1009-1045,1082`). `acc k t` is the recurrence
 accumulator for weight `k` after `t` terms, `prod k t` the product
 `b (k-t) * r t` as it enters the addition, and `wacc t` the weight-sum
 accumulator after adding `r 59, …, r (60 - t)`. -/
@@ -422,7 +422,7 @@ Each rounded operation satisfies `Rounds`; the finite results mean no operation
 overflowed (see `nonfinite_propagates`). With a fused multiply-add set
 `prod k t = b (k-t) * r t` (`Rounds.refl`); with separate multiply and add,
 `prod k t` is the rounded product. The code's guards `|dh| ≥ 1e-6`
-(`leap_kernel.py:1079`, `leap_oracle.py:99`) and `Ŵ > 0` are not needed: `dh ≠ 0`
+(`leap_kernel.py:1079`, `leap_oracle.py:100`) and `Ŵ > 0` are not needed: `dh ≠ 0`
 suffices, and `Ŵ > 0` follows. -/
 structure Run.Valid (R : Run) : Prop where
   s_bound : ∀ k < 60, |R.s k| ≤ 2
@@ -518,7 +518,7 @@ theorem Valid.coef_bound (hR : R.Valid) {m : ℕ} (hm1 : 1 ≤ m) (hm : m < 60) 
 
 
 /-- The dot-product error of one computed weight (`leap_kernel.py:1026-1033`,
-`leap_oracle.py:87-90`): `|r_k - ∑_{j<k} b̂_{k-j} r_j| ≤ ((1+u)^(k+1) - 1) ∑ |b̂_{k-j}| r_j
+`leap_oracle.py:88-91`): `|r_k - ∑_{j<k} b̂_{k-j} r_j| ≤ ((1+u)^(k+1) - 1) ∑ |b̂_{k-j}| r_j
 + 2 k (1+u)^k η`, for fused or separate multiply-add. -/
 theorem Valid.dot (hR : R.Valid) {k : ℕ} (hk1 : 1 ≤ k) (hk : k < 60) :
     |R.r k - ∑ j ∈ range k, R.b (k - j) * R.r j| ≤
@@ -718,7 +718,7 @@ theorem Valid.wacc_error (hR : R.Valid) :
 for any computed sum `Ŵ` with relative error `ε ≤ 7e-15`
 (`LEAP_CERTIFICATE.md:98-108`). The kernel's sequential sum gives
 `ε = γ_60 + 60(1+γ_60)η` (`Valid.last_row_close`). Python's builtin `sum`
-(`leap_oracle.py:94`) compensates its rounding from Python 3.12 on; this lemma
+(`leap_oracle.py:95`) compensates its rounding from Python 3.12 on; this lemma
 applies to it once its relative error is at most `7e-15`, which we do not
 formalize. -/
 theorem value_close {s0 f dh W Wh y v ε : ℝ} (hs0 : |s0| ≤ 2) (hf : |f| ≤ 2) (hW : 1 ≤ W)
@@ -828,12 +828,12 @@ theorem Valid.last_row_close (hR : R.Valid) :
   exact value_close (hR.s_bound 0 (by norm_num)) hR.f_bound hW1 hε hWh hR.dh_round
     hR.y_round hR.v_round
 
-/-- `CERT_RADIUS = 1e-10` (`leap_oracle.py:9`). -/
+/-- `CERT_RADIUS = 1e-10` (`leap_oracle.py:11`). -/
 noncomputable def certRadius : ℝ := 1 / 10 ^ 10
 
 /-- **Shortcut enclosure** (claims CRATES-CERT-5 and STL-FP-1,
 `LEAP_CERTIFICATE.md:16-18,79-110`; code `leap_kernel.py:1079-1082`,
-`leap_oracle.py:99-101`). Under `Run.Valid`, with `M = toeplitz 60 s f`,
+`leap_oracle.py:100-102`). Under `Run.Valid`, with `M = toeplitz 60 s f`,
 `p_j = r_j / W` and `q_j = r_{59-j} / W` (exact `W`):
 * both mixtures are feasible;
 * every row payoff `(M q)_i` and every column payoff `(pᵀ M)_j` lies within
@@ -958,7 +958,7 @@ theorem adjacent_row_difference (s : ℕ → ℝ) (f : ℝ) (q : Fin 60 → ℝ)
   mulVec_sub_succ s f q i hi
 
 /-- **Equalizer recurrence** (claim CRATES-REC-2, `LEAP_CERTIFICATE.md:22-36,79-98`,
-code `leap_kernel.py:1017-1033`, `leap_oracle.py:85-90`). If `d = s_0 - f ≠ 0`, `r_0 = 1`,
+code `leap_kernel.py:1017-1033`, `leap_oracle.py:86-91`). If `d = s_0 - f ≠ 0`, `r_0 = 1`,
 `r_k = ∑_{j<k} b_{k-j} r_j` with `b_m = (s_{m-1} - s_m) / d` for `k ∈ 1..59`,
 and `W = ∑_{j<60} r_j ≠ 0`, then `q_j = r_{59-j} / W` makes every row pay
 `f + d / W`, and `p_j = r_j / W` makes every column pay `f + d / W`. -/
@@ -1021,7 +1021,7 @@ example : MatrixGame.value (toeplitz 60 (fun _ => (1:ℝ)) 0) =
 /-! ## Stage-matrix conventions of the kernels -/
 
 /-- The `leap_kernel.py` cell (zero-based `i` Dropper, `j` Checker):
-`M[i,j] = s[j-i]` if `j ≥ i`, else `f` (`leap_kernel.py:1-12`, `leap_oracle.py:26-30`). -/
+`M[i,j] = s[j-i]` if `j ≥ i`, else `f` (`leap_kernel.py:1-12`, `leap_oracle.py:27-31`). -/
 def leapCell (s : ℕ → ℝ) (f : ℝ) (i j : ℕ) : ℝ := if i ≤ j then s (j - i) else f
 
 /-- The cell of the retired Rust `abstract_solver_rs` kernel, with one-based

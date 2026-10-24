@@ -1047,7 +1047,7 @@ section Window
 
 variable {α : Type*} [LinearOrder α] {β : Type*} [Fintype β] [Nonempty β] {N : ℕ} [NeZero N]
 
-/-- The window stage (`src/stl/solver/leap_oracle.py:26-35`, `stage_matrix`):
+/-- The window stage (`src/stl/solver/leap_oracle.py:27-36`, `stage_matrix`):
 rows `0, …, N - 1` are the square stage, and row `N` (the doc's row 61) is
 Baku's leap action, with payoff `f` in every column. -/
 def windowMatrix (M : Matrix (Fin N) β α) (f : α) : Matrix (Fin (N + 1)) β α :=
@@ -1081,7 +1081,7 @@ theorem colMax_window (M : Matrix (Fin N) β α) (f : α) (c : β) :
       exact h
 
 /-- The window's pure maximin is `max(maximin, f)`: the lifted lower bound of
-`leap_kernel.py:1057-1061` and `leap_oracle.py:74-75` is the pure maximin of the
+`leap_kernel.py:1057-1061` and `leap_oracle.py:75-76` is the pure maximin of the
 61-row window matrix. -/
 theorem pureMaximin_window (M : Matrix (Fin N) β α) (f : α) :
     pureMaximin (windowMatrix M f) = max (pureMaximin M) f := by
@@ -1111,7 +1111,7 @@ theorem pureMinimax_window (M : Matrix (Fin N) β α) (f : α) :
 
 variable {n : ℕ} (s : ℕ → α) (f : α)
 
-/-- **STL-MG-3** (`src/stl/solver/leap_oracle.py:72-75`,
+/-- **STL-MG-3** (`src/stl/solver/leap_oracle.py:73-76`,
 `src/stl/solver/leap_kernel.py:1011-1012,1057-1061`): in the leap window the
 lifted lower bound `max(max(lo, min(f, s0)), f)` is the pure maximin of the
 window stage. -/
@@ -1159,7 +1159,7 @@ noncomputable def mn (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ := max (prefixM
 /-- See `mn`. -/
 noncomputable def mx (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ := min (prefixMax s n) (max f (s 0))
 
-/-- Python's window rung-0 value (`leap_oracle.py:74-81`): the midpoint of the
+/-- Python's window rung-0 value (`leap_oracle.py:75-82`): the midpoint of the
 lifted bounds. -/
 noncomputable def pythonWindowValue (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ :=
   (max (mn n s f) f + max (mx n s f) f) / 2
@@ -1171,7 +1171,7 @@ noncomputable def rustWindowValue (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ :=
   max ((mn n s f + mx n s f) / 2) f
 
 /-- **STL-MG-3, CRATES-PURE-1** (`leap_kernel.py:1067-1069,1146-1152` against
-`leap_oracle.py:74-81`): Python stores the midpoint of the lifted bounds and
+`leap_oracle.py:75-82`): Python stores the midpoint of the lifted bounds and
 the kernel stores `max` of the unlifted midpoint and `f`. The two formulas differ for
 general `mn < f < mx`, but on the Toeplitz closed forms they are equal:
 `s0 ≤ f` makes both equal `f`, and `f < s0` makes `mn ≥ f`, so the lift is the
@@ -1204,7 +1204,7 @@ theorem stage_value_mem :
   · rw [mn, ← pureMaximin_toeplitzL]; exact pureMaximin_le_value _
   · rw [mx, ← pureMinimax_toeplitzL]; exact value_le_pureMinimax _
 
-/-- **STL-MG-3, CRATES-PURE-1** (`leap_oracle.py:72-81`, `leap_kernel.py:1057-1070`): if
+/-- **STL-MG-3, CRATES-PURE-1** (`leap_oracle.py:73-82`, `leap_kernel.py:1057-1070`): if
 the lifted gap is at most `ε`, the stored rung-0 value (Python's, equal to
 the kernel's by `leap_rust_eq_python`) lies within `ε / 2` of the value of the
 61-row window matrix. Without the window the same holds for the square stage

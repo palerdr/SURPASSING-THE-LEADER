@@ -852,7 +852,7 @@ theorem colDiff (p : Fin n → ℝ) (c : Fin n) (hc : c.val + 1 < n) :
 /-- The code coefficients `b[0] = 0`, `b[m] = (s[m-1] - s[m]) / δ`
 (`try_recurrence`, `src/dth_cpp/matrix_game.cpp:376-392`; `Q` in
 `recurrence.cpp` and `fast_kernel.c`; `b` in `leap_oracle.py`,
-`leap_support.py:81-92`, `leap_kernel.py:1014-1045`). -/
+`leap_support.py:82-93`, `leap_kernel.py:1014-1045`). -/
 noncomputable def codeB (m : ℕ) : ℝ := if m = 0 then 0 else (s (m - 1) - s m) / (s 0 - f)
 
 /-- The code recurrence `r[0] = 1`, `r[k] = ∑_{j<k} b[k-j] r[j]`. -/
