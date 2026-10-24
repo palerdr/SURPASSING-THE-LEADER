@@ -15,8 +15,38 @@ concurrency:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    name: python (${{ matrix.shard }}, -n ${{ matrix.width }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: stl
+            width: 4
+            os: ubuntu-latest
+            select: -m "not slow" src/stl/tests
+          - shard: stl
+            width: 8
+            os: ubuntu-latest
+            select: -m "not slow" src/stl/tests
+          - shard: rest
+            width: 4
+            os: ubuntu-latest
+            select: -m "not slow" --ignore-glob='src/stl/tests/*'
+          - shard: rest
+            width: 8
+            os: ubuntu-latest
+            select: -m "not slow" --ignore-glob='src/stl/tests/*'
+          - shard: slow
+            width: 4
+            os: ubuntu-latest
+            select: -m slow
+          - shard: slow
+            width: 4
+            os: ubuntu-24.04-arm
+            select: -m slow
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v10.0.1
@@ -26,13 +56,15 @@ jobs:
           python-version: "3.13"
       - run: uv sync --dev
       - run: uv run python -m pytest --collect-only -q
+      - run: uv run python -m pytest --collect-only -q ${{ matrix.select }} | tail -1
       # The numba leap kernel must reproduce the retired Rust kernel's golden
       # fixture. This step also compiles the kernel into its cache. The kernel
       # passes its inputs read-only, so writable and memmapped tables share
       # that compile, and the workers of the full run below load it.
       - name: Check the numba leap kernel against the Rust golden fixture
-        run: uv run python -m pytest src/stl/tests/test_leap_golden.py -q -n 0
-      - run: uv run python -m pytest -q
+        if: matrix.shard == 'stl'
+        run: uv run python -m pytest src/stl/tests/test_leap_golden.py -q -n 0 --durations=5
+      - run: uv run python -m pytest -q ${{ matrix.select }} -n ${{ matrix.width }} --durations=25
 
   browser-python:
     runs-on: ubuntu-latest
@@ -47,7 +79,13 @@ jobs:
       - run: uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
 
   dth-compact:
-    runs-on: ubuntu-latest
+    name: dth-compact (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     timeout-minutes: 30
     defaults:
       run:
@@ -60,7 +98,7 @@ jobs:
           # numba supports Python below 3.15; without a pin uv takes the newest CPython.
           python-version: "3.13"
       - run: uv sync --dev
-      - run: uv run pytest -q
+      - run: uv run pytest -q --durations=10
 
   browser:
     runs-on: ubuntu-latest
@@ -94,8 +132,16 @@ jobs:
         working-directory: src/dth_cpp
     steps:
       - uses: actions/checkout@v6
-      - run: cmake --preset ${{ matrix.preset }}
-      - run: cmake --build --preset ${{ matrix.preset }} --parallel 2
+      - uses: hendrikmuhs/ccache-action@v1.2.24
+        with:
+          key: ${{ matrix.preset }}-${{ hashFiles('src/dth_cpp/CMakeLists.txt') }}
+          append-timestamp: false
+          evict-old-files: job
+      - run: >-
+          cmake --preset ${{ matrix.preset }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - run: cmake --build --preset ${{ matrix.preset }} --parallel "$(nproc)"
       - run: ctest --preset ${{ matrix.preset }}
 
   ocaml:
