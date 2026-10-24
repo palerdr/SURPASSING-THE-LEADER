@@ -3,10 +3,10 @@
   "tag": "pre-restructure",
   "tag_commit": "4944c91cae48440f2de5eca61809f17f9c2ad38a",
   "summary": {
-    "verified": 164,
-    "mismatch": 3,
+    "verified": 178,
+    "mismatch": 4,
     "missing": 5,
-    "unverifiable": 22
+    "unverifiable": 23
   },
   "records": {
     "src/arena/config/aggro_hal_adaptive_exploitation_goal_v1.json": {
@@ -1841,6 +1841,155 @@
           "pointer": "/report_sha256/src~1hal_lab~1outputs~1exploit_continuation_v1~1runtime-check.json",
           "expected": "1ce3bc3279d53f42c31010fbf744f87881c7b01881cacea5a420c4b74f3ec2f2",
           "path": "src/hal_lab/outputs/exploit_continuation_v1/runtime-check.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        }
+      ]
+    },
+    "src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json": {
+      "sha256": "1339c11233309d5023e7f61ab3ff9ee0a411b723e33d9d0ca0f600e58ca8fc56",
+      "bindings": [
+        {
+          "pointer": "/protocol_sha256",
+          "expected": "aa2a6c9526bfb2af22fadb6ebc1bd2caaabda4bfcc62fa03be7f45509a26aff5",
+          "path": null,
+          "source": null,
+          "method": null,
+          "status": "unverifiable",
+          "reason": "no field beside the hash names its file"
+        },
+        {
+          "pointer": "/report_sha256/src~1hal_lab~1outputs~1leap_support_v1~1report.json",
+          "expected": "22995f1f3945e6cc044bf3d2ec0e5fb1f611bc8243c91969e66a97e48d2cbf89",
+          "path": "src/hal_lab/outputs/leap_support_v1/report.json",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1hal_lab~1experiments~1leap_support_v1~1run.py",
+          "expected": "fd9185ff582c7cd942378eb1ab4f8e52723c3d450c93c16bca943fe03916a585",
+          "path": "src/hal_lab/experiments/leap_support_v1/run.py",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1hal_lab~1outputs~1leap_support_v1~1net_A.npz",
+          "expected": "ab3ef8da22ab27ac6d2a10fcb7da5bdd6949d1bc01935197744dffa3d01662ff",
+          "path": "src/hal_lab/outputs/leap_support_v1/net_A.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1hal_lab~1outputs~1leap_support_v1~1net_B.npz",
+          "expected": "5cd1c48bed7d49253bc5d600182f63351717029a4117f6002d4f2276b2a8c65f",
+          "path": "src/hal_lab/outputs/leap_support_v1/net_B.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1experiments~1export_leap_residue.py",
+          "expected": "893b97592007534fbbb293ec1bdc8ac45f06c6ac02396dd11b93ccf02974ae5f",
+          "path": "src/stl/experiments/export_leap_residue.py",
+          "source": "disk",
+          "method": "bytes",
+          "status": "mismatch",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H1_36.npz",
+          "expected": "7752484eeea4b9881c0ade7477d331b30bd56e88734c6debbb6d01ee923e0c6f",
+          "path": "src/stl/outputs/leap-residue/H1_36.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H1_40.npz",
+          "expected": "d5190af4f4db36be8759e9cf2f00ae20bc58ee2ac28c28ca01b8b6ad72c0564a",
+          "path": "src/stl/outputs/leap-residue/H1_40.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H1_44.npz",
+          "expected": "312658523c66205955b7d9cb1e109332abbce5669155450c10167d848671509c",
+          "path": "src/stl/outputs/leap-residue/H1_44.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H1_45.npz",
+          "expected": "6ab7d5eb2da03f54cec421453bab6f0d69b40042eb1890ed77e7d3dcf8e41618",
+          "path": "src/stl/outputs/leap-residue/H1_45.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H1_48.npz",
+          "expected": "2fbd8df2d5c4823336014fbed22dd557376b11b2f1d8e4c0d9684e05b22317f3",
+          "path": "src/stl/outputs/leap-residue/H1_48.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H2_34.npz",
+          "expected": "6fd40067a1bc03b85e11081106a758abf763e37a0efb3ca5e661ca6c76e2da4d",
+          "path": "src/stl/outputs/leap-residue/H2_34.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H2_37.npz",
+          "expected": "9acfe559762edcd258eada5715919ea1de58404985e093c854ad7e889ecef124",
+          "path": "src/stl/outputs/leap-residue/H2_37.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H2_39.npz",
+          "expected": "5e5d1b1ff094d9ff9342b46a722b85c69c6755d57c6dc52da22beb1c4bad48ad",
+          "path": "src/stl/outputs/leap-residue/H2_39.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H2_42.npz",
+          "expected": "1dc702c8502966115b8d800540255bd4fd16586c91809f2fb6880a1d25db1501",
+          "path": "src/stl/outputs/leap-residue/H2_42.npz",
+          "source": "disk",
+          "method": "bytes",
+          "status": "verified",
+          "reason": null
+        },
+        {
+          "pointer": "/sha256/src~1stl~1outputs~1leap-residue~1H2_46.npz",
+          "expected": "cbbdb108b48298b02066bba088c07536bf6a93d02b3c820308ec9818b3fecab5",
+          "path": "src/stl/outputs/leap-residue/H2_46.npz",
           "source": "disk",
           "method": "bytes",
           "status": "verified",

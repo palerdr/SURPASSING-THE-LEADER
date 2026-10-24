@@ -485,6 +485,37 @@ the training contexts. A new registered study must evaluate this version
 before you treat its results as a replacement for v1. The release retains
 translated-v1 and makes no new promotion claim for the continuation.
 
+### Hal predictability study
+
+`experiments/hal_predictability_v1/` asks how well public information predicts
+a Hal policy's next second, and whether that predictability turns into score.
+Three predictors score held-out moves by negative log-likelihood: the exact
+equilibrium distribution at the state (the floor), a state-only table, and a
+convex history model. A no-fit departure statistic with a game-clustered
+bootstrap is the control; the exact policy's interval contains zero. Against a
+stationary opponent the hosted translated-v1 policy becomes a near-deterministic
+function of the public state: the state-only table predicts its second 67 %
+of the time against 22 % for the equilibrium, a leak of 2.7 nats per move.
+A counter-player that best-responds to that table still wins 26 of 500 games
+against translated-v1, where the exact opponent wins 252, because the policy
+models its opponent and punishes fixed play. The study is pure DTH; the hosted
+game plays canonical STL. See its
+[README](../experiments/hal_predictability_v1/README.md).
+
+### Leap support prediction study
+
+The `leap_support_v1` study asked whether a small network can name the exact
+equilibrium support of a hard STL leap stage from its 61 payoffs, on two
+hidden keys. Revision 2, a 120-input perceptron with 193,400 parameters,
+reached 72.8 % exact match on `H1_44` and 20.8 % on `H2_39`. The gate was
+90 % on each key, so the study failed. Adding the easy stages to the training
+rows moved exact match by −1.4 and −5.1 points, which is no measurable effect
+under the 2-point margin. Five unfrozen pilots, with trees, a convolution, and
+two transformers among them, scored below the frozen result on both keys.
+Revision 2 is frozen, and v1 gets no further revision. The
+[study README](../experiments/leap_support_v1/README.md) holds the data, the
+runs, and the diagnosis.
+
 ### Bayesian Perfect Hal evaluation
 
 We follow the separation of opponent inference and response in

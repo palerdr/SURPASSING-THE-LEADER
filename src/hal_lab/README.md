@@ -49,7 +49,8 @@ plan.
   model, its configs, and its frozen records. The studies are
   `perfect_hal_bayes_v2`, `perfect_hal_ensemble_v1`, `translated_hal_v1`,
   `external_hal_prior_v1`, `neural_pilots_v1`, `selector_study_v1`,
-  `pm_hal_v3`, and `aggro_hal_v1`. `exploit_hal_v2/config/` holds the three
+  `pm_hal_v3`, `aggro_hal_v1`, `leap_support_v1`, and `hal_predictability_v1`.
+  `exploit_hal_v2/config/` holds the three
   historical Exploit Hal v1 configs.
 - `experiments/exploit_continuation_v1/` holds the study of the exploit
   continuation provider `arena.policies.exploit_continuation`. Its runner
@@ -117,11 +118,18 @@ uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth
   `uv run python -m hal_lab.provenance --report > src/hal_lab/evidence/verification_baseline.json`,
   review each difference that `--check` prints, and give the reason in the
   commit message.
-- The baseline holds three mismatches. Later builds replaced the DTH manifest
+- The baseline holds four mismatches. Later builds replaced the DTH manifest
   at `src/dth/artifacts/complete_full_v1/tablebase.json` that two records
   bind. The neural pilots record binds the first `run_neural_pilots.py`, and
   `outputs/neural-pilots-v1/run_neural_pilots-original.py` keeps those bytes.
+  The leap support record binds the `src/stl/experiments/export_leap_residue.py`
+  that called the retired Rust kernel `stl_solver_rs`. The script now calls
+  `stl.solver.leap_kernel`, and commit `dc7954f` keeps the bound bytes.
   The five bindings under `outputs/aggro-hal-v1/` are missing on this disk.
+- `src/hal_lab/experiments/leap_support_v1/leap_support_v1_results.json` is
+  a frozen record, registered on 2026-10-16. Its bound outputs live under the
+  ignored `src/stl/outputs/leap-residue/` and
+  `src/hal_lab/outputs/leap_support_v1/`.
 
 ## Records and configs in `src/arena/config`
 

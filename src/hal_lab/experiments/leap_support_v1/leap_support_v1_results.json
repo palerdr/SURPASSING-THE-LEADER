@@ -1,0 +1,186 @@
+{
+  "device": "mps",
+  "experiment1_passed": false,
+  "experiment2": {
+    "b_minus_a_exact_match": {
+      "H1_44": -0.013726000000000016,
+      "H2_39": -0.050533999999999996
+    },
+    "verdict": "no measurable effect at this budget"
+  },
+  "gate_results": {
+    "hidden_key_exact_match": {
+      "H1_44": false,
+      "H2_39": false
+    },
+    "parameter_cap": true,
+    "training_hours_cap": true
+  },
+  "hidden_keys": [
+    "H2_39",
+    "H1_44"
+  ],
+  "nets": {
+    "A": {
+      "hidden": {
+        "H1_44": {
+          "bit_accuracy": 0.9958914583333334,
+          "exact_match": 0.728023,
+          "rows": 1000000,
+          "wrong_bits_histogram_0_to_7": [
+            728023,
+            131266,
+            90173,
+            30462,
+            13867,
+            4018,
+            1434,
+            471
+          ]
+        },
+        "H2_39": {
+          "bit_accuracy": 0.9763300333333333,
+          "exact_match": 0.208358,
+          "rows": 1000000,
+          "wrong_bits_histogram_0_to_7": [
+            208358,
+            131195,
+            202600,
+            136854,
+            129805,
+            59964,
+            42856,
+            26779
+          ]
+        }
+      },
+      "parameters": 193400,
+      "training_seconds": 1915.6515373329748,
+      "validation_exact_match": 0.598045,
+      "weights": "src/hal_lab/outputs/leap_support_v1/net_A.npz"
+    },
+    "B": {
+      "hidden": {
+        "H1_44": {
+          "bit_accuracy": 0.9954344333333334,
+          "exact_match": 0.714297,
+          "rows": 1000000,
+          "wrong_bits_histogram_0_to_7": [
+            714297,
+            126796,
+            97904,
+            34483,
+            17424,
+            5373,
+            2208,
+            856
+          ]
+        },
+        "H2_39": {
+          "bit_accuracy": 0.9710529166666667,
+          "exact_match": 0.157824,
+          "rows": 1000000,
+          "wrong_bits_histogram_0_to_7": [
+            157824,
+            114521,
+            174543,
+            129496,
+            155506,
+            72305,
+            58996,
+            38065
+          ]
+        }
+      },
+      "parameters": 193400,
+      "training_seconds": 2045.5039308339474,
+      "validation_exact_match": 0.7771876835728027,
+      "weights": "src/hal_lab/outputs/leap_support_v1/net_B.npz"
+    }
+  },
+  "protocol": {
+    "batch_size": 4096,
+    "candidate_keys": [
+      "H1_36",
+      "H1_38",
+      "H1_40",
+      "H1_44",
+      "H1_45",
+      "H1_48",
+      "H2_30",
+      "H2_31",
+      "H2_34",
+      "H2_35",
+      "H2_37",
+      "H2_38",
+      "H2_39",
+      "H2_41",
+      "H2_42",
+      "H2_43",
+      "H2_46",
+      "H2_47"
+    ],
+    "experiment2_margin_points": 2.0,
+    "features": "the 60 success payoffs, the failure payoff, and the 59 success differences",
+    "gates": {
+      "hidden_key_exact_match": 0.9,
+      "parameter_cap": 1000000,
+      "training_hours_cap": 2.0
+    },
+    "hidden_keys": [
+      "H2_39",
+      "H1_44"
+    ],
+    "hidden_layers": [
+      256,
+      256,
+      256
+    ],
+    "learning_rate": 0.001,
+    "optimizer": "adam",
+    "revision": 2,
+    "rows_per_key": 1000000,
+    "seed": 20261016,
+    "steps": 1000000,
+    "training_keys_per_half": 4,
+    "validation_every": 50000,
+    "validation_fraction": 0.05,
+    "version": "leap_support_v1"
+  },
+  "protocol_sha256": "aa2a6c9526bfb2af22fadb6ebc1bd2caaabda4bfcc62fa03be7f45509a26aff5",
+  "report_sha256": {
+    "src/hal_lab/outputs/leap_support_v1/report.json": "22995f1f3945e6cc044bf3d2ec0e5fb1f611bc8243c91969e66a97e48d2cbf89"
+  },
+  "rows": {
+    "easy_training": 7865659,
+    "hidden_H1_44": 1000000,
+    "hidden_H2_39": 1000000,
+    "residue_training": 8000000
+  },
+  "sha256": {
+    "src/hal_lab/experiments/leap_support_v1/run.py": "fd9185ff582c7cd942378eb1ab4f8e52723c3d450c93c16bca943fe03916a585",
+    "src/hal_lab/outputs/leap_support_v1/net_A.npz": "ab3ef8da22ab27ac6d2a10fcb7da5bdd6949d1bc01935197744dffa3d01662ff",
+    "src/hal_lab/outputs/leap_support_v1/net_B.npz": "5cd1c48bed7d49253bc5d600182f63351717029a4117f6002d4f2276b2a8c65f",
+    "src/stl/experiments/export_leap_residue.py": "893b97592007534fbbb293ec1bdc8ac45f06c6ac02396dd11b93ccf02974ae5f",
+    "src/stl/outputs/leap-residue/H1_36.npz": "7752484eeea4b9881c0ade7477d331b30bd56e88734c6debbb6d01ee923e0c6f",
+    "src/stl/outputs/leap-residue/H1_40.npz": "d5190af4f4db36be8759e9cf2f00ae20bc58ee2ac28c28ca01b8b6ad72c0564a",
+    "src/stl/outputs/leap-residue/H1_44.npz": "312658523c66205955b7d9cb1e109332abbce5669155450c10167d848671509c",
+    "src/stl/outputs/leap-residue/H1_45.npz": "6ab7d5eb2da03f54cec421453bab6f0d69b40042eb1890ed77e7d3dcf8e41618",
+    "src/stl/outputs/leap-residue/H1_48.npz": "2fbd8df2d5c4823336014fbed22dd557376b11b2f1d8e4c0d9684e05b22317f3",
+    "src/stl/outputs/leap-residue/H2_34.npz": "6fd40067a1bc03b85e11081106a758abf763e37a0efb3ca5e661ca6c76e2da4d",
+    "src/stl/outputs/leap-residue/H2_37.npz": "9acfe559762edcd258eada5715919ea1de58404985e093c854ad7e889ecef124",
+    "src/stl/outputs/leap-residue/H2_39.npz": "5e5d1b1ff094d9ff9342b46a722b85c69c6755d57c6dc52da22beb1c4bad48ad",
+    "src/stl/outputs/leap-residue/H2_42.npz": "1dc702c8502966115b8d800540255bd4fd16586c91809f2fb6880a1d25db1501",
+    "src/stl/outputs/leap-residue/H2_46.npz": "cbbdb108b48298b02066bba088c07536bf6a93d02b3c820308ec9818b3fecab5"
+  },
+  "training_keys": [
+    "H1_36",
+    "H1_40",
+    "H1_45",
+    "H1_48",
+    "H2_34",
+    "H2_37",
+    "H2_42",
+    "H2_46"
+  ]
+}
