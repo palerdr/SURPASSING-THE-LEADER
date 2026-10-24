@@ -61,8 +61,8 @@ from the state's 61 child values.
 The manifest binds the class encoding, frozen rule hash, sweep configuration,
 array shapes and dtypes, SHA-256 digests, solver routing counts, and sampled
 Bellman recertification. The reader rejects any mismatch. The independent
-dead-band solver pins `V(240,0,240,0) = 0.3372132166291093`, and Python/Rust
-synthetic sweeps must be byte identical under
+dead-band solver pins `V(240,0,240,0) = 0.3372132166291093`, and an
+interrupted synthetic sweep must resume byte identical under
 [`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md).
 
 The post-build `complete-audit` workflow targets the numerical tail rather

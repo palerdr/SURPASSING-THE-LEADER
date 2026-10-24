@@ -18,7 +18,7 @@ policy for every arena state.
   model in `docs/REVIVAL_MODEL.md`
 
 The artifact is generated and therefore gitignored. Its manifest binds array
-digests, class encoding, rule hash, sweep configuration, and Python/Rust/C
+digests, class encoding, rule hash, sweep configuration, and Python or C
 execution provenance. Missing, corrupt, wrong-schema, or off-domain lookups
 fail closed.
 
@@ -46,7 +46,7 @@ exact solution and never established DTH values or policy authority.
 ## Validation
 
 The complete sweep, packed codec, independent dead-band anchor, Bellman
-recertification, resume behavior, and Python/Rust byte parity are locked by the
+recertification, resume behavior, and resume byte identity are locked by the
 tests named `test_complete_*` and the contract in
 [`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md).
 

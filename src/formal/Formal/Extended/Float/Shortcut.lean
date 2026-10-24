@@ -1132,7 +1132,7 @@ theorem ExtRun.all_finite {α : Type*} (E : ExtRun α) (h : E.fin (E.wacc 60)) :
     rw [E.acc_step]; exact E.fma_absorb _ _ _ (Or.inr (Or.inr ht))) hk' t htk
 
 /-- **Min and max do not round** (claims CPP-DOC-FP-1 and CANONICAL-FP-1(a),
-`complete_tablebase.py:386-412`, `src/dth_cpp/BUILD.md:101-104`): over any linear order, a
+`complete_tablebase.py:351-377`, `src/dth_cpp/BUILD.md:101-104`): over any linear order, a
 left fold of `min` returns one of its inputs. The model has no NaN and treats
 `-0` and `+0` as one value; IEEE `min(-0, +0)` may return either zero, so bit
 equality across backends also needs a common tie rule for signed zeros. -/
@@ -1167,7 +1167,7 @@ theorem foldl_min_max_perm {α : Type*} [LinearOrder α] {l l' : List α} (h : l
     h.foldl_eq' (fun x _ y _ z => max_right_comm z x y) a⟩
 
 /-- **Partial-pivoting factor bound** (claim DTH-SUP-2, `DTH_COMPLETE_PARITY.md:94-102`,
-`complete_tablebase.py:429-459`). Let row `p` hold a maximum magnitude of column
+`complete_tablebase.py:394-424`). Let row `p` hold a maximum magnitude of column
 `col` over rows `col..n-1` (the first maximum, after the swap) with
 `|a p| ≥ 1e-12`. Then every elimination factor `a r / a p` has magnitude at most
 one, and so does its rounding under any monotone rounding `fl` that fixes `±1`

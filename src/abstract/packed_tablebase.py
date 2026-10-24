@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import importlib
 import json
 import math
 import os
@@ -32,8 +30,6 @@ from abstract.tablebase import state_id
 PACKED_TABLEBASE_SCHEMA = "abstract.packed-tablebase.v5"
 PACKED_BUILD_SCHEMA = "abstract.packed-tablebase-build.v4"
 UNREACHABLE_ORDINAL = np.iinfo(np.uint32).max
-_RUST_SOURCE_BUNDLE_ALGORITHM = "sha256-framed-source-bundle-v1"
-_RUST_SOURCE_BUNDLE_DOMAIN = b"stl-rust-source-bundle-v1\0"
 
 _ARRAY_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
     "state_index": ("uint32", ("reachable",)),
@@ -93,35 +89,12 @@ def _is_sha256(value: object) -> bool:
     )
 
 
-def _rust_source_bundle_digest() -> str:
-    """Digest the exact compile-time source bundle embedded by build.rs."""
-
-    source_workspace = Path(__file__).resolve().parent.parent
-    repository_root = source_workspace.parent
-    crate_root = source_workspace / "crates" / "abstract_solver"
-    entries = (
-        ("Cargo.toml", crate_root / "Cargo.toml"),
-        ("build.rs", crate_root / "build.rs"),
-        ("src/lib.rs", crate_root / "src" / "lib.rs"),
-        ("Cargo.lock", repository_root / "Cargo.lock"),
-    )
-    digest = hashlib.sha256(_RUST_SOURCE_BUNDLE_DOMAIN)
-    for label, path in entries:
-        label_bytes = label.encode("utf-8")
-        payload = path.read_bytes()
-        digest.update(len(label_bytes).to_bytes(8, "big"))
-        digest.update(label_bytes)
-        digest.update(len(payload).to_bytes(8, "big"))
-        digest.update(payload)
-    return digest.hexdigest()
-
-
-def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
+def _source_digest_inputs() -> list[Path]:
     """Return every implementation input that can affect persisted rows."""
 
     source_root = Path(__file__).resolve().parent
     repository_root = source_root.parent.parent
-    inputs = [
+    return [
         source_root / "artifacts.py",
         source_root / "state.py",
         source_root / "rules.py",
@@ -131,35 +104,20 @@ def _source_digest_inputs(*, include_rust: bool) -> list[Path]:
         source_root / "packed_tablebase.py",
         repository_root / "uv.lock",
     ]
-    if include_rust:
-        source_workspace = source_root.parent
-        inputs.extend(
-            (
-                source_workspace / "crates" / "abstract_solver" / "Cargo.toml",
-                source_workspace / "crates" / "abstract_solver" / "build.rs",
-                source_workspace / "crates" / "abstract_solver" / "src" / "lib.rs",
-                repository_root / "Cargo.lock",
-            )
-        )
-    return inputs
 
 
-def _implementation_digest(*, include_rust: bool) -> str:
+def _implementation_digest() -> str:
     return digest_files(
-        _source_digest_inputs(include_rust=include_rust),
+        _source_digest_inputs(),
         config={
             "artifact_schema": PACKED_TABLEBASE_SCHEMA,
             "build_schema": PACKED_BUILD_SCHEMA,
-            "execution_backend": "rust" if include_rust else "python",
+            "execution_backend": "python",
         },
     )
 
 
-def _build_config_payload(
-    rules: AbstractRuleset,
-    *,
-    include_rust: bool,
-) -> dict[str, object]:
+def _build_config_payload(rules: AbstractRuleset) -> dict[str, object]:
     return {
         "schema": PACKED_BUILD_SCHEMA,
         "ruleset_id": rules.ruleset_id,
@@ -168,7 +126,7 @@ def _build_config_payload(
         "load_cap_units": rules.load_cap_units,
         "failed_check_penalty_units": rules.failed_check_penalty_units,
         "revival_model": rules.revival_model_metadata,
-        "implementation_digest": _implementation_digest(include_rust=include_rust),
+        "implementation_digest": _implementation_digest(),
     }
 
 
@@ -239,25 +197,17 @@ class PackedTablebaseBuilder:
     output_dir: Path
     checkpoint_states: int = 10_000
     ordering_chunk_states: int = 1_000_000
-    backend: str = "auto"
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
         if self.checkpoint_states <= 0 or self.ordering_chunk_states <= 0:
             raise ValueError("checkpoint sizes must be positive")
-        if self.backend not in {"auto", "python", "rust"}:
-            raise ValueError("backend must be 'auto', 'python', or 'rust'")
         if self.rules.physical_state_upper_bound > int(UNREACHABLE_ORDINAL):
             raise ValueError("packed tablebase exceeds the uint32 ordinal contract")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._codec = PackedStateCodec(self.rules.load_cap_units)
         self._progress_path = self.output_dir / "build-progress.json"
-        self._rust_kernel = self._load_rust_kernel()
-        self._active_backend = "rust" if self._rust_kernel is not None else "python"
-        self._build_config = _build_config_payload(
-            self.rules,
-            include_rust=self._active_backend == "rust",
-        )
+        self._build_config = _build_config_payload(self.rules)
         self._config_digest = digest_json(self._build_config)
         if self._progress_path.exists():
             self._progress = json.loads(self._progress_path.read_text(encoding="utf-8"))
@@ -268,32 +218,6 @@ class PackedTablebaseBuilder:
             self._progress.setdefault("execution_backends", [])
         else:
             self._progress = self._initialize_reachability()
-
-    def _load_rust_kernel(self) -> Any | None:
-        if self.backend == "python":
-            return None
-        try:
-            module = importlib.import_module("abstract_solver_rs")
-        except ImportError:
-            if self.backend == "rust":
-                raise RuntimeError(
-                    "Rust backend requested but abstract_solver_rs is not installed; "
-                    "see src/crates/docs/BUILD.md"
-                )
-            return None
-        expected = "abstract-packed-parity-v3"
-        if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
-            raise RuntimeError("Rust packed solver does not match the Python parity contract")
-        if (
-            getattr(module, "SOURCE_BUNDLE_DIGEST_ALGORITHM", None)
-            != _RUST_SOURCE_BUNDLE_ALGORITHM
-            or getattr(module, "SOURCE_BUNDLE_DIGEST", None)
-            != _rust_source_bundle_digest()
-        ):
-            raise RuntimeError(
-                "abstract_solver_rs was not compiled from the current Rust source bundle"
-            )
-        return module
 
     @property
     def codec(self) -> PackedStateCodec:
@@ -405,45 +329,33 @@ class PackedTablebaseBuilder:
             if stop_after_dequeues is not None:
                 remaining = min(remaining, stop_after_dequeues - completed_this_call)
             old_head = head
-            if self._rust_kernel is not None:
-                head, tail = self._rust_kernel.expand_reachability_chunk_rs(
-                    queue,
-                    seen,
-                    head,
-                    tail,
-                    remaining,
-                    self.rules.load_cap_units,
-                    self.rules.action_size,
-                    self.rules.failed_check_penalty_units,
-                )
-            else:
-                stop = min(tail, head + remaining)
-                while head < stop:
-                    index = int(queue[head])
-                    for child in packed_live_successors(
-                        index,
-                        self.rules,
-                        codec=self.codec,
-                    ):
-                        byte_index = child >> 3
-                        mask = 1 << (child & 7)
-                        if int(seen[byte_index]) & mask:
-                            continue
-                        if tail >= self.codec.state_count:
-                            raise RuntimeError(
-                                "reachability queue exceeded the physical state domain"
-                            )
-                        seen[byte_index] = np.uint8(int(seen[byte_index]) | mask)
-                        queue[tail] = child
-                        tail += 1
-                    head += 1
+            stop = min(tail, head + remaining)
+            while head < stop:
+                index = int(queue[head])
+                for child in packed_live_successors(
+                    index,
+                    self.rules,
+                    codec=self.codec,
+                ):
+                    byte_index = child >> 3
+                    mask = 1 << (child & 7)
+                    if int(seen[byte_index]) & mask:
+                        continue
+                    if tail >= self.codec.state_count:
+                        raise RuntimeError(
+                            "reachability queue exceeded the physical state domain"
+                        )
+                    seen[byte_index] = np.uint8(int(seen[byte_index]) | mask)
+                    queue[tail] = child
+                    tail += 1
+                head += 1
             completed_this_call += head - old_head
             seen.flush()
             queue.flush()
             self._progress["queue_head"] = head
             self._progress["queue_tail"] = tail
-            if self._active_backend not in self._progress["execution_backends"]:
-                self._progress["execution_backends"].append(self._active_backend)
+            if "python" not in self._progress["execution_backends"]:
+                self._progress["execution_backends"].append("python")
             self._save_progress()
             should_stop = (
                 stop_after_dequeues is not None
@@ -700,73 +612,6 @@ class PackedTablebaseBuilder:
         )
         self._progress[counter] = int(self._progress[counter]) + 1
 
-    def _backup_rust_chunk(
-        self,
-        arrays: dict[str, np.memmap],
-        start: int,
-        cursor: int,
-    ) -> None:
-        assert self._rust_kernel is not None
-        size = self.rules.action_size
-        state_indices = np.asarray(arrays["state_index"][start:cursor])
-        result = self._rust_kernel.backup_chunk_rs(
-            state_indices,
-            arrays["ordinal_by_index"],
-            arrays["value"],
-            arrays["dropper_win_probability"],
-            arrays["checker_win_probability"],
-            self.rules.load_cap_units,
-            size,
-            self.rules.failed_check_penalty_units,
-        )
-        (
-            pure_mask,
-            pure_value,
-            pure_drop_action,
-            pure_check_action,
-            pure_dropper_win,
-            pure_checker_win,
-            mixed_positions,
-            mixed_payoff,
-            mixed_dropper_win,
-            mixed_checker_win,
-        ) = (np.asarray(value) for value in result)
-
-        for local in np.flatnonzero(pure_mask):
-            row = start + int(local)
-            drop_action = int(pure_drop_action[local])
-            check_action = int(pure_check_action[local])
-            arrays["value"][row] = pure_value[local]
-            arrays["drop_policy"][row] = 0.0
-            arrays["check_policy"][row] = 0.0
-            arrays["drop_policy"][row, drop_action] = 1.0
-            arrays["check_policy"][row, check_action] = 1.0
-            arrays["saddle_gap"][row] = 0.0
-            arrays["dropper_win_probability"][row] = pure_dropper_win[local]
-            arrays["checker_win_probability"][row] = pure_checker_win[local]
-            self._progress["pure_saddle_states"] = (
-                int(self._progress["pure_saddle_states"]) + 1
-            )
-
-        mixed_count = len(mixed_positions)
-        payoff_rows = mixed_payoff.reshape(mixed_count, size, size)
-        dropper_rows = mixed_dropper_win.reshape(mixed_count, size, size)
-        checker_rows = mixed_checker_win.reshape(mixed_count, size, size)
-        for offset, local in enumerate(mixed_positions):
-            row = start + int(local)
-            equilibrium = solve_matrix(payoff_rows[offset])
-            if equilibrium.solver_kind != "lp":
-                raise RuntimeError(
-                    "Rust/Python parity violation: mixed routing disagrees"
-                )
-            self._store_equilibrium(
-                arrays,
-                row,
-                equilibrium,
-                dropper_rows[offset],
-                checker_rows[offset],
-            )
-
     def solve(self, *, stop_after_chunks: int | None = None) -> bool:
         """Advance descending-potential backups; return whether solving finished."""
 
@@ -784,22 +629,19 @@ class PackedTablebaseBuilder:
             potential = int(np.searchsorted(offsets, cursor - 1, side="right") - 1)
             layer_start = int(offsets[potential])
             start = max(layer_start, cursor - self.checkpoint_states)
-            if self._rust_kernel is not None:
-                self._backup_rust_chunk(arrays, start, cursor)
-            else:
-                for row in range(cursor - 1, start - 1, -1):
-                    index = int(arrays["state_index"][row])
-                    equilibrium, cell_dropper_win, cell_checker_win = self._backup_state(
-                        index,
-                        arrays,
-                    )
-                    self._store_equilibrium(
-                        arrays,
-                        row,
-                        equilibrium,
-                        cell_dropper_win,
-                        cell_checker_win,
-                    )
+            for row in range(cursor - 1, start - 1, -1):
+                index = int(arrays["state_index"][row])
+                equilibrium, cell_dropper_win, cell_checker_win = self._backup_state(
+                    index,
+                    arrays,
+                )
+                self._store_equilibrium(
+                    arrays,
+                    row,
+                    equilibrium,
+                    cell_dropper_win,
+                    cell_checker_win,
+                )
 
             for array in arrays.values():
                 array.flush()
@@ -807,8 +649,8 @@ class PackedTablebaseBuilder:
             chunks += 1
             self._progress["solve_cursor"] = cursor
             self._progress["states_solved"] = int(self._progress["reachable_state_count"]) - cursor
-            if self._active_backend not in self._progress["execution_backends"]:
-                self._progress["execution_backends"].append(self._active_backend)
+            if "python" not in self._progress["execution_backends"]:
+                self._progress["execution_backends"].append("python")
             self._save_progress()
             if stop_after_chunks is not None and chunks >= stop_after_chunks:
                 return False
@@ -818,10 +660,8 @@ class PackedTablebaseBuilder:
 
     def _finalize(self, arrays: dict[str, np.memmap]) -> None:
         persisted_policy_max_saddle_gap = self._validate_hot_arrays(arrays)
-        include_rust = "rust" in self._progress["execution_backends"]
-        digest_inputs = _source_digest_inputs(include_rust=include_rust)
         code_config_digest = digest_files(
-            digest_inputs,
+            _source_digest_inputs(),
             config={
                 "ruleset_id": self.rules.ruleset_id,
                 "root": (0, 0, 0, 0),
@@ -943,76 +783,6 @@ class PackedTablebaseBuilder:
         return maximum_gap
 
     def _audit_persisted_policy_gaps(
-        self,
-        arrays: dict[str, np.memmap],
-    ) -> float:
-        if self._rust_kernel is None:
-            return self._audit_persisted_policy_gaps_python(arrays)
-
-        offsets = np.asarray(self._progress["potential_offsets"], dtype=np.int64)
-        size = self.rules.action_size
-        maximum_gap = 0.0
-        for potential in range(len(offsets) - 2, -1, -1):
-            layer_end = int(offsets[potential + 1])
-            for start in range(int(offsets[potential]), layer_end, self.checkpoint_states):
-                end = min(start + self.checkpoint_states, layer_end)
-                result = self._rust_kernel.backup_chunk_rs(
-                    np.asarray(arrays["state_index"][start:end]),
-                    arrays["ordinal_by_index"],
-                    arrays["value"],
-                    arrays["dropper_win_probability"],
-                    arrays["checker_win_probability"],
-                    self.rules.load_cap_units,
-                    size,
-                    self.rules.failed_check_penalty_units,
-                )
-                mixed_positions = np.asarray(result[6], dtype=np.int64)
-                if mixed_positions.size == 0:
-                    continue
-                payoff = np.asarray(result[7]).reshape(-1, size, size)
-                rows = start + mixed_positions
-                drop_policy = np.asarray(
-                    arrays["drop_policy"][rows],
-                    dtype=np.float64,
-                )
-                check_policy = np.asarray(
-                    arrays["check_policy"][rows],
-                    dtype=np.float64,
-                )
-                expected = np.einsum(
-                    "mi,mij,mj->m",
-                    drop_policy,
-                    payoff,
-                    check_policy,
-                    optimize=True,
-                )
-                row_gain = np.maximum(
-                    0.0,
-                    np.einsum(
-                        "mij,mj->mi",
-                        payoff,
-                        check_policy,
-                        optimize=True,
-                    ).max(axis=1)
-                    - expected,
-                )
-                column_gain = np.maximum(
-                    0.0,
-                    expected
-                    - np.einsum(
-                        "mi,mij->mj",
-                        drop_policy,
-                        payoff,
-                        optimize=True,
-                    ).min(axis=1),
-                )
-                maximum_gap = max(
-                    maximum_gap,
-                    float(np.max(row_gain + column_gain, initial=0.0)),
-                )
-        return maximum_gap
-
-    def _audit_persisted_policy_gaps_python(
         self,
         arrays: dict[str, np.memmap],
     ) -> float:
@@ -1149,8 +919,7 @@ class PackedTablebase:
             or not 0.0 <= float(maximum_gap) <= 2e-7
         ):
             raise ValueError("packed tablebase persisted saddle gap is invalid")
-        backends = metadata.get("execution_backends")
-        if backends not in (["python"], ["rust"]):
+        if metadata.get("execution_backends") != ["python"]:
             raise ValueError("packed tablebase execution provenance is invalid")
         checkpoint_states = metadata.get("checkpoint_states")
         if (
@@ -1159,17 +928,14 @@ class PackedTablebase:
             or checkpoint_states <= 0
         ):
             raise ValueError("packed tablebase checkpoint size is invalid")
-        include_rust = "rust" in backends
-        expected_build_digest = digest_json(
-            _build_config_payload(self.rules, include_rust=include_rust)
-        )
+        expected_build_digest = digest_json(_build_config_payload(self.rules))
         build_config_digest = metadata.get("packed_build_config_digest")
         if build_config_digest != expected_build_digest:
             raise ValueError(
                 "packed tablebase build configuration or implementation source is stale"
             )
         expected_code_digest = digest_files(
-            _source_digest_inputs(include_rust=include_rust),
+            _source_digest_inputs(),
             config={
                 "ruleset_id": self.rules.ruleset_id,
                 "root": (0, 0, 0, 0),
@@ -1294,7 +1060,6 @@ def build_packed_tablebase(
     output_dir: str | Path,
     *,
     checkpoint_states: int = 10_000,
-    backend: str = "auto",
 ) -> Path:
     """Build or resume a complete packed tablebase and return its manifest."""
 
@@ -1302,5 +1067,4 @@ def build_packed_tablebase(
         rules=rules,
         output_dir=Path(output_dir),
         checkpoint_states=checkpoint_states,
-        backend=backend,
     ).run()

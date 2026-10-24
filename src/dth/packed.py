@@ -79,7 +79,7 @@ class QuotientProfileTable:
     """Precomputed per-profile rule tables, the bit-level solver authority.
 
     Every transcendental quantity the complete sweep needs is evaluated here,
-    once, in Python: kernels downstream (numpy or Rust) only gather from these
+    once, in Python: kernels downstream (numpy or C) only gather from these
     arrays, which is what makes their arithmetic reproducible bit-for-bit.
     """
 

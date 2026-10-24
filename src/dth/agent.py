@@ -36,7 +36,7 @@ def runtime_source_files() -> tuple[str, ...]:
     files = [
         package / "__init__.py",
         package / "agent.py",
-        *_source_digest_inputs(include_rust=False, include_fast=True),
+        *_source_digest_inputs(include_fast=True),
     ]
     return tuple(path.relative_to(root).as_posix() for path in files)
 

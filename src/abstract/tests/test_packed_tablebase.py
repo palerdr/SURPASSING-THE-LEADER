@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -132,7 +131,6 @@ def test_float32_policy_validation_accumulates_in_float64(tmp_path) -> None:
         rules,
         output,
         checkpoint_states=2,
-        backend="python",
     )
     builder.run()
     tablebase = PackedTablebase(output)
@@ -150,44 +148,23 @@ def test_packed_checkpoint_rejects_changed_implementation_source(
 ) -> None:
     rules = _tiny_rules()
     output = tmp_path / "source-bound"
-    builder = PackedTablebaseBuilder(
-        rules, output, checkpoint_states=2, backend="python"
-    )
+    builder = PackedTablebaseBuilder(rules, output, checkpoint_states=2)
     assert not builder.enumerate_reachable(stop_after_dequeues=2)
     original = packed_tablebase_module._implementation_digest
     monkeypatch.setattr(
         packed_tablebase_module,
         "_implementation_digest",
-        lambda *, include_rust: "0" * 64,
+        lambda: "0" * 64,
     )
-    assert original(include_rust=False) != "0" * 64
+    assert original() != "0" * 64
     with pytest.raises(ValueError, match="configuration"):
-        PackedTablebaseBuilder(rules, output, checkpoint_states=2, backend="python")
-
-
-def test_packed_rust_backend_rejects_a_stale_loaded_binary(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    stale = SimpleNamespace(
-        PARITY_CONTRACT_VERSION="abstract-packed-parity-v3",
-        SOURCE_BUNDLE_DIGEST_ALGORITHM="sha256-framed-source-bundle-v1",
-        SOURCE_BUNDLE_DIGEST="0" * 64,
-    )
-    monkeypatch.setattr(
-        packed_tablebase_module.importlib,
-        "import_module",
-        lambda name: stale,
-    )
-    with pytest.raises(RuntimeError, match="current Rust source bundle"):
-        PackedTablebaseBuilder(_tiny_rules(), tmp_path / "stale", backend="auto")
+        PackedTablebaseBuilder(rules, output, checkpoint_states=2)
 
 
 def test_packed_manifest_contract_fields_fail_closed(tmp_path) -> None:
     rules = _tiny_rules()
     output = tmp_path / "manifest-contract"
-    PackedTablebaseBuilder(
-        rules, output, checkpoint_states=2, backend="python"
-    ).run()
+    PackedTablebaseBuilder(rules, output, checkpoint_states=2).run()
     manifest_path = output / "tablebase.json"
     original = json.loads(manifest_path.read_text(encoding="utf-8"))
     cases = (
@@ -243,9 +220,7 @@ def test_packed_manifest_contract_fields_fail_closed(tmp_path) -> None:
 def test_completed_packed_builder_reverifies_artifact(tmp_path, damage) -> None:
     rules = _tiny_rules()
     output = tmp_path / damage
-    PackedTablebaseBuilder(
-        rules, output, checkpoint_states=2, backend="python"
-    ).run()
+    PackedTablebaseBuilder(rules, output, checkpoint_states=2).run()
     if damage == "manifest":
         (output / "tablebase.json").unlink()
     else:
@@ -253,9 +228,7 @@ def test_completed_packed_builder_reverifies_artifact(tmp_path, damage) -> None:
         payload = bytearray(value_path.read_bytes())
         payload[-1] ^= 0xFF
         value_path.write_bytes(payload)
-    resumed = PackedTablebaseBuilder(
-        rules, output, checkpoint_states=2, backend="python"
-    )
+    resumed = PackedTablebaseBuilder(rules, output, checkpoint_states=2)
     with pytest.raises(RuntimeError, match="completed packed"):
         resumed.solve()
 
@@ -270,9 +243,7 @@ def test_completed_packed_builder_reverifies_artifact(tmp_path, damage) -> None:
 )
 def test_packed_lookup_rejects_coercible_or_out_of_domain_states(tmp_path, state) -> None:
     output = tmp_path / "lookup-validation"
-    PackedTablebaseBuilder(
-        _tiny_rules(), output, checkpoint_states=2, backend="python"
-    ).run()
+    PackedTablebaseBuilder(_tiny_rules(), output, checkpoint_states=2).run()
     with pytest.raises((TypeError, ValueError)):
         PackedTablebase(output).lookup(state)
 

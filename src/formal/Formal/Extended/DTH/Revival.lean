@@ -873,7 +873,7 @@ theorem bucketRevival_of_not {C F τ q : ℕ} (h : ¬ BucketEligible C τ q) : b
   simp only [this, ↓reduceIte]
 
 /-- **Positivity iff eligibility, range, and bounds in bucket units** (claims
-ABSTRACT-REV-1, ABSTRACT-REV-2; `src/abstract/docs/MODEL.md:42-63,169-180`).
+ABSTRACT-REV-1, ABSTRACT-REV-2; `src/abstract/docs/MODEL.md:42-63,159-170`).
 For `0 < F < C` and load `l`: `P > 0 ↔ (l + F < C ∧ τ + l + F ≤ C)`; `P < 1`
 always; and on eligible profiles `0.95 · 0.75^(C/F) / (C - F) ≤ P ≤ 0.95`. So
 the clamp never binds and every failed check has a death branch. -/

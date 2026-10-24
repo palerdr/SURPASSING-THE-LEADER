@@ -141,7 +141,7 @@ def IsPureSaddle (M : Matrix m n α) (i : m) (j : n) : Prop :=
   M i j = rowMin M i ∧ M i j = colMax M j
 
 /-- **ABSTRACT-MAT-2 (a)** (`src/abstract/matrix.py:128-160`,
-`src/abstract/docs/MODEL.md:150-152`): an exact pure saddle exists if and only
+`src/abstract/docs/MODEL.md:140-142`): an exact pure saddle exists if and only
 if the pure maximin equals the pure minimax. -/
 theorem exists_pureSaddle_iff (M : Matrix m n α) :
     (∃ i j, IsPureSaddle M i j) ↔ pureMaximin M = pureMinimax M := by
@@ -213,7 +213,7 @@ theorem lowerValue_upperValue_mem (M : Matrix m n ℝ) :
   refine ⟨h1, h2, ?_, ?_⟩ <;> [rw [← h3]; rw [← h3]] <;> assumption
 
 /-- **DTH-PURE-2, CPP-CODE-PURE-3, CRATES-PURE-1, CANONICAL-MG-5**
-(`src/dth/complete_tablebase.py:1360-1368`, `src/dth/fast_kernel.c:84-85`,
+(`src/dth/complete_tablebase.py:1289-1297`, `src/dth/fast_kernel.c:84-85`,
 `src/dth_cpp/recurrence.cpp:105-107`): when the pure gap is at most `ε`, the
 stored midpoint is within `ε / 2` of the value. With `ε = 1e-6` the error is at
 most `5e-7`. The accepted pair need not be an exact saddle; the rung stores a
@@ -368,7 +368,7 @@ theorem toeplitzL_of_lt {d c : Fin (n + 1)} (h : c.val < d.val) :
   simp only [toeplitzL, h', ↓reduceIte]
 
 /-- **CPP-DOC-PURE-1, CPP-CODE-PURE-1, DTH-PURE-1, CANONICAL-MG-5** (row part;
-`src/dth_cpp/matrix_game.cpp:139-163`, `src/dth/complete_tablebase.py:386-401`):
+`src/dth_cpp/matrix_game.cpp:139-163`, `src/dth/complete_tablebase.py:351-366`):
 row `d` of the stage reads `s[0..n-d]` and, when `d > 0`, `f`; its minimum is
 `prefix_min[n - d]`, combined with `f` when `d > 0`. With `n = 59` this is
 `prefix_min[59 - d]`. -/
@@ -788,7 +788,7 @@ section Order
 
 variable {α : Type*} [LinearOrder α]
 
-/-- **DTH-PURE-2, CANONICAL-MG-5** (`src/dth/complete_tablebase.py:398-399`,
+/-- **DTH-PURE-2, CANONICAL-MG-5** (`src/dth/complete_tablebase.py:363-364`,
 "order-independent"): a left fold of `max` does not depend on the order of its
 list. A NumPy reduction, a C loop, and a Rust `fold` over any permutation of
 the same finite entries therefore return the same element. -/
@@ -997,13 +997,15 @@ theorem rustPureSaddle_error {M : Matrix (Fin m) (Fin n) ℝ} {τ : ℝ} {rc : F
 /-- The near-saddle counterexample `!![t, 0; 0, t]` with `t > 0`. -/
 def nearPennies (t : ℝ) : Matrix (Fin 2) (Fin 2) ℝ := !![t, 0; 0, t]
 
-/-- **ABSTRACT-MAT-2** (reader doubt; `src/abstract/packed_tablebase.py:744`,
-`src/abstract/docs/MODEL.md:150-152`): with `t = 1e-12` the Rust search accepts
+/-- **ABSTRACT-MAT-2** (reader doubt; `src/abstract/packed_tablebase.py:597`,
+`src/abstract/docs/MODEL.md:140-142`): with `t = 1e-12` the Rust search accepts
 `!![t, 0; 0, t]` as pure, although the matrix has no exact pure saddle, and
-every returned cell has one-hot gap `colMax c - rowMin r > 0`. The builder
-stores `saddle_gap = 0.0` for that row, which is not the certificate of the
-stored one-hot pair. The doc's "genuinely mixed" reading of the non-pure
-states is therefore one-directional: some mixed states take the pure path. -/
+every returned cell has one-hot gap `colMax c - rowMin r > 0`. The retired Rust
+backup stored `saddle_gap = 0.0` for that row, which is not the certificate of
+the stored one-hot pair. The Python builder, the only one since 2026-10-23,
+stores the pair's certified gap. The doc's "genuinely mixed" reading of the
+non-pure states is therefore one-directional: some mixed states take the pure
+path. -/
 theorem nearPennies_counterexample :
     (rustPureSaddle (nearPennies 1e-12) 1e-12).isSome ∧
       (¬ ∃ i j, IsPureSaddle (nearPennies 1e-12) i j) ∧

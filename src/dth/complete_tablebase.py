@@ -3,8 +3,9 @@
 This module owns the dense complete-game solver artifact: one float64 value
 per quotient class of ``dth.packed``, computed by dynamic programming in
 strictly decreasing class potential, plus a one-byte solver-routing record per
-class. This module's Python path is the behavioral authority for the optional
-Rust kernel per ``docs/DTH_COMPLETE_PARITY.md``.
+class. This module's Python path is the behavioral authority for the v2 ladder
+of ``docs/DTH_COMPLETE_PARITY.md``. The ``c`` backend runs the v3 recurrence
+ladder of ``docs/FAST_TABLEBASE.md`` in ``fast_kernel.c``.
 
 Solve ladder per class, in pinned order (``LADDER_ID``):
 
@@ -32,7 +33,6 @@ and work partition by construction.
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import math
 import os
@@ -98,8 +98,6 @@ _SUPPORTS_FILE = "warm-supports.npz"
 _FULL_SUPPORT = tuple(range(60))
 # The pinned rung order; part of every build's config digest.
 LADDER_ID = "pure/warm-support/full-support/lp-v1"
-_RUST_SOURCE_BUNDLE_ALGORITHM = "sha256-framed-source-bundle-v1"
-_RUST_SOURCE_BUNDLE_DOMAIN = b"stl-rust-source-bundle-v1\0"
 
 _COMPLETE_METADATA_KEYS = {
     "class_encoding",
@@ -189,27 +187,7 @@ def _digest_files(paths: list[Path], *, config: object) -> str:
     return digest.hexdigest()
 
 
-def _rust_source_bundle_digest() -> str:
-    """Digest the exact compile-time source bundle embedded by build.rs."""
-
-    source_workspace = Path(__file__).resolve().parent.parent
-    repository_root = source_workspace.parent
-    crate_root = source_workspace / "crates" / "dth_complete"
-    entries = (
-        ("Cargo.toml", crate_root / "Cargo.toml"),
-        ("build.rs", crate_root / "build.rs"),
-        ("src/lib.rs", crate_root / "src" / "lib.rs"),
-        ("Cargo.lock", repository_root / "Cargo.lock"),
-    )
-    digest = hashlib.sha256(_RUST_SOURCE_BUNDLE_DOMAIN)
-    for label, path in entries:
-        _update_frame(digest, label, path.read_bytes())
-    return digest.hexdigest()
-
-
-def _source_digest_inputs(
-    *, include_rust: bool, include_fast: bool = False
-) -> list[Path]:
+def _source_digest_inputs(*, include_fast: bool = False) -> list[Path]:
     """Return every implementation input that can affect persisted values."""
 
     source_root = Path(__file__).resolve().parent
@@ -224,22 +202,12 @@ def _source_digest_inputs(
     ]
     if include_fast:
         inputs.append(source_root / "fast_kernel.c")
-    if include_rust:
-        source_workspace = source_root.parent
-        inputs.extend(
-            (
-                source_workspace / "crates" / "dth_complete" / "Cargo.toml",
-                source_workspace / "crates" / "dth_complete" / "build.rs",
-                source_workspace / "crates" / "dth_complete" / "src" / "lib.rs",
-                repository_root / "Cargo.lock",
-            )
-        )
     return inputs
 
 
-def _implementation_digest(*, include_rust: bool, include_fast: bool = False) -> str:
+def _implementation_digest(*, include_fast: bool = False) -> str:
     return _digest_files(
-        _source_digest_inputs(include_rust=include_rust, include_fast=include_fast),
+        _source_digest_inputs(include_fast=include_fast),
         config={
             "artifact_schema": FAST_TABLEBASE_SCHEMA
             if include_fast
@@ -247,9 +215,7 @@ def _implementation_digest(*, include_rust: bool, include_fast: bool = False) ->
             "build_schema": FAST_BUILD_SCHEMA
             if include_fast
             else COMPLETE_BUILD_SCHEMA,
-            "execution_backend": "c"
-            if include_fast
-            else ("rust" if include_rust else "python"),
+            "execution_backend": "c" if include_fast else "python",
         },
     )
 
@@ -260,7 +226,6 @@ def _build_config_payload(
     table_digest: str,
     warm_start: bool,
     max_support: int,
-    include_rust: bool,
     include_fast: bool = False,
 ) -> dict[str, object]:
     """Construct the source-bound resume contract used by builders and readers."""
@@ -278,9 +243,9 @@ def _build_config_payload(
         "max_support": max_support,
         "policy_mass_eps": _POLICY_MASS_EPS,
         "implementation_digest": (
-            _implementation_digest(include_rust=include_rust, include_fast=True)
+            _implementation_digest(include_fast=True)
             if include_fast
-            else _implementation_digest(include_rust=include_rust)
+            else _implementation_digest()
         ),
     }
 
@@ -379,7 +344,7 @@ def _table_digest(table: QuotientProfileTable) -> str:
 
 
 # --------------------------------------------------------------------------
-# Pinned solve primitives shared with (and mirrored by) the Rust kernel
+# Pinned solve primitives
 # --------------------------------------------------------------------------
 
 
@@ -781,7 +746,7 @@ class CompleteTablebaseBuilder:
     """
 
     output_dir: Path
-    backend: str = "auto"
+    backend: str = "python"
     kernel_workers: int = 12
     checkpoint_every: int = 1
     warm_start: bool = True
@@ -794,8 +759,8 @@ class CompleteTablebaseBuilder:
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
-        if self.backend not in {"auto", "python", "rust", "c"}:
-            raise ValueError("backend must be auto, python, rust, or c")
+        if self.backend not in {"python", "c"}:
+            raise ValueError("backend must be python or c")
         if self.backend == "c" and self.warm_start:
             raise ValueError("the c recurrence ladder requires warm_start=false")
         if self.checkpoint_every < 1 or (
@@ -821,12 +786,7 @@ class CompleteTablebaseBuilder:
         self._buckets = self._table.bucket_profiles
         self._max_class_potential = 2 * (len(self._buckets) - 1)
         self._progress_path = self.output_dir / "build-progress.json"
-        self._rust_kernel = self._load_rust_kernel()
-        self._active_backend = (
-            "c"
-            if self.backend == "c"
-            else ("rust" if self._rust_kernel is not None else "python")
-        )
+        self._active_backend = self.backend
         self._build_schema = (
             FAST_BUILD_SCHEMA if self.backend == "c" else COMPLETE_BUILD_SCHEMA
         )
@@ -835,7 +795,6 @@ class CompleteTablebaseBuilder:
             table_digest=_table_digest(self._table),
             warm_start=bool(self.warm_start),
             max_support=int(self.max_support),
-            include_rust=self._active_backend == "rust",
             include_fast=self._active_backend == "c",
         )
         self._config_digest = _digest_json(self._build_config)
@@ -851,34 +810,6 @@ class CompleteTablebaseBuilder:
             self._progress = None
 
     # ------------------------------------------------------------- plumbing
-    def _load_rust_kernel(self) -> Any | None:
-        if self.backend in {"python", "c"}:
-            return None
-        try:
-            module = importlib.import_module("dth_complete_rs")
-        except ImportError:
-            if self.backend == "rust":
-                raise RuntimeError(
-                    "Rust backend requested but dth_complete_rs is not installed; "
-                    "see src/crates/docs/BUILD.md"
-                )
-            return None
-        expected = "dth-complete-parity-v1"
-        if getattr(module, "PARITY_CONTRACT_VERSION", None) != expected:
-            raise RuntimeError(
-                "dth_complete_rs does not match the Python parity contract"
-            )
-        if (
-            getattr(module, "SOURCE_BUNDLE_DIGEST_ALGORITHM", None)
-            != _RUST_SOURCE_BUNDLE_ALGORITHM
-            or getattr(module, "SOURCE_BUNDLE_DIGEST", None)
-            != _rust_source_bundle_digest()
-        ):
-            raise RuntimeError(
-                "dth_complete_rs was not compiled from the current Rust source bundle"
-            )
-        return module
-
     @property
     def phase(self) -> str:
         return "init" if self._progress is None else str(self._progress["phase"])
@@ -1207,8 +1138,6 @@ class CompleteTablebaseBuilder:
     ) -> tuple[dict[str, int], dict[int, tuple[tuple[int, ...], tuple[int, ...]]]]:
         if self.backend == "c":
             return self._solve_layer_fast(potential, arrays, pool)
-        if self._rust_kernel is not None:
-            return self._solve_layer_rust(potential, arrays, prev_supports, pool)
         return self._solve_layer_python(potential, arrays, prev_supports, pool)
 
     def _layer_rectangles(self, potential: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -1432,7 +1361,7 @@ class CompleteTablebaseBuilder:
         value: np.memmap,
         kind: np.memmap,
     ) -> None:
-        """The LP tail, shared verbatim by the Python and Rust backends."""
+        """The LP tail, shared verbatim by the Python and c backends."""
 
         residues.sort(key=lambda item: item[0])
         if pool is not None and len(residues) > 1:
@@ -1462,110 +1391,6 @@ class CompleteTablebaseBuilder:
             counters[backend_keys[backend]] += 1
             next_supports[class_id] = (drop_support, check_support)
 
-    def _solve_layer_rust(
-        self,
-        potential: int,
-        arrays: dict[str, np.memmap],
-        prev_supports: dict[int, tuple[tuple[int, ...], tuple[int, ...]]],
-        pool,
-    ) -> tuple[dict[str, int], dict[int, tuple[tuple[int, ...], tuple[int, ...]]]]:
-        table = self._table
-        pool_segments: list[np.ndarray] = []
-        work: list[int] = []
-        offset = 0
-        for checker_bucket, dropper_bucket in self._layer_rectangles(potential):
-            checker_offset = offset
-            pool_segments.append(checker_bucket)
-            offset += len(checker_bucket)
-            dropper_base = offset
-            pool_segments.append(dropper_bucket)
-            offset += len(dropper_bucket)
-            for start in range(0, len(dropper_bucket), self.work_item_profiles):
-                length = min(self.work_item_profiles, len(dropper_bucket) - start)
-                work.extend(
-                    (checker_offset, len(checker_bucket), dropper_base + start, length)
-                )
-        profile_pool = (
-            np.concatenate(pool_segments).astype(np.uint32)
-            if pool_segments
-            else np.zeros(0, dtype=np.uint32)
-        )
-        guess_classes = np.array(sorted(prev_supports), dtype=np.uint64)
-        guess_rows = np.full((len(guess_classes), self.max_support), -1, dtype=np.int32)
-        guess_cols = np.full((len(guess_classes), self.max_support), -1, dtype=np.int32)
-        for index, class_id in enumerate(guess_classes):
-            drop_support, check_support = prev_supports[int(class_id)]
-            guess_rows[index, : len(drop_support)] = drop_support
-            guess_cols[index, : len(check_support)] = check_support
-
-        (
-            residue_classes,
-            residue_success,
-            residue_failed,
-            hit_classes,
-            hit_rows,
-            hit_cols,
-            pure_count,
-            warm_hits,
-            full_hits,
-            warm_attempts,
-        ) = self._rust_kernel.sweep_layer_rs(
-            np.asarray(work, dtype=np.uint64),
-            profile_pool,
-            np.ascontiguousarray(
-                table.success_child_by_profile, dtype=np.int32
-            ).reshape(-1),
-            np.ascontiguousarray(table.failure_child_by_profile, dtype=np.int32),
-            np.ascontiguousarray(table.revival_by_profile, dtype=np.float64),
-            self._profile_count,
-            guess_classes,
-            guess_rows.reshape(-1),
-            guess_cols.reshape(-1),
-            arrays["value"],
-            arrays["solver_kind"],
-            SADDLE_GAP_TOLERANCE,
-            self.max_support,
-            bool(self.warm_start),
-        )
-        counters = {
-            "pure_states": int(pure_count),
-            "support_states": int(warm_hits) + int(full_hits),
-            "warm_hits": int(warm_hits),
-            "full_support_hits": int(full_hits),
-            "lp_states": 0,
-            "lp_single_dual": 0,
-            "lp_highs": 0,
-            "lp_ipm": 0,
-            "lp_tightened": 0,
-            "warm_attempts": int(warm_attempts),
-        }
-        next_supports: dict[int, tuple[tuple[int, ...], tuple[int, ...]]] = {}
-        hit_rows = np.asarray(hit_rows).reshape(-1, self.max_support)
-        hit_cols = np.asarray(hit_cols).reshape(-1, self.max_support)
-        for index, class_id in enumerate(np.asarray(hit_classes)):
-            next_supports[int(class_id)] = (
-                tuple(int(v) for v in hit_rows[index] if v >= 0),
-                tuple(int(v) for v in hit_cols[index] if v >= 0),
-            )
-        residue_success = np.asarray(residue_success).reshape(-1, 60)
-        residues = [
-            (
-                int(np.asarray(residue_classes)[index]),
-                residue_success[index].copy(),
-                float(np.asarray(residue_failed)[index]),
-            )
-            for index in range(len(np.asarray(residue_classes)))
-        ]
-        self._solve_residues(
-            residues,
-            pool,
-            counters,
-            next_supports,
-            arrays["value"],
-            arrays["solver_kind"],
-        )
-        return counters, next_supports
-
     # ------------------------------------------------------------- finalize
     def _finalize(self, arrays: dict[str, np.memmap]) -> None:
         value = arrays["value"]
@@ -1586,10 +1411,7 @@ class CompleteTablebaseBuilder:
         recertified, worst_gap = self._sampled_recertification(value, kind)
 
         include_fast = self.backend == "c"
-        include_rust = "rust" in self._progress["execution_backends"]
-        digest_inputs = _source_digest_inputs(
-            include_rust=include_rust, include_fast=include_fast
-        )
+        digest_inputs = _source_digest_inputs(include_fast=include_fast)
         code_config_digest = _digest_files(
             digest_inputs, config={"build_config_digest": self._config_digest}
         )
@@ -1784,10 +1606,9 @@ class CompleteTablebase:
 
         backends = metadata.get("execution_backends")
         if (include_fast and (backends != ["c"] or warm_start)) or (
-            not include_fast and backends not in (["python"], ["rust"])
+            not include_fast and backends != ["python"]
         ):
             raise ValueError("complete-tablebase execution provenance is invalid")
-        include_rust = "rust" in backends
         table_digest = metadata.get("table_digest")
         if not _is_sha256(table_digest):
             raise ValueError("complete-tablebase table digest is missing")
@@ -1821,7 +1642,6 @@ class CompleteTablebase:
             table_digest=table_digest,
             warm_start=warm_start,
             max_support=max_support,
-            include_rust=include_rust,
             include_fast=include_fast,
         )
         build_config_digest = metadata.get("build_config_digest")
@@ -1830,7 +1650,7 @@ class CompleteTablebase:
                 "complete-tablebase build configuration or implementation source is stale"
             )
         expected_code_digest = _digest_files(
-            _source_digest_inputs(include_rust=include_rust, include_fast=include_fast),
+            _source_digest_inputs(include_fast=include_fast),
             config={"build_config_digest": build_config_digest},
         )
         if metadata.get("code_config_digest") != expected_code_digest:
