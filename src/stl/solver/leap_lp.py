@@ -189,11 +189,6 @@ class NativeFallback(Fallback):
     """
     def __init__(self, workers=None, *, crash=False, kernel_native=False, kink_attempts=0):
         super().__init__(workers)
-        import stl_solver_rs
-        from pathlib import Path
-        root = Path(__file__).resolve().parents[2]/'crates/stl_solver/src'
-        if stl_solver_rs.LEAP_PACKING_SOURCE != (root/'leap_packing.rs').read_text():
-            raise ValueError('stale packing extension; rebuild with maturin')
         if kink_attempts < 0 or (kink_attempts and not kernel_native):
             raise ValueError('kink attempts need the kernel residue mode')
         self.crash = crash; self.kernel_native = kernel_native; self.kink_attempts = kink_attempts
@@ -213,7 +208,9 @@ class NativeFallback(Fallback):
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
         import time
-        from stl_solver_rs import solve_packing_rs
+        # The spawn workers of FallbackPool import this module and run only
+        # HiGHS, so we import the numba kernel where we call it.
+        from stl.solver.leap_kernel import solve_packing
         output = self.cache.get(success, failure, window, pcs, pds)
         missing = np.flatnonzero(np.isnan(output)); cached = len(pcs)-len(missing)
         if not len(missing):
@@ -225,7 +222,7 @@ class NativeFallback(Fallback):
         s = np.ascontiguousarray(-succ_table[ds[:,None], p.succ[cs]])
         f = np.ascontiguousarray(p.rev[cs]*-fail_table[ds,columns]+1-p.rev[cs])
         values = np.empty(len(missing)); kind = np.empty(len(missing),np.uint8)
-        failed = solve_packing_rs(s,f,window,values,kind,crash=self.crash)
+        failed = solve_packing(s,f,window,values,kind,crash=self.crash)
         self.native_seconds += time.perf_counter()-tick
         self.native_solves += len(missing)-failed
         residual = np.flatnonzero(kind == 255)
@@ -255,7 +252,7 @@ class SupportFallback(Fallback):
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
         import time
-        from stl_solver_rs import sweep_key_rs
+        from stl.solver.leap_kernel import sweep_batch
         output = self.cache.get(success, failure, window, pcs, pds)
         pending = np.flatnonzero(np.isnan(output))
         cached = len(output)-len(pending); solved = 0
@@ -312,7 +309,7 @@ class SupportFallback(Fallback):
             values = np.empty(len(pending)); kinds = np.empty(len(pending), np.uint8)
             masks = np.zeros((len(pending), 2), np.uint64)
             tick = time.perf_counter()
-            sweep_key_rs(np.ascontiguousarray(pcs[pending]), np.ascontiguousarray(pds[pending]),
+            sweep_batch(np.ascontiguousarray(pcs[pending]), np.ascontiguousarray(pds[pending]),
                     succ_table, fail_table, p.succ, fail_col, p.rev, window, 1e-6,
                     values, kinds, seeds, masks, stop_on_support_miss=True)
             self.support_seconds += time.perf_counter()-tick

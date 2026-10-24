@@ -22,7 +22,7 @@ Conventions (shared with `Formal.DTH.Rules` and `Formal.Toeplitz.Basic`):
 * Values are stated from the current Dropper's seat. A live child has
   swapped roles, so a parent reads `-V(child)`; a Dropper win pays `+1`.
 * `δ = S 0 - F` and `r = Toeplitz.weights s f` (the recurrence of
-  `try_rung2`). The code forms of the recurrence (`b`-form in C, C++, Rust and
+  `try_rung2`). The code forms of the recurrence (`b`-form in C, C++, the numba leap kernel and
   `fast_kernel.py`; the 1-based doc form; the power-series form of
   `LEAP_CERTIFICATE.md`) are each proved equal to `r`.
 
@@ -847,12 +847,12 @@ theorem colDiff (p : Fin n → ℝ) (c : Fin n) (hc : c.val + 1 < n) :
         show c.val - (c.val + 1 - 1 - m) = m by omega]
     · congr 1; ext; simp only [Fin.val_rev]; omega
 
-/-! ### The `b`-form of C, C++, Rust and `fast_kernel.py` -/
+/-! ### The `b`-form of C, C++, the numba leap kernel and `fast_kernel.py` -/
 
 /-- The code coefficients `b[0] = 0`, `b[m] = (s[m-1] - s[m]) / δ`
 (`try_recurrence`, `src/dth_cpp/matrix_game.cpp:376-392`; `Q` in
 `recurrence.cpp` and `fast_kernel.c`; `b` in `leap_oracle.py`,
-`leap_support.py:81-92`, `leap.rs:387-424`). -/
+`leap_support.py:81-92`, `leap_kernel.py:1014-1045`). -/
 noncomputable def codeB (m : ℕ) : ℝ := if m = 0 then 0 else (s (m - 1) - s m) / (s 0 - f)
 
 /-- The code recurrence `r[0] = 1`, `r[k] = ∑_{j<k} b[k-j] r[j]`. -/
@@ -867,7 +867,7 @@ theorem recB_succ (b : ℕ → ℝ) (k : ℕ) :
   rw [recB, ← Fin.sum_univ_eq_sum_range (fun j => b (k + 1 - j) * recB b j)]
 
 /-- **Claims CPP-DOC-REC-1, CPP-CODE-REC-1, DTH-REC-1, STL-REC-1,
-CANONICAL-MG-6.** The `b`-form recurrence of the C, C++, Rust and
+CANONICAL-MG-6.** The `b`-form recurrence of the C, C++, numba and
 `fast_kernel.py` kernels computes the same weights as the compact form
 `weights`. The equality holds for every `δ`, with Lean's `x / 0 = 0` on both
 sides; the kernels only accept `|δ| ≥ 1e-12`. `fast_kernel.py` stores

@@ -4,8 +4,8 @@ import Formal.Toeplitz.Equalizer
 /-!
 # The nonnegative-weight shortcut certificate
 
-This file proves the certificate of `src/crates/docs/LEAP_CERTIFICATE.md:1-118`
-for the rung-1 shortcut of `leap.rs:475-479` and `leap_oracle.py:99-101`: when
+This file proves the certificate of `src/stl/docs/LEAP_CERTIFICATE.md:1-118`
+for the rung-1 shortcut of `leap_kernel.py:1079-1082` and `leap_oracle.py:99-101`: when
 the computed recurrence weights are finite and nonnegative, the kernel stores
 `v = fl(F + fl(d̂ / Ŵ))` with radius `CERT_RADIUS = 1e-10` and never forms `M q`.
 
@@ -389,7 +389,7 @@ theorem spread_const : (59 : ℝ) * (6 / 10 ^ 14) = 354 / 10 ^ 14 := by norm_num
 /-! ## The computed run of the shortcut branch -/
 
 /-- Every computed quantity of the shortcut branch, as a real number
-(`leap_oracle.py:92-100`, `leap.rs:380-426,479`). `acc k t` is the recurrence
+(`leap_oracle.py:92-100`, `leap_kernel.py:1009-1045,1082`). `acc k t` is the recurrence
 accumulator for weight `k` after `t` terms, `prod k t` the product
 `b (k-t) * r t` as it enters the addition, and `wacc t` the weight-sum
 accumulator after adding `r 59, …, r (60 - t)`. -/
@@ -422,7 +422,7 @@ Each rounded operation satisfies `Rounds`; the finite results mean no operation
 overflowed (see `nonfinite_propagates`). With a fused multiply-add set
 `prod k t = b (k-t) * r t` (`Rounds.refl`); with separate multiply and add,
 `prod k t` is the rounded product. The code's guards `|dh| ≥ 1e-6`
-(`leap.rs:475`, `leap_oracle.py:99`) and `Ŵ > 0` are not needed: `dh ≠ 0`
+(`leap_kernel.py:1079`, `leap_oracle.py:99`) and `Ŵ > 0` are not needed: `dh ≠ 0`
 suffices, and `Ŵ > 0` follows. -/
 structure Run.Valid (R : Run) : Prop where
   s_bound : ∀ k < 60, |R.s k| ≤ 2
@@ -517,7 +517,7 @@ theorem Valid.coef_bound (hR : R.Valid) {m : ℕ} (hm1 : 1 ≤ m) (hm : m < 60) 
         nlinarith
 
 
-/-- The dot-product error of one computed weight (`leap.rs:404-413`,
+/-- The dot-product error of one computed weight (`leap_kernel.py:1026-1033`,
 `leap_oracle.py:87-90`): `|r_k - ∑_{j<k} b̂_{k-j} r_j| ≤ ((1+u)^(k+1) - 1) ∑ |b̂_{k-j}| r_j
 + 2 k (1+u)^k η`, for fused or separate multiply-add. -/
 theorem Valid.dot (hR : R.Valid) {k : ℕ} (hk1 : 1 ≤ k) (hk : k < 60) :
@@ -698,7 +698,7 @@ theorem Valid.spread (hR : R.Valid) (a b : Fin 60) :
   have := sub_le_of_adjacent _ rho_nonneg (fun i hi => hR.adjacent_le i hi) a b
   norm_num at this ⊢; linarith
 
-/-- The Rust weight sum `Ŵ` (`leap.rs:417-426`, `sum += r[59-k]` for
+/-- The kernel weight sum `Ŵ` (`leap_kernel.py:1037-1045`, `total += r[59-k]` for
 `k = 0..59`) satisfies `|Ŵ - W| ≤ ((1+u)^60 - 1) W + 60 (1+u)^60 η`. -/
 theorem Valid.wacc_error (hR : R.Valid) :
     |R.wacc 60 - wsum 60 R.r| ≤ ((1 + u) ^ 60 - 1) * wsum 60 R.r + 60 * (1 + u) ^ 60 * eta := by
@@ -716,7 +716,7 @@ theorem Valid.wacc_error (hR : R.Valid) :
 
 /-- The stored-value error of `v = fl(F + fl(d̂ / Ŵ))` against `F + (S_0 - F) / W`,
 for any computed sum `Ŵ` with relative error `ε ≤ 7e-15`
-(`LEAP_CERTIFICATE.md:98-108`). The Rust sequential sum gives
+(`LEAP_CERTIFICATE.md:98-108`). The kernel's sequential sum gives
 `ε = γ_60 + 60(1+γ_60)η` (`Valid.last_row_close`). Python's builtin `sum`
 (`leap_oracle.py:94`) compensates its rounding from Python 3.12 on; this lemma
 applies to it once its relative error is at most `7e-15`, which we do not
@@ -832,7 +832,7 @@ theorem Valid.last_row_close (hR : R.Valid) :
 noncomputable def certRadius : ℝ := 1 / 10 ^ 10
 
 /-- **Shortcut enclosure** (claims CRATES-CERT-5 and STL-FP-1,
-`LEAP_CERTIFICATE.md:16-18,79-110`; code `leap.rs:475-479`,
+`LEAP_CERTIFICATE.md:16-18,79-110`; code `leap_kernel.py:1079-1082`,
 `leap_oracle.py:99-101`). Under `Run.Valid`, with `M = toeplitz 60 s f`,
 `p_j = r_j / W` and `q_j = r_{59-j} / W` (exact `W`):
 * both mixtures are feasible;
@@ -843,7 +843,7 @@ noncomputable def certRadius : ℝ := 1 / 10 ^ 10
   the value, and its width `2e-10` is within the `1e-6` gate.
 
 The doc says the bound is used in `kernel.c`; the shortcut exists only in
-`leap.rs` and `leap_oracle.py` (`src/dth/fast_kernel.c` always forms `M q`). -/
+`leap_kernel.py` and `leap_oracle.py` (`src/dth/fast_kernel.c` always forms `M q`). -/
 theorem Valid.enclosure (hR : R.Valid) :
     mixP 60 R.r ∈ MatrixGame.simplex (Fin 60) ∧ mixQ 60 R.r ∈ MatrixGame.simplex (Fin 60) ∧
     (∀ i, |(toeplitz 60 R.s R.f *ᵥ mixQ 60 R.r) i - R.v| < 358 / 10 ^ 14) ∧
@@ -947,7 +947,7 @@ example : |MatrixGame.value (toeplitz 60 exampleRun.s exampleRun.f) - exampleRun
 /-! ## Exact arithmetic: the row difference and the equalizer recurrence -/
 
 /-- **Adjacent row difference** (claim CRATES-REC-1, `LEAP_CERTIFICATE.md:50-59,81`,
-code `leap.rs:392-413`): for every vector `q` and row `i ∈ 0..58`,
+code `leap_kernel.py:1017-1033`): for every vector `q` and row `i ∈ 0..58`,
 `(M q)_i - (M q)_{i+1} = d q_i + ∑_{j>i} Δ_{j-i} q_j` with `d = s_0 - f`
 and `Δ_m = s_m - s_{m-1}`. It specializes `Toeplitz.mulVec_sub_succ` to 60 actions. -/
 theorem adjacent_row_difference (s : ℕ → ℝ) (f : ℝ) (q : Fin 60 → ℝ) (i : Fin 60)
@@ -958,7 +958,7 @@ theorem adjacent_row_difference (s : ℕ → ℝ) (f : ℝ) (q : Fin 60 → ℝ)
   mulVec_sub_succ s f q i hi
 
 /-- **Equalizer recurrence** (claim CRATES-REC-2, `LEAP_CERTIFICATE.md:22-36,79-98`,
-code `leap.rs:392-413`, `leap_oracle.py:85-90`). If `d = s_0 - f ≠ 0`, `r_0 = 1`,
+code `leap_kernel.py:1017-1033`, `leap_oracle.py:85-90`). If `d = s_0 - f ≠ 0`, `r_0 = 1`,
 `r_k = ∑_{j<k} b_{k-j} r_j` with `b_m = (s_{m-1} - s_m) / d` for `k ∈ 1..59`,
 and `W = ∑_{j<60} r_j ≠ 0`, then `q_j = r_{59-j} / W` makes every row pay
 `f + d / W`, and `p_j = r_j / W` makes every column pay `f + d / W`. -/
@@ -1020,25 +1020,28 @@ example : MatrixGame.value (toeplitz 60 (fun _ => (1:ℝ)) 0) =
 
 /-! ## Stage-matrix conventions of the kernels -/
 
-/-- The `leap.rs` cell (zero-based `i` Dropper, `j` Checker):
-`M[i,j] = s[j-i]` if `j ≥ i`, else `f` (`leap.rs:1-12`, `leap_oracle.py:26-30`). -/
+/-- The `leap_kernel.py` cell (zero-based `i` Dropper, `j` Checker):
+`M[i,j] = s[j-i]` if `j ≥ i`, else `f` (`leap_kernel.py:1-12`, `leap_oracle.py:26-30`). -/
 def leapCell (s : ℕ → ℝ) (f : ℝ) (i j : ℕ) : ℝ := if i ≤ j then s (j - i) else f
 
-/-- The `abstract_solver` cell with one-based actions `d, c`: failure if `c < d`,
-else `success[c - d]` (`src/crates/abstract_solver/src/lib.rs:387-402`). -/
+/-- The cell of the retired Rust `abstract_solver_rs` kernel, with one-based
+actions `d, c`: failure if `c < d`, else `success[c - d]`. The Python builder
+that it mirrored reads the same outcome by `ST = c - d + 1`
+(`src/abstract/packed_tablebase.py:559-571`), the form of `payoffRsCell`. -/
 def abstractCell (succ : ℕ → ℝ) (fail : ℝ) (d c : ℕ) : ℝ := if c < d then fail else succ (c - d)
 
-/-- The legacy `payoff.rs` cell with one-based `drop, check`: `success_values[st]`
-with `st = check - drop + 1` when `check ≥ drop` (`payoff.rs:20-42`). Index `0`
-of `success_values` is unused. -/
+/-- The ST-keyed cell with one-based `drop, check`: `success_values[st]` with
+`st = check - drop + 1` when `check ≥ drop`, as the abstract builder reads it
+(`src/abstract/packed_tablebase.py:559-571`) and the retired legacy `payoff.rs`
+did. Index `0` of `success_values` is unused. -/
 def payoffRsCell (sv : ℕ → ℝ) (fail : ℝ) (drop check : ℕ) : ℝ :=
   if drop ≤ check then sv (check - drop + 1) else fail
 
 /-- **Stage-matrix conventions** (claim CRATES-TOEP-1): the three kernel cells are
-the Toeplitz stage matrix `toeplitz n s f`. The zero-based `leap.rs` and the
-one-based `abstract_solver` index the success vector by `k = ST - 1`; the legacy
-`payoff.rs` indexes it by `ST = check - drop + 1`, so its vector is `s` shifted
-by one. -/
+the Toeplitz stage matrix `toeplitz n s f`. The zero-based leap kernel and the
+one-based retired `abstract_solver_rs` index the success vector by
+`k = ST - 1`; the abstract Python builder and the retired `payoff.rs` index it
+by `ST = check - drop + 1`, so their vector is `s` shifted by one. -/
 theorem stage_cells_eq_toeplitz {n : ℕ} (s : ℕ → ℝ) (f : ℝ) (sv : ℕ → ℝ) (d c : Fin n) :
     leapCell s f d.val c.val = toeplitz n s f d c ∧
       abstractCell s f (d.val + 1) (c.val + 1) = toeplitz n s f d c ∧
@@ -1056,7 +1059,7 @@ theorem stage_cells_eq_toeplitz {n : ℕ} (s : ℕ → ℝ) (f : ℝ) (sv : ℕ 
     simp only [leapCell, abstractCell, payoffRsCell, toeplitz_apply, h, hv, h', h'',
       ↓reduceIte, and_self]
 
-/-- **Payoff range** (claim CRATES-TOEP-1, `leap.rs:357-367`): with child values in
+/-- **Payoff range** (claim CRATES-TOEP-1, `leap_kernel.py:993-999`): with child values in
 `[-1, 1]` and revival probability `ρ ∈ [0, 1]`, the success payoffs `s_k = -child_k`
 and the failure payoff `f = ρ (-child_f) + (1 - ρ)` lie in `[-1, 1]`, so every
 stage entry does. -/
@@ -1091,7 +1094,7 @@ theorem fin_of_fin_last {α : Type*} (fin : α → Prop) (x : ℕ → α)
     ∀ t ≤ n, fin (x t) := fun t ht => by
   by_contra h; exact nonfinite_propagates fin x hstep ht h hn
 
-/-- The shortcut's intermediate values over an abstract binary64 type (`leap.rs:404-426`):
+/-- The shortcut's intermediate values over an abstract binary64 type (`leap_kernel.py:1026-1045`):
 `acc k (t+1) = fma(b (k-t), r t, acc k t)`, `r k = acc k k`,
 `wacc (t+1) = wacc t + clip (r (59-t))`, where `clip` maps a nonfinite weight
 to NaN. -/
@@ -1113,7 +1116,7 @@ structure ExtRun (α : Type*) where
 
 /-- **Overflow exclusion** (claim CRATES-CERT-6(a)): if the weight sum is finite,
 every weight, every recurrence accumulator and every partial sum is finite. So a
-finite `Ŵ` (the gate `sum.is_finite()` of `leap.rs:453`) rules out every
+finite `Ŵ` (the gate `_finite(sm)` of `leap_kernel.py:1073`) rules out every
 overflow, and each operation obeys the finite rounding model `Rounds`. -/
 theorem ExtRun.all_finite {α : Type*} (E : ExtRun α) (h : E.fin (E.wacc 60)) :
     (∀ t ≤ 60, E.fin (E.wacc t)) ∧ (∀ j < 60, E.fin (E.r j)) ∧
@@ -1132,7 +1135,7 @@ theorem ExtRun.all_finite {α : Type*} (E : ExtRun α) (h : E.fin (E.wacc 60)) :
     rw [E.acc_step]; exact E.fma_absorb _ _ _ (Or.inr (Or.inr ht))) hk' t htk
 
 /-- **Min and max do not round** (claims CPP-DOC-FP-1 and CANONICAL-FP-1(a),
-`complete_tablebase.py:386-412`, `src/dth_cpp/BUILD.md:101-104`): over any linear order, a
+`complete_tablebase.py:351-377`, `src/dth_cpp/BUILD.md:101-104`): over any linear order, a
 left fold of `min` returns one of its inputs. The model has no NaN and treats
 `-0` and `+0` as one value; IEEE `min(-0, +0)` may return either zero, so bit
 equality across backends also needs a common tie rule for signed zeros. -/
@@ -1166,8 +1169,8 @@ theorem foldl_min_max_perm {α : Type*} [LinearOrder α] {l l' : List α} (h : l
   ⟨h.foldl_eq' (fun x _ y _ z => min_right_comm z x y) a,
     h.foldl_eq' (fun x _ y _ z => max_right_comm z x y) a⟩
 
-/-- **Partial-pivoting factor bound** (claim DTH-SUP-2, `DTH_COMPLETE_PARITY.md:94-102`,
-`complete_tablebase.py:429-459`). Let row `p` hold a maximum magnitude of column
+/-- **Partial-pivoting factor bound** (claim DTH-SUP-2, `DTH_COMPLETE_PARITY.md:95-103`,
+`complete_tablebase.py:394-424`). Let row `p` hold a maximum magnitude of column
 `col` over rows `col..n-1` (the first maximum, after the swap) with
 `|a p| ≥ 1e-12`. Then every elimination factor `a r / a p` has magnitude at most
 one, and so does its rounding under any monotone rounding `fl` that fixes `±1`

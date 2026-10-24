@@ -25,10 +25,13 @@ jobs:
           # The leap builder calls math.fma, which Python 3.13 added.
           python-version: "3.13"
       - run: uv sync --dev
-      - name: Build the STL leap extension into the repository environment
-        working-directory: src/crates/stl_solver
-        run: uv run --project ../../.. maturin develop --release
       - run: uv run python -m pytest --collect-only -q
+      # The numba leap kernel must reproduce the retired Rust kernel's golden
+      # fixture. This step also compiles the kernel into its cache. The kernel
+      # passes its inputs read-only, so writable and memmapped tables share
+      # that compile, and the workers of the full run below load it.
+      - name: Check the numba leap kernel against the Rust golden fixture
+        run: uv run python -m pytest src/stl/tests/test_leap_golden.py -q -n 0
       - run: uv run python -m pytest -q
 
   browser-python:
@@ -58,46 +61,6 @@ jobs:
           python-version: "3.13"
       - run: uv sync --dev
       - run: uv run pytest -q
-
-  rust:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - run: cargo fmt --all -- --check
-      - name: Clippy checked accelerator crates
-        run: >-
-          cargo clippy
-          -p abstract_solver_rs
-          -p dth_complete_rs
-          --all-targets -- -D warnings
-      - run: cargo test --workspace
-
-  rust-python-parity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      STL_REQUIRE_RUST_PARITY: "1"
-    steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          enable-cache: true
-          python-version: "3.13"
-      - run: uv sync --dev
-      - name: Build Abstract extension into the repository environment
-        working-directory: src/crates/abstract_solver
-        run: uv run --project ../../.. maturin develop --release
-      - name: Build complete-DTH extension into the repository environment
-        working-directory: src/crates/dth_complete
-        run: uv run --project ../../.. maturin develop --release
-      - name: Require both compiled modules
-        run: uv run python -c "import abstract_solver_rs, dth_complete_rs"
-      - name: Run Python/Rust parity contracts
-        run: >-
-          uv run python -m pytest
-          src/abstract/tests/test_rust_parity.py
-          src/dth/tests/test_complete_rust_parity.py -q
 
   browser:
     runs-on: ubuntu-latest

@@ -33,10 +33,11 @@ structural and numerical checks the paper cites.
   `src/dth/docs/BUILD.md`; do not edit them without a rules change.
 - Changing the paper's numbers (timings, routing counts, line count) means
   re-rendering `paper/dth_exact_solution.pdf`.
-- Keep numba out of the root `pyproject.toml` and `uv.lock`:
-  `src/dth/complete_tablebase.py` digests the root lock, so any change there
-  orphans the `complete_full_v1` artifact. This subtree is therefore its own
-  `uv` project (`pyproject.toml`, `uv.lock`, an ignored `.venv/`).
+- This subtree is its own `uv` project (`pyproject.toml`, `uv.lock`, an
+  ignored `.venv/`), so a change to its dependencies leaves the root lock
+  alone. `src/dth/complete_tablebase.py` digests the root lock, so a root lock
+  change orphans the `complete_full_v1` artifact. The root project also
+  carries numba, at the same 0.67.0 pin, for the STL leap kernel.
 
 Build and verify from inside `src/dth_compact/`:
 

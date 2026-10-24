@@ -76,7 +76,7 @@ def test_scheduler_routes_failed_classes_to_parallel_highs(tmp_path, monkeypatch
     def reject(*args):
         args[-2][:] = np.nan; args[-1][:] = 255
         return len(args[0])
-    monkeypatch.setattr(b, 'require_kernel', lambda: reject)
+    monkeypatch.setattr(b, 'sweep_batch', reject)
     bitmap = np.zeros((b.N, (b.N+7)//8), np.uint8); bitmap[0, 0] = 1
     with Fallback(workers=1) as fallback:
         record = b.sweep_key(('H1', 56), bitmap, store, child, min_clock=720, full=True, fallback=fallback)

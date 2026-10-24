@@ -7,7 +7,6 @@ against an independent per-class resolution through the certified ladder.
 
 import json
 from dataclasses import replace
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -215,32 +214,11 @@ def test_checkpoint_rejects_changed_implementation_source(
     monkeypatch.setattr(
         complete_tablebase_module,
         "_implementation_digest",
-        lambda *, include_rust: "0" * 64,
+        lambda: "0" * 64,
     )
-    assert original(include_rust=False) != "0" * 64
+    assert original() != "0" * 64
     with pytest.raises(ValueError, match="configuration"):
         CompleteTablebaseBuilder(output_dir=target, backend="python", table=table)
-
-
-def test_rust_backend_rejects_a_stale_loaded_binary(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    stale = SimpleNamespace(
-        PARITY_CONTRACT_VERSION="dth-complete-parity-v1",
-        SOURCE_BUNDLE_DIGEST_ALGORITHM="sha256-framed-source-bundle-v1",
-        SOURCE_BUNDLE_DIGEST="0" * 64,
-    )
-    monkeypatch.setattr(
-        complete_tablebase_module.importlib,
-        "import_module",
-        lambda name: stale,
-    )
-    with pytest.raises(RuntimeError, match="current Rust source bundle"):
-        CompleteTablebaseBuilder(
-            output_dir=tmp_path / "stale",
-            backend="auto",
-            table=make_synthetic_table(count=8),
-        )
 
 
 def test_profile_table_digest_binds_bucket_schedule_and_array_contracts() -> None:

@@ -557,7 +557,7 @@ committed layer.
   independently derivable dead-band value
   `V(240,0,240,0) = 0.3372132166291093`.
 - **This exact code was cross-validated.** Layer-by-layer comparison against
-  this repository's independently implemented, Rust-parity-pinned certified
+  this repository's independently implemented, byte-parity-pinned certified
   artifact — sampled layers spanning every region of the game, 5.9M classes
   in the largest four alone — agreed to at most `5.3e-7` (only on
   LP-routed classes; elsewhere agreement is at machine precision), the
@@ -569,7 +569,7 @@ committed layer.
 `src/dth/` builds the same values via `python -m dth complete` (see
 [`WORKFLOWS.md`](WORKFLOWS.md)) with two extras this recipe deliberately
 omits: a warm-started small-support rung, and arithmetic pinned
-operation-by-operation so a Rust kernel can reproduce the artifact byte for
+operation-by-operation so a second kernel can reproduce the artifact byte for
 byte (`DTH_COMPLETE_PARITY.md`). Those constraints are what make the
 repository's pure-Python backend roughly 190x slower than this recipe; free
 of them, plain LAPACK and vectorized NumPy do the same certified work in

@@ -3,7 +3,8 @@ from pathlib import Path
 import contextlib,io,json,platform,statistics,time
 import numpy as np
 from stl.experiments.rung2b import batch_benchmark,throughput_benchmark
-from stl.solver.leap_build import builder_hash,require_kernel,file_hash
+from stl.solver.leap_build import builder_hash,file_hash
+from stl.solver.leap_kernel import sweep_batch
 from stl.solver.leap_support import solve_supported
 
 OUTPUTS=Path(__file__).resolve().parents[4]/'src/stl/outputs'
@@ -12,7 +13,7 @@ OUTPUTS=Path(__file__).resolve().parents[4]/'src/stl/outputs'
 def main():
     base=OUTPUTS
     sample=np.load(base/'leap-rung2b-samples.npz')
-    kernel=require_kernel();n=len(sample['s'])
+    n=len(sample['s'])
     differences=[];gaps=[]
     for s,f,masks,v in zip(sample['s'],sample['f'],sample['supports'],sample['values']):
         result=solve_supported(s,f,False,*map(int,masks),edges=False)
@@ -24,14 +25,14 @@ def main():
           np.tile(np.arange(60,dtype=np.int32),(n,1)),np.zeros(n,np.int32),np.ones(n),False,1e-6,out,kind,sample['supports'],masks)
     seconds=[]
     for _ in range(6):
-        tick=time.perf_counter();failed=kernel(*args);seconds.append(time.perf_counter()-tick)
-        if failed:raise RuntimeError('known-support Rust solve failed')
+        tick=time.perf_counter();failed=sweep_batch(*args);seconds.append(time.perf_counter()-tick)
+        if failed:raise RuntimeError('known-support kernel solve failed')
     report={'source_hash':builder_hash(),'platform':platform.platform(),'workers':16,
         'samples_sha256':file_hash(base/'leap-rung2b-samples.npz'),
         'known_support':{'distinct_stages':n,'replicated_classes':size,'seconds':seconds[1:],
             'median_us_per_class':statistics.median(seconds[1:])*1e6/size,
             'max_lp_difference':float(max(differences)), 'max_gap':float(max(gaps)),
-            'max_rust_lp_difference':float(np.max(np.abs(out-sample['values'][pc]))),
+            'max_kernel_lp_difference':float(np.max(np.abs(out-sample['values'][pc]))),
             'median_dimension':float(np.median(sample['sizes'])),'max_dimension':int(max(sample['sizes']))}}
     for name,module in (('throughput',throughput_benchmark),('batch',batch_benchmark)):
         trials=[]

@@ -8,24 +8,24 @@ from stl.solver.leap_oracle import solve_lp
 @pytest.mark.parametrize('n', [1, 17, 2049])
 @pytest.mark.parametrize('window', [False, True])
 def test_native_binding_matches_lp(n, window):
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     scales = np.linspace(.7, 1., n)
     s = np.ascontiguousarray(scales[:, None]*S); f = scales*F
     out = np.empty(n); kind = np.empty(n, np.uint8)
-    assert solve_packing_rs(s, f, window, out, kind) == 0
+    assert solve_packing(s, f, window, out, kind) == 0
     assert np.all(kind == 3)
     expected = scales*(F if window else VALUE)
     assert np.max(np.abs(out-expected)) < 1e-9
 
 
 def test_native_binding_rejects_bad_inputs_and_reports_unsupported():
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     out = np.empty(1); kind = np.empty(1, np.uint8)
     with pytest.raises(ValueError, match='finite'):
-        solve_packing_rs(np.full((1,60), np.nan), np.ones(1), False, out, kind)
+        solve_packing(np.full((1,60), np.nan), np.ones(1), False, out, kind)
     with pytest.raises(ValueError, match='shape'):
-        solve_packing_rs(np.zeros((1,59)), np.ones(1), False, out, kind)
-    assert solve_packing_rs(np.ones((1,60)), np.zeros(1), False, out, kind) == 1
+        solve_packing(np.zeros((1,59)), np.ones(1), False, out, kind)
+    assert solve_packing(np.ones((1,60)), np.zeros(1), False, out, kind) == 1
     assert kind[0] == 255 and np.isnan(out[0])
 
 
@@ -71,7 +71,7 @@ def test_sweep_records_native_and_highs_work_apart(tmp_path, monkeypatch):
     def reject(*args):
         args[-2][:] = np.nan; args[-1][:] = 255
         return len(args[0])
-    monkeypatch.setattr(b,'require_kernel',lambda:reject)
+    monkeypatch.setattr(b,'sweep_batch',reject)
     class Native:
         native_solves = 0; native_seconds = 0.; highs_seconds = 0.
         def solve(self, *args):

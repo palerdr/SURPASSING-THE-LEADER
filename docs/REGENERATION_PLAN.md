@@ -41,10 +41,8 @@ uv run --with matplotlib --with seaborn python paper/make_figures.py
 
 The OCaml project retains its independent direct and packed exact-solver paths;
 the Python DTH manifest remains the repository's canonical complete artifact
-contract. Rust crates are accelerators behind their Python owners' artifact
-formats and do not publish independent tablebases. The C++ artifact workflow
-remains subtree-owned while that implementation and its build order are in
-progress.
+contract. The C++ artifact workflow remains subtree-owned while that
+implementation and its build order are in progress.
 
 After regeneration, run the owning project tests and the repository-wide
 validation commands in `AGENTS.md`. Exact artifacts must fail closed if copied

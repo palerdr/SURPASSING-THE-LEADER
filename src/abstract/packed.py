@@ -85,7 +85,7 @@ class PackedStateCodec:
 
 @dataclass(frozen=True, slots=True)
 class PackedBranch:
-    """Compact transition result used by the Python/Rust parity boundary."""
+    """One probability-weighted outcome of a joint action."""
 
     probability: float
     state_index: int | None

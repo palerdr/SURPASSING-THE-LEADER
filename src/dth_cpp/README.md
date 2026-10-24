@@ -1,8 +1,8 @@
 # C++ DTH solver instructions
 
 This subtree is an independent, minimal C++ implementation of pure Drop the
-Handkerchief. It must not import or link the Python, Rust, OCaml, STL, abstract,
-or arena projects. Those projects may be used only as external validation
+Handkerchief. It must not import or link the Python, OCaml, STL, abstract, or
+arena projects. Those projects may be used only as external validation
 oracles while developing this implementation.
 
 The complete solver implements the recurrence amendment in [`BUILD.md`](BUILD.md).

@@ -1,8 +1,6 @@
 """We benchmark leap candidates without changing sweep tables or source identity."""
 from dataclasses import dataclass
 from pathlib import Path
-import json
-import subprocess
 import time
 
 import highspy
@@ -77,24 +75,25 @@ class PackingLP:
                              self.highs.getInfo().simplex_iteration_count)
 
 
-def native_batch(s, f, groups, directory, *, warm, threads=16):
-    """We include file transport and process startup in the returned wall time."""
-    binary = ROOT/'target/release/examples/leap_bench'
-    source = ROOT/'src/crates/stl_solver/examples/leap_bench.rs'
-    if not binary.exists() or binary.stat().st_mtime < source.stat().st_mtime:
-        subprocess.run(['cargo', 'build', '--release', '-p', 'stl_solver_rs', '--example', 'leap_bench'],
-                       cwd=ROOT, check=True, capture_output=True)
-    tick = time.perf_counter()
-    directory = Path(directory); directory.mkdir(parents=True, exist_ok=True)
-    src = directory/'native-input.bin'; dst = directory/'native-output.bin'
-    np.ascontiguousarray(np.c_[s, f, groups], dtype='<f8').tofile(src)
-    response = subprocess.run([str(binary), str(src), str(dst), str(int(warm)), str(threads)],
-                              check=True, capture_output=True, text=True)
-    result = np.fromfile(dst, dtype='<f8').reshape(-1, 5)
-    timing = json.loads(response.stdout)
-    timing['wall_seconds'] = time.perf_counter()-tick
-    src.unlink(); dst.unlink()
-    return result, timing
+def native_batch(s, f, groups, *, warm, threads=16):
+    """We solve each stage with the kernel's packing LP and time the call.
+
+    Stages that share a group value reuse the last certified basis when warm
+    is set. Each result row holds the value, gap, pivots, warm start, and
+    restart of `leap_kernel.solve_packing_runs`.
+    """
+    from numba import config, get_num_threads, set_num_threads
+    from stl.solver.leap_kernel import solve_packing_runs
+    previous = get_num_threads()
+    set_num_threads(min(threads, config.NUMBA_NUM_THREADS))
+    try:
+        tick = time.perf_counter()
+        result = solve_packing_runs(s, f, groups, warm)
+        seconds = time.perf_counter()-tick
+    finally:
+        set_num_threads(previous)
+    failed = int(np.count_nonzero(~np.isfinite(result[:, 0])))
+    return result, {'solve_seconds': seconds, 'failed': failed, 'wall_seconds': seconds}
 
 
 def rev_signature(clock, pc):

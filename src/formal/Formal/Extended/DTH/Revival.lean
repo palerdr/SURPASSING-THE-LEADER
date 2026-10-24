@@ -16,8 +16,8 @@ Conventions.
 * `Survives s t` is the dose form `s + 60 < 300 ∧ t + (s + 60) ≤ 300`, the form
   of `src/dth/solver.py:63-65`.
 * `bucketRevival C F τ q` mirrors `AbstractRuleset.revival_probability`
-  (`src/abstract/rules.py:178-189`) and the Rust `revival_probability`
-  (`src/crates/abstract_solver/src/lib.rs:153-162`): it takes the prior TTD
+  (`src/abstract/rules.py:178-189`), as the retired Rust `revival_probability`
+  of `abstract_solver_rs` did: it takes the prior TTD
   `τ` and the dose `q` in bucket units, recovers the load `q - F`, and clamps
   to `[0, 1]`.
 * `refereeProb` mirrors `Referee.compute_survival_probability`
@@ -828,9 +828,9 @@ theorem cubic_flat {q : ℝ} (h0 : 0 ≤ q) (h90 : q ≤ 90) :
 
 /-- `AbstractRuleset.revival_probability(prior_ttd = τ, dose_units = q)` with load
 cap `C` and penalty `F`: `0` if `q ≥ C` or `τ + q > C`, else the clamp to `[0,1]`
-of `0.95 (1 - (q - F)/(C - F)) 0.75^(τ/F)`. The Rust
-`revival_probability` (`src/crates/abstract_solver/src/lib.rs:153-162`) has
-the same structure. -/
+of `0.95 (1 - (q - F)/(C - F)) 0.75^(τ/F)` (`src/abstract/rules.py:178-189`).
+The retired Rust `revival_probability` of `abstract_solver_rs` had the same
+structure. -/
 noncomputable def bucketRevival (C F τ q : ℕ) : ℝ :=
   if C ≤ q ∨ C < τ + q then 0
   else max 0 (min 1 (0.95 * (1 - ((q : ℝ) - F) / ((C : ℝ) - F)) * (0.75 : ℝ) ^ ((τ : ℝ) / F)))
@@ -873,7 +873,7 @@ theorem bucketRevival_of_not {C F τ q : ℕ} (h : ¬ BucketEligible C τ q) : b
   simp only [this, ↓reduceIte]
 
 /-- **Positivity iff eligibility, range, and bounds in bucket units** (claims
-ABSTRACT-REV-1, ABSTRACT-REV-2; `src/abstract/docs/MODEL.md:42-63,169-180`).
+ABSTRACT-REV-1, ABSTRACT-REV-2; `src/abstract/docs/MODEL.md:42-63,159-170`).
 For `0 < F < C` and load `l`: `P > 0 ↔ (l + F < C ∧ τ + l + F ≤ C)`; `P < 1`
 always; and on eligible profiles `0.95 · 0.75^(C/F) / (C - F) ≤ P ≤ 0.95`. So
 the clamp never binds and every failed check has a death branch. -/
@@ -1107,8 +1107,8 @@ structure FloatModel where
   c95 : ℝ
   c75 : ℝ
 
-/-- The evaluation order of `src/abstract/rules.py:183-189` and
-`src/crates/abstract_solver/src/lib.rs:157-161`:
+/-- The evaluation order of `src/abstract/rules.py:183-189`, which the retired
+Rust `abstract_solver_rs` shared:
 `clamp(fl(fl(0.95 · fl(1 - fl(l / span))) · pow(0.75, fl(τ / F))))`. -/
 noncomputable def FloatModel.evalRevival (M : FloatModel) (l span τ F : ℕ) : ℝ :=
   max 0 (min 1 (M.fl (M.fl (M.c95 * M.fl (1 - M.fl ((l : ℝ) / span))) *
@@ -1120,8 +1120,8 @@ inputs only through the real quotients `l / span` and `τ / F`. The bucket
 quotients coincide with the seconds quotients (`bucket_invariance`), so one
 implementation with a fixed `fl` and `pow` returns identical binary64 results
 at `B = 10`, `B = 5`, and `B = 1`. The model says nothing across two
-implementations with different `pow` functions (Python `**` against Rust
-`powf`), and a form that rounds `1/span` before multiplying by `l` would feed
+implementations with different `pow` functions (Python `**` against a C
+`pow`), and a form that rounds `1/span` before multiplying by `l` would feed
 different reals to `fl`. -/
 theorem evalRevival_bucket_invariant (M : FloatModel) (l τ : ℕ) :
     M.evalRevival l 24 τ 6 = M.evalRevival (2 * l) 48 (2 * τ) 12 ∧

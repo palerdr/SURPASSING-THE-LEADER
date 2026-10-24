@@ -43,7 +43,7 @@ def test_partial_recovery_reuses_certified_lp_values(tmp_path, monkeypatch):
     def reject(*args):
         args[-2][:] = np.nan; args[-1][:] = 255
         return len(args[0])
-    monkeypatch.setattr(b, 'require_kernel', lambda: reject)
+    monkeypatch.setattr(b, 'sweep_batch', reject)
     class Fallback:
         def solve(self, success, fail, success_table, fail_table, pcs, pds, window):
             assert len(pcs) == 1

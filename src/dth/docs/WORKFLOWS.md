@@ -13,9 +13,10 @@ uv run python -m pytest src/dth/tests/test_complete_facade.py `
 ```
 
 The build uses `src/dth/config/complete_full_v1.yaml`, resumes by descending
-potential layer, and writes `src/dth/artifacts/complete_full_v1/`. Set
-`backend=python` or `backend=rust` to force a backend; `backend=auto` uses the
-parity-gated Rust accelerator when installed.
+potential layer, and writes `src/dth/artifacts/complete_full_v1/`. It runs
+the Python v2 ladder, `backend=python`. Pass `--config-name complete_fast_v1`
+for the `c` recurrence backend of [`FAST_TABLEBASE.md`](FAST_TABLEBASE.md),
+which builds the production artifact.
 
 The sweep is the only DTH value-bearing production workflow. Earlier
 partial-solve artifacts are not accepted by production play.
@@ -35,14 +36,14 @@ mixed strategy on its shared 1..60 action/state model; arena and the STL engine
 own legal action masking, the possible Baku action 61, clocks, transitions, and
 the frozen revival roll.
 
-## Cross-backend validation
+## Retired Rust kernel
 
-```powershell
-cd src/crates/dth_complete
-uv run maturin develop
-cd ../../..
-uv run python -m pytest src/dth/tests/test_complete_rust_parity.py -q
-```
-
-See [`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md) for the fail-closed
-contract.
+Until 2026-10-23 an optional Rust kernel, `dth_complete_rs`, swept the v2
+ladder's layers and returned the LP residue to the same Python code. We
+retired it with the repository's Rust workspace. On the top 200 potential
+layers it took 3.4 s against 92 s for the Python v2 path, and both wrote the
+same `value.npy` and `solver_kind.npy` bytes. Production builds use the `c`
+backend, and `src/dth_compact/`'s numba solver ran the same layers in 0.24 s
+warm. Git history keeps the kernel. See
+[`DTH_COMPLETE_PARITY.md`](DTH_COMPLETE_PARITY.md) for the fail-closed
+contract of the v2 ladder.
