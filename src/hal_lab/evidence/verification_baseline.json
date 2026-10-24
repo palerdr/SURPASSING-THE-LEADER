@@ -3,8 +3,8 @@
   "tag": "pre-restructure",
   "tag_commit": "4944c91cae48440f2de5eca61809f17f9c2ad38a",
   "summary": {
-    "verified": 179,
-    "mismatch": 3,
+    "verified": 178,
+    "mismatch": 4,
     "missing": 5,
     "unverifiable": 23
   },
@@ -1902,7 +1902,7 @@
           "path": "src/stl/experiments/export_leap_residue.py",
           "source": "disk",
           "method": "bytes",
-          "status": "verified",
+          "status": "mismatch",
           "reason": null
         },
         {

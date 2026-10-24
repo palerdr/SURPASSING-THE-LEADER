@@ -46,12 +46,12 @@ class RecordingFallback(NativeFallback):
         self.rows = []
 
     def solve(self, success, failure, succ_table, fail_table, pcs, pds, window):
-        from stl_solver_rs import solve_packing_rs
+        from stl.solver.leap_kernel import solve_packing
         compressed = failure is not None and failure[0] == 'REV'
         s, f = gather(succ_table, fail_table, pcs, pds, compressed)
         values = np.empty(len(pcs)); kind = np.empty(len(pcs), np.uint8)
         masks = np.zeros((len(pcs), 2), np.uint64)
-        solve_packing_rs(s, f, window, values, kind, False, masks)
+        solve_packing(s, f, window, values, kind, crash=False, support_out=masks)
         residual = np.flatnonzero(kind == 255)
         if len(residual):
             values[residual] = self.pool.solve(succ_table.filename, fail_table.filename,
@@ -83,7 +83,7 @@ def stage_rows(store, key, dth, pcs, pds, window):
     We group the classes by failure child as `sweep_key` does, so each group
     reads one success table and one failure table.
     """
-    from stl_solver_rs import solve_packing_rs, sweep_key_rs
+    from stl.solver.leap_kernel import solve_packing, sweep_batch
     p = profiles(); success_key = build.child_key(key)
     success_table = dth if success_key is None else store.load(success_key)
     s = np.empty((len(pcs), 60)); f = np.empty(len(pcs)); value = np.empty(len(pcs))
@@ -97,10 +97,10 @@ def stage_rows(store, key, dth, pcs, pds, window):
         cs = np.ascontiguousarray(pcs[rows]); ds = np.ascontiguousarray(pds[rows])
         s[rows], f[rows] = gather(success_table, fail_table, cs, ds, compressed)
         out = np.empty(len(rows)); kinds = np.empty(len(rows), np.uint8)
-        sweep_key_rs(cs, ds, success_table, fail_table, p.succ, fail_col, p.rev, window, 1e-6, out, kinds)
+        sweep_batch(cs, ds, success_table, fail_table, p.succ, fail_col, p.rev, window, 1e-6, out, kinds)
         kind[rows] = kinds
         values = np.empty(len(rows)); packed = np.empty(len(rows), np.uint8); bases = np.zeros((len(rows), 2), np.uint64)
-        solve_packing_rs(np.ascontiguousarray(s[rows]), f[rows], window, values, packed, False, bases)
+        solve_packing(np.ascontiguousarray(s[rows]), f[rows], window, values, packed, crash=False, support_out=bases)
         value[rows] = np.where(kinds == 255, np.nan, out); masks[rows] = bases
         certified = packed == 3
         if np.any(np.abs(values[certified]-out[certified]) > 1e-6):
