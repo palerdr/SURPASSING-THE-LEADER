@@ -66,7 +66,7 @@ Run `uv run python -m pytest src/stl/tests -q` for the retained surface.
 ## Leap calibration
 
 The leap kernel is `solver/leap_kernel.py`. numba compiles it on first use,
-in 15 to 35 seconds, and caches the machine code in the ignored
+in 14 to 35 seconds, and caches the machine code in the ignored
 `solver/__pycache__/`. A change to the kernel source or to the numba version
 in `uv.lock` invalidates that cache. Set `NUMBA_CACHE_DIR` to move it, for
 example to a disk that a container keeps. From the repository root, run
@@ -213,10 +213,18 @@ basis masks agreed bit for bit. Every sample value stayed within 4.97e-7 of
 its certified value, inside the 1e-6 gate. The engines differed only on
 malformed arguments: the kernel accepts an `int` for a `bool` and a `float`
 for an integer, it rejects Fortran-ordered `supports`, `support_out`, and `s`
-arrays, which Rust read in memory order, and its error messages differ. With
-15 threads on the production residue options, H1_44 took 1.09 s in numba
-against 1.24 s in Rust, and H2_42 took 3.74 s against 6.98 s, with equal
-output hashes. A cold cache adds a 15 to 35 second compile to the first call.
+arrays, which Rust read in memory order, and its error messages differ.
+
+After the port moved here, we ran it and the last `stl_solver_rs` build on
+the H1_44 and H2_42 samples on AC power with 15 threads. Both engines wrote
+the same bits in four workloads: the rungs alone, the production options of
+`RESIDUE` in Dropper-major and shuffled order, and the window path. With the
+production options, H1_44 took 1.08 s in numba against 1.26 s in Rust, and
+H2_42 took 4.31 s against 7.64 s. An earlier run of the port on lower power
+took 2.13 s against 2.70 s and 3.66 s against 6.74 s. The window path, where
+the leap row wins every class, took 0.08 s against 0.04 s. A cold cache adds
+a compile of 14 seconds on AC power, and up to 35 seconds on battery, to the
+first calls.
 
 `tests/data/leap_kernel_golden.npz` keeps 1,940 seeded stage classes and
 1,100 random-table classes with the Rust outputs: square and window stages,

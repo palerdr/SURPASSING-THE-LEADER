@@ -9,7 +9,9 @@ stages under the rungs alone and under the production residue options of
 warm and cold packing runs of the leap benchmarks. We require equal kinds,
 equal failure counts, equal basis masks, and equal values, with NaN in the
 same places. Equal means equal as numbers, so a signed zero matches either
-sign. A gate on the certified values would hide a change of rung or basis.
+sign: `llvm.minnum` and `llvm.maxnum` may return either zero of a tie, the
+fixture came from an arm64 Mac, and CI runs on x86-64. A gate on the certified
+values would hide a change of rung or basis.
 """
 import json
 from pathlib import Path
@@ -18,7 +20,6 @@ import numpy as np
 import pytest
 
 FIXTURE = Path(__file__).with_name('data')/'leap_kernel_golden.npz'
-OPTIONS = {'rungs': {}, 'production': None}
 
 
 @pytest.fixture(scope='module')
