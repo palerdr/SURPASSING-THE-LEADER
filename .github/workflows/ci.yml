@@ -22,8 +22,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
-          # The leap builder calls math.fma, which Python 3.13 added.
-          python-version: "3.13"
+          python-version: "3.12"
       - run: uv sync --dev
       - run: uv run python -m pytest --collect-only -q
       # The numba leap kernel must reproduce the retired Rust kernel's golden

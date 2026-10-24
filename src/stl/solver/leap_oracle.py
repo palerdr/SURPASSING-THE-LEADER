@@ -5,9 +5,10 @@ import math
 import numpy as np
 from scipy.optimize import linprog
 
+from stl.solver.leap_fma import fma
+
 GAP = 1e-6
 CERT_RADIUS = 1e-10
-_fma = getattr(math, "fma", lambda a, b, c: a*b+c)
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,7 @@ def solve_stage(s, f, window, *, allow_lp=True):
             acc = 0.
             try:
                 for j in range(k):
-                    acc = _fma(b[k-j], r[j], acc)
+                    acc = fma(b[k-j], r[j], acc)
             except (OverflowError, ValueError):
                 acc = math.nan
             r.append(acc)
