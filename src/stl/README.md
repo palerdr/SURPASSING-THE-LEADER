@@ -67,9 +67,11 @@ Run `uv run python -m pytest src/stl/tests -q` for the retained surface.
 
 The leap kernel is `solver/leap_kernel.py`. numba compiles it on first use,
 in 14 to 35 seconds, and caches the machine code in the ignored
-`solver/__pycache__/`. A change to the kernel source or to the numba version
-in `uv.lock` invalidates that cache. Set `NUMBA_CACHE_DIR` to move it, for
-example to a disk that a container keeps. From the repository root, run
+`solver/__pycache__/`. The kernel passes its inputs read-only, so writable
+arrays and the memmapped child tables of a build share one compiled version.
+A change to the kernel source or to the numba version in `uv.lock`
+invalidates that cache. Set `NUMBA_CACHE_DIR` to move it, for example to a
+disk that a container keeps. From the repository root, run
 `uv run python -m stl.cli command=leap`. The command checks the source and
 DTH hashes, sweeps clocks 3600 through 3420, and retains dense tables and packed
 copies under `outputs/leap/`. Resume uses the same command. Calibration rejects
@@ -232,5 +234,6 @@ the rungs alone and the production options that `RESIDUE` held at the
 capture, the packing LP from the slack and crash bases, and the warm and cold
 packing runs of the benchmarks. `tests/test_leap_golden.py` requires equal
 kinds, failure counts, masks, and values. It runs the production cases with
-the captured options, so a change of `RESIDUE` keeps the check. The commit
-that added the fixture holds `tests/make_leap_golden.py`, which captured it.
+the captured options, so a change of `RESIDUE` keeps the check. It also reads
+the child tables as read-only memmaps. The commit that added the fixture
+holds `tests/make_leap_golden.py`, which captured it.

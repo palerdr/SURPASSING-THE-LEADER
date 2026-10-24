@@ -27,8 +27,9 @@ jobs:
       - run: uv sync --dev
       - run: uv run python -m pytest --collect-only -q
       # The numba leap kernel must reproduce the retired Rust kernel's golden
-      # fixture. This step also compiles the kernel into its cache, so the
-      # workers of the full run below load it instead of compiling it.
+      # fixture. This step also compiles the kernel into its cache. The kernel
+      # passes its inputs read-only, so writable and memmapped tables share
+      # that compile, and the workers of the full run below load it.
       - name: Check the numba leap kernel against the Rust golden fixture
         run: uv run python -m pytest src/stl/tests/test_leap_golden.py -q -n 0
       - run: uv run python -m pytest -q

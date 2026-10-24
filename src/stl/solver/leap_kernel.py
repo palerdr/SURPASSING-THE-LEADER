@@ -1288,6 +1288,15 @@ def _flat(x):
     return x.reshape(-1)
 
 
+def _input(x):
+    # numba compiles one version of a function for each array writability.
+    # We pass every input read-only, so writable arrays and the read-only
+    # memmaps of the child tables share one compiled kernel.
+    x = x.view()
+    x.flags.writeable = False
+    return x
+
+
 def _count(x, name):
     x = int(x)
     if x < 0:
@@ -1383,8 +1392,9 @@ def sweep_batch(pcs, pds, succ_table, fail_table, succ_col, fail_col, rev, windo
     sr, sw = succ_table.shape
     fr, fw = fail_table.shape
     profiles = succ_col.shape[0]
-    pcs, pds, sc, fc, rev = (_flat(x) for x in (pcs, pds, succ_col, fail_col, rev))
-    st, ft, out, kind = (_flat(x) for x in (succ_table, fail_table, out, kind))
+    pcs, pds, sc, fc, rev, st, ft = (_input(_flat(x)) for x in
+                                     (pcs, pds, succ_col, fail_col, rev, succ_table, fail_table))
+    out, kind = _flat(out), _flat(kind)
     if (succ_col.shape[1] != A or len(fc) != profiles or len(rev) != profiles
             or len(pds) != len(pcs) or len(out) != len(pcs) or len(kind) != len(pcs)):
         raise ValueError('incompatible input shapes')
@@ -1401,9 +1411,9 @@ def sweep_batch(pcs, pds, succ_table, fail_table, succ_col, fail_col, rev, windo
         seeds = _flat(supports).reshape(profiles, 2)
         if (seeds & np.uint64(~SUPPORT_BITS & (2**64-1))).any():
             raise ValueError('support bit out of range')
-        seeds = seeds.view(np.int64)
+        seeds = _input(seeds.view(np.int64))
     else:
-        seeds = np.zeros((0, 2), np.int64)
+        seeds = _input(np.zeros((0, 2), np.int64))
     if support_out is not None:
         if support_out.shape != (len(pcs), 2):
             raise ValueError('support output shape mismatch')
@@ -1452,8 +1462,8 @@ def solve_packing(s, f, window, out, kind, crash=False, support_out=None):
             raise ValueError('packing support shape mismatch')
         masks = _flat(support_out).reshape(len(f), 2)
         masks.fill(0)
-    s = _flat(s).reshape(len(f), A)
-    f, out, kind = _flat(f), _flat(out), _flat(kind)
+    s = _input(_flat(s).reshape(len(f), A))
+    f, out, kind = _input(_flat(f)), _flat(out), _flat(kind)
     if not (np.isfinite(s).all() and np.isfinite(f).all()):
         raise ValueError('packing needs finite payoffs')
     if not environment_ok():

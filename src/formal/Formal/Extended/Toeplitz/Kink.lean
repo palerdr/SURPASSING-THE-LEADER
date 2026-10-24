@@ -490,7 +490,7 @@ theorem kinkIndex_eq_none_iff (n : ℕ) (s : ℕ → ℝ) :
 
 /-- **`kink_index` returns the first most negative step** (CRATES-KINK-2,
 `leap_kernel.py:852-866`). A returned index `k` lies in `1..n-1` (`1..59` for
-`n = 60`, the range `kink_seed` accepts at `leap_kernel.py:1506-1514`), its step
+`n = 60`, the range `kink_seed` accepts at `leap_kernel.py:1516-1524`), its step
 `s[k] - s[k-1]` is negative and minimal, and every earlier step is strictly
 larger. These properties determine `k`, so the NumPy version
 (`np.argmin` over the steps, first index on a tie, then `None` unless the

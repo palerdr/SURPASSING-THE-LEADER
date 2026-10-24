@@ -8,7 +8,8 @@ stages under the rungs alone and under the production residue options that
 `leap_build.RESIDUE` held at the capture, the packing LP from the slack and
 crash bases, and the warm and cold packing runs of the leap benchmarks. We run
 the production cases with the captured options, so a later change of
-`RESIDUE` keeps this parity check. We require equal kinds,
+`RESIDUE` keeps this parity check. A build reads its child tables as read-only
+memmaps, and we hold those to the fixture too. We require equal kinds,
 equal failure counts, equal basis masks, and equal values, with NaN in the
 same places. Equal means equal as numbers, so a signed zero matches either
 sign: `llvm.minnum` and `llvm.maxnum` may return either zero of a tie, the
@@ -76,6 +77,35 @@ def test_sweep_matches_golden(golden, label, window, mode):
     failed = sweep_batch(args['pcs'], args['pds'], args['succ_table'], args['fail_table'],
                          args['succ_col'], args['fail_col'], args['rev'], window, 1e-6, out, kind,
                          **({} if mode == 'rungs' else production(golden)))
+    assert failed == int(golden[f'{name}_failed'])
+    assert np.array_equal(kind, golden[f'{name}_kind'])
+    assert np.array_equal(out, golden[f'{name}_value'], equal_nan=True)
+
+
+@pytest.mark.parametrize('mapped', [(True, True), (True, False), (False, True)])
+def test_memmapped_tables_share_the_compiled_kernel(golden, tmp_path, mapped):
+    from stl.solver import leap_kernel
+    name = 'sweep_tables_square_production'
+    args = inputs(golden, 'tables')
+
+    def sweep(succ_table, fail_table):
+        n = len(args['pcs']); out = np.full(n, -7.); kind = np.full(n, 77, np.uint8)
+        failed = leap_kernel.sweep_batch(args['pcs'], args['pds'], succ_table, fail_table,
+                                         args['succ_col'], args['fail_col'], args['rev'], False,
+                                         1e-6, out, kind, **production(golden))
+        return failed, out, kind
+
+    sweep(args['succ_table'], args['fail_table'])
+    compiled = set(leap_kernel._sweep_parallel.signatures)
+    tables = []
+    for table, memmap in zip(('succ_table', 'fail_table'), mapped):
+        if memmap:
+            np.save(tmp_path/f'{table}.npy', args[table])
+            tables.append(np.load(tmp_path/f'{table}.npy', mmap_mode='r'))
+        else:
+            tables.append(args[table])
+    failed, out, kind = sweep(*tables)
+    assert set(leap_kernel._sweep_parallel.signatures) == compiled
     assert failed == int(golden[f'{name}_failed'])
     assert np.array_equal(kind, golden[f'{name}_kind'])
     assert np.array_equal(out, golden[f'{name}_value'], equal_nan=True)
