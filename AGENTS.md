@@ -20,8 +20,6 @@
   consume their public interfaces, but they must not import it or one another.
 - `src/formal/` is a Lean project that machine-checks the solvers' mathematics.
   It imports no other project, and no project imports it.
-- `src/crates/` is a shared Rust workspace; Python remains behavioral authority
-  until an explicit parity contract says otherwise.
 - `src/terminal/` is the terminal game app, `python -m terminal play`. It may
   import `arena` and `stl.engine`, and no project imports it.
 - `src/browser/` is the browser game app, `python -m browser`: the FastAPI
@@ -62,7 +60,6 @@ such as `paper/*.py`.
 | Layer | Projects | May import |
 | --- | --- | --- |
 | Peers | `stl`, `dth`, `dth_compact`, `abstract`, `dth_ocaml`, `dth_cpp` | No other project |
-| Shared accelerators | `crates` | No other project |
 | Proofs | `formal` | Nothing |
 | Library | `arena` | `stl.engine`, `stl.solver.canonical`, `stl.reader`, `dth.agent`, `dth.solver`, `abstract` |
 | App | `terminal` | `arena`, `stl.engine` |
@@ -71,8 +68,7 @@ such as `paper/*.py`.
 | Consumer | `paper` | `stl.reader`, `main` (`src/dth_compact/main.py`) |
 
 - A cross-project import must sit under a `may_import` entry of the importer
-  and under a `public_interfaces` entry of the owner. The compiled `*_rs`
-  extension modules are outside this check.
+  and under a `public_interfaces` entry of the owner.
 - `hal_lab`, `terminal`, and `browser` declare no public interface, so no
   project can import them.
 - The layer check scans `src/<id>/` alone. The root `tests/` directory sits
@@ -117,8 +113,9 @@ such as `paper/*.py`.
 - The builder hash reads `src/stl/solver/leap_*.py` by glob. Name a new STL
   builder module `src/stl/solver/leap_*.py`, and put new non-builder STL code
   outside `src/stl/solver/`.
-- `uv sync` at the root removes the three maturin extensions. Run commands
-  with `uv run`, and rebuild the extensions after a sync.
+- The STL leap kernel `src/stl/solver/leap_kernel.py` is numba code. Its
+  first call compiles it into the ignored `src/stl/solver/__pycache__/`;
+  `NUMBA_CACHE_DIR` moves that cache.
 - The browser app is its own uv project, `src/browser/pyproject.toml`, with
   its own `src/browser/uv.lock`. FastAPI, uvicorn, and httpx live there, and
   the project installs the root package as an editable path dependency. A
@@ -169,7 +166,6 @@ uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
-cargo test --workspace
 npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml

@@ -22,7 +22,6 @@ packages = ["src/stl", "src/dth", "src/abstract", "src/arena", "src/terminal", "
 
 [dependency-groups]
 dev = [
-    "maturin>=1.14.1",
     "pytest>=8.0",
     "pytest-xdist>=3.6",
 ]

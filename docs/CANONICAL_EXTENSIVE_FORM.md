@@ -64,7 +64,6 @@ per-player physicality multiplier in revival odds at any ladder rung.
 
 - `src/stl/engine/game.py` owns full-game transitions.
 - `src/stl/engine/actions.py` owns STL action legality.
-- `src/crates/stl_solver/src/game.rs` must match the Python engine where covered.
 - `src/dth/solver.py` owns the no-leap DTH abstraction (ladder rung L1).
 - `src/abstract/rules.py` owns only the enumerated role-relative 10-second and
   5-second bucket abstractions (ladder rung L0); their shared exact contract is

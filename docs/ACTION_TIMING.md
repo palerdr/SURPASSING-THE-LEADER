@@ -1,7 +1,7 @@
 # Action Timing Authority
 
 This is the sole repository authority for action seconds and Squandered Time
-(ST). Engine, solver, learning, Rust, tests, and artifact schemas must agree.
+(ST). Engine, solver, learning, tests, and artifact schemas must agree.
 
 ## Evidence and interpretation
 

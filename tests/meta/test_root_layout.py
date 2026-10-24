@@ -22,8 +22,6 @@ GOVERNANCE = frozenset(
         ".gitignore",
         "AGENTS.md",
         "CLAUDE.md",
-        "Cargo.lock",
-        "Cargo.toml",
         "README.md",
         "pyproject.toml",
         "uv.lock",
