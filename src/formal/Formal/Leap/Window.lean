@@ -156,7 +156,7 @@ theorem lowerBound_scale (M : Matrix (Fin m) n ℝ) (p : Fin m → ℝ) {k : ℝ
   · rw [le_lowerBound_iff]; intro j
     rw [hv]; exact mul_le_mul_of_nonneg_left (lowerBound_le_col M p j) hk
 
-/-- Claim CRATES-LEAP-1 (`src/crates/docs/LEAP_CERTIFICATE.md:124-129`) and the
+/-- Claim CRATES-LEAP-1 (`src/stl/docs/LEAP_CERTIFICATE.md:124-129`) and the
 proof of STL-MG-1 (`paper/stl.tex:168-171`): a row mix with mass `a` on the
 leap row has minimum column payoff `a f + (1 - a) min_c (p'ᵀ M)_c`. -/
 theorem lowerBound_mix (M : Matrix (Fin m) n ℝ) (f : ℝ) {a : ℝ} (ha1 : a ≤ 1)
@@ -176,7 +176,7 @@ theorem mix_payoff_le_max {a L f : ℝ} (ha0 : 0 ≤ a) (ha1 : a ≤ 1) :
     mul_le_mul_of_nonneg_left (le_max_left _ _) (by linarith)
   linarith
 
-/-- Claims CRATES-LEAP-1 and STL-MG-1 (`src/crates/docs/LEAP_CERTIFICATE.md:120-138`,
+/-- Claims CRATES-LEAP-1 and STL-MG-1 (`src/stl/docs/LEAP_CERTIFICATE.md:120-138`,
 `paper/stl.tex:163-172`): the window value is `max(v60, f)`. -/
 theorem value_window (M : Matrix (Fin m) n ℝ) (f : ℝ) :
     value (window M f) = max (value M) f := by
@@ -230,7 +230,7 @@ theorem value_le_value_window (M : Matrix (Fin m) n ℝ) (f : ℝ) :
     value M ≤ value (window M f) := by
   rw [value_window]; exact le_max_left _ _
 
-/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/crates/docs/LEAP_CERTIFICATE.md:135-138`,
+/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/stl/docs/LEAP_CERTIFICATE.md:135-138`,
 `paper/stl.tex:205-207`): a square certificate `(p, q)` lifts to the window
 enclosure `[max(L, f), max(U, f)]`. -/
 theorem window_certificate (M : Matrix (Fin m) n ℝ) (f : ℝ) {p : Fin m → ℝ} {q : n → ℝ}
@@ -275,13 +275,13 @@ theorem value_windowStage (W : DTH.State → ℝ) (x : DTH.State) :
 
 section Lift
 
-/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/crates/docs/LEAP_CERTIFICATE.md:135-137`):
+/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/stl/docs/LEAP_CERTIFICATE.md:135-137`):
 `x ↦ max x f` is monotone, so it maps `[MN, MX]` into `[max(MN, f), max(MX, f)]`. -/
 theorem lift_mem {MN MX v f : ℝ} (h1 : MN ≤ v) (h2 : v ≤ MX) :
     max MN f ≤ max v f ∧ max v f ≤ max MX f :=
   ⟨max_le_max h1 le_rfl, max_le_max h2 le_rfl⟩
 
-/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/crates/docs/LEAP_CERTIFICATE.md:137-138`):
+/-- Claims CRATES-LEAP-2 and STL-MG-2 (`src/stl/docs/LEAP_CERTIFICATE.md:137-138`):
 `max (·) f` is 1-Lipschitz. -/
 theorem lift_lipschitz (x y f : ℝ) : |max x f - max y f| ≤ |x - y| :=
   abs_max_sub_max_le_abs x y f
@@ -294,14 +294,14 @@ theorem lift_gap_le {MN MX : ℝ} (f : ℝ) (h : MN ≤ MX) :
   rw [abs_of_nonneg h0] at this
   exact (le_abs_self _).trans this
 
-/-- Claim CRATES-LEAP-2 (`src/crates/stl_solver/src/leap.rs:559-567`): the kernel
+/-- Claim CRATES-LEAP-2 (`src/stl/solver/leap_kernel.py:1146-1152`): the kernel
 records kind 2 when `f ≥ v_sq`; the stored value `max v_sq f` is then `f`,
 the leap row's payoff. -/
 theorem stored_eq_f_of_kind2 {vsq f : ℝ} (h : vsq ≤ f) : max vsq f = f := max_eq_right h
 
 variable {m : ℕ} [NeZero m] {n : Type*} [Fintype n] [Nonempty n]
 
-/-- Claim CRATES-LEAP-2 and its doubt (`src/crates/stl_solver/src/leap.rs:505-509,559-567`):
+/-- Claim CRATES-LEAP-2 and its doubt (`src/stl/solver/leap_kernel.py:1104-1107,1146-1152`):
 if the square value and the square estimate `v_sq` both lie in `[MN, MX]` and
 the lifted gap is at most `ε`, the stored value `max v_sq f` lies in the lifted
 interval and is within `ε` (not `ε / 2`) of the window value. -/

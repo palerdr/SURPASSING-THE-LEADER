@@ -105,8 +105,8 @@ per-player physicality. The unified engine instead folds physicality into the
 baseline and the CPR count into `t` — each death
 costs at least 60 seconds of TTD, so `t/60` is an upper bound on deaths — gives a
 two-variable surface faithful to the earlier structure and portable to every
-formulation. Current STL, DTH, abstract, Rust, and OCaml engines all execute
-that same two-variable rule. This is a modeling bridge, not a claim that
+formulation. Current STL, DTH, abstract, and OCaml engines all execute that
+same two-variable rule. This is a modeling bridge, not a claim that
 accrued TTD is a literal observed CPR count.
 
 ## Table
@@ -210,7 +210,7 @@ the identity-specific multiplier the unified model deliberately absorbs.
 ## Implementation status
 
 Every executable formulation now uses this frozen surface: pure DTH, both
-abstract tablebases, the Python and Rust STL engines, the OCaml STL engine in
+abstract tablebases, the Python STL engine, the OCaml STL engine in
 `src/dth_ocaml/play/`, and the pure-DTH OCaml solver. Arena and both terminal
 renderers display the probability recorded by their engine; neither carries a
 separate revival calculation.
@@ -222,9 +222,7 @@ The implementation record is in
 | `src/dth/solver.py` | frozen surface and source-derived rule hash |
 | `src/abstract/rules.py` | only the frozen surface is addressable |
 | `src/abstract/packed_tablebase.py` | manifests reject non-frozen metadata |
-| `src/crates/abstract_solver/src/lib.rs` | frozen Rust kernel; parity verified |
 | `src/stl/engine/game.py` | frozen linear/geometric surface |
-| `src/crates/stl_solver/src/game.rs` | frozen linear/geometric surface |
 | `src/dth_ocaml/play/engine/referee.ml` | frozen linear/geometric surface |
 | `src/dth_ocaml/lib/solver/exact.ml` | frozen linear/geometric surface |
 

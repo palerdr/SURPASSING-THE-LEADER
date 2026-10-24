@@ -102,7 +102,7 @@ support of its preceding residue class with the success-payoff kink and tries
 it once. On a miss, the chunk runs the packing LP from the recurrence crash
 basis. REV keys keep the Python fallback and its revival cache, and their
 packing LP also starts from the crash basis. Every stored value still passes
-the full 1e-6 matrix gate; [`LEAP_CERTIFICATE.md`](../crates/docs/LEAP_CERTIFICATE.md)
+the full 1e-6 matrix gate; [`LEAP_CERTIFICATE.md`](docs/LEAP_CERTIFICATE.md)
 holds the equations. Records count kernel LP solves as `kernel_native_solves`
 and support hits as `support_solves`, and `failures` still counts all
 residue. The kernel time then includes the residue LPs, so compare residue
@@ -138,7 +138,7 @@ command leaves support reuse disabled; the measured H2 batches ran slower with s
 reuse. The full sweep uses `NativeFallback` with a fresh packing basis per
 stage. `leap_kernel.sweep_batch` accepts optional `supports` and `support_out`
 masks and preserves its original behavior when you omit them. See
-[`LEAP_CERTIFICATE.md`](../crates/docs/LEAP_CERTIFICATE.md) for the equations
+[`LEAP_CERTIFICATE.md`](docs/LEAP_CERTIFICATE.md) for the equations
 and acceptance rule, and `solver/leap_support.py` for the Python authority.
 
 `uv run python -m stl.experiments.benchmark_leap_run` reproduced the packing,

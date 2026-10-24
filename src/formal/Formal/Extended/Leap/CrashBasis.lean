@@ -7,22 +7,22 @@ import Formal.Toeplitz.Equalizer
 /-!
 # The recurrence crash basis of the packing LP
 
-`src/crates/docs/LEAP_CERTIFICATE.md` ("Packing fallback", "Recurrence crash
-basis") and `Solver::crash` in `src/crates/stl_solver/src/leap_packing.rs`
+`src/stl/docs/LEAP_CERTIFICATE.md` ("Packing fallback", "Recurrence crash
+basis") and `_crash` in `src/stl/solver/leap_kernel.py`
 start the packing simplex from the basis in which every packing variable is
 basic. This file proves the exact-arithmetic mathematics of that start.
 
-Conventions. Indices are `0`-based, as in the Rust code. The stage matrix is
+Conventions. Indices are `0`-based, as in the kernel code. The stage matrix is
 `Formal.Toeplitz.toeplitz n s f` (`M[d, c] = s[c - d]` for `d ≤ c`, else `f`;
 the row player is the Dropper and maximizes). With `d = f - s[0]`, the packing
-coefficients are `a[k] = (f - s[k]) / d` (`Solver::coefficients`), and
+coefficients are `a[k] = (f - s[k]) / d` (`_coefficients`), and
 `A[i, j] = a[j - i]` for `j ≥ i`, so `M = f 11ᵀ - d A`. The packing LP is
 `max 1ᵀ y` subject to `Aᵀ y + w = 1`, `y, w ≥ 0`; variables are indexed by
 `Fin n ⊕ Fin n`, with `Sum.inl i` the packing variable `y[i]` (cost `1`) and
 `Sum.inr j` the slack `w[j]` (cost `0`). The reduced cost of a variable is
-`c_j - c_Bᵀ B⁻¹ G_j`, the value `Solver::objective` writes into row `N` of the
+`c_j - c_Bᵀ B⁻¹ G_j`, the value `_objective` writes into row `N` of the
 tableau; the problem maximizes, so optimality needs every reduced cost `≤ 0`
-(`optimize`'s `dual` test).
+(`_optimize`'s `dual` test).
 
 Main results:
 
@@ -34,7 +34,7 @@ Main results:
   prefix sums of `c`, and the reduced cost of slack `j` is
   `-(c[0] + ... + c[n-1-j])` (CRATES-CRASH-2).
 * `kernelWeights_eq_prefixSum`, `weights_eq_prefixSum`: the kernel weights
-  `r` of `sweep_key_rs` are the same prefix sums (CRATES-CRASH-3).
+  `r` of `sweep_batch` are the same prefix sums (CRATES-CRASH-3).
 * `crash_residue_infeasible`, `crash_primal_feasible_iff`,
   `crash_dual_feasible_iff`, `card_basic_packing_eq_card_nonbasic_slack`
   (STL-LP-2).
@@ -87,7 +87,7 @@ theorem sum_Icc_reflect (F : ℕ → ℝ) {lo hi : ℕ} (h : lo ≤ hi) :
 /-! ## Lower-triangular Toeplitz matrices and truncated power series -/
 
 /-- The lower-triangular Toeplitz matrix with first column `a`:
-`T[i, j] = a[i - j]` for `j ≤ i`, else `0`. This is `Solver::coefficient` for a
+`T[i, j] = a[i - j]` for `j ≤ i`, else `0`. This is the kernel's `_coefficient` for a
 packing variable (`row ≥ variable ↦ a[row - variable]`). -/
 def ltToeplitz (n : ℕ) (a : ℕ → ℝ) : Matrix (Fin n) (Fin n) ℝ :=
   fun i j => if j ≤ i then a (i.val - j.val) else 0
@@ -133,8 +133,8 @@ theorem ltToeplitz_mul (n : ℕ) (a b : ℕ → ℝ) :
     · simp only [h1, ↓reduceIte, show ¬ j.val ≤ l.val by omega, mul_zero]
     · simp only [h1, ↓reduceIte, zero_mul]
 
-/-- The first column `c` of `(Aᵀ)⁻¹`, computed as in `Solver::crash`
-(`leap_packing.rs:114-123`): `c[0] = 1` and `c[k] = -∑_{m=1}^{k} a[m] c[k-m]`.
+/-- The first column `c` of `(Aᵀ)⁻¹`, computed as in `_crash`
+(`leap_kernel.py:299-304`): `c[0] = 1` and `c[k] = -∑_{m=1}^{k} a[m] c[k-m]`.
 Here the index `m : Fin (k + 1)` stands for the code's `m + 1`. -/
 noncomputable def crashSeries (a : ℕ → ℝ) : ℕ → ℝ
   | 0 => 1
@@ -183,7 +183,7 @@ theorem ltToeplitz_coeff_one (n : ℕ) :
   · simp only [h, ↓reduceIte, show i.val ≠ j.val by omega]
 
 /-- **Inverse of `Aᵀ`** (CRATES-CRASH-1, STL-LP-2; `LEAP_CERTIFICATE.md:218-224`,
-`leap_packing.rs:107-123`): for any first column `a` with `a[0] = 1`, the
+`leap_kernel.py:291-304`): for any first column `a` with `a[0] = 1`, the
 lower-triangular Toeplitz matrix with first column `c = crashSeries a` is a
 two-sided inverse of the one with first column `a`. -/
 theorem ltToeplitz_mul_crash (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) :
@@ -203,7 +203,7 @@ theorem inv_ltToeplitz (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) :
 /-! ## The packing matrix of a stage -/
 
 /-- The packing coefficients `a[k] = (f - s[k]) / (f - s[0])`
-(`Solver::coefficients`, `leap_packing.rs`; `LEAP_CERTIFICATE.md:219`). -/
+(`_coefficients`, `leap_kernel.py`; `LEAP_CERTIFICATE.md:219`). -/
 noncomputable def packCoeff (s : ℕ → ℝ) (f : ℝ) (k : ℕ) : ℝ := (f - s k) / (f - s 0)
 
 theorem packCoeff_zero (s : ℕ → ℝ) (f : ℝ) (hd : f - s 0 ≠ 0) : packCoeff s f 0 = 1 :=
@@ -270,8 +270,8 @@ noncomputable def basicValues {m : ℕ} {ι : Type*} (G : Matrix (Fin m) ι ℝ)
     (b : Fin m → ℝ) : Fin m → ℝ :=
   (basisMatrix G β)⁻¹ *ᵥ b
 
-/-- The reduced cost `c_j - c_Bᵀ B⁻¹ G_j` (`Solver::objective`,
-`leap_packing.rs:94-106`: one minus the basic packing rows for a packing
+/-- The reduced cost `c_j - c_Bᵀ B⁻¹ G_j` (`_objective`,
+`leap_kernel.py:267-277`: one minus the basic packing rows for a packing
 column, zero minus them for a slack column). -/
 noncomputable def reducedCost {m : ℕ} {ι : Type*} (G : Matrix (Fin m) ι ℝ) (β : Fin m → ι)
     (c : ι → ℝ) (j : ι) : ℝ :=
@@ -281,8 +281,8 @@ noncomputable def reducedCost {m : ℕ} {ι : Type*} (G : Matrix (Fin m) ι ℝ)
 reduced cost is `≤ 0`, then every feasible point `x ≥ 0`, `G x = b` has
 objective at most `c_Bᵀ B⁻¹ b`, the objective of the basic solution. So a
 basis that is primal feasible and has all reduced costs `≤ 0` is optimal for
-`max cᵀ x`; this is the exit test `primal && dual` of `optimize`
-(`leap_packing.rs`). -/
+`max cᵀ x`; this is the exit test `primal and dual` of `_optimize`
+(`leap_kernel.py`). -/
 theorem objective_le_of_dual_feasible {m : ℕ} {ι : Type*} [Fintype ι]
     (G : Matrix (Fin m) ι ℝ) (β : Fin m → ι) (c : ι → ℝ) (b : Fin m → ℝ)
     (hdual : ∀ j, reducedCost G β c j ≤ 0) {x : ι → ℝ} (hx : ∀ j, 0 ≤ x j)
@@ -315,7 +315,7 @@ noncomputable def zeroPositive {m : ℕ} {ι : Type*} (G : Matrix (Fin m) ι ℝ
 
 /-- **Zeroing positive reduced costs gives dual feasibility**
 (CRATES-CRASH-5, STL-LP-2; `LEAP_CERTIFICATE.md:235-236`,
-`leap_packing.rs:270-275`). The objective row that `solve_crash` obtains by
+`leap_kernel.py:512-516`). The objective row that `_solve_crash` obtains by
 setting each positive entry to `0` is the reduced-cost row of the perturbed
 costs `zeroPositive`: every nonbasic reduced cost becomes `min(rc, 0) ≤ 0`.
 The basic values `B⁻¹ b` do not involve the costs, so primal feasibility
@@ -349,7 +349,7 @@ noncomputable def packG (n : ℕ) (a : ℕ → ℝ) : Matrix (Fin n) (Fin n ⊕ 
 def packCost (n : ℕ) : Fin n ⊕ Fin n → ℝ := Sum.elim (fun _ => 1) (fun _ => 0)
 
 /-- The crash basis makes every packing variable basic: `basic[i] = i`
-(`Solver::crash`). -/
+(`_crash`). -/
 def crashBasis (n : ℕ) : Fin n → Fin n ⊕ Fin n := Sum.inl
 
 theorem basisMatrix_crash (n : ℕ) (a : ℕ → ℝ) :
@@ -358,7 +358,7 @@ theorem basisMatrix_crash (n : ℕ) (a : ℕ → ℝ) :
   simp [basisMatrix, packG, crashBasis]
 
 /-- **Crash basic values** (CRATES-CRASH-2, STL-LP-2; `LEAP_CERTIFICATE.md:227-228`,
-`leap_packing.rs:107-140`): in the basis where every packing variable is basic,
+`leap_kernel.py:291-317`): in the basis where every packing variable is basic,
 `y = (Aᵀ)⁻¹ 1` and `y[i] = c[0] + ... + c[i]`. These are also the unique `y`
 with `Aᵀ y = 1`. -/
 theorem crash_basicValues (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) :
@@ -382,7 +382,7 @@ theorem crash_basicValues (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) :
       mulVec_mulVec, (ltToeplitz_mul_crash n a ha).1, one_mulVec]
 
 /-- **Crash reduced costs** (CRATES-CRASH-2, STL-LP-2; `LEAP_CERTIFICATE.md:228-229`,
-`leap_packing.rs:107-113`): the reduced cost of slack `j` in the crash basis
+`leap_kernel.py:291-297`): the reduced cost of slack `j` in the crash basis
 is the negated sum of column `j` of `(Aᵀ)⁻¹`, which is
 `-(c[0] + ... + c[n-1-j])`. -/
 theorem crash_reducedCost_slack (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) (j : Fin n) :
@@ -402,7 +402,7 @@ theorem crash_reducedCost_slack (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) (j : 
   refine ⟨e, ?_⟩
   rw [e, inv_ltToeplitz n a ha, ltToeplitz_colSum]
 
-/-- At the code's size `N = 60` (`leap_packing.rs`), the crash basic values are
+/-- At the code's size `N = 60` (`leap_kernel.py`), the crash basic values are
 `y[i] = c[0] + ... + c[i]` and slack `j` has reduced cost
 `-(c[0] + ... + c[59-j])` (CRATES-CRASH-2, STL-LP-2;
 `LEAP_CERTIFICATE.md:227-229`). -/
@@ -429,11 +429,11 @@ theorem crash_reducedCost_basic (n : ℕ) (a : ℕ → ℝ) (ha : a 0 = 1) (i : 
 /-! ## Kernel weights are the same prefix sums -/
 
 /-- The kernel coefficients `b[m] = (s[m-1] - s[m]) / (s[0] - f)` of
-`sweep_key_rs` (`leap.rs:392-397`, the scratch array `q[k]`). At `m = 0`
+`sweep_batch` (`leap_kernel.py:1017-1020`, the scratch array `q[k]`). At `m = 0`
 natural subtraction gives `b[0] = 0`; the kernel never reads `b[0]`. -/
 noncomputable def kernelCoeff (s : ℕ → ℝ) (f : ℝ) (m : ℕ) : ℝ := (s (m - 1) - s m) / (s 0 - f)
 
-/-- The kernel weights of `sweep_key_rs` (`leap.rs:399-409`): `r[0] = 1` and
+/-- The kernel weights of `sweep_batch` (`leap_kernel.py:1021-1031`): `r[0] = 1` and
 `r[k] = ∑_{j<k} b[k-j] r[j]`. -/
 noncomputable def kernelWeights (b : ℕ → ℝ) : ℕ → ℝ
   | 0 => 1
@@ -507,7 +507,7 @@ theorem kernelWeights_eq_prefixSum (a b : ℕ → ℝ) (ha : a 0 = 1)
     rw [prefixSum, Finset.sum_range_succ, ← prefixSum, ← ih]
     linarith [hcs k]
 
-/-- The kernel weights of `sweep_key_rs` are the equalizer weights
+/-- The kernel weights of `sweep_batch` are the equalizer weights
 `Formal.Toeplitz.weights` of `try_rung2` (`src/dth_compact/main.py`), written
 with `b[m]` in place of `-dS[m-1] / d0`. -/
 theorem kernelWeights_kernelCoeff (s : ℕ → ℝ) (f : ℝ) (k : ℕ) :
@@ -532,11 +532,11 @@ theorem kernelWeights_kernelCoeff (s : ℕ → ℝ) (f : ℝ) (k : ℕ) :
 
 /-- **Kernel weights equal crash basic values** (CRATES-CRASH-3, STL-LP-2;
 `LEAP_CERTIFICATE.md:229-232`). For a stage with `d = f - s[0] ≠ 0`, the
-kernel weights `r` of `sweep_key_rs` (`leap.rs:392-413`) and the equalizer
+kernel weights `r` of `sweep_batch` (`leap_kernel.py:1017-1033`) and the equalizer
 weights of `try_rung2` are the prefix sums of the crash series
 `c = crashSeries a`, `a = packCoeff s f`; so the crash basic values are
-`y[i] = r[i]`. This holds in exact arithmetic; `Solver::crash` and
-`sweep_key_rs` round `c` and `r` along different paths, so their binary64
+`y[i] = r[i]`. This holds in exact arithmetic; `_crash` and
+`sweep_batch` round `c` and `r` along different paths, so their binary64
 outputs can differ by rounding. The code requires `d > 1e-12`; the identity
 needs only `d ≠ 0`. -/
 theorem weights_eq_prefixSum (s : ℕ → ℝ) (f : ℝ) (hd : f - s 0 ≠ 0) (k : ℕ) :
@@ -565,9 +565,9 @@ theorem crash_primal_feasible_iff (n : ℕ) (s : ℕ → ℝ) (f : ℝ) (hd : f 
   exact ⟨fun h k hk => h ⟨k, hk⟩, fun h i => h i.val i.isLt⟩
 
 /-- The crash basis is dual feasible (every reduced cost `≤ 0`, the
-maximization test of `optimize`) exactly when every kernel weight
+maximization test of `_optimize`) exactly when every kernel weight
 `r[0..n-1]` is nonnegative (STL-LP-2; `LEAP_CERTIFICATE.md:227-235`,
-`leap_packing.rs:166`). Slack `j` has reduced cost
+`leap_kernel.py:351-355`). Slack `j` has reduced cost
 `-r[n-1-j]`; basic packing variables have reduced cost `0`. -/
 theorem crash_dual_feasible_iff (n : ℕ) (s : ℕ → ℝ) (f : ℝ) (hd : f - s 0 ≠ 0) :
     (∀ v, reducedCost (packG n (packCoeff s f)) (crashBasis n) (packCost n) v ≤ 0) ↔
@@ -609,7 +609,7 @@ theorem crash_residue_infeasible (n : ℕ) (s : ℕ → ℝ) (f : ℝ) (hd : f -
   linarith
 
 /-- **Seed sizes agree** (STL-LP-2; `LEAP_CERTIFICATE.md:261-263`,
-`Solver::basis_support`): a basis of the packing LP has `n` basic variables
+the masks of the kernel's `_finish`): a basis of the packing LP has `n` basic variables
 among the `n` packing variables and `n` slacks, so the number of basic
 packing variables (Dropper support) equals the number of nonbasic slacks
 (Checker support). -/
@@ -637,7 +637,7 @@ variable {m n : Type*} [Fintype m] [Fintype n] [Nonempty m] [Nonempty n]
 open MatrixGame
 
 /-- **Two starts store values within the gate** (CRATES-CRASH-5;
-`LEAP_CERTIFICATE.md:240-242`, `leap_packing.rs` `certificate`). Exact
+`LEAP_CERTIFICATE.md:240-242`, `leap_kernel.py` `_certificate`). Exact
 arithmetic: if two accepted certificates `(p₁, q₁)` and `(p₂, q₂)` of the same
 stage matrix have gaps `U - L ≤ ε`, their stored midpoints differ by at most
 `ε`, each lies within `ε / 2` of the value, and the window lift

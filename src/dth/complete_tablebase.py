@@ -395,7 +395,7 @@ def _solve_linear_pinned(a: np.ndarray, b: np.ndarray) -> np.ndarray | None:
     """Gaussian elimination, partial pivoting, lowest-index ties, pinned order.
 
     Mutates its inputs.  Row updates are elementwise ``a[r] -= factor * a[p]``
-    (one multiply and one subtract per element, no FMA), so a Rust kernel
+    (one multiply and one subtract per element, no FMA), so another kernel
     looping the same expressions per element reproduces every intermediate
     bit; the back-substitution sum is sequential ascending for the same
     reason.  Fails closed on any pivot magnitude below 1e-12.

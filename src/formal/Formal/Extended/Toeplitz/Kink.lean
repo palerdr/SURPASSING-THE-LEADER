@@ -50,7 +50,7 @@ theorem weights_succ (s : ℕ → ℝ) (f : ℝ) (k : ℕ) :
 
 /-- **Nondecreasing `s` with `f > s[0]` gives nonnegative weights**
 (CRATES-KINK-1, STL-REC-2; `LEAP_CERTIFICATE.md:246-248`,
-`leap_support.py:28-32`, `leap.rs:928-931`), in exact arithmetic. Every
+`leap_support.py:28-32`, `leap_kernel.py:853-857`), in exact arithmetic. Every
 coefficient `b[m] = (s[m-1] - s[m]) / (s[0] - f)` is a nonpositive number
 over a negative one, and the recurrence sums nonnegative products. -/
 theorem weights_nonneg_of_monotone {n : ℕ} {s : ℕ → ℝ} {f : ℝ}
@@ -97,10 +97,10 @@ section Ladder
 
 variable (n : ℕ) [NeZero n]
 
-/-- The saddle-gap gate `GAP = 1e-6` (`leap.rs:28`, `leap_oracle.py:8`). -/
+/-- The saddle-gap gate `GAP = 1e-6` (`leap_kernel.py:44`, `leap_oracle.py:8`). -/
 noncomputable def gapTol : ℝ := 1 / 10 ^ 6
 
-/-- The `d`-size guard `1e-12` of the recurrence rung (`leap.rs:453`, `leap_oracle.py:83`). -/
+/-- The `d`-size guard `1e-12` of the recurrence rung (`leap_kernel.py:1073`, `leap_oracle.py:83`). -/
 noncomputable def dTol : ℝ := 1 / 10 ^ 12
 
 /-- `lo = min_k s[k]` over the `n` success payoffs. -/
@@ -109,19 +109,19 @@ noncomputable def succLo (s : ℕ → ℝ) : ℝ := univ.inf' univ_nonempty fun 
 /-- `hi = max_k s[k]` over the `n` success payoffs. -/
 noncomputable def succHi (s : ℕ → ℝ) : ℝ := univ.sup' univ_nonempty fun k : Fin n => s k.val
 
-/-- `mn = max(lo, min(f, s[0]))` (`leap.rs:383`). -/
+/-- `mn = max(lo, min(f, s[0]))` (`leap_kernel.py:1011`). -/
 noncomputable def pureLower (s : ℕ → ℝ) (f : ℝ) : ℝ := max (succLo n s) (min f (s 0))
 
-/-- `mx = min(hi, max(f, s[0]))` (`leap.rs:384`). -/
+/-- `mx = min(hi, max(f, s[0]))` (`leap_kernel.py:1012`). -/
 noncomputable def pureUpper (s : ℕ → ℝ) (f : ℝ) : ℝ := min (succHi n s) (max f (s 0))
 
 /-- The pure-rung gap `upper - lower`, with both bounds lifted through
-`max(·, f)` in a leap window (`leap.rs:441-447`, `leap_oracle.py:73-77`). -/
+`max(·, f)` in a leap window (`leap_kernel.py:1061-1067`, `leap_oracle.py:73-77`). -/
 noncomputable def pureGap (s : ℕ → ℝ) (f : ℝ) (window : Bool) : ℝ :=
   if window then max (pureUpper n s f) f - max (pureLower n s f) f
   else pureUpper n s f - pureLower n s f
 
-/-- The clipped weight sum `∑ max(r[k], 0)` (`leap.rs:430-439`). -/
+/-- The clipped weight sum `∑ max(r[k], 0)` (`leap_kernel.py:1037-1045`). -/
 noncomputable def clipSum (s : ℕ → ℝ) (f : ℝ) : ℝ := ∑ k ∈ range n, max (weights s f k) 0
 
 /-- The clipped Checker candidate `q[j] = max(r[n-1-j], 0) / ∑ max(r, 0)`. -/
@@ -136,22 +136,22 @@ noncomputable def fullLower (s : ℕ → ℝ) (f : ℝ) : ℝ :=
 noncomputable def fullUpper (s : ℕ → ℝ) (f : ℝ) : ℝ :=
   univ.sup' univ_nonempty fun i => (toeplitz n s f *ᵥ clipCol n s f) i
 
-/-- The full-check gap, lifted through `max(·, f)` in a window (`leap.rs:505-510`). -/
+/-- The full-check gap, lifted through `max(·, f)` in a window (`leap_kernel.py:1104-1108`). -/
 noncomputable def fullGap (s : ℕ → ℝ) (f : ℝ) (window : Bool) : ℝ :=
   if window then max (fullUpper n s f) f - max (fullLower n s f) f
   else fullUpper n s f - fullLower n s f
 
-/-- `cum = ∑ q[j]` of the clipped candidate (`leap.rs:510`). -/
+/-- `cum = ∑ q[j]` of the clipped candidate (`leap_kernel.py:1108`). -/
 noncomputable def clipMass (s : ℕ → ℝ) (f : ℝ) : ℝ := ∑ j, clipCol n s f j
 
-/-- The hypotheses of the weight-sum shortcut (`leap.rs:475`, `leap_oracle.py:99`):
+/-- The hypotheses of the weight-sum shortcut (`leap_kernel.py:1079`, `leap_oracle.py:99`):
 all weights nonnegative, bounded payoffs, and `|d| ≥ GAP`. -/
 def ShortcutOk (s : ℕ → ℝ) (f : ℝ) : Prop :=
   (∀ k < n, 0 ≤ weights s f k) ∧ -2 ≤ succLo n s ∧ succHi n s ≤ 2 ∧ |f| ≤ 2 ∧
     gapTol ≤ |s 0 - f|
 
 /-- The kernel's route to the residue, evaluated in exact real arithmetic
-(`sweep_key_rs`, `leap.rs:447-510`). A stage reaches the residue when the pure
+(`sweep_batch`, `leap_kernel.py:1067-1108`). A stage reaches the residue when the pure
 rung fails and then either the recurrence guard fires (`|d| < 1e-12` or a
 nonpositive clipped sum; over `ℝ` every sum is finite) or the shortcut does not
 apply and the full check fails. Python's `solve_stage` omits the `cum` test;
@@ -297,7 +297,7 @@ theorem fullGap_eq_zero_of_nonneg [NeZero n] (hd : s 0 - f ≠ 0)
   · simp only [clipMass, hcc]; exact hq.2
 
 /-- **Nonnegative weights never reach the residue** (CRATES-CRASH-4(b),
-exact-arithmetic version; `LEAP_CERTIFICATE.md:234`, `leap.rs:447-510`).
+exact-arithmetic version; `LEAP_CERTIFICATE.md:234`, `leap_kernel.py:1067-1108`).
 If every `r[k] ≥ 0`, the kernel route of `ReachesResidue` does not fire, in or
 out of a leap window: a failed pure rung forces `|d| > 1e-6`, the clipped sum
 is `W ≥ 1`, and the full check sees gap `0` and mass `1`. -/
@@ -341,7 +341,7 @@ theorem succLo_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) : succL
 
 /-- **Pure saddle when `f ≤ s[0]`** (CRATES-KINK-2, implicit lemma): for a
 nondecreasing `s` with `f ≤ s[0]`, both pure bounds equal `s[0]`, so the pure
-rung's gap is `0`, in or out of a window (`leap.rs:383-384,441-447`). -/
+rung's gap is `0`, in or out of a window (`leap_kernel.py:1011-1012,1061-1067`). -/
 theorem pureGap_eq_zero_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) (hf : f ≤ s 0)
     (window : Bool) : pureGap n s f window = 0 := by
   have hL : pureLower n s f = s 0 := by
@@ -375,11 +375,11 @@ theorem pureGap_le_of_monotone (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) (hf
   linarith
 
 /-- **The implemented ladder accepts every nondecreasing stage**
-(STL-REC-2; `leap_support.py:28-32`, `leap.rs:441-475`), in exact
+(STL-REC-2; `leap_support.py:28-32`, `leap_kernel.py:1061-1079`), in exact
 arithmetic. Either the pure gap is at most `1e-6` (always when `f ≤ s[0]`,
 and when `0 < f - s[0] ≤ 1e-6` because the gap is at most `f - s[0]`), or the
 weights are nonnegative, `|d| > 1e-6`, and `W ≥ 1`, which are the weight
-conditions of the shortcut at `leap.rs:475`. -/
+conditions of the shortcut at `leap_kernel.py:1079`. -/
 theorem monotone_ladder (hs : ∀ m, m + 1 < n → s m ≤ s (m + 1)) (window : Bool) :
     pureGap n s f window ≤ gapTol ∨
       ((∀ k < n, 0 ≤ weights s f k) ∧ gapTol < |s 0 - f| ∧ 1 ≤ weightSum n s f) := by
@@ -411,7 +411,7 @@ end Monotone
 
 section KinkIndex
 
-/-- The scan state of `kink_index` (`leap.rs:932-943`) after it has processed
+/-- The scan state of `kink_index` (`leap_kernel.py:859-866`) after it has processed
 the steps `k = 1..m`: the most negative step seen so far (starting at `0`)
 and the index where it first occurred. A step replaces the state only when it
 is strictly below the current best, so ties keep the first index. -/
@@ -422,7 +422,7 @@ noncomputable def kinkScan (s : ℕ → ℝ) : ℕ → ℝ × Option ℕ
     else kinkScan s m
 
 /-- `kink_index(s)` for `n` success payoffs (`n = 60` in the code): the loop
-`for k in 1..A` of `leap.rs:932-943`. -/
+`for k in 1..A` of `leap_kernel.py:859-866`. -/
 noncomputable def kinkIndex (n : ℕ) (s : ℕ → ℝ) : Option ℕ := (kinkScan s (n - 1)).2
 
 theorem kinkScan_inv (s : ℕ → ℝ) (m : ℕ) :
@@ -470,7 +470,8 @@ theorem kinkScan_inv (s : ℕ → ℝ) (m : ℕ) :
         exact ⟨a, by omega, c, d, e⟩
 
 /-- **`kink_index` returns `None` exactly when no step is negative** (CRATES-KINK-2,
-`leap.rs:928-943`, `leap_support.py:27-36`). -/
+`leap_kernel.py:852-866`, `leap_support.py:27-36`). The kernel's `_kink_index`
+writes `None` as `-1`. -/
 theorem kinkIndex_eq_none_iff (n : ℕ) (s : ℕ → ℝ) :
     kinkIndex n s = none ↔ ∀ j, 1 ≤ j → j < n → s (j - 1) ≤ s j := by
   have hI := kinkScan_inv s (n - 1)
@@ -488,8 +489,8 @@ theorem kinkIndex_eq_none_iff (n : ℕ) (s : ℕ → ℝ) :
       linarith
 
 /-- **`kink_index` returns the first most negative step** (CRATES-KINK-2,
-`leap.rs:928-943`). A returned index `k` lies in `1..n-1` (`1..59` for
-`n = 60`, the range `kink_seed_rs` accepts at `leap.rs:1048-1063`), its step
+`leap_kernel.py:852-866`). A returned index `k` lies in `1..n-1` (`1..59` for
+`n = 60`, the range `kink_seed` accepts at `leap_kernel.py:1506-1514`), its step
 `s[k] - s[k-1]` is negative and minimal, and every earlier step is strictly
 larger. These properties determine `k`, so the NumPy version
 (`np.argmin` over the steps, first index on a tie, then `None` unless the
@@ -509,7 +510,7 @@ example : kinkIndex 3 (fun k => if k = 2 then (-1 : ℝ) else 0) = some 2 := by
   simp [kinkIndex, kinkScan]
 
 /-- **A residue stage needs a negative step** (CRATES-KINK-2, STL-REC-2;
-`LEAP_CERTIFICATE.md:246`, `leap.rs:928-931`, `leap_support.py:28-32`), in
+`LEAP_CERTIFICATE.md:246`, `leap_kernel.py:853-857`, `leap_support.py:28-32`), in
 exact real arithmetic: if the kernel route of `ReachesResidue` sends a stage
 to the residue, in or out of a leap window, then `kink_index` returns an
 index. The binary64 version is false; see `overflow_counterexample`. -/
@@ -529,7 +530,7 @@ end KinkIndex
 
 section Rounding
 
-/-- The fused accumulation of `leap.rs:403-410`: for weight `k` the kernel
+/-- The fused accumulation of `leap_kernel.py:1024-1031`: for weight `k` the kernel
 runs `acc ← fl(b[k-j] * r[j] + acc)` for `j = 0..k-1` from `acc = 0`.
 `fmaFold R b r k j` is `acc` after `j` steps, with rounding function `R`. -/
 def fmaFold (R : ℝ → ℝ) (b r : ℕ → ℝ) (k : ℕ) : ℕ → ℝ
@@ -542,7 +543,7 @@ def ComputedWeights (R : ℝ → ℝ) (b r : ℕ → ℝ) : Prop :=
   r 0 = 1 ∧ ∀ k, 1 ≤ k → r k = fmaFold R b r k k
 
 /-- The computed kernel coefficient `b̂[m] = fl(fl(s[m-1] - s[m]) / d̂)`
-(`leap.rs:392-397`), with `d̂ = fl(s[0] - f)`. -/
+(`leap_kernel.py:1017-1020`), with `d̂ = fl(s[0] - f)`. -/
 noncomputable def computedCoeff (R : ℝ → ℝ) (s : ℕ → ℝ) (f : ℝ) (m : ℕ) : ℝ :=
   R (R (s (m - 1) - s m) / R (s 0 - f))
 
@@ -557,7 +558,7 @@ theorem fmaFold_nonneg {R : ℝ → ℝ} (hR : Monotone R) (h0 : R 0 = 0) {b r :
     exact hR (add_nonneg (mul_nonneg (hb _) (hr j (by omega))) (ih (by omega)))
 
 /-- **Rounding preserves the sign of the weights** (CRATES-KINK-1, STL-REC-2;
-`LEAP_CERTIFICATE.md:246-248`, kernel loop `leap.rs:392-413`). The rounding
+`LEAP_CERTIFICATE.md:246-248`, kernel loop `leap_kernel.py:1017-1033`). The rounding
 model is an abstract function `R : ℝ → ℝ` that is monotone with `R 0 = 0`;
 round-to-nearest in binary64 has both properties on its finite range. The
 model has no overflow: `R` returns a real for every input. Under it, a
@@ -610,7 +611,7 @@ section Crash
 variable (s : ℕ → ℝ) (f : ℝ)
 
 /-- The packing coefficients `a[k] = (f - s[k]) / d`, `d = f - s[0]`
-(`Solver::coefficients`, `leap_packing.rs:293-300`). -/
+(`_coefficients`, `leap_kernel.py:180-190`). -/
 noncomputable def packCoeff (k : ℕ) : ℝ := (f - s k) / (f - s 0)
 
 /-- The upper-triangular Toeplitz packing matrix `A[i,j] = a[j-i]` for
@@ -619,7 +620,7 @@ noncomputable def packMatrix (n : ℕ) : Matrix (Fin n) (Fin n) ℝ :=
   fun i j => if i ≤ j then packCoeff s f (j.val - i.val) else 0
 
 /-- The crash series `c[0] = 1`, `c[k] = -∑_{m=1}^{k} a[m] c[k-m]`
-(`Solver::crash`, `leap_packing.rs:113-121`). -/
+(`_crash`, `leap_kernel.py:299-303`). -/
 noncomputable def crashSeries : ℕ → ℝ
   | 0 => 1
   | k + 1 => -∑ m : Fin (k + 1), packCoeff s f (m.val + 1) * crashSeries (k - m.val)
@@ -627,11 +628,11 @@ termination_by k => k
 decreasing_by omega
 
 /-- The basic value of packing variable `i` in the crash basis:
-`y[i] = c[0] + ... + c[i]` (`prefix[i]`, `leap_packing.rs:122-135`). -/
+`y[i] = c[0] + ... + c[i]` (`prefix[i]`, `leap_kernel.py:304-314`). -/
 noncomputable def crashPrimal (i : ℕ) : ℝ := ∑ l ∈ range (i + 1), crashSeries s f l
 
 /-- The reduced cost of slack `j` in the crash basis,
-`-(c[0] + ... + c[n-1-j])` (`leap_packing.rs:106-112`, `LEAP_CERTIFICATE.md:230-231`). -/
+`-(c[0] + ... + c[n-1-j])` (`leap_kernel.py:291-296`, `LEAP_CERTIFICATE.md:230-231`). -/
 noncomputable def crashReduced (n j : ℕ) : ℝ := -crashPrimal s f (n - 1 - j)
 
 variable {s f}
@@ -742,7 +743,7 @@ theorem packMatrix_rev (n : ℕ) (i j : Fin n) :
   · rfl
 
 /-- **The crash basis** (CRATES-CRASH-4(a); `LEAP_CERTIFICATE.md:219-235`,
-`Solver::crash` at `leap_packing.rs:106-136`). With `d = f - s[0] ≠ 0`:
+`_crash` at `leap_kernel.py:291-314`). With `d = f - s[0] ≠ 0`:
 the basic values `y[i] = c[0] + ... + c[i]` equal the weights `r[i]` and
 solve `Aᵀ y = 1`; the simplex multipliers `u[j] = r[n-1-j]` solve `A u = 1`;
 the reduced cost of slack `j` is `-u[j] = -r[n-1-j]`. Hence the basis is
@@ -880,7 +881,7 @@ Every binary64 value at or above `2^1024` lies above the largest finite
 double `(2^53 - 1) 2^971`, so the kernel cannot hold `r[55]` as a finite
 number; `rounded_weights_overflow` proves this for any computed sequence with
 per-step relative error at most `1e-3`. The kernel then sees a non-finite
-weight sum (`leap.rs:453`) and sends the stage to the residue with no negative
+weight sum (`leap_kernel.py:1073`) and sends the stage to the residue with no negative
 step. The binary64 behavior itself (`r[55] = inf`, then `0 * inf = NaN` for
 `r[57..59]`, so `x >= 0.0` fails) is a numerical observation, not a theorem
 of this file. -/

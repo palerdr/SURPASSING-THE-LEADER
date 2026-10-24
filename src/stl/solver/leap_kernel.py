@@ -851,7 +851,11 @@ def _solve_support(s, f, r, seed_p, seed_q, window, limit, scratch, res):
 @njit(cache=True)
 def _kink_index(s):
     """We return the index k of the most negative step s[k] - s[k-1], the
-    first on a tie, or -1 when no step is negative."""
+    first on a tie, or -1 when no step is negative.
+
+    A nondecreasing s with f > s[0] gives nonnegative recurrence weights, so
+    a residue stage needs at least one negative step.
+    """
     best = 0.0
     index = -1
     for k in range(1, A):

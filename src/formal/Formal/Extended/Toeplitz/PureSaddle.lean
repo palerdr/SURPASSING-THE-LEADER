@@ -17,7 +17,7 @@ Conventions.
 * `rowMin M d = min_c M[d, c]` and `colMax M c = max_d M[d, c]`.
   `pureMaximin M = max_d rowMin M d` and `pureMinimax M = min_c colMax M c`.
   These are defined over any linear order `α`. A linear order models finite
-  IEEE doubles under `fmin`/`fmax`, `np.minimum`, and Rust `f64::min`: those
+  IEEE doubles under `fmin`/`fmax`, `np.minimum`, and `llvm.minnum`: those
   operations select one of their arguments. The model identifies `+0` and
   `-0` and excludes NaN; the solvers reject nonfinite inputs first.
 * `toeplitzL n s f` is `Formal.Toeplitz.toeplitz` over a linear order:
@@ -48,8 +48,8 @@ Main results.
   it accepts although the matrix has no exact pure saddle.
 * `window_pureMaximin`, `window_pureMinimax`, `leap_rust_eq_python`,
   `window_rung0_error`: the STL leap-window lift. The lifted bounds are the
-  pure bounds of the 61-row window matrix, and the Python and Rust rung-0
-  stores agree on the Toeplitz closed forms.
+  pure bounds of the 61-row window matrix, and the Python and leap-kernel
+  rung-0 stores agree on the Toeplitz closed forms.
 * `constant_stage_value`, `linspace_stage_value`,
   `rowMin_injective_counterexample`: the `dth_compact` tests and a
   counterexample to the "one of four numbers" step of `architecture.md`.
@@ -468,7 +468,7 @@ theorem colMax_zero : colMax (toeplitzL (n + 2) s f) 0 = max f (s 0) := by
 /-- **COMPACT-RUNG1-1, CPP-DOC-PURE-3, CPP-CODE-PURE-2, DTH-PURE-1,
 CRATES-PURE-1, CANONICAL-MG-5, STL-MG-3** (maximin; `src/dth_compact/main.py:226-237`,
 `src/dth/fast_kernel.c:44`, `src/dth_cpp/recurrence.cpp:52`,
-`src/crates/stl_solver/src/leap.rs:383`): the pure maximin of the stage is
+`src/stl/solver/leap_kernel.py:1011`): the pure maximin of the stage is
 `max(lo, min(f, s0))` with `lo = prefix_min[n] = min_k s[k]`. The identity
 holds in every linear order, so the `O(60)` closed form and the 3,600-cell
 brute force select the same element. -/
@@ -490,7 +490,7 @@ theorem pureMaximin_toeplitzL :
 
 /-- **COMPACT-RUNG1-1, CPP-DOC-PURE-3, CPP-CODE-PURE-2, DTH-PURE-1,
 CRATES-PURE-1, CANONICAL-MG-5, STL-MG-3** (minimax; `src/dth/fast_kernel.c:45`,
-`src/dth_cpp/recurrence.cpp:53`, `src/crates/stl_solver/src/leap.rs:384`): the
+`src/dth_cpp/recurrence.cpp:53`, `src/stl/solver/leap_kernel.py:1012`): the
 pure minimax of the stage is `min(hi, max(f, s0))` with
 `hi = prefix_max[n] = max_k s[k]`. -/
 theorem pureMinimax_toeplitzL :
@@ -790,7 +790,7 @@ variable {α : Type*} [LinearOrder α]
 
 /-- **DTH-PURE-2, CANONICAL-MG-5** (`src/dth/complete_tablebase.py:363-364`,
 "order-independent"): a left fold of `max` does not depend on the order of its
-list. A NumPy reduction, a C loop, and a Rust `fold` over any permutation of
+list. A NumPy reduction, a C loop, and a numba loop over any permutation of
 the same finite entries therefore return the same element. -/
 theorem foldl_max_perm {l l' : List α} (h : l.Perm l') (a : α) :
     l.foldl max a = l'.foldl max a :=
@@ -813,15 +813,14 @@ section Abstract
 
 variable {m n : ℕ} [NeZero m] [NeZero n]
 
-/-- `|a - b| ≤ τ`: Rust `close` (`src/crates/abstract_solver/src/lib.rs:164-166`)
-and NumPy `isclose(a, b, atol=τ, rtol=0)`. The model evaluates the
-subtraction and the absolute value exactly. -/
+/-- `|a - b| ≤ τ`: NumPy `isclose(a, b, atol=τ, rtol=0)` (`src/abstract/matrix.py:139`)
+and the `close` of the retired Rust `abstract_solver_rs`. The model evaluates
+the subtraction and the absolute value exactly. -/
 def Close (τ a b : ℝ) : Prop := |a - b| ≤ τ
 
 /-- The three tests of the inner loop at cell `(r, c)`: the row minimum is
 close to `lower`, the column maximum is close to `upper`, and the cell is
-close to `lower` (`src/crates/abstract_solver/src/lib.rs:179-190`,
-`src/abstract/matrix.py:139-141`). -/
+close to `lower` (`src/abstract/matrix.py:138-142`). -/
 def NearCell (M : Matrix (Fin m) (Fin n) ℝ) (τ : ℝ) (rc : Fin m × Fin n) : Prop :=
   Close τ (rowMin M rc.1) (pureMaximin M) ∧ Close τ (colMax M rc.2) (pureMinimax M) ∧
     Close τ (M rc.1 rc.2) (pureMaximin M)
@@ -834,11 +833,13 @@ theorem mem_cells (rc : Fin m × Fin n) : rc ∈ cells m n := by
   simp [cells, List.mem_flatMap, List.mem_map, List.mem_finRange]
 
 open Classical in
-/-- Rust `pure_saddle` (`src/crates/abstract_solver/src/lib.rs:168-195`): reject
+/-- The search of the retired Rust `pure_saddle` in `abstract_solver_rs`: reject
 unless `lower` and `upper` are close, then return the first cell in row-major
-order that passes the three tests. The Rust row-minimum and column-maximum
-loops and the folds that form `lower` and `upper` compute `rowMin`, `colMax`,
-`pureMaximin`, and `pureMinimax` (min and max select entries; `foldl_max_perm`). -/
+order that passes the three tests. Its row-minimum and column-maximum loops and
+the folds that form `lower` and `upper` computed `rowMin`, `colMax`,
+`pureMaximin`, and `pureMinimax` (min and max select entries; `foldl_max_perm`).
+Python's pure branch (`src/abstract/matrix.py:135-160`) runs the same search
+with a gap re-check (`pythonPureSaddle_eq_rust`). -/
 noncomputable def rustPureSaddle (M : Matrix (Fin m) (Fin n) ℝ) (τ : ℝ) :
     Option (Fin m × Fin n) :=
   if Close τ (pureMaximin M) (pureMinimax M) then
@@ -877,8 +878,7 @@ theorem pythonGap_eq (M : Matrix (Fin m) (Fin n) ℝ) (r : Fin m) (c : Fin n) :
     ring
   exact ⟨h, by rw [h, upperBound_single, lowerBound_single]⟩
 
-/-- **ABSTRACT-MAT-2 (b), CRATES-ABS-5** (`src/abstract/matrix.py:138-141`,
-`src/crates/abstract_solver/src/lib.rs:175-190`): when `lower` and `upper`
+/-- **ABSTRACT-MAT-2 (b), CRATES-ABS-5** (`src/abstract/matrix.py:136-142`): when `lower` and `upper`
 are close, the argmax row `i*` of the row minima and the argmin column `j*` of
 the column maxima pass all three tests, with `rowMin i* = lower`,
 `colMax j* = upper`, and `lower ≤ M[i*, j*] ≤ upper`. -/
@@ -942,9 +942,9 @@ theorem pairGap_bounds {M : Matrix (Fin m) (Fin n) ℝ} {τ : ℝ} {rc : Fin m �
   refine ⟨by linarith, by linarith, by linarith⟩
 
 /-- **ABSTRACT-MAT-2 (c)** (`src/abstract/matrix.py:150-151`,
-`src/abstract/docs/PACKED_TABLEBASE_PARITY.md:81-86`): when `3 τ ≤ g`, the
+`src/abstract/matrix.py:139-142`): when `3 τ ≤ g`, the
 Python `2e-7` re-check never rejects a candidate cell, so Python returns the
-same first cell as Rust. Both scan rows, then columns, in increasing order.
+same first cell as the retired Rust search. Both scan rows, then columns, in increasing order.
 With `τ = 1e-12` and `g = 2e-7` the hypothesis holds. In exact arithmetic the
 pure-versus-LP routing of the two implementations is identical in both
 directions. -/
@@ -981,9 +981,9 @@ theorem no_pureSaddle_of_rust_none (M : Matrix (Fin m) (Fin n) ℝ) {τ : ℝ} (
   rw [he, sub_self] at h
   linarith
 
-/-- **CRATES-ABS-5, ABSTRACT-MAT-2** (`src/crates/abstract_solver/src/lib.rs:168-194,404-417`):
-the value the Rust search returns, `M[r, c]`, lies within `2 τ` of the matrix
-value. With `τ = 1e-12` the error is at most `2e-12`. -/
+/-- **CRATES-ABS-5, ABSTRACT-MAT-2** (`src/abstract/matrix.py:135-160`,
+`src/abstract/packed_tablebase.py:594`): the value at the cell the search
+returns, `M[r, c]`, lies within `2 τ` of the matrix value. With `τ = 1e-12` the error is at most `2e-12`. -/
 theorem rustPureSaddle_error {M : Matrix (Fin m) (Fin n) ℝ} {τ : ℝ} {rc : Fin m × Fin n}
     (h : rustPureSaddle M τ = some rc) : |M rc.1 rc.2 - value M| ≤ 2 * τ := by
   obtain ⟨hc, -, -, h3⟩ := rustPureSaddle_spec h
@@ -1081,7 +1081,7 @@ theorem colMax_window (M : Matrix (Fin N) β α) (f : α) (c : β) :
       exact h
 
 /-- The window's pure maximin is `max(maximin, f)`: the lifted lower bound of
-`leap.rs:436-441` and `leap_oracle.py:74-75` is the pure maximin of the
+`leap_kernel.py:1057-1061` and `leap_oracle.py:74-75` is the pure maximin of the
 61-row window matrix. -/
 theorem pureMaximin_window (M : Matrix (Fin N) β α) (f : α) :
     pureMaximin (windowMatrix M f) = max (pureMaximin M) f := by
@@ -1112,7 +1112,7 @@ theorem pureMinimax_window (M : Matrix (Fin N) β α) (f : α) :
 variable {n : ℕ} (s : ℕ → α) (f : α)
 
 /-- **STL-MG-3** (`src/stl/solver/leap_oracle.py:72-75`,
-`src/crates/stl_solver/src/leap.rs:383-384,436-441`): in the leap window the
+`src/stl/solver/leap_kernel.py:1011-1012,1057-1061`): in the leap window the
 lifted lower bound `max(max(lo, min(f, s0)), f)` is the pure maximin of the
 window stage. -/
 theorem window_pureMaximin :
@@ -1164,14 +1164,15 @@ lifted bounds. -/
 noncomputable def pythonWindowValue (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ :=
   (max (mn n s f) f + max (mx n s f) f) / 2
 
-/-- Rust's window rung-0 value (`leap.rs:447-450,559-566`): the unlifted
+/-- The leap kernel's window rung-0 value (`leap_kernel.py:1067-1069,1146-1152`),
+first written in Rust: the unlifted
 midpoint `0.5 (mn + mx)`, then `max(v, f)`. -/
 noncomputable def rustWindowValue (n : ℕ) (s : ℕ → ℝ) (f : ℝ) : ℝ :=
   max ((mn n s f + mx n s f) / 2) f
 
-/-- **STL-MG-3, CRATES-PURE-1** (`leap.rs:447-450,559-566` against
+/-- **STL-MG-3, CRATES-PURE-1** (`leap_kernel.py:1067-1069,1146-1152` against
 `leap_oracle.py:74-81`): Python stores the midpoint of the lifted bounds and
-Rust stores `max` of the unlifted midpoint and `f`. The two formulas differ for
+the kernel stores `max` of the unlifted midpoint and `f`. The two formulas differ for
 general `mn < f < mx`, but on the Toeplitz closed forms they are equal:
 `s0 ≤ f` makes both equal `f`, and `f < s0` makes `mn ≥ f`, so the lift is the
 identity. The gate expression is the same in both. -/
@@ -1194,7 +1195,7 @@ theorem leap_rust_eq_python : rustWindowValue n s f = pythonWindowValue n s f :=
       le_min (h.le.trans (le_prefixMax s (Nat.zero_le _))) (le_max_left _ _)
     rw [max_eq_left (by linarith)]
 
-/-- **STL-MG-3** (`paper/stl.tex:178-181`, `src/crates/docs/LEAP_CERTIFICATE.md:112`):
+/-- **STL-MG-3** (`paper/stl.tex:178-181`, `src/stl/docs/LEAP_CERTIFICATE.md:112`):
 the square stage's value lies in `[max(lo, min(f, s0)), min(hi, max(f, s0))]`. -/
 theorem stage_value_mem :
     mn n s f ≤ value (toeplitz (n + 1) s f) ∧ value (toeplitz (n + 1) s f) ≤ mx n s f := by
@@ -1203,9 +1204,9 @@ theorem stage_value_mem :
   · rw [mn, ← pureMaximin_toeplitzL]; exact pureMaximin_le_value _
   · rw [mx, ← pureMinimax_toeplitzL]; exact value_le_pureMinimax _
 
-/-- **STL-MG-3, CRATES-PURE-1** (`leap_oracle.py:72-81`, `leap.rs:436-451`): if
+/-- **STL-MG-3, CRATES-PURE-1** (`leap_oracle.py:72-81`, `leap_kernel.py:1057-1070`): if
 the lifted gap is at most `ε`, the stored rung-0 value (Python's, equal to
-Rust's by `leap_rust_eq_python`) lies within `ε / 2` of the value of the
+the kernel's by `leap_rust_eq_python`) lies within `ε / 2` of the value of the
 61-row window matrix. Without the window the same holds for the square stage
 (`pure_midpoint_error`). -/
 theorem window_rung0_error {ε : ℝ} (hgap : max (mx n s f) f - max (mn n s f) f ≤ ε) :
