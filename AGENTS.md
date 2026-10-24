@@ -2,7 +2,6 @@
 
 ## Communication
 
-- In final responses only, start with `James -`.
 - Keep progress updates concise and factual.
 - Treat pre-existing uncommitted changes as user work.
 
