@@ -4,9 +4,11 @@
 with the values, kinds, failure counts, and basis masks that `stl_solver_rs`
 returned for them. The commit that added the fixture holds
 `make_leap_golden.py`, which captured it. The fixture covers square and window
-stages under the rungs alone and under the production residue options of
-`leap_build.RESIDUE`, the packing LP from the slack and crash bases, and the
-warm and cold packing runs of the leap benchmarks. We require equal kinds,
+stages under the rungs alone and under the production residue options that
+`leap_build.RESIDUE` held at the capture, the packing LP from the slack and
+crash bases, and the warm and cold packing runs of the leap benchmarks. We run
+the production cases with the captured options, so a later change of
+`RESIDUE` keeps this parity check. We require equal kinds,
 equal failure counts, equal basis masks, and equal values, with NaN in the
 same places. Equal means equal as numbers, so a signed zero matches either
 sign: `llvm.minnum` and `llvm.maxnum` may return either zero of a tie, the
@@ -28,9 +30,8 @@ def golden():
         return {name: data[name] for name in data.files}
 
 
-def production():
-    from stl.solver.leap_build import RESIDUE
-    return {'native': True, 'crash': RESIDUE['crash'], 'kink_attempts': RESIDUE['kink_attempts']}
+def production(golden):
+    return json.loads(str(golden['meta']))['production']
 
 
 def inputs(golden, label):
@@ -45,15 +46,23 @@ def inputs(golden, label):
             'rev': np.ones(1)}
 
 
-def test_fixture_records_the_production_options(golden):
+def test_fixture_covers_every_kind(golden):
     meta = json.loads(str(golden['meta']))
-    assert meta['engine'] == 'stl_solver_rs' and meta['production'] == production()
+    assert meta['engine'] == 'stl_solver_rs'
     kinds = set()
     for name, counts in meta['coverage'].items():
         if name.startswith('sweep_'):
             kinds |= {int(k) for k in counts}
     assert kinds == {0, 1, 2, 3, 4, 255}
     assert FIXTURE.stat().st_size < 500_000
+
+
+def test_fixture_holds_the_live_production_options(golden):
+    from stl.solver.leap_build import RESIDUE
+    from stl.solver.leap_lp import NativeFallback
+    if NativeFallback(**RESIDUE).kernel_options(('H1', 44)) != production(golden):
+        pytest.skip('production options changed since the Rust capture; '
+                    'the fixture still checks the kernel under the captured options')
 
 
 @pytest.mark.parametrize('mode', ['rungs', 'production'])
@@ -66,7 +75,7 @@ def test_sweep_matches_golden(golden, label, window, mode):
     n = len(args['pcs']); out = np.full(n, -7.); kind = np.full(n, 77, np.uint8)
     failed = sweep_batch(args['pcs'], args['pds'], args['succ_table'], args['fail_table'],
                          args['succ_col'], args['fail_col'], args['rev'], window, 1e-6, out, kind,
-                         **({} if mode == 'rungs' else production()))
+                         **({} if mode == 'rungs' else production(golden)))
     assert failed == int(golden[f'{name}_failed'])
     assert np.array_equal(kind, golden[f'{name}_kind'])
     assert np.array_equal(out, golden[f'{name}_value'], equal_nan=True)

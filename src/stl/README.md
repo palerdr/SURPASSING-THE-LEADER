@@ -228,8 +228,9 @@ first calls.
 
 `tests/data/leap_kernel_golden.npz` keeps 1,940 seeded stage classes and
 1,100 random-table classes with the Rust outputs: square and window stages,
-the rungs alone and the production options of `RESIDUE`, the packing LP from
-the slack and crash bases, and the warm and cold packing runs of the
-benchmarks. `tests/test_leap_golden.py` requires equal kinds, failure counts,
-masks, and values. The commit that added the fixture holds
-`tests/make_leap_golden.py`, which captured it.
+the rungs alone and the production options that `RESIDUE` held at the
+capture, the packing LP from the slack and crash bases, and the warm and cold
+packing runs of the benchmarks. `tests/test_leap_golden.py` requires equal
+kinds, failure counts, masks, and values. It runs the production cases with
+the captured options, so a change of `RESIDUE` keeps the check. The commit
+that added the fixture holds `tests/make_leap_golden.py`, which captured it.
