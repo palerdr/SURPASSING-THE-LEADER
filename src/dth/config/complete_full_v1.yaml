@@ -9,7 +9,7 @@ defaults:
 # layer.
 output_dir: src/dth/artifacts/complete_full_v1
 report_path: src/dth/artifacts/complete_full_v1_report.json
-backend: auto
+backend: python
 warm_start: true
 max_support: 12
 lp_workers: 1

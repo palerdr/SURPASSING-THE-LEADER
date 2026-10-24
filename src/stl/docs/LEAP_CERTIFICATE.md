@@ -120,9 +120,9 @@ full matrix so that clipping cannot trigger the shortcut.
 ## Public leap row
 
 The STL kernel uses this proof with separate row-local success and failure
-child tables. Python supplies the frozen revival probabilities. We use
-`mul_add` for the recurrence and require round-to-nearest with gradual
-underflow on the calling thread and on each Rayon worker.
+child tables. Python supplies the frozen revival probabilities. We use a
+fused multiply-add for the recurrence and require round-to-nearest with
+gradual underflow on the calling thread and on each kernel worker.
 
 In a window stage, row 61 has payoff `f` in each of the 60 columns. A row
 strategy with mass `a` on this row has minimum payoff
@@ -182,7 +182,7 @@ Python sends remaining misses to HiGHS and refreshes the row's support.
 Python batches rows with reduced dimension above 16 through HiGHS by default.
 This size limit controls work and does not change the certificate.
 
-You enable this path by supplying support masks to `sweep_key_rs`, or by using
+You enable this path by supplying support masks to `sweep_batch`, or by using
 `SupportFallback` in place of `Fallback`. The full-sweep command leaves
 support reuse disabled: measured support-search and refresh costs exceeded the saved LP
 work on the sampled H2 batches. We retain kinds 4 and 5 for direct and moved
@@ -209,9 +209,9 @@ It clips negative roundoff in candidate weights, normalizes both mixtures,
 and checks all original matrix row and column payoffs at the same `1e-6`
 gap gate. The formula proposes the candidate; the full matrix certificate
 controls acceptance. We retain the constant-row proof for window games.
-The Python binding checks finite inputs and the floating-point environment
-on the calling thread and on Rayon workers. It records native certificates
-and HiGHS solves as separate counts.
+`solve_packing` checks finite inputs and the floating-point environment on
+the calling thread and on each kernel worker. Python records kernel
+certificates and HiGHS solves as separate counts.
 
 ## Recurrence crash basis
 

@@ -6,7 +6,7 @@ import Formal.DTH.Rules
 Every DTH and STL stage game has the shape `M[d, c] = s[c - d]` for `c ≥ d`
 and `M[d, c] = f` for `c < d`, with rows and columns indexed from `0`
 (`full_matrix` in `src/dth_compact/main.py`; `docs/FOUNDATIONS.md`;
-`src/crates/docs/LEAP_CERTIFICATE.md`). Index `k` of `s` is the success
+`src/stl/docs/LEAP_CERTIFICATE.md`). Index `k` of `s` is the success
 payoff for lag `k + 1`; `f` is the failed-check payoff.
 
 This module proves the structural facts that the solver shortcuts rely on:

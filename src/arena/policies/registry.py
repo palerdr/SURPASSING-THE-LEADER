@@ -247,8 +247,6 @@ def make_provider(kind: str, args: argparse.Namespace):
                 "--output-dir",
                 str(output_dir),
             ]
-            if packed_artifact:
-                command.extend(("--backend", args.abstract_backend))
             result = abstract_main(command)
             if result != 0:
                 raise RuntimeError(
@@ -297,12 +295,6 @@ def add_play_arguments(parser: argparse.ArgumentParser) -> None:
         "--abstract-tablebase",
         default=None,
         help="override the bucket-specific abstract artifact path",
-    )
-    parser.add_argument(
-        "--abstract-backend",
-        choices=("auto", "python", "rust"),
-        default="auto",
-        help="backend used when a missing abstract tablebase must be built",
     )
     parser.add_argument(
         "--dth-complete-tablebase",

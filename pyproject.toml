@@ -7,6 +7,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "highspy>=1.12,<2",
     "hydra-core>=1.3,<2",
+    "numba>=0.67.0,<0.68",
     "numpy>=2.0,<3",
     "pyyaml>=6.0,<7",
     "scipy>=1.14,<2",
@@ -21,7 +22,6 @@ packages = ["src/stl", "src/dth", "src/abstract", "src/arena", "src/terminal", "
 
 [dependency-groups]
 dev = [
-    "maturin>=1.14.1",
     "pytest>=8.0",
     "pytest-xdist>=3.6",
 ]

@@ -34,9 +34,11 @@ inclusive ST, and no leap-second or STL-only route/information mechanics.
 Read `docs/GAME_AND_SOLVER.md` for the model, `docs/EXACTNESS_PROOF.md` for
 the completed proof, and `docs/AGENT_GOAL.md` for the exact play contract.
 `config/` holds the three production presets: `complete_full_v1`,
-`complete_fast_v1`, and `complete_audit_v1`. The packed tablebase's Rust
-kernel must satisfy `docs/DTH_COMPLETE_PARITY.md` before it can become a
-default backend. Run `uv run python -m pytest src/dth/tests -q`.
+`complete_fast_v1`, and `complete_audit_v1`. The `python` backend runs the
+v2 ladder of `docs/DTH_COMPLETE_PARITY.md`, and the `c` backend runs the v3
+recurrence ladder of `docs/FAST_TABLEBASE.md`. A new accelerator needs its own
+parity contract and tests before it can replace either. Run
+`uv run python -m pytest src/dth/tests -q`.
 
 After a canonical complete build, `uv run python -m dth complete-audit`
 re-solves the full LP-routed tail and independently checks the lowest-mass
@@ -46,6 +48,6 @@ full-support certificates from a deterministic class-stratified screen.
 
 Use `uv run python -m dth complete --config-name complete_fast_v1` for the
 certified C recurrence backend. It emits schema v3 and retains the 1e-6
-full-matrix gate. The existing Python/Rust v2 ladder remains available.
+full-matrix gate. The Python v2 ladder remains available as `backend=python`.
 See [docs/FAST_TABLEBASE.md](docs/FAST_TABLEBASE.md) for its independent
 certificate, checkpoint interval, and measured full-build results.

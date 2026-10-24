@@ -655,7 +655,11 @@ def play(clients, moves):
     raise AssertionError("the game did not end")
 
 
-def test_one_process_builds_a_game_once_and_a_new_process_replays_the_same_game():
+def test_one_process_builds_a_game_once_and_a_new_process_replays_the_same_game(monkeypatch):
+    # The hosted app draws each session's game and policy seeds at random, and a
+    # short game records fewer than five events. Seeded draws fix the game; with
+    # seed 7 it records 19 events. The seeds still pass through the store.
+    monkeypatch.setattr("browser.hosted.secrets.randbits", random.Random(7).getrandbits)
     store, built = MemoryStore(), []
     client = TestClient(counted(store, built))
     final = play([client], random.Random(7))

@@ -12,7 +12,8 @@ considered.
 - Do not add leap seconds, route stages, private information, neural leaf
   values, MCTS, CFR, or training code without an explicit new contract.
 - Generated files belong under `src/abstract/outputs`.
-- Python is behavioral authority. A packed Rust hot loop must satisfy
-  `docs/PACKED_TABLEBASE_PARITY.md` before it can become a default backend.
+- Python is the only implementation of the packed builder. A new
+  accelerator needs its own parity contract and tests before it can replace
+  a Python hot loop.
 
 Run `uv run python -m pytest src/abstract/tests -q`.

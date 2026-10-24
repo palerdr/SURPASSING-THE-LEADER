@@ -25,7 +25,7 @@ one depends on `sorry` or on an axiom other than `propext`,
 | The value is 1-Lipschitz in the payoffs | §5 | `MatrixGame.abs_value_sub_le` |
 | `|V̂ - V| ≤ (1201 - Φ) · 5e-7`, and at the opening `V ± 0.00061`, `P ± 0.00031` | §5–§6 | `DTH.abs_sub_V_le`, `DTH.opening_error_bounds` |
 
-## STL leap window (`src/crates/docs/LEAP_CERTIFICATE.md`, `src/stl/docs/GAME_AND_SOLVER.md`)
+## STL leap window (`src/stl/docs/LEAP_CERTIFICATE.md`, `src/stl/docs/GAME_AND_SOLVER.md`)
 
 | Claim | Lean |
 | --- | --- |
@@ -63,8 +63,10 @@ compiles and audits them, but nothing in the core imports them.
 - The rung-1 doc step "every row minimum is one of four numbers"
   (`src/dth_compact/architecture.md`) is false; the 60 row minima can be
   distinct (`rowMin_injective_counterexample`). The closed forms stay correct.
-- The Rust abstract pure path accepts near-saddles at `1e-12` and stores a gap
-  of `0.0` (`nearPennies_counterexample`); the value error is at most `2e-12`.
+- The retired Rust abstract pure path accepted near-saddles at `1e-12` and
+  stored a gap of `0.0` (`nearPennies_counterexample`); the value error is at
+  most `2e-12`. The Python builder takes the same cells and stores their
+  certified gap.
 - In binary64 the monotone-payoff guarantee fails by overflow: `s = (0, 1, …, 1)`,
   `f = 2e-6` has exact weights `500000^k > 2^1024` at `k = 55`
   (`overflow_counterexample`). The stage then reaches the residue without a

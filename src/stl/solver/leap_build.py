@@ -11,8 +11,10 @@ import resource
 import sys
 import time
 
+import numba
 import numpy as np
 
+from stl.solver.leap_kernel import sweep_batch
 from stl.solver.leap_profiles import N, N_ALIVE, WIN, child_clock, profiles
 from stl.solver.leap_oracle import solve_lp, solve_stage
 
@@ -184,11 +186,11 @@ def file_hash(path):
 
 
 def builder_hash():
+    # The glob covers the numba kernel, leap_kernel.py; uv.lock pins numba.
     root = Path(__file__).resolve().parents[3]
     files = [*Path(__file__).parent.glob('leap_*.py'),
              root/'src/stl/engine/game.py', root/'src/stl/solver/canonical.py',
-             root/'src/crates/stl_solver/Cargo.toml', root/'Cargo.lock', root/'uv.lock', root/'pyproject.toml',
-             * (root/'src/crates/stl_solver/src').glob('*.rs')]
+             root/'uv.lock', root/'pyproject.toml']
     h = hashlib.sha256()
     for path in sorted(files):
         name = str(path.relative_to(root)).encode(); data = path.read_bytes()
@@ -277,7 +279,6 @@ def sweep_key(key, bitmap, store, dth, *, min_clock=3420, full=False, fallback=N
     floor = 720 if full else 3420
     if min_clock < floor or key_clock(key) < min_clock:
         raise ValueError(f'key sweeps must stop at clock {floor}')
-    sweep_key_rs = require_kernel()
     p = profiles(); table = store.create(key); cols = key_columns(key)
     success_key = child_key(key)
     success_table = dth if success_key is None else store.load(success_key)
@@ -311,8 +312,8 @@ def sweep_key(key, bitmap, store, dth, *, min_clock=3420, full=False, fallback=N
             pds = np.ascontiguousarray(full_pds[js], dtype=np.int32)
             out = np.empty(len(pcs)); kind = np.empty(len(pcs), np.uint8)
             tick = time.perf_counter()
-            failed = sweep_key_rs(pcs, pds, success_table, fail_table, p.succ,
-                                  fail_col, p.rev, is_window(key), 1e-6, out, kind, **options)
+            failed = sweep_batch(pcs, pds, success_table, fail_table, p.succ,
+                                 fail_col, p.rev, is_window(key), 1e-6, out, kind, **options)
             kernel_seconds += time.perf_counter()-tick
             if options:
                 # Kinds 3, 4, and 5 are residue that the kernel certified itself.
@@ -417,7 +418,6 @@ def calibration_report(records, reach, store, wall_seconds):
 def calibrate(dth_path, directory, min_clock=3420):
     if min_clock != 3420:
         raise ValueError('calibration must stop at clock 3420')
-    require_kernel()
     start = time.perf_counter(); directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     dth_path = Path(dth_path); dth = np.load(dth_path, mmap_mode='r')
@@ -425,7 +425,8 @@ def calibrate(dth_path, directory, min_clock=3420):
         raise ValueError('DTH table schema mismatch')
     identity = {'schema': 'stl-leap-values-v1', 'builder_sha256': builder_hash(),
                 'dth_sha256': file_hash(dth_path), 'saddle_tolerance': 1e-6,
-                'minimum_clock': min_clock, 'python': sys.version, 'numpy': np.__version__}
+                'minimum_clock': min_clock, 'python': sys.version, 'numpy': np.__version__,
+                'numba': numba.__version__}
     checkpoint_path = directory/'checkpoint.json'
     records = []
     if checkpoint_path.exists():
@@ -513,7 +514,6 @@ def run_full(dth_path, directory):
     from stl.solver.leap_audit import audit_full
     from stl.solver.leap_lp import NativeFallback
     import highspy
-    require_kernel()
     started = time.perf_counter(); directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     dth_path = Path(dth_path); dth = np.load(dth_path, mmap_mode='r')
@@ -522,7 +522,7 @@ def run_full(dth_path, directory):
     identity = {'schema': 'stl-leap-values-v1', 'builder_sha256': builder_hash(),
                 'dth_sha256': file_hash(dth_path), 'saddle_tolerance': 1e-6,
                 'minimum_clock': 720, 'mode': 'full', 'python': sys.version, 'numpy': np.__version__,
-                'highs': highspy.Highs().version(), 'residue': RESIDUE}
+                'numba': numba.__version__, 'highs': highspy.Highs().version(), 'residue': RESIDUE}
     checkpoint_path = directory/'checkpoint.json'; store = TableStore(directory/'tables')
     records = []; files = {}; elapsed_base = 0.; prior_peak = 0
     if checkpoint_path.exists():
@@ -613,16 +613,6 @@ def run_full(dth_path, directory):
                          'max_bellman_residual': audit['max_bellman_residual']}})
     print(json.dumps(report, indent=2), flush=True)
     return report
-
-
-def require_kernel():
-    import stl_solver_rs
-    source = Path(__file__).resolve().parents[2]/'crates/stl_solver/src/leap.rs'
-    if getattr(stl_solver_rs, 'LEAP_SOURCE', None) != source.read_text():
-        raise ValueError('stale leap extension; rebuild with maturin develop --release')
-    if getattr(stl_solver_rs, 'LEAP_PACKING_SOURCE', None) != source.with_name('leap_packing.rs').read_text():
-        raise ValueError('stale packing extension; rebuild with maturin develop --release')
-    return stl_solver_rs.sweep_key_rs
 
 
 def validate_files(directory, files):

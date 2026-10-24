@@ -3,6 +3,7 @@ from pathlib import Path
 import json,time
 import numpy as np
 from stl.solver import leap_build as b
+from stl.solver.leap_kernel import sweep_batch
 from stl.solver.leap_lp import Fallback,SupportFallback
 
 ROOT=Path(__file__).resolve().parents[4]
@@ -10,7 +11,7 @@ OUTPUTS=ROOT/'src/stl/outputs'
 
 
 def main():
-    base=OUTPUTS/'leap-full-centered';key=('H2',42);p=b.profiles();kernel=b.require_kernel()
+    base=OUTPUTS/'leap-full-centered';key=('H2',42);p=b.profiles()
     bitmap=np.load(base/'reachability/H2_42.npy',mmap_mode='r');table=np.load(base/'tables/H2_42.npy',mmap_mode='r')
     def load(dest):return np.load(ROOT/'src/dth_compact/artifacts/V.npy' if dest is None else base/'tables'/f'{b.key_name(dest)}.npy',mmap_mode='r')
     success_key=b.child_key(key);success=load(success_key);groups={}
@@ -26,7 +27,7 @@ def main():
             pc=np.ascontiguousarray(checkers[local]);pd=np.ascontiguousarray(pd,dtype=np.int32);missing=~np.isfinite(table[pc,pd])
             if not missing.any():continue
             pc=pc[missing];pd=pd[missing];out=np.empty(len(pc));kind=np.empty(len(pc),np.uint8)
-            kernel(pc,pd,success,fail,p.succ,p.fail,p.rev,False,1e-6,out,kind)
+            sweep_batch(pc,pd,success,fail,p.succ,p.fail,p.rev,False,1e-6,out,kind)
             bad=kind==255;pc=pc[bad];pd=pd[bad]
             if not len(pc):continue
             reports={'classes':len(pc),'checker_rows':len(np.unique(pc)),'key':list(key)};outputs={}

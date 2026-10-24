@@ -122,23 +122,13 @@ uv run python -m abstract exact `
   --checkpoint-states 10000
 ```
 
-For the multi-hour production build, install the parity-versioned Rust kernel
-and request it explicitly (or leave `--backend auto`, which selects it when
-installed):
-
-```powershell
-cd src/crates/abstract_solver
-uv run --project ../../.. maturin develop --release
-cd ../../..
-uv run python -m abstract exact `
-  --ruleset bucket12_frozen95 `
-  --backend rust
-```
-
-Rust expands bitset/queue chunks and constructs/certifies pure-saddle backup
-batches. It returns only genuinely mixed payoff matrices to Python's persistent
-HiGHS LP, so the Rust path cannot silently substitute a different matrix
-solver.
+Python runs every phase of the build. Until 2026-10-23 an optional Rust
+kernel, `abstract_solver_rs`, expanded reachability chunks and certified
+pure-saddle backups, and it returned the mixed matrices to the same HiGHS LP.
+We retired it with the repository's Rust workspace. The full bucket6 build
+took 55 s in Python and 25 s with Rust, with equal integer arrays and float
+arrays within 3.3e-14. The bucket12 reachability pass took 36 s in Python and
+0.8 s with Rust. Git history keeps the kernel and its parity contract.
 
 The default outputs are `src/abstract/outputs/bucket6_frozen95/` and
 `src/abstract/outputs/bucket12_frozen95/`. Re-running either command resumes from
@@ -178,7 +168,3 @@ remain the same while values, policies, and saddle gaps are regenerated under
 the frozen surface. The bucket6 reachable-state count was verified at exactly
 576,270 before accepting the production artifact; bucket12 was regenerated at
 exactly 8,870,160 reachable states.
-
-The byte-level state, transition, numeric, and checkpoint contract that must be
-satisfied before replacing a Python hot loop with Rust is specified in
-[`PACKED_TABLEBASE_PARITY.md`](PACKED_TABLEBASE_PARITY.md).

@@ -10,7 +10,6 @@ This repository contains deliberately separate game-solving projects:
 | `src/abstract/` | Exact bucket examples | Role-relative 10-second and packed 5-second TTD abstractions solved by exhaustive tablebases |
 | `src/dth_ocaml/` | Hand-written exact OCaml reference; `play/` keeps the CS 3110 STL engine and terminal UI | Pure DTH with literal seconds 1..60 and the repository-wide frozen revival model |
 | `src/dth_cpp/` | In-progress native exact DTH implementation | Pure DTH; build order and root integration remain subtree-owned while work is active |
-| `src/crates/` | Shared Rust acceleration workspace | Checked L0/L1 kernels only; Python remains behavioral authority |
 | `src/arena/` | Game library: session, provider adapters, runtime Hal providers, shared presentation and its art | Canonical STL referee with pluggable policy-provider adapters |
 | `src/terminal/` | Terminal game app: `python -m terminal play` | Canonical STL, or pure DTH with `--pure-dth`, through `src/arena/` |
 | `src/browser/` | Browser game app: `python -m browser`, the TypeScript client, and the hosted Vercel deployment | Canonical STL, or pure DTH with `--pure-dth`, through `src/arena/` |
@@ -38,7 +37,6 @@ uv run python -m pytest --collect-only -q
 uv run python -m pytest -q
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 uv run --project src/browser python -m pytest src/browser/tests tests/parity -q
-cargo test --workspace
 npm --prefix src/browser/webclient run typecheck
 opam exec --switch=stl-dth-ocaml -- dune build --root src/dth_ocaml
 opam exec --switch=stl-dth-ocaml -- dune runtest --root src/dth_ocaml
@@ -57,7 +55,7 @@ uv run python -m dth --help
 uv run python -m dth complete
 uv run python -m dth complete-audit
 
-# The paper's compact solver: its own uv project (numba is not a root dependency)
+# The paper's compact solver: its own uv project
 uv run --project src/dth_compact src/dth_compact/main.py
 uv run --project src/dth_compact pytest src/dth_compact/tests -q
 

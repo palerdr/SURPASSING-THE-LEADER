@@ -50,7 +50,7 @@ schema `dth.complete-tablebase-build.v3`, backend `c`, and ladder
 `pure/recurrence/lp-v1`. It requires `warm_start=false`. Route bytes remain
 0 for pure, 1 for support, and 2 for LP. `full_support_hits` counts accepted
 recurrence policies, including clipped policies that pass the certificate.
-The v2 Python/Rust ladder and its byte-parity contract retain their order.
+The v2 Python ladder and its byte-parity contract retain their order.
 
 The manifest binds both kernel sources, the existing rule/solver sources,
 and the lockfile. The reader checks source digests and array hashes, with

@@ -51,7 +51,7 @@ library in `play/engine/`, and its terminal UI, the `dth-play` executable in
 surface. Opam builds the `dth` tests with `-p dth`, which hides the
 `dth_play` sources, so a private name would not resolve there; the
 `(dth_play :with-test)` dependency installs the library instead. Keep the
-project independent of the Python and Rust peer projects; GLPK is a C build
+project independent of the Python peer projects; GLPK is a C build
 dependency, not a peer.
 
 - Keep `lib/solver/` and `bin/solve_tablebase.ml` pure DTH, with actions

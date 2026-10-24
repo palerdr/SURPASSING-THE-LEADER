@@ -88,9 +88,9 @@ def synthetic(n):
 
 
 def run_kernel(args, window=False, tolerance=1e-6):
-    from stl_solver_rs import sweep_key_rs
+    from stl.solver.leap_kernel import sweep_batch
     out = np.empty(len(args[0])); kind = np.empty(len(out), dtype=np.uint8)
-    failed = sweep_key_rs(*args, window, tolerance, out, kind)
+    failed = sweep_batch(*args, window, tolerance, out, kind)
     return out, kind, failed
 
 
@@ -235,15 +235,6 @@ def test_kernel_rounding_mode():
         assert libc.fesetround(original) == 0
 
 
-def test_kernel_source_guard(monkeypatch):
-    import stl_solver_rs
-    from stl.solver.leap_build import require_kernel
-    require_kernel()
-    monkeypatch.setattr(stl_solver_rs, 'LEAP_SOURCE', 'stale source')
-    with pytest.raises(ValueError, match='stale'):
-        require_kernel()
-
-
 def test_reachability_cache_hashes(tmp_path):
     from stl.solver.leap_build import validate_files, file_hash
     path = tmp_path/'reach.npy'; path.write_bytes(b'reach bitmap')
@@ -343,8 +334,8 @@ def test_scheduler_sends_kernel_failures_to_highs(tmp_path, monkeypatch, dth):
         calls.append(args[2])
         return solve_lp(*args)
     def forbid_retry(*args, **kwargs):
-        raise AssertionError('Rust failures must enter HiGHS')
-    monkeypatch.setattr(build, 'require_kernel', lambda: fail_kernel)
+        raise AssertionError('kernel failures must enter HiGHS')
+    monkeypatch.setattr(build, 'sweep_batch', fail_kernel)
     monkeypatch.setattr(build, 'solve_stage', forbid_retry)
     monkeypatch.setattr(build, 'solve_lp', highs)
     bits = np.zeros((N, 23), np.uint8); bits[0, 0] = 1

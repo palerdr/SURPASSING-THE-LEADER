@@ -22,24 +22,24 @@ def kinked_stages(n, seed):
 
 
 def kernel(s, f, window, **options):
-    from stl_solver_rs import sweep_key_rs
+    from stl.solver.leap_kernel import sweep_batch
     n = len(f); out = np.empty(n); kind = np.empty(n, np.uint8)
-    failed = sweep_key_rs(np.zeros(n, np.int32), np.arange(n, dtype=np.int32),
-                          np.ascontiguousarray(-s), np.ascontiguousarray(-f[:, None]),
-                          np.arange(60, dtype=np.int32)[None, :], np.zeros(1, np.int32), np.ones(1),
-                          window, 1e-6, out, kind, **options)
+    failed = sweep_batch(np.zeros(n, np.int32), np.arange(n, dtype=np.int32),
+                         np.ascontiguousarray(-s), np.ascontiguousarray(-f[:, None]),
+                         np.arange(60, dtype=np.int32)[None, :], np.zeros(1, np.int32), np.ones(1),
+                         window, 1e-6, out, kind, **options)
     return out, kind, failed
 
 
 @pytest.mark.parametrize('window', [False, True])
 def test_crash_packing_matches_cold_and_lp(window):
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     s, f = kinked_stages(300, 17)
     s = np.vstack([S, *shifted_stages()[0], s]); f = np.r_[F, shifted_stages()[1], f]
     results = {}
     for crash in (False, True):
         out = np.empty(len(f)); kind = np.empty(len(f), np.uint8)
-        assert solve_packing_rs(np.ascontiguousarray(s), f, window, out, kind, crash=crash) == 0
+        assert solve_packing(np.ascontiguousarray(s), f, window, out, kind, crash=crash) == 0
         assert np.all(kind == 3); results[crash] = out
     assert np.max(np.abs(results[True]-results[False])) <= 1e-6
     assert abs(results[True][0]-(max(VALUE, F) if window else VALUE)) < 1e-9
@@ -48,27 +48,27 @@ def test_crash_packing_matches_cold_and_lp(window):
 
 
 def test_crash_packing_keeps_unsupported_and_nonfinite_contract():
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     out = np.empty(2); kind = np.empty(2, np.uint8)
     s = np.ones((2, 60)); f = np.array([0., 1.+1e-13])
-    assert solve_packing_rs(s, f, False, out, kind, crash=True) == 2
+    assert solve_packing(s, f, False, out, kind, crash=True) == 2
     assert np.all(kind == 255) and np.isnan(out).all()
     with pytest.raises(ValueError, match='finite'):
-        solve_packing_rs(np.full((1, 60), np.nan), np.ones(1), False, out[:1], kind[:1], crash=True)
+        solve_packing(np.full((1, 60), np.nan), np.ones(1), False, out[:1], kind[:1], crash=True)
 
 
 def test_kink_index_matches_python_authority():
-    from stl_solver_rs import kink_index_rs
+    from stl.solver import leap_kernel
     from stl.solver.leap_support import kink_index
     rng = np.random.default_rng(5)
     cases = [np.linspace(-.5, .5, 60), np.zeros(60), S, *shifted_stages()[0]]
     tie = np.linspace(0, .3, 60); tie[10:] -= .02; tie[40:] -= .02; cases.append(tie)
     cases += [rng.normal(size=60).cumsum()*.01 for _ in range(300)]
     for s in cases:
-        assert kink_index_rs(np.ascontiguousarray(s)) == kink_index(s)
+        assert leap_kernel.kink_index(np.ascontiguousarray(s)) == kink_index(s)
     assert kink_index(tie) == 10 and kink_index(np.zeros(60)) is None
     with pytest.raises(ValueError, match='60'):
-        kink_index_rs(np.zeros(59))
+        leap_kernel.kink_index(np.zeros(59))
 
 
 def random_mask(rng):
@@ -81,13 +81,13 @@ def random_mask(rng):
 
 
 def test_kink_seed_matches_python_authority():
-    from stl_solver_rs import kink_seed_rs
+    from stl.solver import leap_kernel
     from stl.solver.leap_support import kink_seed
     rng = np.random.default_rng(8)
     for _ in range(3000):
         p, q = random_mask(rng), random_mask(rng)
         old, new = (None if rng.random() < .1 else int(rng.integers(1, 60)) for _ in range(2))
-        assert kink_seed_rs(p, q, old, new) == kink_seed(p, q, old, new)
+        assert leap_kernel.kink_seed(p, q, old, new) == kink_seed(p, q, old, new)
     # A Dropper hole at k*=45 moves right; the mirrored hole at 59-k* moves left.
     p = ((1 << 60)-1) & ~(0b111 << 12) & ~(0b111 << 43)
     q = ((1 << 60)-1) & ~(0b111 << 12) & ~(0b111 << 42)
@@ -96,9 +96,9 @@ def test_kink_seed_matches_python_authority():
     assert moved_q == ((1 << 60)-1) & ~(0b111 << 11) & ~(0b111 << 43)
     assert kink_seed(p, q, 45, None) == (p, q) and kink_seed(p, q, 45, 45) == (p, q)
     with pytest.raises(ValueError, match='kink'):
-        kink_seed_rs(p, q, 0, 5)
+        leap_kernel.kink_seed(p, q, 0, 5)
     with pytest.raises(ValueError, match='kink'):
-        kink_seed_rs(1 << 60, q, 5, 6)
+        leap_kernel.kink_seed(1 << 60, q, 5, 6)
 
 
 def unsupported_residue(count, seed):
@@ -157,23 +157,23 @@ def test_kernel_native_seeds_restart_in_each_worker_chunk():
 
 
 def test_packing_reports_certified_basis_masks():
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     s = np.vstack([S, np.ones(60)]); f = np.array([F, 0.])
     out = np.empty(2); kind = np.empty(2, np.uint8); basis = np.full((2, 2), 7, np.uint64)
-    assert solve_packing_rs(s, f, False, out, kind, crash=True, support_out=basis) == 1
+    assert solve_packing(s, f, False, out, kind, crash=True, support_out=basis) == 1
     p, q = map(int, basis[0])
     assert p and p.bit_count() == q.bit_count() and np.all(basis[1] == 0)
     with pytest.raises(ValueError, match='support shape'):
-        solve_packing_rs(s, f, False, out, kind, support_out=np.zeros((1, 2), np.uint64))
+        solve_packing(s, f, False, out, kind, support_out=np.zeros((1, 2), np.uint64))
 
 
 def test_kernel_edge_move_limit_matches_python_authority():
-    from stl_solver_rs import solve_packing_rs
+    from stl.solver.leap_kernel import solve_packing
     from stl.solver.leap_support import kink_index, kink_seed, solve_supported
     rng = np.random.default_rng(250)
     t = S+rng.normal(0, 3e-3, 60); ft = F+rng.normal(0, 3e-3)
     out = np.empty(1); kind = np.empty(1, np.uint8); basis = np.zeros((1, 2), np.uint64)
-    assert solve_packing_rs(np.ascontiguousarray(S[None]), np.array([F]), False, out, kind,
+    assert solve_packing(np.ascontiguousarray(S[None]), np.array([F]), False, out, kind,
                             crash=True, support_out=basis) == 0
     # The kernel seeds the second stage with the first stage's crash basis.
     guess = kink_seed(int(basis[0, 0]), int(basis[0, 1]), kink_index(S), kink_index(t))
@@ -234,7 +234,7 @@ def test_sweep_counts_kernel_residue_kinds(tmp_path, monkeypatch):
         out, kind = args[-2:]
         out[:] = [.1, .2, .3, np.nan]; kind[:] = [3, 4, 5, 255]
         return 1
-    monkeypatch.setattr(b, 'require_kernel', lambda: kernel_stub)
+    monkeypatch.setattr(b, 'sweep_batch', kernel_stub)
     class Native:
         native_solves = 0; native_seconds = 0.; highs_seconds = 0.
         def kernel_options(self, key):

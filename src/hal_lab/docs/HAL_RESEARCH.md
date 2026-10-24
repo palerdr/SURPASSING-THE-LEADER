@@ -777,7 +777,7 @@ uv run python -m hal_lab match --candidate aggro-hal --opponent dth --pure-dth -
 uv run python -m hal_lab match --candidate perfect-hal --opponent dth --pure-dth --games 50 --output outputs/perfect-hal-v1/vs-exact.json
 
 # Build the current schema-v2 exact artifact at the Arena default path.
-uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 report_path=outputs/pm-hal/dth-complete-v2-report.json backend=rust lp_workers=4 progress_every=50
+uv run python -m dth complete output_dir=src/dth/artifacts/complete_full_v1 report_path=outputs/pm-hal/dth-complete-v2-report.json backend=python lp_workers=4 progress_every=50
 
 # Frozen bounded training run for PM's compatible recurrent component candidate.
 uv run python -m hal_lab.training.train_aggro_hal train --config src/hal_lab/experiments/pm_hal_v3/pm_hal_aggro_component_v1.yaml --output-dir outputs/pm-hal/aggro-component-v1

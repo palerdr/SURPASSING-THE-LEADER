@@ -20,6 +20,7 @@ import numpy as np
 
 from stl.solver import leap_build as build
 from stl.experiments.benchmark_leap import PackingLP, native_batch, rev_signature, ROOT
+from stl.solver.leap_kernel import sweep_batch
 from stl.solver.leap_lp import WarmLP
 from stl.solver.leap_oracle import solve_lp
 from stl.solver.leap_profiles import N, profiles
@@ -56,7 +57,7 @@ def gather(key, pc, pd):
 
 
 def current_batch():
-    key = ('H2', 42); p = profiles(); kernel = build.require_kernel()
+    key = ('H2', 42); p = profiles()
     bitmap = np.load(PREFIX/'reachability/H2_42.npy', mmap_mode='r')
     partial = np.load(PREFIX/'tables/H2_42.npy', mmap_mode='r')
     success = table(build.child_key(key)); groups = {}
@@ -74,7 +75,7 @@ def current_batch():
             if not len(pc):
                 continue
             out = np.empty(len(pc)); kind = np.empty(len(pc), np.uint8)
-            kernel(pc, pd, success, fail, p.succ, p.fail, p.rev, False, 1e-6, out, kind)
+            sweep_batch(pc, pd, success, fail, p.succ, p.fail, p.rev, False, 1e-6, out, kind)
             pc = pc[kind == 255]; pd = pd[kind == 255]
             if len(pc):
                 s, f = gather(key, pc, pd)
@@ -90,10 +91,10 @@ def random_residue(key, seed=832):
     reached = (bitmap[pc, pd//8] & (1 << (pd % 8))) != 0
     pc = pc[reached]; pd = pd[reached]; s, f = gather(key, pc, pd)
     out = np.empty(len(pc)); kind = np.empty(len(pc), np.uint8)
-    build.require_kernel()(np.zeros(len(pc), np.int32), np.arange(len(pc), dtype=np.int32),
-            np.ascontiguousarray(-s), np.ascontiguousarray(-f[:, None]),
-            np.arange(60, dtype=np.int32)[None, :], np.zeros(1, np.int32), np.ones(1),
-            False, 1e-6, out, kind)
+    sweep_batch(np.zeros(len(pc), np.int32), np.arange(len(pc), dtype=np.int32),
+                np.ascontiguousarray(-s), np.ascontiguousarray(-f[:, None]),
+                np.arange(60, dtype=np.int32)[None, :], np.zeros(1, np.int32), np.ones(1),
+                False, 1e-6, out, kind)
     bad = kind == 255
     if not bad.any():
         raise RuntimeError('holdout has no residue')
@@ -127,7 +128,7 @@ def parallel_highs(path, order, method, workers):
                     'fallbacks': sum(x[2] for x in answers), 'pivots': sum(x[3] for x in answers)}
 
 
-def solve_bench(path, directory, repeats, workers):
+def solve_bench(path, repeats, workers):
     sample = np.load(path); pc = sample['pc']; pd = sample['pd']; n = len(pc)
     orders = {'dropper_major': np.lexsort((pc, pd)), 'checker_major': np.lexsort((pd, pc))}
     experiments = [('game_highs', 'dropper_major'), ('packing', 'dropper_major'),
@@ -144,7 +145,7 @@ def solve_bench(path, directory, repeats, workers):
             order = orders[order_name]
             if method.startswith('native'):
                 result, timing = native_batch(sample['s'][order], sample['f'][order], np.zeros(n),
-                                              directory, warm=method == 'native_warm', threads=workers)
+                                              warm=method == 'native_warm', threads=workers)
                 tick = time.perf_counter(); bad = ~np.isfinite(result[:, 0])
                 gap = float(np.max(result[~bad, 1])) if (~bad).any() else 0.
                 if bad.any():
@@ -175,7 +176,7 @@ def solve_bench(path, directory, repeats, workers):
 
 def rev_bench(directory, repeats):
     """We compare real writes and kernel work on sampled rows across 60 clocks."""
-    p = profiles(); kernel = build.require_kernel(); rng = np.random.default_rng(921)
+    p = profiles(); rng = np.random.default_rng(921)
     clocks = list(range(3059, 2999, -1)); pcs = np.sort(rng.choice(N, 128, replace=False)).astype(np.int32)
     sampled = []; union = {}; full_states = 0; cache_tables = {}
     for clock in clocks:
@@ -218,8 +219,8 @@ def rev_bench(directory, repeats):
                         out = np.empty(len(cs)); kind = np.empty(len(cs), np.uint8)
                         success, fail, window = signature
                         columns = p.idx0[p.fail] if fail is not None and fail[0] == 'REV' else p.fail
-                        rejected = kernel(cs, ds, cache_tables[success], cache_tables[fail], p.succ,
-                                          columns, p.rev, window, 1e-6, out, kind)
+                        rejected = sweep_batch(cs, ds, cache_tables[success], cache_tables[fail], p.succ,
+                                               columns, p.rev, window, 1e-6, out, kind)
                         if rejected:
                             raise RuntimeError('selected REV band needs LP timing as well')
                         values[missing] = out; solved += len(cs)
@@ -267,12 +268,12 @@ def main():
               'timing_scope': 'gathered real residue; process startup, certification, and fallback included; no sweep writes',
               'benchmarks': {}}
     for path in (first, second, third):
-        report['benchmarks'][path.stem] = solve_bench(path, args.output, args.repeats, args.workers)
+        report['benchmarks'][path.stem] = solve_bench(path, args.repeats, args.workers)
         build.write_json(args.output/'report.json', report)
     report['rev'] = rev_bench(args.output, args.repeats)
     report['code_hashes'] = {str(path.relative_to(ROOT)): build.file_hash(path) for path in
                            [Path(__file__), ROOT/'src/stl/experiments/benchmark_leap.py',
-                            ROOT/'src/crates/stl_solver/examples/leap_bench.rs']}
+                            ROOT/'src/stl/solver/leap_kernel.py']}
     build.write_json(args.output/'report.json', report)
     print(json.dumps(report['rev']), flush=True)
 

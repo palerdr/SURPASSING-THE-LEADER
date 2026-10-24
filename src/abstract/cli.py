@@ -42,7 +42,6 @@ def command_exact(args: argparse.Namespace) -> int:
             rules,
             output_dir,
             checkpoint_states=args.checkpoint_states,
-            backend=args.backend,
         )
         loaded = PackedTablebase(output_dir, verify_hashes=False)
         print(
@@ -100,12 +99,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=10_000,
         help="number of reachability/backup rows between durable checkpoints",
-    )
-    exact.add_argument(
-        "--backend",
-        choices=("auto", "python", "rust"),
-        default="auto",
-        help="packed hot-loop backend; auto uses Rust when the parity-versioned extension is installed",
     )
     exact.set_defaults(function=command_exact)
 

@@ -1,12 +1,12 @@
 # DTH Complete-Game Tablebase Parity Contract
 
 `src/dth/packed.py` and `src/dth/complete_tablebase.py` are the behavioral
-authority for the packed-quotient complete-game tablebase. The Rust kernel
-`dth_complete_rs` (`src/crates/dth_complete`) is an opt-in accelerator and remains
-opt-in until every gate in this contract passes; an unchecked Rust result must
-never silently replace Python output. The contract version string is
-`dth-complete-parity-v1`, exported by the extension and checked at import; a
-mismatch refuses the backend outright.
+authority for the packed-quotient complete-game tablebase. The `python`
+backend runs the v2 ladder of this contract. An optional Rust kernel,
+`dth_complete_rs`, ran the same ladder under the contract version
+`dth-complete-parity-v1` until 2026-10-23, and its artifacts were byte
+identical to Python's. A new accelerator must pass every gate here before it
+can replace a Python hot loop.
 
 ## Class encoding
 
@@ -60,8 +60,8 @@ mismatch refuses the backend outright.
 - Warm-start guesses are **precomputed per state** from the previous layer's
   support table (see below); kernels perform no chaining, so artifact bytes
   are independent of worker count and work-item partition by construction.
-  `test_complete_rust_parity.py` verifies byte-identity against
-  `RAYON_NUM_THREADS=1`.
+  `test_fast_kernel.py` requires byte-identical `c` backend results across
+  worker counts.
 
 ## Assembly parity
 
@@ -69,13 +69,14 @@ mismatch refuses the backend outright.
   overflow else `-value[p_d * 17011 + success_child[p_c][lag]]`, and
   `failed = 1.0` for a dead checker else
   `revival * (-value[child]) + (1.0 - revival)` — one multiply, one negate,
-  one subtract, one add, **no FMA**, in exactly that order in both backends.
-- Reading an unsolved (NaN) child value aborts the layer with an error in
-  both backends; it can only mean a schedule violation.
+  one subtract, one add, **no FMA**, in exactly that order.
+- Reading an unsolved (NaN) child value aborts the layer with an error; it
+  can only mean a schedule violation.
 - The implied 60x60 matrix is `matrix[d, c] = success[c - d]` when `c >= d`
-  else `failed` (0-based). Cross-backend class values are bit-identical by
-  construction; the fallback bound, should a platform break bit-identity, is
-  2e-14 per class value, and any use of the fallback must be reported.
+  else `failed` (0-based). Class values of two kernels that follow this order
+  are bit-identical by construction; the fallback bound, should a platform
+  break bit-identity, is 2e-14 per class value, and any use of the fallback
+  must be reported.
 
 ## Routing and the solve ladder
 
@@ -103,31 +104,21 @@ frozen `SADDLE_GAP_TOLERANCE = 1e-6` and returns the certificate midpoint
 3. **Full support**: the identical mechanism at `k = 60` — this *is* the
    structured full-support solve, and it dominates the endgame regions
    (measured 2026-07-30: 7,021 of 7,021 mixed classes in the top 120 layers).
-4. **LP residue**: kernels return the state's 61 class values; both backends
-   route them through the same Python code in ascending class order,
+4. **LP residue**: the sweep collects each residue state's 61 class values
+   and routes them through one Python path in ascending class order,
    optionally on an LP worker pool: `support_solver.solve_matrix_single_lp`,
    then `solver.solve_matrix`, then HiGHS IPM, then the two-LP oracle under
    tightened HiGHS
    dual-simplex tolerances (1e-10 feasibility) — the retry tightens the
    *solver*, never the 1e-6 gate, and a matrix failing all four aborts the
-   build. Identical code, so cross-backend parity cannot break here.
+   build. The `c` backend sends its residue through the same path.
 
 Recorded supports (for the next layer's guesses) use the pinned extraction:
 mass above 1e-9, top-`max_support` by descending mass with ascending-index
-ties, stored ascending. Routing parity is **exact**: the `solver_kind` byte
-per class (0 pure, 1 support-certified, 2 lp) must be equal across backends,
-and `test_complete_rust_parity.py` compares full synthetic sweeps byte for
-byte, primitive calls bit for bit, and counter sets exactly.
-
-## Public binding firewall
-
-Every exported Rust primitive rejects non-finite or out-of-range class values,
-non-canonical supports, and any saddle tolerance other than the frozen `1e-6`
-gate. The layer binding validates table shapes, child/profile indices, revival
-probabilities, sorted padded supports, and work-item bounds before computation.
-Parallel workers stage results without mutating NumPy arrays; overlapping work
-items are rejected before staged values are committed, so malformed callers
-cannot create concurrent writes or partial layer output.
+ties, stored ascending. The `solver_kind` byte per class (0 pure, 1
+support-certified, 2 lp) is part of the artifact. An accelerator must match it
+exactly, and `test_complete_sweep_python.py` checks the Python sweep against
+an independent per-class resolution through the certified ladder.
 
 ## Artifact and resume parity
 
@@ -147,17 +138,14 @@ cannot create concurrent writes or partial layer output.
   only at layer completion, so an interrupted layer never double-counts.
 - Interrupt/resume must be byte-for-byte against an uninterrupted build of
   the same backend, verified with stops in at least two distinct layers
-  (`test_complete_sweep_python.py`, `test_complete_rust_parity.py`).
-- The resume digest includes the Python implementation sources and `uv.lock`
-  and, when used, the Rust crate, build script, and workspace lockfile. The
-  loaded extension exposes a compile-time source-bundle digest that Python
-  independently recomputes before accepting the backend. Changing source,
-  dependencies, or the installed binary rejects partial layers instead of
-  mixing them into a newly stamped artifact.
+  (`test_complete_sweep_python.py`).
+- The resume digest includes the Python implementation sources and `uv.lock`,
+  and `fast_kernel.c` for the `c` backend. Changing source or dependencies
+  rejects partial layers instead of mixing them into a newly stamped
+  artifact.
 - The finalize manifest embeds the build config digest inputs, per-array
   SHA-256, the routing counters, and a `code_config_digest` over
-  the packed rules, solver ladder, builder and — when Rust executed — the
-  crate's `Cargo.toml`, `build.rs`, `lib.rs`, and workspace `Cargo.lock`. The read facade
+  the packed rules, solver ladder, builder, and `uv.lock`. The read facade
   derives and re-verifies the exact array set, shape, dtype, class encoding,
   rule hash, ladder, tolerance, build fingerprint, and current source digest
   on open and fails closed.
@@ -172,20 +160,16 @@ cannot create concurrent writes or partial layer output.
 
 ## Promotion gate
 
-The Rust backend is eligible as a default only after every test above passes
-for both the Python fallback and the compiled extension, and after a
-completed canonical build passes its finalize gates and external anchors.
-Per `src/crates/README.md`, no Python runtime behavior may depend on an
-unchecked Rust path.
-
-Set `STL_REQUIRE_RUST_PARITY=1` in CI or a release-validation shell. With that
-gate enabled, a missing `dth_complete_rs` extension is a hard test-collection
-failure instead of an ordinary Python-development skip.
+An accelerator is eligible as a default only after every test above passes
+for both the Python path and the accelerator, and after a completed canonical
+build passes its finalize gates and external anchors. No Python runtime
+behavior may depend on an unchecked accelerator path. The retired Rust kernel
+met these gates; [`WORKFLOWS.md`](WORKFLOWS.md) records its measurements.
 
 ## Separate recurrence contract
 
 The `c` backend uses the v3 schema and `pure/recurrence/lp-v1` ladder in
-[FAST_TABLEBASE.md](FAST_TABLEBASE.md). It does not change this v2 Python/Rust
+[FAST_TABLEBASE.md](FAST_TABLEBASE.md). It does not change this v2
 route-order contract. Its tests compare full small-game values with the
 Python authority and require byte-identical resume and worker-count results.
 The C++ peer owns its own implementation and artifact schema. Cross-peer

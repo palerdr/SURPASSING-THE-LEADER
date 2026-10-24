@@ -20,7 +20,6 @@ file's frozen global rules win.
 @src/abstract/README.md
 @src/dth_ocaml/README.md
 @src/dth_cpp/README.md
-@src/crates/README.md
 @src/arena/README.md
 @src/terminal/README.md
 @src/browser/README.md
