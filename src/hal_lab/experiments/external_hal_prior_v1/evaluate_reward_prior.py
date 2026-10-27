@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 import csv
-from dataclasses import asdict
 import hashlib
 import io
 import json
@@ -18,9 +17,10 @@ from scipy.special import betaln
 
 from arena.dth_adapter import project_to_dth_state
 from arena.match import play_match_game
-from arena.policies import perfect_hal, translated_hal
-from arena.policies.perfect_hal import PerfectHalConfig, PerfectHalOpponentModel, PerfectHalPolicyProvider
-from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
+from arena.policies.perfect_hal import decision as hal_decision, model as hal_model, policy as hal_policy, translated as hal_translated
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
+from arena.policies.perfect_hal.translated import TranslatedHalConfig, TranslatedHalOpponentModel
 from dth.agent import CompleteDTHAgent
 from hal_lab.experiments.external_hal_prior_v1.reward_prior_hal import RewardPriorConfig, RewardPriorHal
 from hal_lab.experiments.perfect_hal_bayes_v2 import evaluate_bayesian_hal
@@ -137,7 +137,7 @@ def external_scores(participants, prior):
 
 def inputs(args):
     paths = [Path(__file__), Path(__file__).with_name("reward_prior_hal.py"),
-        Path(translated_hal.__file__), Path(perfect_hal.__file__),
+        Path(hal_translated.__file__), Path(hal_model.__file__), Path(hal_decision.__file__), Path(hal_policy.__file__),
         Path(evaluate_bayesian_hal.__file__), Path(evaluate_translated_hal.__file__),
         Path(opponent_league.__file__), Path("src/arena/match.py"), Path("src/arena/contracts.py"),
         args.selection, args.human_data, args.artifact / "tablebase.json", args.output / "human.csv"]

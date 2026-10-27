@@ -42,7 +42,8 @@ from arena.policies.aggro_hal import (
     dth_compatibility,
     load_checkpoint,
 )
-from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
 from arena.policies.pm_hal import (
     ACTION_COUNT,
     DEFAULT_PM_HAL_CONFIG,

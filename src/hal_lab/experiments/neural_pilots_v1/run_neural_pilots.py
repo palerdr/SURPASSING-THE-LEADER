@@ -14,9 +14,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from arena.policies import aggro_hal, perfect_hal, translated_hal
-from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
-from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
+from arena.policies import aggro_hal
+from arena.policies.perfect_hal import decision, model, policy, translated
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
+from arena.policies.perfect_hal.translated import TranslatedHalConfig, TranslatedHalOpponentModel
 from dth.agent import CompleteDTHAgent
 from hal_lab.experiments.neural_pilots_v1.neural_pilots import PublicMemory, make_network, tensor
 from hal_lab.experiments.perfect_hal_bayes_v2 import evaluate_bayesian_hal
@@ -104,7 +106,7 @@ class Experiment:
         paths = [Path(__file__), Path(__file__).with_name("neural_pilots.py"), self.args.selection,
             self.args.artifact / "tablebase.json", Path("src/arena/dth_adapter.py"), Path("src/arena/contracts.py")]
         paths += [Path(module.__file__) for module in (aggro_env, aggro_hal, opponent_league,
-            perfect_hal, translated_hal, evaluate_bayesian_hal, evaluate_translated_hal)]
+            model, decision, policy, translated, evaluate_bayesian_hal, evaluate_translated_hal)]
         return {str(p.resolve()): sha(p) for p in paths}
 
     def collect(self, split):

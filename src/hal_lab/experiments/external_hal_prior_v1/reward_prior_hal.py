@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
+from arena.policies.perfect_hal.translated import TranslatedHalConfig, TranslatedHalOpponentModel
 
 
 def transfer_prior(binary_prior, action_count=60):

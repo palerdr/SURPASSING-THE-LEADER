@@ -15,8 +15,8 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 # The hosted providers, the translated opponent memory, and the Vercel entry.
 RUNTIME_MODULES = (
-    "arena.policies.perfect_hal",
-    "arena.policies.translated_hal",
+    "arena.policies.perfect_hal.policy",
+    "arena.policies.perfect_hal.translated",
     "arena.translated_hal_adapter",
     "browser.opponent_memory",
     "browser.deploy.production",

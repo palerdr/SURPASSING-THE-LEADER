@@ -146,11 +146,8 @@ def make_perfect_hal_provider(args: argparse.Namespace):
         )
 
         return ExploitContinuationHalPolicyProvider(dth_artifact_dir(args))
-    from arena.policies.perfect_hal import (
-        PerfectHalConfig,
-        PerfectHalOpponentModel,
-        PerfectHalPolicyProvider,
-    )
+    from arena.policies.perfect_hal.model import PerfectHalConfig, PerfectHalOpponentModel
+    from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
 
     config = PerfectHalConfig(
         prior_strength=args.perfect_hal_prior_strength,

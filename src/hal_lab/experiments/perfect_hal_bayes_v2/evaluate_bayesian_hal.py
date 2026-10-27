@@ -18,9 +18,11 @@ import numpy as np
 
 from arena.dth_adapter import project_to_dth_state
 from arena.match import play_match_game
-from arena.policies import bayesian_hal, perfect_hal
+from arena.policies import bayesian_hal
+from arena.policies.perfect_hal import decision, model, policy
 from arena.policies.bayesian_hal import BayesianHalConfig, BayesianHalOpponentModel
-from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
 from dth.agent import CompleteDTHAgent
 from hal_lab.harness.baselines import ExactProvider, FittedHumanOpponent, ResetMemoryProvider, UniformProvider
 from hal_lab.harness.human_data import fit_priors, human_observation, split_games
@@ -186,7 +188,8 @@ def main(argv=None):
         raise ValueError("human split fractions must leave a test partition")
     if protocol["games_per_identity"] < 2 or protocol["games_per_identity"] % 2:
         raise ValueError("paired evaluation requires a positive even game count")
-    source_files = [Path(__file__), Path(bayesian_hal.__file__), Path(perfect_hal.__file__)]
+    source_files = [Path(__file__), Path(bayesian_hal.__file__),
+        Path(model.__file__), Path(decision.__file__), Path(policy.__file__)]
     source_hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files}
     selection = None
     if args.split == "test":

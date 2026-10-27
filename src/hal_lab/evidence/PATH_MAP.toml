@@ -76,7 +76,10 @@ absolute_roots = ["/Users/palerider/Desktop/projects/usogui/stl/"]
 "src/arena/policies/exploit_hal_gym.py" = "src/hal_lab/training/exploit_hal_gym.py"
 "src/arena/policies/neural_pilots.py" = "src/hal_lab/experiments/neural_pilots_v1/neural_pilots.py"
 "src/arena/policies/opponent_league.py" = "src/hal_lab/harness/opponent_league.py"
-"src/arena/policies/perfect_hal.py" = "src/arena/policies/perfect_hal.py"
+# perfect_hal.py split into the perfect_hal package: model.py holds the
+# opponent model, decision.py the exact-matrix response, and policy.py the
+# provider. The verifier reads the bound bytes from the tag.
+"src/arena/policies/perfect_hal.py" = "src/arena/policies/perfect_hal/model.py"
 "src/arena/policies/plot_selector_study.py" = "src/hal_lab/experiments/selector_study_v1/plot_selector_study.py"
 "src/arena/policies/pm_hal.py" = "src/arena/policies/pm_hal.py"
 "src/arena/policies/reward_prior_hal.py" = "src/hal_lab/experiments/external_hal_prior_v1/reward_prior_hal.py"
@@ -85,7 +88,7 @@ absolute_roots = ["/Users/palerider/Desktop/projects/usogui/stl/"]
 "src/arena/policies/selector_study.py" = "src/hal_lab/experiments/selector_study_v1/selector_study.py"
 "src/arena/policies/train_aggro_hal.py" = "src/hal_lab/training/train_aggro_hal.py"
 "src/arena/policies/train_exploit_hal.py" = "src/hal_lab/training/train_exploit_hal.py"
-"src/arena/policies/translated_hal.py" = "src/arena/policies/translated_hal.py"
+"src/arena/policies/translated_hal.py" = "src/arena/policies/perfect_hal/translated.py"
 "src/arena/tests/test_aggro_adaptive_config.py" = "src/hal_lab/tests/test_aggro_adaptive_config.py"
 "src/arena/tests/test_aggro_env.py" = "src/hal_lab/tests/test_aggro_env.py"
 "src/arena/tests/test_aggro_memory_curriculum.py" = "src/hal_lab/tests/test_aggro_memory_curriculum.py"

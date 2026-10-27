@@ -55,7 +55,7 @@ from arena.policies.aggro_hal import (
     encode_public_observation,
     load_checkpoint,
 )
-from arena.policies.perfect_hal import (
+from arena.policies.perfect_hal.model import (
     PerfectHalConfig,
     PerfectHalForecast,
     PerfectHalOpponentModel,

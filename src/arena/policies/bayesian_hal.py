@@ -13,7 +13,7 @@ from typing import Mapping
 
 import numpy as np
 
-from arena.policies.perfect_hal import (
+from arena.policies.perfect_hal.model import (
     ACTION_COUNT, PerfectHalConfig, PerfectHalContext, PerfectHalForecast,
     PerfectHalOpponentModel, _literal_action, _normalize, _readonly,
 )

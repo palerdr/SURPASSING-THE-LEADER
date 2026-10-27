@@ -8,7 +8,7 @@ import zlib
 
 import numpy as np
 
-from arena.policies.translated_hal import TranslatedHalOpponentModel
+from arena.policies.perfect_hal.translated import TranslatedHalOpponentModel
 
 SCHEMA = "arena-translated-hal-memory-v1"
 MAX_BYTES = 4_000_000

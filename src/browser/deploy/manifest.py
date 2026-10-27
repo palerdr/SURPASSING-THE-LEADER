@@ -84,8 +84,11 @@ RUNTIME_FILES: tuple[RuntimeFile, ...] = (
     # The translated Hal candidate and its opponent memory.
     RuntimeFile("src/arena/translated_hal_adapter.py", in_version=True, policies=_TRANSLATED),
     RuntimeFile("src/arena/policies/__init__.py", policies=_TRANSLATED),
-    RuntimeFile("src/arena/policies/perfect_hal.py", in_version=True, policies=_TRANSLATED),
-    RuntimeFile("src/arena/policies/translated_hal.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/__init__.py", policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/decision.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/model.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/policy.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/translated.py", in_version=True, policies=_TRANSLATED),
     RuntimeFile(
         "src/arena/config/translated_hal_v1_selection.json", in_version=True, policies=_TRANSLATED
     ),

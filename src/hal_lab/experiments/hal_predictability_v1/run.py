@@ -18,8 +18,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-import arena.dth_adapter, arena.match, arena.policies.adaptive, arena.policies.perfect_hal  # noqa: E401
-import arena.policies.translated_hal, arena.translated_hal_adapter, dth.agent  # noqa: E401
+import arena.dth_adapter, arena.match, arena.policies.adaptive, arena.policies.perfect_hal.decision  # noqa: E401
+import arena.policies.perfect_hal.model, arena.policies.perfect_hal.policy, arena.policies.perfect_hal.translated  # noqa: E401
+import arena.translated_hal_adapter, dth.agent  # noqa: E401
 from arena.contracts import observe_provider, reset_provider_game
 from arena.dth_adapter import project_to_dth_state
 from arena.match import play_match_game
@@ -329,8 +330,8 @@ def curve_seeds(protocol: dict, spec: dict) -> dict[str, list[int]]:
 def translated(temperature: float, agent):
     """Build translated-v1 through the provider constructors with another response temperature."""
     config = dataclasses.replace(arena.translated_hal_adapter.selected_config(), response_temperature=temperature)
-    return arena.policies.perfect_hal.PerfectHalPolicyProvider(
-        ARTIFACT, config, agent=agent, opponent_model=arena.policies.translated_hal.TranslatedHalOpponentModel(config))
+    return arena.policies.perfect_hal.policy.PerfectHalPolicyProvider(
+        ARTIFACT, config, agent=agent, opponent_model=arena.policies.perfect_hal.translated.TranslatedHalOpponentModel(config))
 
 
 def _departure(rows, protocol) -> dict:
@@ -383,7 +384,8 @@ def _sources() -> dict:
     shared = (arena.match.__file__, registry.__file__)
     return {"dth": digest(*shared, arena.dth_adapter.__file__, dth.agent.__file__),
             "translated-v1": digest(*shared, arena.translated_hal_adapter.__file__,
-                                    arena.policies.perfect_hal.__file__, arena.policies.translated_hal.__file__,
+                                    arena.policies.perfect_hal.model.__file__, arena.policies.perfect_hal.decision.__file__,
+                                    arena.policies.perfect_hal.policy.__file__, arena.policies.perfect_hal.translated.__file__,
                                     arena.translated_hal_adapter.SELECTION),
             "adaptive-uniform": digest(*shared, arena.policies.adaptive.__file__)}
 

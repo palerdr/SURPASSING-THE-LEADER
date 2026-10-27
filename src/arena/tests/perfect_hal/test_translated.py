@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from arena.policies.perfect_hal import PerfectHalOpponentModel
-from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.translated import TranslatedHalConfig, TranslatedHalOpponentModel
 from arena.testing import make_forecast as _forecast
 
 

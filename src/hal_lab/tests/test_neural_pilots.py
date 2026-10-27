@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from arena.policies.translated_hal import TranslatedHalConfig
+from arena.policies.perfect_hal.translated import TranslatedHalConfig
 from arena.testing import make_decision as _decision
 from hal_lab.experiments.neural_pilots_v1.neural_pilots import ExpertSelector, PublicMemory, SequencePredictor, SessionActor, TOKEN_DIM, WINDOW
 

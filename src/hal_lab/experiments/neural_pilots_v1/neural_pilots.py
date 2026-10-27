@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from arena.policies.translated_hal import TranslatedHalOpponentModel
+from arena.policies.perfect_hal.translated import TranslatedHalOpponentModel
 
 WINDOW = 16
 TOKEN_DIM = 16

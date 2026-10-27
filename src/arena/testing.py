@@ -27,7 +27,7 @@ from arena.contracts import (
     PublicHalfRound,
     PublicPlayerState,
 )
-from arena.policies.perfect_hal import ACTION_COUNT
+from arena.policies.perfect_hal.model import ACTION_COUNT
 from arena.session import PlaySession
 from dth.agent import CertifiedStageGame
 from stl.engine.game import (
@@ -40,7 +40,7 @@ from stl.engine.game import (
 )
 
 if TYPE_CHECKING:
-    from arena.policies.perfect_hal import PerfectHalOpponentModel
+    from arena.policies.perfect_hal.model import PerfectHalOpponentModel
 
 
 def certified_stage(matrix: np.ndarray | None = None) -> CertifiedStageGame:
