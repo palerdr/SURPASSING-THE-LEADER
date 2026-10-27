@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -12,10 +11,12 @@ import time
 import numpy as np
 
 from arena.match import play_match_game
-from arena.policies import bayesian_hal, ensemble_hal, perfect_hal
+from arena.policies import bayesian_hal, ensemble_hal
+from arena.policies.perfect_hal import decision, model, policy
 from arena.policies.bayesian_hal import BayesianHalOpponentModel
 from arena.policies.ensemble_hal import EnsembleHalConfig, EnsembleHalPolicyProvider
-from arena.policies.perfect_hal import PerfectHalOpponentModel, PerfectHalPolicyProvider
+from arena.policies.perfect_hal.model import PerfectHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
 from dth.agent import CompleteDTHAgent
 from hal_lab.experiments.perfect_hal_bayes_v2 import evaluate_bayesian_hal
 from hal_lab.experiments.perfect_hal_bayes_v2.evaluate_bayesian_hal import (
@@ -128,7 +129,7 @@ def main(argv=None):
         raise ValueError("paired seats require a positive even number of games")
     inputs = [args.config, args.human_data, args.artifact / "tablebase.json"]
     inputs += [Path(__file__)] + [Path(module.__file__) for module in
-               (ensemble_hal, perfect_hal, bayesian_hal, evaluate_bayesian_hal, opponent_league)]
+               (ensemble_hal, model, decision, policy, bayesian_hal, evaluate_bayesian_hal, opponent_league)]
     hashes = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     data = json.loads(args.human_data.read_text())
     partitions = split_games(data["games"], config)

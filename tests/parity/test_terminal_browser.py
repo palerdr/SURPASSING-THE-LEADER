@@ -21,8 +21,8 @@ from browser.tests.fakes import StubHal as _StubHal, make_client as _client, pla
 def test_cli_and_browser_select_the_declared_model(monkeypatch, choice, expected):
     from terminal import cli
     from browser.__main__ import build_parser as web_parser
-    from arena.policies import perfect_hal
-    monkeypatch.setattr(perfect_hal, "CompleteDTHAgent", lambda *args, **kwargs: object())
+    from arena.policies.perfect_hal import policy
+    monkeypatch.setattr(policy, "CompleteDTHAgent", lambda *args, **kwargs: object())
     # The stub agent opens no tablebase, so the registry's artifact check has nothing to find.
     monkeypatch.setattr(registry, "dth_artifact_dir", lambda args: Path(args.dth_complete_tablebase))
     arguments = ["--hal-agent", "perfect-hal", "--pure-dth", "--perfect-hal-model", choice]

@@ -67,7 +67,7 @@ open Formal.DTH Formal.MatrixGame
 
 /-- The leap window: a half-round starting at `τ` spans the inserted second
 exactly when `3540 ≤ τ ≤ 3600` (`is_leap_window`, `canonical.py:48-51`; the
-closed interval of `game.py:28-34`). -/
+closed interval of `game.py:25-31`). -/
 def IsLeapWindow (τ : ℕ) : Prop := 3540 ≤ τ ∧ τ ≤ 3600
 
 instance (τ : ℕ) : Decidable (IsLeapWindow τ) := inferInstanceAs (Decidable (_ ∧ _))
@@ -109,7 +109,7 @@ inductive Role
   | checker
   deriving DecidableEq
 
-/-- `legal_max_second` of `src/stl/engine/actions.py:35-45`. -/
+/-- `legal_max_second` of `src/stl/engine/actions.py:32-42`. -/
 def legalMaxSecond (a : Identity) (r : Role) (T : ℕ) : ℕ :=
   if T < 61 then min T 60 else if r = .dropper ∧ a = .baku then 61 else 60
 
@@ -155,7 +155,7 @@ def LeapDropAvailable (h τ : ℕ) : Prop := h = 2 ∧ IsLeapWindow τ
 
 instance (h τ : ℕ) : Decidable (LeapDropAvailable h τ) := inferInstanceAs (Decidable (_ ∧ _))
 
-/-- STL-RULE-2 (`AGENTS.md`, `src/stl/docs/GAME_AND_SOLVER.md:218-220`, `actions.py:35-52`,
+/-- STL-RULE-2 (`AGENTS.md`, `src/stl/docs/GAME_AND_SOLVER.md:218-220`, `actions.py:35-45`,
 `canonical.py:72-75`): the current Dropper may choose second `61` exactly when
 `leap_drop_available` holds. -/
 theorem sixtyOne_legal_iff_leapDropAvailable (h τ : ℕ) (hh : h = 1 ∨ h = 2) :
@@ -167,7 +167,7 @@ theorem sixtyOne_legal_iff_leapDropAvailable (h τ : ℕ) (hh : h = 1 ∨ h = 2)
 /-! ## Next-minute snap (STL-CLOCK-2) -/
 
 /-- `snap` of `leap_profiles.py:15-19` (= `snap_clock_to_next_minute`,
-`game.py:318-345`). -/
+`game.py:315-342`). -/
 def snap (c : ℕ) : ℕ :=
   if c < 3600 then (if (c / 60 + 1) * 60 = 3600 then 3601 else (c / 60 + 1) * 60)
   else if c = 3600 then 3601 else 3601 + ((c - 3601) / 60 + 1) * 60
@@ -176,7 +176,7 @@ def snap (c : ℕ) : ℕ :=
 `3601 + 60 k` after it. -/
 def IsBoundary (b : ℕ) : Prop := (b % 60 = 0 ∧ b < 3600) ∨ (3601 ≤ b ∧ (b - 3601) % 60 = 0)
 
-/-- STL-CLOCK-2 (`paper/stl.tex:105-106`, `game.py:318-345`): `snap c` is the
+/-- STL-CLOCK-2 (`paper/stl.tex:105-106`, `game.py:315-342`): `snap c` is the
 least wall-clock minute boundary strictly after `c`. -/
 theorem snap_isLeast (c : ℕ) : IsLeast {b | IsBoundary b ∧ c < b} (snap c) := by
   refine ⟨?_, ?_⟩
@@ -216,7 +216,7 @@ def childClock (h τ q : ℕ) : ℕ :=
   if h = 1 then τ + turnDuration τ + (if q = 0 then 0 else q + 120) + 60
   else snap (τ + turnDuration τ + (if q = 0 then 0 else q + 120))
 
-/-- The engine's clock step (`game.py:478-512`): advance `T`, then
+/-- The engine's clock step (`game.py:475-509`): advance `T`, then
 `death_duration + DEATH_PROCEDURE_OVERHEAD (120)` on a death, then
 `WITHIN_ROUND_OVERHEAD (60)` after half `1` or a snap after half `2`. -/
 def engineClock (h τ : ℕ) (death : Option ℕ) : ℕ :=
@@ -224,7 +224,7 @@ def engineClock (h τ : ℕ) (death : Option ℕ) : ℕ :=
   if h = 1 then a + 60 else snap a
 
 /-- STL-CLOCK-1 (`paper/stl.tex:100-108`, `leap_profiles.py:22-26`,
-`game.py:478-512`): the builder's child clock equals the engine's clock step,
+`game.py:475-509`): the builder's child clock equals the engine's clock step,
 with `q = 0` after a success and `q = dd > 0` after a revived death. -/
 theorem childClock_eq_engineClock (h τ : ℕ) :
     childClock h τ 0 = engineClock h τ none ∧
@@ -454,13 +454,13 @@ theorem shared_half_clock :
 
 /-! ## Wall-clock labels (STL-CLOCK-5) -/
 
-/-- `format_game_clock` (`game.py:346-372`) as `(hour, minute, second)`. -/
+/-- `format_game_clock` (`game.py:343-369`) as `(hour, minute, second)`. -/
 def clockLabel (gc : ℕ) : ℕ × ℕ × ℕ :=
   if gc ≤ 3599 then (8 + gc / 3600, gc % 3600 / 60, gc % 60)
   else if gc = 3600 then (8, 59, 60)
   else (8 + (gc - 1) / 3600, (gc - 1) % 3600 / 60, (gc - 1) % 60)
 
-/-- STL-CLOCK-5 (`src/stl/docs/GAME_AND_SOLVER.md:117-119`, `game.py:346-372`): the clock
+/-- STL-CLOCK-5 (`src/stl/docs/GAME_AND_SOLVER.md:117-119`, `game.py:343-369`): the clock
 label map is injective. -/
 theorem clockLabel_injective : Function.Injective clockLabel := by
   intro a b h
@@ -536,13 +536,13 @@ theorem lsr_V2_active :
 /-! ## Half-round resolution (STL-RULE-4) -/
 
 /-- The engine's revival probability `compute_survival_probability`
-(`game.py:185-200`) for a death of duration `dd` with prior TTD `ttd`, over
+(`game.py:182-197`) for a death of duration `dd` with prior TTD `ttd`, over
 `ℝ`. -/
 noncomputable def engineSurvival (ttd dd : ℕ) : ℝ :=
   if 300 ≤ dd ∨ 300 < ttd + dd then 0
   else max 0 (min 1 (0.95 * (1 - max 0 ((dd : ℝ) - 60) / 240) * (0.75 : ℝ) ^ ((ttd : ℝ) / 60)))
 
-/-- STL-RULE-4 (`src/stl/docs/GAME_AND_SOLVER.md:208-231`, `game.py:439-470`): a failed
+/-- STL-RULE-4 (`src/stl/docs/GAME_AND_SOLVER.md:208-231`, `game.py:436-467`): a failed
 check injects `min (s + 60) 300`, and the engine's revival probability for
 that dose is the frozen surface `revival s t`. -/
 theorem engineSurvival_fail (s t : ℕ) :
@@ -591,8 +591,8 @@ theorem children_profiles (x : State) (ℓ : ℕ) (h : x.c.s + ℓ < 300) :
   simp only [failChild]; omega
 
 
-/-- The engine's Checker update in `resolve_half_round` (`game.py:439-470`),
-with `add_to_cylinder`, `on_death`, and `on_revival` (`game.py:109-139`). From
+/-- The engine's Checker update in `resolve_half_round` (`game.py:436-467`),
+with `add_to_cylinder`, `on_death`, and `on_revival` (`game.py:106-136`). From
 cylinder `cyl`, TTD `ttd`, drop `d`, check `c`, and the revival outcome
 `survived`, it returns the Checker's new cylinder, TTD, and alive flag. A
 success adds `ST = c - d + 1`; a cylinder of `300` or more is a death of
@@ -608,7 +608,7 @@ def engineChecker (cyl ttd d c : ℕ) (survived : Bool) : ℕ × ℕ × Bool :=
   else if survived then (0, ttd + min (cyl + 60) 300, true)
   else (cyl + 60, ttd + min (cyl + 60) 300, false)
 
-/-- STL-RULE-4 (`game.py:439-470`): a live success in the engine gives the
+/-- STL-RULE-4 (`game.py:436-467`): a live success in the engine gives the
 Checker the profile of `successChild` with lag `c - d + 1`, whatever the
 revival flag says, because no death occurs. -/
 theorem engineChecker_success (x : State) {d c : ℕ} (b : Bool) (hdc : d ≤ c)
@@ -618,7 +618,7 @@ theorem engineChecker_success (x : State) {d c : ℕ} (b : Bool) (hdc : d ≤ c)
   simp only [engineChecker, hdc, ↓reduceIte, show ¬ 300 ≤ x.c.s + (c - d + 1) by omega,
     successChild]
 
-/-- STL-RULE-4 (`game.py:449-451,461-462`): a revived failed check of a
+/-- STL-RULE-4 (`game.py:446-448,458-459`): a revived failed check of a
 revivable Checker gives him the profile of `failChild`: cylinder `0` and TTD
 `t + (s + 60)`. -/
 theorem engineChecker_fail (x : State) {d c : ℕ} (hdc : c < d) (hs : Survives x.c.s x.c.t) :
@@ -630,7 +630,7 @@ theorem engineChecker_fail (x : State) {d c : ℕ} (hdc : c < d) (hs : Survives 
     true_and, and_true]
   omega
 
-/-- STL-RULE-4 (`game.py:452-456`): the engine refuses a forced revival of
+/-- STL-RULE-4 (`game.py:449-453`): the engine refuses a forced revival of
 probability `0`. A failed check has positive revival probability exactly when
 the Checker is revivable, and an overflow never has. -/
 theorem engineSurvival_pos_iff (s t : ℕ) :

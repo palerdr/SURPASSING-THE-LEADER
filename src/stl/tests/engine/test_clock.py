@@ -257,7 +257,6 @@ class TestMangaTimeline:
             if death_dur > 0:
                 # Failed check: checker's cylinder must equal death_dur
                 # before the play. Set it up so penalty produces right duration.
-                checker_idx = 1  # Baku is checker in half 1 (Hal drops first)
                 checker = g.player2 if g.first_dropper == g.player1 else g.player1
                 checker.cylinder = death_dur - 60  # +60 penalty -> death_dur
                 if checker.cylinder < 0:

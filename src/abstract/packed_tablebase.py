@@ -8,7 +8,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 
@@ -810,14 +810,6 @@ class PackedTablebaseBuilder:
             raise RuntimeError("tablebase solve stopped before completion")
         return self.output_dir / "tablebase.json"
 
-    def verify_and_refresh_manifest(self) -> Path:
-        """Re-run artifact gates and refresh hashes/metadata without backups."""
-
-        if self.phase != "complete":
-            raise RuntimeError("only a complete packed tablebase can be reverified")
-        self._finalize(self._open_hot_arrays(mode="r+"))
-        return self.output_dir / "tablebase.json"
-
 
 @dataclass
 class PackedTablebase:
@@ -1049,10 +1041,6 @@ class PackedTablebase:
                 self.arrays["checker_win_probability"][row]
             ),
         }
-
-    def export_rows(self, indices: Iterator[int]) -> Iterator[dict[str, Any]]:
-        for index in indices:
-            yield self.lookup(index)
 
 
 def build_packed_tablebase(

@@ -412,25 +412,6 @@ class ControllerObservation:
     leap_action_legal: bool
 
 
-class CandidateSource(Protocol):
-    def candidates(
-        self,
-        stage_game: CertifiedStageGame,
-        role: str,
-        opponent: OpponentModel,
-        remaining_epsilon: float,
-        rng: np.random.Generator,
-    ) -> Sequence[CertifiedPolicyCandidate]: ...
-
-
-class PolicyController(Protocol):
-    def choose(
-        self,
-        observation: ControllerObservation,
-        candidates: Sequence[CertifiedPolicyCandidate],
-        valid_mask: np.ndarray,
-    ) -> int: ...
-
 
 def _invalid_candidate(
     equilibrium: np.ndarray,
@@ -947,10 +928,6 @@ class AdaptiveDTHPolicyProvider:
         self._half_round_index = 0
         self._exploit_decisions = 0
 
-    def reset_match(self) -> None:
-        """Backward-compatible alias for the explicit per-game lifecycle."""
-
-        self.reset_game()
 
     def observe(self, record: PublicHalfRound) -> None:
         """Update the role-separated posterior from one public reveal."""

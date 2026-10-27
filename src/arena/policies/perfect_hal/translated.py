@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 
-from arena.policies.perfect_hal import (
+from arena.policies.perfect_hal.model import (
     PerfectHalConfig, PerfectHalContext, PerfectHalOpponentModel,
 )
 

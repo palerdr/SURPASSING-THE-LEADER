@@ -631,7 +631,6 @@ class AggroHalPolicyProvider(CanonicalPolicyProvider):
         self._current_actor_name: str | None = None
         self._new_game = True
         self._game_started = False
-        self._last_outcome: PublicGameOutcome | None = None
         self._fast_evidence = {
             "dropper": np.zeros(ACTION_COUNT, dtype=np.float64),
             "checker": np.zeros(ACTION_COUNT, dtype=np.float64),
@@ -687,7 +686,6 @@ class AggroHalPolicyProvider(CanonicalPolicyProvider):
         self._current_actor_name = None
         self._new_game = True
         self._game_started = False
-        self._last_outcome = None
         self.decisions.clear()
         for evidence in self._fast_evidence.values():
             evidence.fill(0.0)
@@ -698,7 +696,6 @@ class AggroHalPolicyProvider(CanonicalPolicyProvider):
         self._game_epoch += 1
         self._new_game = True
         self._game_started = True
-        self._last_outcome = None
         self._current_actor_name = None
 
     def observe(self, record: PublicHalfRound) -> None:
@@ -739,7 +736,6 @@ class AggroHalPolicyProvider(CanonicalPolicyProvider):
 
         if outcome.game_index < 0 or outcome.half_rounds < 0:
             raise ValueError("public game outcome indices must be nonnegative")
-        self._last_outcome = outcome
 
     def policy(self, decision: CanonicalDecision) -> Mapping[int, float]:
         if decision.turn_duration != ACTION_COUNT or tuple(

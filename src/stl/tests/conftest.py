@@ -27,8 +27,3 @@ def game(hal, baku, referee):
     g.seed(42)
     return g
 
-@pytest.fixture
-def game_at_r1(game):
-    """Game with clock set to 720 (8:12 AM) — manga R1 start."""
-    game.game_clock = 720.0
-    return game

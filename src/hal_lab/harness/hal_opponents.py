@@ -24,8 +24,8 @@ from arena.contracts import (
 )
 from arena.dth_adapter import project_to_dth_state
 from arena.policies.exploit_continuation import hal_view
-from arena.policies.perfect_hal import PerfectHalPolicyProvider
-from arena.policies.translated_hal import TranslatedHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
+from arena.policies.perfect_hal.translated import TranslatedHalOpponentModel
 from arena.translated_hal_adapter import selected_config
 from hal_lab.harness.telescope import policy_vector
 

@@ -20,12 +20,9 @@ import numpy as np
 from stl.engine.game import TURN_DURATION_LEAP, TURN_DURATION_NORMAL
 
 
-NORMAL_MAX_SECOND = TURN_DURATION_NORMAL
 LEAP_MAX_SECOND = TURN_DURATION_LEAP
 ACTION_SIZE = LEAP_MAX_SECOND + 1
 TIMING_CONVENTION_ID = "ordinal-seconds-inclusive-st-v1"
-NORMAL_SECONDS = tuple(range(1, NORMAL_MAX_SECOND + 1))
-LEAP_SECONDS = tuple(range(1, LEAP_MAX_SECOND + 1))
 
 
 class IllegalActionError(ValueError):
@@ -45,12 +42,6 @@ def legal_max_second(actor: str, role: str, turn_duration: int) -> int:
     return TURN_DURATION_NORMAL
 
 
-def can_use_leap_second(actor: str, role: str) -> bool:
-    actor_l = actor.lower()
-    role_l = role.lower()
-
-    return actor_l == "baku" and role_l == "dropper"
-
 
 def legal_seconds(actor: str, role: str, turn_duration: int) -> tuple[int, ...]:
     """Return literal legal action seconds for the actor and role."""
@@ -65,10 +56,6 @@ def legal_mask(actor: str, role: str, turn_duration: int) -> np.ndarray:
         mask[1 : max_sec + 1] = True
     return mask
 
-
-def clamp_action(second: int, *, actor: str, role: str, turn_duration: int) -> int:
-    max_sec = legal_max_second(actor, role, turn_duration)
-    return max(1, min(int(second), max_sec))
 
 
 def validate_action(second: int, *, actor: str, role: str, turn_duration: int) -> int:

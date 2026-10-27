@@ -31,10 +31,13 @@ projects must not import it.
 - Keep generated artifacts in the owning project, never under `src/arena/`.
   The ignored prepared-frame cache `art/.sprite-cache/` is the one exception,
   because it derives from the art beside it.
-- `policies/` holds the runtime Hal providers: `adaptive.py`,
-  `perfect_hal.py`, `bayesian_hal.py`, `ensemble_hal.py`, `translated_hal.py`,
+- `policies/` holds the runtime Hal providers: `adaptive.py`, the
+  `perfect_hal/` package, `bayesian_hal.py`, `ensemble_hal.py`,
   `exploit_hal.py`, `aggro_hal.py`, and `pm_hal.py`, with `registry.py` and
-  `exploit_hal_config.py`. Hal training, evaluation, and study code lives in
+  `exploit_hal_config.py`. `perfect_hal/model.py` holds the public-history
+  opponent model, `decision.py` the exact-matrix response, `policy.py` the
+  pure-DTH provider, and `translated.py` Translated Hal, which extends the
+  model. The package initializer re-exports nothing; import each module. Hal training, evaluation, and study code lives in
   [`src/hal_lab/`](../hal_lab/README.md).
 - `policies/exploit_continuation.py` holds `--perfect-hal-model
   exploit-continuation-v1`: translated Hal with a one-step look-ahead into the

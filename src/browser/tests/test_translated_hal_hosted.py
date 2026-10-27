@@ -13,9 +13,10 @@ from fastapi.testclient import TestClient
 
 from arena.agent import PolicyDrivenAgent
 from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-from browser.app import SessionConfig, SeriesConfig, create_app
+from browser.app import create_app
 from browser.hosted import create_hosted_app
 from browser.opponent_memory import OpponentMemory
+from browser.series import SeriesConfig, SessionConfig
 from arena.testing import (
     StageAgent as _StageAgent,
     make_decision as _decision,

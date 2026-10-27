@@ -12,10 +12,11 @@ from fastapi.testclient import TestClient
 
 from arena.agent import PolicyDrivenAgent
 from arena.translated_hal_adapter import TranslatedHalPolicyProvider
-from browser.app import SessionConfig, SeriesConfig, create_app
+from browser.app import create_app
 from browser.deploy.manifest import REPOSITORY_ROOT, version_entries
 from browser.hosted import create_hosted_app
 from browser.opponent_memory import OpponentMemory
+from browser.series import SeriesConfig, SessionConfig
 from dth.agent import CompleteDTHAgent
 from stl.engine.game import LS_WINDOW_START
 

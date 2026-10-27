@@ -1,4 +1,4 @@
-from typing import Callable, Mapping, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 from enum import IntEnum
 import hashlib
 import inspect
@@ -9,49 +9,9 @@ from dataclasses import dataclass
 
 DROPPER_ACTIONS = list(range(1, 61))
 CHECKER_ACTIONS = list(range(1, 61))
-ST_SUPPORT = list(range(300))
-
-# This identifier names the executable pure-DTH contract.  Persistent exact
-# artifacts bind to both it and ``solver_schema_hash`` below, so a tablebase
-# cannot silently survive a rules change.
-TARGET_SCHEMA = "dth-v1-ttd-strict-overflow"
-
-# Per-row meaning of a target artifact's ``values`` column.  Finite rows are
-# exact values at the row's literal horizon; play rows are depth-amplified
-# complete-game estimates a resolve emitted at its query horizon.  The two
-# must never share a supervised head or pass as exact authority.
-VALUE_SEMANTICS_FINITE = 0
-VALUE_SEMANTICS_PLAY = 1
 
 
-def resolve_value_semantics(
-    emission: str,
-    value_semantics: "np.ndarray | None",
-    rows: int,
-) -> "np.ndarray":
-    """Return the per-row value semantics of a target artifact.
-
-    An explicit ``value_semantics`` array wins.  Without one, a
-    ``resolve_labeled`` artifact is play-valued by construction, and every
-    other emission predates play values and is finite-horizon-exact.
-    """
-
-    if value_semantics is not None:
-        semantics = np.asarray(value_semantics).astype(np.uint8, copy=True)
-        if semantics.shape != (rows,):
-            raise ValueError(
-                f"value_semantics must have shape ({rows},), got {semantics.shape}"
-            )
-        if not np.isin(semantics, (VALUE_SEMANTICS_FINITE, VALUE_SEMANTICS_PLAY)).all():
-            raise ValueError("value_semantics entries must be 0 (finite) or 1 (play)")
-        return semantics
-    if emission == "resolve_labeled":
-        return np.full(rows, VALUE_SEMANTICS_PLAY, dtype=np.uint8)
-    return np.full(rows, VALUE_SEMANTICS_FINITE, dtype=np.uint8)
-SOLVER_VERSION = "dth-complete-game-current"
-COMPLETE_GAME_HORIZON = -1
 SADDLE_GAP_TOLERANCE = 1e-6
-STATE_ENCODING_VERSION = "dth-state-key-failure-dead-quotient-v1"
 _RAW_RADICES = (300, 301, 300, 301)
 _FAILURE_DEAD_MIN_ST = 240
 
@@ -195,20 +155,6 @@ def state_from_canonical_id(raw: int) -> NTState:
     )
 
 
-def canonical_damage_rank(raw: Sequence[int]) -> int:
-    """Strict topological rank for raw states plus failure-dead classes.
-
-    Entering the quotient can erase as much as 600 points of now-dead TTD.
-    Quotient ranks therefore occupy a disjoint band above every non-quotient
-    live rank; successful lags still increase rank inside that band.
-    """
-
-    state = validate_live_state(raw)
-    if failure_dead_quotient(state) is not None:
-        representative = state_from_canonical_id(canonical_state_id(state))
-        return 1200 + representative[0] + representative[2]
-    return damage_rank(state)
-
 
 def solver_schema_hash() -> str:
     """Stable hash of every rule that affects exact persistent solutions."""
@@ -280,61 +226,6 @@ class Solution:
     saddle_gap: float
 
 
-@dataclass(frozen=True)
-class CertifiedSolution:
-    """A persistent, numerically certified finite or complete-game result."""
-
-    state: NTState
-    value: float
-    drop_policy: tuple[float, ...]
-    check_policy: tuple[float, ...]
-    lower_bound: float
-    upper_bound: float
-    saddle_gap: float
-    damage_rank: int
-    scope: str
-    horizon: int | None
-    child_dependencies: int
-
-
-@dataclass(frozen=True)
-class ValueInterval:
-    """A fail-closed Bellman enclosure from the current Dropper's view."""
-
-    lower_bound: float
-    upper_bound: float
-
-    def __post_init__(self) -> None:
-        if not (
-            np.isfinite(self.lower_bound)
-            and np.isfinite(self.upper_bound)
-            and -1.0 <= self.lower_bound <= self.upper_bound <= 1.0
-        ):
-            raise ValueError(f"invalid value interval {self!r}")
-
-    @property
-    def exact(self) -> bool:
-        return self.upper_bound - self.lower_bound <= SADDLE_GAP_TOLERANCE
-
-    @property
-    def midpoint(self) -> float:
-        return (self.lower_bound + self.upper_bound) / 2.0
-
-
-@dataclass
-class CompleteGameMetrics:
-    cache_hits: int = 0
-    cache_misses: int = 0
-    lp_solves: int = 0
-    matrix_builds: int = 0
-    child_dependencies: int = 0
-    new_solutions: int = 0
-    elapsed_seconds: float = 0.0
-    dependency_construction_seconds: float = 0.0
-    tablebase_lookup_and_certificate_seconds: float = 0.0
-    matrix_reconstruction_seconds: float = 0.0
-    highs_lp_solving_seconds: float = 0.0
-    durable_commit_seconds: float = 0.0
 
 # E[Terminal or -V(s', h-1)]
 def action_value(
@@ -389,41 +280,6 @@ def continuation_class_values(
     return successful, failed
 
 
-def continuation_class_intervals(
-    x: NTState,
-    continuation_interval: Callable[[NTState], ValueInterval | None],
-) -> tuple[tuple[ValueInterval, ...], ValueInterval]:
-    """Evaluate Bellman classes with unknown children conservatively at [-1,1]."""
-
-    state = validate_live_state(x)
-
-    def evaluate(distribution: Distribution) -> ValueInterval:
-        lower = 0.0
-        upper = 0.0
-        for probability, child in distribution:
-            if isinstance(child, TState):
-                branch = ValueInterval(float(reward(child)), float(reward(child)))
-            else:
-                child_interval = continuation_interval(child)
-                if child_interval is None:
-                    child_interval = ValueInterval(-1.0, 1.0)
-                branch = ValueInterval(
-                    -child_interval.upper_bound,
-                    -child_interval.lower_bound,
-                )
-            lower += probability * branch.lower_bound
-            upper += probability * branch.upper_bound
-        return ValueInterval(
-            max(-1.0, min(1.0, lower)),
-            max(-1.0, min(1.0, upper)),
-        )
-
-    successful = tuple(
-        evaluate(transition(state, 1, lag)) for lag in CHECKER_ACTIONS
-    )
-    failed = evaluate(transition(state, 2, 1))
-    return successful, failed
-
 
 def reconstruct_transition_class_matrix(
     successful_values: Sequence[float],
@@ -446,86 +302,6 @@ def reconstruct_transition_class_matrix(
     return matrix
 
 
-def reconstruct_transition_class_interval_matrices(
-    successful: Sequence[ValueInterval],
-    failed: ValueInterval,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Build elementwise lower and upper Bellman matrices."""
-
-    lower = reconstruct_transition_class_matrix(
-        [interval.lower_bound for interval in successful],
-        failed.lower_bound,
-    )
-    upper = reconstruct_transition_class_matrix(
-        [interval.upper_bound for interval in successful],
-        failed.upper_bound,
-    )
-    if np.any(lower > upper):
-        raise RuntimeError("Bellman interval matrices are not ordered")
-    return lower, upper
-
-
-def bellman_value_interval(
-    x: NTState,
-    continuation_interval: Callable[[NTState], ValueInterval | None],
-) -> ValueInterval:
-    """Propagate global child intervals through minimax monotonicity."""
-
-    successful, failed = continuation_class_intervals(
-        validate_live_state(x), continuation_interval
-    )
-    lower_matrix, upper_matrix = reconstruct_transition_class_interval_matrices(
-        successful, failed
-    )
-    lower_value, _, _ = solve_matrix(lower_matrix)
-    upper_value, _, _ = solve_matrix(upper_matrix)
-    numerical_slack = 1e-10
-    lower = max(-1.0, min(1.0, lower_value - numerical_slack))
-    upper = max(-1.0, min(1.0, upper_value + numerical_slack))
-    if lower > upper:
-        if lower - upper <= 2.0 * numerical_slack:
-            midpoint = (lower + upper) / 2.0
-            lower = upper = midpoint
-        else:
-            raise RuntimeError("Bellman lower value exceeds its upper value")
-    return ValueInterval(lower, upper)
-
-
-def payoff_from_transition_classes(x: NTState, horizon: int) -> np.ndarray:
-    """Optimized finite-horizon builder, retained beside ``payoff`` for parity."""
-
-    if horizon <= 0:
-        raise ValueError(f"horizon must be positive, got {horizon}")
-
-    def child_value(child: NTState) -> float:
-        return 0.0 if horizon == 1 else value(child, horizon - 1)
-
-    successful, failed = continuation_class_values(x, child_value)
-    return reconstruct_transition_class_matrix(successful, failed)
-
-
-def payoff_from_value_lookup(
-    x: NTState,
-    horizon: int,
-    values: Mapping[tuple[NTState, int], float],
-) -> np.ndarray:
-    """Reconstruct an exact finite matrix from an explicit child-value store."""
-
-    state = validate_live_state(x)
-    if horizon <= 0:
-        raise ValueError(f"horizon must be positive, got {horizon}")
-
-    def child_value(child: NTState) -> float:
-        if horizon == 1:
-            return 0.0
-        key = (child, horizon - 1)
-        try:
-            return float(values[key])
-        except KeyError as exc:
-            raise KeyError(f"missing exact child value for {key!r}") from exc
-
-    successful, failed = continuation_class_values(state, child_value)
-    return reconstruct_transition_class_matrix(successful, failed)
 
 def payoff(x: NTState, horizon: int) -> np.ndarray:
     """Builds the payoff matrix for the current state
@@ -672,92 +448,6 @@ def solve_matrix(matrix: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
     return matrix_value, drop_policy, check_policy
 
 
-def is_transition_class_matrix(
-    matrix: np.ndarray,
-    *,
-    tolerance: float = 1e-12,
-) -> bool:
-    """Recognize the 61-class lower-triangular/diagonal DTH matrix."""
-
-    values = np.asarray(matrix, dtype=np.float64)
-    if values.shape != (60, 60) or not np.all(np.isfinite(values)):
-        return False
-    failed = values[1, 0]
-    for row in range(60):
-        for column in range(60):
-            expected = (
-                values[0, column - row] if column >= row else failed
-            )
-            if abs(float(values[row, column] - expected)) > tolerance:
-                return False
-    return True
-
-
-def solve_full_support_structured_matrix(
-    matrix: np.ndarray,
-) -> tuple[float, np.ndarray, np.ndarray]:
-    """Solve a full-support DTH matrix by its equilibrium linear equations.
-
-    This path is accepted only after structural recognition, strict positive
-    support, and the same saddle-gap validation used by the HiGHS oracle.
-    Singular, boundary-support, or numerically weak candidates fail closed so
-    callers can fall back to :func:`solve_matrix`.
-    """
-
-    values = np.asarray(matrix, dtype=np.float64)
-    if not is_transition_class_matrix(values):
-        raise ValueError("matrix does not have the DTH transition-class structure")
-    ones = np.ones(60, dtype=np.float64)
-    augmented = np.block(
-        [[values, -ones[:, None]], [ones[None, :], np.zeros((1, 1))]]
-    )
-    check_solution = np.linalg.solve(
-        augmented,
-        np.concatenate([np.zeros(60, dtype=np.float64), [1.0]]),
-    )
-    drop_augmented = np.block(
-        [[values.T, -ones[:, None]], [ones[None, :], np.zeros((1, 1))]]
-    )
-    drop_solution = np.linalg.solve(
-        drop_augmented,
-        np.concatenate([np.zeros(60, dtype=np.float64), [1.0]]),
-    )
-    check = check_solution[:-1]
-    drop = drop_solution[:-1]
-    if (
-        not np.all(np.isfinite(drop))
-        or not np.all(np.isfinite(check))
-        or np.min(drop) <= 1e-12
-        or np.min(check) <= 1e-12
-    ):
-        raise RuntimeError("structured equilibrium is not strict full support")
-    drop /= drop.sum()
-    check /= check.sum()
-    lower = float(np.min(values.T @ drop))
-    upper = float(np.max(values @ check))
-    gap = max(0.0, upper - lower)
-    if gap > SADDLE_GAP_TOLERANCE:
-        raise RuntimeError(f"structured saddle gap too large: {gap}")
-    return (lower + upper) / 2.0, drop, check
-
-
-def solve_certified_matrix(
-    matrix: np.ndarray,
-    *,
-    prefer_structured: bool = True,
-) -> tuple[float, np.ndarray, np.ndarray, str]:
-    """Use the validated structured path when possible, else HiGHS."""
-
-    if prefer_structured:
-        try:
-            value_, drop, check = solve_full_support_structured_matrix(matrix)
-        except (ValueError, RuntimeError, np.linalg.LinAlgError):
-            pass
-        else:
-            return value_, drop, check, "structured-full-support"
-    value_, drop, check = solve_matrix(matrix)
-    return value_, drop, check, "highs"
-
 
 def canonical_certificate_scalars(
     lower: float,
@@ -778,98 +468,6 @@ def canonical_certificate_scalars(
         lower = upper = midpoint
     return lower, min(max(value, lower), upper), upper
 
-
-def _certify_matrix_solution(
-    state: NTState,
-    matrix: np.ndarray,
-    *,
-    scope: str,
-    horizon: int | None,
-    child_dependencies: int,
-    backend_out: list[str] | None = None,
-) -> CertifiedSolution:
-    """Solve and retain the complete numerical certificate for one matrix."""
-
-    normalized_state = validate_live_state(state)
-    if matrix.shape != (len(DROPPER_ACTIONS), len(CHECKER_ACTIONS)):
-        raise ValueError(f"expected a 60x60 matrix, got {matrix.shape}")
-    if not np.all(np.isfinite(matrix)):
-        raise ValueError("exact payoff matrix contains a non-finite value")
-    value_, drop, check, backend = solve_certified_matrix(matrix)
-    if backend_out is not None:
-        backend_out.append(backend)
-    lower = float(np.min(matrix.T @ drop))
-    upper = float(np.max(matrix @ check))
-
-    def canonical_unit_interval(name: str, raw: float) -> float:
-        if not -1.0 - 1e-10 <= raw <= 1.0 + 1e-10:
-            raise RuntimeError(f"LP {name} lies outside [-1, 1]: {raw}")
-        return min(1.0, max(-1.0, raw))
-
-    lower = canonical_unit_interval("lower bound", lower)
-    upper = canonical_unit_interval("upper bound", upper)
-    value_ = canonical_unit_interval("value", float(value_))
-    # Independent LP solves can reverse the two bounds by a few ulps.  The
-    # mathematical saddle gap is nonnegative; canonicalize only that numerical
-    # zero while retaining the existing 1e-6 rejection threshold.
-    saddle_gap = max(0.0, upper - lower)
-    if saddle_gap > SADDLE_GAP_TOLERANCE:
-        raise RuntimeError(f"LP saddle gap too large: {saddle_gap}")
-    lower, value_, upper = canonical_certificate_scalars(lower, value_, upper)
-    return CertifiedSolution(
-        state=normalized_state,
-        value=float(value_),
-        drop_policy=tuple(float(value) for value in drop),
-        check_policy=tuple(float(value) for value in check),
-        lower_bound=lower,
-        upper_bound=upper,
-        saddle_gap=saddle_gap,
-        damage_rank=damage_rank(normalized_state),
-        scope=scope,
-        horizon=horizon,
-        child_dependencies=child_dependencies,
-    )
-
-
-def certify_complete_game_matrix(
-    x: NTState,
-    matrix: np.ndarray,
-    *,
-    child_dependencies: int,
-    backend_out: list[str] | None = None,
-) -> CertifiedSolution:
-    """Certify one complete-game matrix for rank-layer storage backends."""
-
-    return _certify_matrix_solution(
-        validate_live_state(x),
-        matrix,
-        scope="complete-game-exact",
-        horizon=None,
-        child_dependencies=child_dependencies,
-        backend_out=backend_out,
-    )
-
-
-def certify_finite_horizon_solution(x: NTState, horizon: int) -> CertifiedSolution:
-    """Wrap the unchanged finite-horizon solve in a persistent certificate."""
-
-    state = validate_live_state(x)
-    if horizon <= 0:
-        raise ValueError("finite-horizon certification requires horizon >= 1")
-    # ``payoff`` remains intentionally independent from the transition-class
-    # builder, so this certificate also acts as an oracle for builder parity.
-    matrix = payoff(state, horizon)
-    certified = _certify_matrix_solution(
-        state,
-        matrix,
-        scope="finite-horizon-exact",
-        horizon=horizon,
-        child_dependencies=0 if horizon == 1 else len(complete_game_dependencies(state)),
-    )
-    finite = solve(state, horizon)
-    if abs(certified.value - finite.value) > 1e-10:
-        raise RuntimeError("finite-horizon certificate disagrees with solve")
-    return certified
 
 
 def complete_game_dependencies(x: NTState) -> tuple[NTState, ...]:

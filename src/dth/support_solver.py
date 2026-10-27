@@ -277,8 +277,8 @@ def solve_certified_matrix_fast(
 ) -> tuple[float, np.ndarray, np.ndarray, str]:
     """Cheapest certified path first, HiGHS as the retained oracle.
 
-    Mirrors :func:`solver.solve_certified_matrix`'s signature, and never
-    returns an answer that solver's own tolerance would reject.
+    Returns the value, both policies and the route name, and never returns
+    an answer that the solver's own tolerance would reject.
     """
 
     values = np.asarray(matrix, dtype=np.float64)

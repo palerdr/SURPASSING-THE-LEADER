@@ -186,9 +186,6 @@ class AggroSessionEnv:
     def session_done(self) -> bool:
         return self._session_done
 
-    @property
-    def current_decision(self) -> AggroDecision | None:
-        return self._pending
 
     def _learner_seat_for_game(self, game_index: int) -> str:
         starts_hal = self.learner_starts_in_hal_seat

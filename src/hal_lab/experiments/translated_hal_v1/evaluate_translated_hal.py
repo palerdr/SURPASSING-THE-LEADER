@@ -12,8 +12,8 @@ import time
 import numpy as np
 
 from arena.match import play_match_game
-from arena.policies.perfect_hal import PerfectHalPolicyProvider
-from arena.policies.translated_hal import TranslatedHalConfig, TranslatedHalOpponentModel
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
+from arena.policies.perfect_hal.translated import TranslatedHalConfig, TranslatedHalOpponentModel
 from dth.agent import CompleteDTHAgent
 from hal_lab.experiments.perfect_hal_bayes_v2.evaluate_bayesian_hal import (
     ExactProvider, FittedHumanOpponent, UniformProvider, cluster_interval, split_games,

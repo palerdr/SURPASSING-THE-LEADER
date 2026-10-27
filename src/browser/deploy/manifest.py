@@ -73,19 +73,24 @@ RUNTIME_FILES: tuple[RuntimeFile, ...] = (
     # The browser server, its hosted wrapper, and this deploy entry.
     RuntimeFile("src/browser/__init__.py"),
     RuntimeFile("src/browser/app.py", in_version=True),
+    RuntimeFile("src/browser/config.py", in_version=True),
     RuntimeFile("src/browser/hosted.py", in_version=True),
     RuntimeFile("src/browser/ledger.py", in_version=True),
     RuntimeFile("src/browser/names.py"),
     RuntimeFile("src/browser/redis_store.py", in_version=True),
     RuntimeFile("src/browser/schema.py", in_version=True),
+    RuntimeFile("src/browser/series.py", in_version=True),
     RuntimeFile("src/browser/deploy/__init__.py"),
     RuntimeFile("src/browser/deploy/manifest.py", in_version=True),
     RuntimeFile("src/browser/deploy/production.py", in_version=True),
     # The translated Hal candidate and its opponent memory.
     RuntimeFile("src/arena/translated_hal_adapter.py", in_version=True, policies=_TRANSLATED),
     RuntimeFile("src/arena/policies/__init__.py", policies=_TRANSLATED),
-    RuntimeFile("src/arena/policies/perfect_hal.py", in_version=True, policies=_TRANSLATED),
-    RuntimeFile("src/arena/policies/translated_hal.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/__init__.py", policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/decision.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/model.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/policy.py", in_version=True, policies=_TRANSLATED),
+    RuntimeFile("src/arena/policies/perfect_hal/translated.py", in_version=True, policies=_TRANSLATED),
     RuntimeFile(
         "src/arena/config/translated_hal_v1_selection.json", in_version=True, policies=_TRANSLATED
     ),

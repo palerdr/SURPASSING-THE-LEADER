@@ -21,9 +21,6 @@ The game clock is absolute: second 0 = 8:00:00 AM.
 # ──────────────────────────────────────────────
 # CLOCK
 # ──────────────────────────────────────────────
-GAME_START_HOUR = 8                 # 8:00 AM
-SECONDS_PER_MINUTE = 60
-MINUTES_PER_HOUR = 60
 OPENING_START_CLOCK = 12 * 60       # Canonical R1 start: 8:12:00 AM
 # Leap second: inserted at exactly 8:59:60 AM.
 # In game clock seconds: 8:59:00 AM = 59 * 60 = 3540s after game start.
@@ -513,19 +510,6 @@ class Game:
                 self.current_half = 1
                 self.round_num += 1
         return record
-    def play_round(self, half1_drop: int, half1_check: int,
-                   half2_drop: int, half2_check: int) -> list[HalfRoundRecord]:
-        """
-        Convenience method: play both halves of a round.
-        Returns list of 1 or 2 HalfRoundRecords (may be 1 if game ends in half 1).
-        """
-        records: list[HalfRoundRecord] = []
-        record1 = self.play_half_round(half1_drop, half1_check)
-        records.append(record1)
-        if not self.game_over:
-            record2 = self.play_half_round(half2_drop, half2_check)
-            records.append(record2)
-        return records
     # VALIDATION
     def validate_drop_time(
         self, drop_time: int, turn_duration: int, actor: str | None = None

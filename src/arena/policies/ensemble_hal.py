@@ -8,10 +8,11 @@ import numpy as np
 
 from arena.dth_adapter import project_to_dth_state
 from arena.policies.bayesian_hal import BayesianHalOpponentModel
-from arena.policies.perfect_hal import (
-    PerfectHalConfig, PerfectHalOpponentModel, PerfectHalPolicyProvider,
-    _literal_action, _validate_stage,
+from arena.policies.perfect_hal.decision import _validate_stage
+from arena.policies.perfect_hal.model import (
+    PerfectHalConfig, PerfectHalOpponentModel, _literal_action,
 )
+from arena.policies.perfect_hal.policy import PerfectHalPolicyProvider
 from dth.agent import CompleteDTHAgent
 
 
