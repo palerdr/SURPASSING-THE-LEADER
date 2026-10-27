@@ -35,7 +35,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.colors import BoundaryNorm, ListedColormap
-from matplotlib.patches import ConnectionPatch
 import numpy as np
 import seaborn as sns
 
@@ -50,7 +49,6 @@ ORANGE = "#D1622B"
 TEAL = "#1D9E75"
 PURPLE = "#534AB7"
 INK = "#242424"
-MID_GRAY = "#707070"
 LIGHT_GRAY = "#E8E8E8"
 PALE_GRAY = "#F5F5F5"
 
@@ -128,7 +126,7 @@ def make_revival_probability() -> None:
         shade=False,
     )
 
-    surface = ax.plot_surface(
+    ax.plot_surface(
         ST,
         TTD,
         P,

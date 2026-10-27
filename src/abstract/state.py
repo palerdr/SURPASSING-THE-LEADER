@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,9 +38,6 @@ class AbstractState:
 
         return self.checker_load + self.checker_ttd + self.dropper_load + self.dropper_ttd
 
-    def with_updates(self, **updates: int) -> "AbstractState":
-        return replace(self, **updates)
-
 
 @dataclass(frozen=True, slots=True)
 class AbstractBranch:
@@ -64,6 +61,3 @@ class AbstractBranch:
         if self.terminal_value is not None and self.terminal_value not in (-1.0, 0.0, 1.0):
             raise ValueError("terminal value must be -1, 0, or 1")
 
-    @property
-    def is_terminal(self) -> bool:
-        return self.terminal_value is not None

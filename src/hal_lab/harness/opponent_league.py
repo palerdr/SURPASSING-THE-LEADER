@@ -303,7 +303,6 @@ class ReactiveDTHOpponent:
         self._loss_streak = 0
         self._retreat_until = 0
         self._recent_local_wins: deque[bool] = deque(maxlen=8)
-        self._last_outcome: PublicGameOutcome | None = None
 
     @property
     def game_index(self) -> int:
@@ -465,7 +464,6 @@ class ReactiveDTHOpponent:
 
         if self._awaiting_reveal:
             raise RuntimeError("opponent game ended with an unrevealed action")
-        self._last_outcome = outcome
 
     @staticmethod
     def _actor_load(decision: CanonicalDecision) -> tuple[float, float]:

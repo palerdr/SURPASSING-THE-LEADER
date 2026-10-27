@@ -16,8 +16,8 @@ def decision(role="dropper", game=0, index=0):
 
 def test_inputs_precede_reveal_and_independent_memories_do_not_share_state():
     first, second = PublicMemory(TranslatedHalConfig()), PublicMemory(TranslatedHalConfig())
-    f1, w1, g1 = first.prepare(decision())
-    f2, w2, g2 = second.prepare(decision())
+    _, w1, g1 = first.prepare(decision())
+    _, w2, g2 = second.prepare(decision())
     np.testing.assert_array_equal(w1, w2)
     np.testing.assert_array_equal(g1, g2)
     first.observe(17, 20)

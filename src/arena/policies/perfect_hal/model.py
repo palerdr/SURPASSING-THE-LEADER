@@ -22,7 +22,6 @@ from arena.contracts import CanonicalDecision
 
 ACTION_COUNT = 60
 ACTIONS = tuple(range(1, ACTION_COUNT + 1))
-PERFECT_HAL_SCHEMA = "arena-perfect-hal-bayesian-v2"
 
 _BASE_EXPERT_NAMES = (
     "uniform",

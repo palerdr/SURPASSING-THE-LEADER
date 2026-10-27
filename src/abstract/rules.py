@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Iterator
 
 from abstract.state import AbstractBranch, AbstractState
 
@@ -153,27 +152,11 @@ class AbstractRuleset:
     def state_field_names(self) -> tuple[str, ...]:
         return ("checker_load", "checker_ttd", "dropper_load", "dropper_ttd")
 
-    @property
-    def feature_names(self) -> tuple[str, ...]:
-        return (
-            "checker_load_normalized",
-            "checker_ttd_normalized",
-            "dropper_load_normalized",
-            "dropper_ttd_normalized",
-        )
 
     @property
     def physical_state_upper_bound(self) -> int:
         return self.load_cap_units * (self.load_cap_units + 1) * self.load_cap_units * (self.load_cap_units + 1)
 
-    def enumerate_states(self) -> Iterator[AbstractState]:
-        """Enumerate the full role-relative physical state domain."""
-
-        for checker_load in range(self.load_cap_units):
-            for checker_ttd in range(self.load_cap_units + 1):
-                for dropper_load in range(self.load_cap_units):
-                    for dropper_ttd in range(self.load_cap_units + 1):
-                        yield AbstractState(checker_load, checker_ttd, dropper_load, dropper_ttd)
 
     def revival_probability(self, prior_ttd: int, dose_units: int) -> float:
         """Return the repository-wide frozen revival probability."""

@@ -1019,7 +1019,6 @@ class PMHalPolicyProvider(CanonicalPolicyProvider):
         self._game_epoch = -1
         self._game_decision_index = 0
         self._epsilon_spent = 0.0
-        self._last_outcome: PublicGameOutcome | None = None
         self._aggro_hidden: Tensor | None = None
         self._aggro_previous_reveal: PublicHalfRound | None = None
         self._aggro_previous_self_name: str | None = None
@@ -1087,7 +1086,6 @@ class PMHalPolicyProvider(CanonicalPolicyProvider):
         self._game_epoch = -1
         self._game_decision_index = 0
         self._epsilon_spent = 0.0
-        self._last_outcome = None
         self._aggro_hidden = None
         self._aggro_previous_reveal = None
         self._aggro_previous_self_name = None
@@ -1104,7 +1102,6 @@ class PMHalPolicyProvider(CanonicalPolicyProvider):
         self._current_actor_name = None
         self._game_decision_index = 0
         self._epsilon_spent = 0.0
-        self._last_outcome = None
         self._aggro_new_game = True
 
     @staticmethod
@@ -1618,7 +1615,6 @@ class PMHalPolicyProvider(CanonicalPolicyProvider):
             raise RuntimeError("PM Hal game ended with an unrevealed action")
         if outcome.game_index < 0 or outcome.half_rounds < 0:
             raise ValueError("public game outcome indices must be nonnegative")
-        self._last_outcome = outcome
 
     def match_summary(self) -> str:
         if not self.decisions:

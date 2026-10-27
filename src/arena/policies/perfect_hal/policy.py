@@ -68,7 +68,6 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
         self._game_started = False
         self._game_epoch = -1
         self._game_decision_index = 0
-        self._last_outcome: PublicGameOutcome | None = None
 
     @property
     def last_decision(self) -> PerfectHalDecision | None:
@@ -93,7 +92,6 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
         self._game_started = False
         self._game_epoch = -1
         self._game_decision_index = 0
-        self._last_outcome = None
 
     def reset_game(self) -> None:
         """Start a fresh game while retaining the repeated-opponent model."""
@@ -107,7 +105,6 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
             self._game_epoch = 0
         self._current_actor_name = None
         self._game_decision_index = 0
-        self._last_outcome = None
 
     @staticmethod
     def _validate_decision(decision: CanonicalDecision) -> None:
@@ -240,7 +237,6 @@ class PerfectHalPolicyProvider(CanonicalPolicyProvider):
             raise RuntimeError("Perfect Hal game ended with an unrevealed action")
         if outcome.game_index < 0 or outcome.half_rounds < 0:
             raise ValueError("public game outcome indices must be nonnegative")
-        self._last_outcome = outcome
 
     def match_summary(self) -> str:
         if not self.decisions:

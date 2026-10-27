@@ -60,7 +60,6 @@ from hal_lab.harness.opponent_league import (
     make_opponent,
 )
 
-LEGACY_EVALUATION_SCHEMA = "arena-pm-hal-evaluation-v1"
 EVALUATION_SCHEMA = "arena-pm-hal-evaluation-v2"
 LEGACY_CONFIG_SCHEMA = "arena-pm-hal-evaluation-config-v1"
 CONFIG_SCHEMA = "arena-pm-hal-evaluation-config-v2"

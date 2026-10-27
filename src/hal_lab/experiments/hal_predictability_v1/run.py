@@ -184,7 +184,7 @@ def _history_model(logf, x, y, fit_rows, val, protocol):
     """Fit logits = log floor + z W + b by L-BFGS per L2 weight; keep the best on validation."""
     std = x[fit_rows].std(0)
     z = torch.as_tensor((x - x[fit_rows].mean(0)) / np.where(std > 0, std, 1.0))
-    lf, yy, fr, vr = (torch.as_tensor(a) for a in (logf, y, fit_rows, val))
+    lf, yy, fr = (torch.as_tensor(a) for a in (logf, y, fit_rows))
     grid, best = [], None
     for l2 in protocol["l2_grid"]:
         w, b = (torch.zeros(*shape, dtype=torch.float64, requires_grad=True) for shape in ((z.shape[1], 60), (60,)))

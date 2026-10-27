@@ -234,13 +234,6 @@ class Sprite:
         return Sprite(width, height, tuple(rows))
 
 
-def _paeth(a: int, b: int, c: int) -> int:
-    p = a + b - c
-    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
-    if pa <= pb and pa <= pc:
-        return a
-    return b if pb <= pc else c
-
 
 def decode_png(path: str | Path, max_edge: int | None = None) -> Sprite:
     """Decode a PNG into a :class:`Sprite` using only the standard library.
