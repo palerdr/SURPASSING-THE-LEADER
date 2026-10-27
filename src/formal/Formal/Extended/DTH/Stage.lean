@@ -79,7 +79,7 @@ noncomputable def classS (W : State → ℝ) (x : State) : Fin 60 → ℝ :=
 
 /-- **Claims DTH-MAT-1, CANONICAL-MG-1, CPP-DOC-MAT-1, COMPACT-RULE-3.** The
 61 transition classes rebuild the joint-action stage matrix entrywise
-(`reconstruct_transition_class_matrix`, `src/dth/solver.py:428-446`;
+(`reconstruct_transition_class_matrix`, `src/dth/solver.py:284-302`;
 `src/dth/docs/GAME_AND_SOLVER.md:102-106`). -/
 theorem stage_eq_classMatrix (W : State → ℝ) (x : State) :
     stage W x = classMatrix (classS W x) (failPay W x) := by
@@ -89,7 +89,7 @@ theorem stage_eq_classMatrix (W : State → ℝ) (x : State) :
 /-- **Claims DTH-MAT-1, CANONICAL-MG-1.** The representative cells:
 `(drop = 1, check = k + 1)` realizes success class `k`, and
 `(drop = 2, check = 1)` realizes the failure class
-(`continuation_class_values`, `src/dth/solver.py:361-389`). -/
+(`continuation_class_values`, `src/dth/solver.py:252-280`). -/
 theorem classes_realized (W : State → ℝ) (x : State) :
     (∀ k : Fin 60, classS W x k = stage W x 0 k) ∧ failPay W x = stage W x 1 0 := by
   refine ⟨fun k => ?_, ?_⟩
@@ -244,7 +244,7 @@ inductive Outcome where
   | win
   | live (y : State)
 
-/-- `transition` of `src/dth/solver.py:244-273`, per cell `(d, c)` of the
+/-- `transition` of `src/dth/solver.py:190-219`, per cell `(d, c)` of the
 zero-based stage matrix. A success with lag `ℓ = c - d + 1` either overflows
 (`s_c + ℓ ≥ 300`, Dropper wins) or continues at `(s_d, t_d, s_c + ℓ, t_c)`.
 A failure with `p = P(s_c, t_c)` is a Dropper win when `p = 0`; otherwise
@@ -354,7 +354,7 @@ theorem transition_live_phi (x : State) (d c : Fin 60) {pr : ℝ} {y : State}
 /-- **Claims CANONICAL-RULE-4, DTH-MAT-1, DTH-MAT-2, PAPERS-OCAML-SIGN-1,
 CPP-DOC-RULE-4.** The branch expectation of every cell, with `+1` for a
 Dropper win and `-W(y)` for a live child, equals the stage matrix built from
-the 61 classes (`src/dth/solver.py:244-273,361-389,530-545`;
+the 61 classes (`src/dth/solver.py:190-219,252-280,306-321`;
 `src/dth_ocaml/lib/solver/exact.ml:105-117`). -/
 theorem jointPayoff_eq_stage (W : State → ℝ) (x : State) (d c : Fin 60) :
     jointPayoff W x d c = stage W x d c := by

@@ -14,14 +14,14 @@ Conventions.
   is the ST in the vial before the failed check, `t` the accrued TTD, both
   natural numbers of seconds. The dose is `q = s + 60`.
 * `Survives s t` is the dose form `s + 60 < 300 ∧ t + (s + 60) ≤ 300`, the form
-  of `src/dth/solver.py:63-65`.
+  of `src/dth/solver.py:23-25`.
 * `bucketRevival C F τ q` mirrors `AbstractRuleset.revival_probability`
-  (`src/abstract/rules.py:178-189`), as the retired Rust `revival_probability`
+  (`src/abstract/rules.py:161-172`), as the retired Rust `revival_probability`
   of `abstract_solver_rs` did: it takes the prior TTD
   `τ` and the dose `q` in bucket units, recovers the load `q - F`, and clamps
   to `[0, 1]`.
 * `refereeProb` mirrors `Referee.compute_survival_probability`
-  (`src/stl/engine/game.py:171-200`).
+  (`src/stl/engine/game.py:168-197`).
 * All probabilities are real numbers. `0.75^(t/60)` is `Real.rpow`. Where a
   claim concerns binary64 results, the module states an explicit abstract
   rounding model and proves the claim inside that model. No theorem here
@@ -93,7 +93,7 @@ theorem rpow75_strictAnti {e e' : ℝ} (h : e < e') : (0.75 : ℝ) ^ e' < 0.75 ^
 
 /-- **Eligibility equivalence** (claims CPP-DOC-RULE-1, DTH-RULE-2,
 CANONICAL-RULE-3). The dose form `q < 300 ∧ t + q ≤ 300` with `q = s + 60`
-(`src/dth/solver.py:63-65`, `docs/REVIVAL_MODEL.md:22-24`) is equivalent to the
+(`src/dth/solver.py:23-25`, `docs/REVIVAL_MODEL.md:22-24`) is equivalent to the
 integer form `s ≤ 239 ∧ s + t ≤ 240` that `src/dth_cpp/exact.cpp:45-50`
 implements (`src/dth_cpp/BUILD.md:344-353`). The equivalence holds for every
 natural `s`, `t`, not only on the domain `s ≤ 299`, `t ≤ 300`. -/
@@ -774,7 +774,7 @@ theorem floor_never_binds_of_survives {s t : ℕ} (h : Survives s t) :
 /-! ## TTD and the death count (`docs/REVIVAL_MODEL.md:101-110`) -/
 
 /-- The TTD accrued by a sequence of survived deaths with vial STs `sts`: each
-death adds its dose `s + 60` (`src/dth/solver.py:271`, `failChild`). -/
+death adds its dose `s + 60` (`src/dth/solver.py:217`, `failChild`). -/
 def deathTTD (sts : List ℕ) : ℕ := (sts.map (· + 60)).sum
 
 /-- A revived failed check adds the dose `s + 60` to the old Checker's TTD. -/
@@ -824,11 +824,11 @@ theorem cubic_flat {q : ℝ} (h0 : 0 ≤ q) (h90 : q ≤ 90) :
   norm_num at h2
   constructor <;> norm_num <;> linarith
 
-/-! ## Bucket form (`src/abstract/rules.py:178-189`) -/
+/-! ## Bucket form (`src/abstract/rules.py:161-172`) -/
 
 /-- `AbstractRuleset.revival_probability(prior_ttd = τ, dose_units = q)` with load
 cap `C` and penalty `F`: `0` if `q ≥ C` or `τ + q > C`, else the clamp to `[0,1]`
-of `0.95 (1 - (q - F)/(C - F)) 0.75^(τ/F)` (`src/abstract/rules.py:178-189`).
+of `0.95 (1 - (q - F)/(C - F)) 0.75^(τ/F)` (`src/abstract/rules.py:161-172`).
 The retired Rust `revival_probability` of `abstract_solver_rs` had the same
 structure. -/
 noncomputable def bucketRevival (C F τ q : ℕ) : ℝ :=
@@ -970,7 +970,7 @@ theorem bucket6_extremes :
   rw [(bucketRevival_eq (by unfold BucketEligible; omega)).1]; norm_num
 
 /-- `Referee.compute_survival_probability(player with ttd = t, death_duration = q)`
-(`src/stl/engine/game.py:171-200`) with `CYLINDER_MAX = TOTAL_TTD_MAX = 300`,
+(`src/stl/engine/game.py:168-197`) with `CYLINDER_MAX = TOTAL_TTD_MAX = 300`,
 `FAILED_CHECK_PENALTY = 60`. -/
 noncomputable def refereeProb (t q : ℕ) : ℝ :=
   if 300 ≤ q ∨ 300 < t + q then 0
@@ -989,8 +989,8 @@ theorem refereeProb_eq (s t : ℕ) : refereeProb t (s + 60) = revival s t := by
 
 /-! ## Failed-check branches and the game graph -/
 
-/-- The branches a failed check emits (`src/abstract/rules.py:227-258`,
-`src/dth/solver.py:262-273`): `true` (revived, live child) when `p > 0`, and
+/-- The branches a failed check emits (`src/abstract/rules.py:210-241`,
+`src/dth/solver.py:208-219`): `true` (revived, live child) when `p > 0`, and
 `false` (death) when `p < 1`. -/
 noncomputable def failBranches (p : ℝ) : Finset Bool :=
   (if 0 < p then {true} else ∅) ∪ (if p < 1 then {false} else ∅)
@@ -1020,7 +1020,7 @@ theorem failBranches_revival (s t : ℕ) :
     simp only [this, revival_lt_one, h, ↓reduceIte]; rfl
 
 /-- One live transition of pure DTH for a revival surface `P`, as
-`src/dth/solver.py:262-273` builds it: a successful check with lag
+`src/dth/solver.py:208-219` builds it: a successful check with lag
 `ℓ ∈ 1..60` that leaves the Checker below `300` moves to `successChild`; a
 failed check moves to `failChild` exactly when `P(s_c, t_c) ≠ 0` (the code
 tests `p == 0.0`). -/
@@ -1107,7 +1107,7 @@ structure FloatModel where
   c95 : ℝ
   c75 : ℝ
 
-/-- The evaluation order of `src/abstract/rules.py:183-189`, which the retired
+/-- The evaluation order of `src/abstract/rules.py:166-172`, which the retired
 Rust `abstract_solver_rs` shared:
 `clamp(fl(fl(0.95 · fl(1 - fl(l / span))) · pow(0.75, fl(τ / F))))`. -/
 noncomputable def FloatModel.evalRevival (M : FloatModel) (l span τ F : ℕ) : ℝ :=
