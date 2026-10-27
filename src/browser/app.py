@@ -1,8 +1,8 @@
 """Local HTTP surface for browser play.
 
 A front end onto the same session as the terminal app (``terminal.cli`` and
-``terminal.tui``). It imports only ``stl.engine`` and ``arena``, the imports
-that ``docs/PROJECTS.toml`` allows the browser app. It shares the
+``terminal.tui``). The app imports only ``arena`` and ``stl.engine``, the
+imports that ``docs/PROJECTS.toml`` allows it. It shares the
 rules text and the prepared art with the terminal through
 ``arena.presentation``, and it never imports the terminal renderer. The STL
 engine remains the only referee.
@@ -97,9 +97,9 @@ def create_app(
         allow_headers=["*"],
     )
 
-    state = Series(hal_factory(), config, series, sequence_start=sequence_start)
+    played = Series(hal_factory(), config, series, sequence_start=sequence_start)
     # The hosted adapter checkpoints provider memory at game boundaries.
-    app.state.hal_provider = state.provider
+    app.state.hal_provider = played.provider
     lock = threading.Lock()
     art_cache: dict[str, object] = {}
 
@@ -113,28 +113,28 @@ def create_app(
     @app.get("/api/rules")
     def rules() -> dict[str, object]:
         return {
-            "human_name": state.session.human_display_name,
-            "hal_label": state.series.hal_label,
-            "pure_dth": state.config.pure_dth,
+            "human_name": played.session.human_display_name,
+            "hal_label": played.series_config.hal_label,
+            "pure_dth": played.config.pure_dth,
             "lines": list(rules_body()),
         }
 
     @app.get("/api/session", response_model=Snapshot)
     def read_session() -> Snapshot:
         with lock:
-            return snapshot_from_session(state.session)
+            return snapshot_from_session(played.session)
 
     @app.post("/api/session", response_model=Snapshot)
     def new_session(request: NewSessionRequest) -> Snapshot:
         with lock:
-            previous = state.session
+            previous = played.session
             _require(request.sequence, previous)
             if previous.phase not in (Phase.RULES, Phase.GAME_OVER):
                 raise HTTPException(
                     status_code=409,
                     detail=f"cannot replace an active session in phase {previous.phase.value}",
                 )
-            session = state.next_game(
+            session = played.next_game(
                 human_name=request.human_name,
                 start_clock=request.start_clock,
                 max_half_rounds=request.max_half_rounds,
@@ -145,26 +145,26 @@ def create_app(
     @app.post("/api/session/restart", response_model=Snapshot)
     def restart(request: SequencedRequest) -> Snapshot:
         with lock:
-            _require(request.sequence, state.session)
-            return snapshot_from_session(state.restart())
+            _require(request.sequence, played.session)
+            return snapshot_from_session(played.restart())
 
     @app.post("/api/session/begin", response_model=Snapshot)
     def begin(request: SequencedRequest) -> Snapshot:
         with lock:
-            session = state.session
+            session = played.session
             _require(request.sequence, session)
             try:
                 session.begin()
             except SessionPhaseError as error:
                 raise HTTPException(status_code=409, detail=str(error)) from error
             if session.phase is Phase.GAME_OVER:
-                state.record_finished_game()
+                played.record_finished_game()
             return snapshot_from_session(session)
 
     @app.post("/api/session/action", response_model=Snapshot)
     def act(request: ActionRequest) -> Snapshot:
         with lock:
-            session = state.session
+            session = played.session
             _require(request.sequence, session)
             if session.phase is not Phase.AWAITING_ACTION:
                 raise HTTPException(status_code=409, detail=f"phase is {session.phase.value}")
@@ -182,14 +182,14 @@ def create_app(
     @app.post("/api/session/ack", response_model=Snapshot)
     def acknowledge(request: SequencedRequest) -> Snapshot:
         with lock:
-            session = state.session
+            session = played.session
             _require(request.sequence, session)
             try:
                 session.acknowledge()
             except SessionPhaseError as error:
                 raise HTTPException(status_code=409, detail=str(error)) from error
             if session.phase is Phase.GAME_OVER:
-                state.record_finished_game()
+                played.record_finished_game()
             return snapshot_from_session(session)
 
     @app.get("/api/transcript")
@@ -197,7 +197,7 @@ def create_app(
         """The public series so far; ``Series.public_transcript`` states its scope."""
 
         with lock:
-            return state.public_transcript()
+            return played.public_transcript()
 
     @app.get("/art/panel/{name}")
     def panel(name: str) -> Response:

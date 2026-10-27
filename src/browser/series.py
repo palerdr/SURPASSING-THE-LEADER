@@ -140,7 +140,7 @@ class Series:
     ) -> None:
         self.hal_agent = hal_agent
         self.config = config or SessionConfig()
-        self.series = series or SeriesConfig()
+        self.series_config = series or SeriesConfig()
         self.series_seed = self.config.seed
         self.game_index = 0
         self.recorded = False
@@ -152,8 +152,8 @@ class Series:
         )
         self.transcript: dict[str, object] = {
             "schema_version": TRANSCRIPT_SCHEMA,
-            "hal_agent": self.series.hal_agent,
-            "public_hal_label": self.series.public_hal_label,
+            "hal_agent": self.series_config.hal_agent,
+            "public_hal_label": self.series_config.public_hal_label,
             "human_name": self.config.human_name,
             "base_seed": self.config.seed,
             "start_clock": self.config.start_clock,
@@ -198,9 +198,9 @@ class Series:
         else:
             self.tally["hal_wins"] += 1
         self.recorded = True
-        if self.series.transcript_path is not None:
+        if self.series_config.transcript_path is not None:
             write_play_transcript(
-                self.series.transcript_path, {**self.transcript, **self.hal_details()}
+                self.series_config.transcript_path, {**self.transcript, **self.hal_details()}
             )
 
     def next_game(
@@ -285,6 +285,6 @@ class Series:
                 "public_history": list(session.public_history),
             },
         }
-        if not self.series.conceal_hal_details:
+        if not self.series_config.conceal_hal_details:
             payload.update(self.hal_details())
         return payload

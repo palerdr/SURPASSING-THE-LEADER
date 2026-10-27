@@ -158,7 +158,9 @@ def prepare(args):
     selection = json.loads(args.selection.read_text())
     for name in ("perfect_hal.py", "translated_hal.py"):
         path = f"src/arena/policies/{name}"
-        if digest(path) != selection["input_sha256"][path]:
+        # The split of perfect_hal.py removed the bound files, so this
+        # historical runner refuses a re-run, as the hal_lab README states.
+        if not Path(path).is_file() or digest(path) != selection["input_sha256"][path]:
             raise ValueError("frozen baseline changed")
     write_new(args.output / "protocol.json", {**PROTOCOL, "input_sha256": inputs(args)})
     participants = load_external(source)

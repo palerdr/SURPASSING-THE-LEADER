@@ -81,7 +81,9 @@ class Experiment:
         self.config = TranslatedHalConfig(**selection["config"])
         for name in ("perfect_hal.py", "translated_hal.py"):
             path = Path("src/arena/policies") / name
-            if sha(path) != selection["input_sha256"][str(path)]:
+            # The split of perfect_hal.py removed the bound files, so this
+            # historical runner refuses a re-run, as the hal_lab README states.
+            if not path.is_file() or sha(path) != selection["input_sha256"][str(path)]:
                 raise ValueError("frozen baseline source changed")
         self.agent = CompleteDTHAgent(args.artifact)
 

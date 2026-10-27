@@ -1,5 +1,3 @@
-"""Browser front end for canonical STL play."""
-
-from browser.app import SessionConfig, create_app
-
-__all__ = ["SessionConfig", "create_app"]
+"""Browser front end for canonical STL play. The package re-exports nothing;
+import ``browser.app``, ``browser.series`` and the other modules directly.
+"""
