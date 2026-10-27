@@ -11,7 +11,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from browser.app import SeriesConfig, SessionConfig, create_app
+from browser.app import create_app
+from browser.series import SeriesConfig, SessionConfig
 from browser.tests.fakes import StubHal as _StubHal, make_client as _client, play_out as _play_out
 from stl.engine.game import LS_WINDOW_START, OPENING_START_CLOCK
 

@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from browser.app import SessionConfig, create_app
+from browser.app import create_app
+from browser.series import SessionConfig
 
 
 class StubHal:

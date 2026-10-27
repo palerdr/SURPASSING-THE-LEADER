@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from pathlib import Path
 
 from arena.agent import PolicyDrivenAgent
 from arena.dth_adapter import DTHCompletePolicyProvider
-from browser.app import SessionConfig, SeriesConfig, create_app
+from browser import config
+from browser.app import create_app
 from browser.deploy.manifest import (
     CONTINUATION,
     CONTINUATION_SELECTION,
@@ -20,6 +20,7 @@ from browser.deploy.manifest import (
 from browser.hosted import create_hosted_app
 from browser.ledger import SupabaseLedger
 from browser.redis_store import RedisSessionStore
+from browser.series import SeriesConfig, SessionConfig
 from dth.agent import CompleteDTHAgent
 
 
@@ -31,7 +32,7 @@ def create_production_app(artifact: Path):
     # bundle, and the bundle is immutable once deployed. Rehashing 2.3 GB on
     # every cold start cost about ten seconds before the first answer.
     agent = CompleteDTHAgent(artifact, verify_hashes=False)
-    policy_name = os.environ.get("STL_HAL_POLICY", "exact")
+    policy_name = config.hal_policy()
     if policy_name == CONTINUATION and policy_name not in POLICIES:
         raise ValueError(
             f"STL_HAL_POLICY={CONTINUATION} needs {CONTINUATION_SELECTION}, "
@@ -88,18 +89,10 @@ def create_production_app(artifact: Path):
     for entry in version_entries(policy_name):
         digest.update((REPOSITORY_ROOT / entry.path).read_bytes())
     digest.update(agent.tablebase.metadata["code_config_digest"].encode())
-    url = os.environ.get("KV_REST_API_URL") or os.environ.get(
-        "UPSTASH_REDIS_REST_URL", ""
-    )
-    token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get(
-        "UPSTASH_REDIS_REST_TOKEN", ""
-    )
+    url, token = config.session_store()
     # The ledger is optional: without its two settings the game plays as
     # before, records nothing, and serves no leaderboard.
-    ledger_url = os.environ.get("SUPABASE_URL", "")
-    ledger_key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get(
-        "SUPABASE_SERVICE_ROLE_KEY", ""
-    )
+    ledger_url, ledger_key = config.ledger()
     ledger = None
     if ledger_url and ledger_key:
         try:

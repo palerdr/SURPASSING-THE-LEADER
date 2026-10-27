@@ -8,10 +8,11 @@ import random
 import httpx
 from fastapi.testclient import TestClient
 
-from browser.app import SessionConfig, create_app
+from browser.app import create_app
 from browser.hosted import COOKIE, PLAYER_COOKIE, create_hosted_app
 from browser.ledger import game_row, life_left
 from browser.names import is_offensive
+from browser.series import SessionConfig
 from browser.tests.fakes import MemoryStore, begin
 
 

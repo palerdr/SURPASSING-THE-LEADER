@@ -32,7 +32,10 @@ uv run --project src/browser python -m browser
 
 ## Server invariants
 
-`app.py` serves the TypeScript client in `webclient/`. It builds its
+`app.py` holds the routes, the lock, and the art routes, and serves the
+TypeScript client in `webclient/`. `series.py` holds the series behind those
+routes: the session and series configs, the game construction, and the
+record of finished games, with no route and no lock. `app.py` builds its
 provider once at startup — provider construction memory-maps a
 multi-gigabyte artifact and the `abstract` provider can build a tablebase
 outright, so neither may happen on a request path; `python -m browser`
@@ -74,7 +77,10 @@ session reads still recover state for stale-request handling and worker replay.
 ## Hosted sessions
 
 The Vercel entrypoint uses `hosted.py` and `deploy/production.py` to isolate
-players with secure cookies and Redis command logs. `redis_store.py` holds the
+players with secure cookies and Redis command logs. `config.py` is the one
+reader of environment variables; `deploy/production.py` reads each setting
+through it when it builds the hosted app at cold start, with the same names
+and defaults as before. `redis_store.py` holds the
 Upstash store and its atomic compare-and-set. The entrypoint replays accepted commands
 through the same local HTTP adapter and commits each mutation before returning
 a reveal. A process keeps the game it last served and rebuilds it from the

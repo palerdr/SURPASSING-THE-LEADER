@@ -73,11 +73,13 @@ RUNTIME_FILES: tuple[RuntimeFile, ...] = (
     # The browser server, its hosted wrapper, and this deploy entry.
     RuntimeFile("src/browser/__init__.py"),
     RuntimeFile("src/browser/app.py", in_version=True),
+    RuntimeFile("src/browser/config.py", in_version=True),
     RuntimeFile("src/browser/hosted.py", in_version=True),
     RuntimeFile("src/browser/ledger.py", in_version=True),
     RuntimeFile("src/browser/names.py"),
     RuntimeFile("src/browser/redis_store.py", in_version=True),
     RuntimeFile("src/browser/schema.py", in_version=True),
+    RuntimeFile("src/browser/series.py", in_version=True),
     RuntimeFile("src/browser/deploy/__init__.py"),
     RuntimeFile("src/browser/deploy/manifest.py", in_version=True),
     RuntimeFile("src/browser/deploy/production.py", in_version=True),
